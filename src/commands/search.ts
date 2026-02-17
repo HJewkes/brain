@@ -16,6 +16,7 @@ export const searchCommand = new Command('search')
   .option('--category <cat>', 'filter by category')
   .option('--confidence <level>', 'filter by confidence')
   .option('--since <date>', 'only notes modified after this date')
+  .option('--min-score <score>', 'minimum relevance score (0-1)')
   .option('--expand', 'include graph-connected notes')
   .action(async (query, opts) => {
     const config = loadConfig()
@@ -30,6 +31,7 @@ export const searchCommand = new Command('search')
         category: opts.category,
         confidence: opts.confidence as SearchOptions['confidence'],
         since: opts.since,
+        minScore: opts.minScore ? parseFloat(opts.minScore) : undefined,
       }
 
       const results = await search(db, embedder, query, searchOpts, config.fusionWeights)
