@@ -35,8 +35,16 @@ export function parseMarkdown(filePath: string, content: string): ParsedNote {
   return { id, filePath, frontmatter, content: body, chunks, relations }
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 function deriveId(filePath: string, data: Record<string, unknown>): string {
   if (typeof data.id === 'string' && data.id.length > 0) return data.id
+  if (typeof data.title === 'string' && data.title.length > 0) return slugify(data.title)
   const filename = filePath.split('/').pop() ?? filePath
   return filename.replace(/\.md$/, '')
 }

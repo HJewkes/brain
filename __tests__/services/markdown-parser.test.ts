@@ -39,9 +39,21 @@ Body text here.
     expect(result.frontmatter.status).toBe('current')
   })
 
-  it('defaults id to filename slug when not in frontmatter', () => {
+  it('derives id from title when no explicit id in frontmatter', () => {
     const content = `---
 title: My Note
+type: note
+tier: slow
+---
+
+Content.
+`
+    const result = parseMarkdown('react-server-components.md', content)
+    expect(result.id).toBe('my-note')
+  })
+
+  it('falls back to filename slug when no id or title in frontmatter', () => {
+    const content = `---
 type: note
 tier: slow
 ---

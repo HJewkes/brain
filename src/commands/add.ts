@@ -110,7 +110,7 @@ export const addCommand = new Command('add')
       content = fm + '\n\n' + content
     }
 
-    const parsed = parseMarkdown('temp.md', content)
+    const parsed = parseMarkdown(file ?? 'untitled.md', content)
     const id = parsed.id
     const tier = (opts.tier ?? parsed.frontmatter.tier ?? 'slow') as NoteTier
     const type = (opts.type ?? parsed.frontmatter.type ?? 'note') as NoteType
