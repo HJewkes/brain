@@ -288,6 +288,11 @@ export class BrainDB {
     return rows.map(rowToChunk)
   }
 
+  getChunkCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM chunks').get() as { count: number }
+    return row.count
+  }
+
   deleteChunksForNote(noteId: string): void {
     const chunkIds = this.db
       .prepare('SELECT id FROM chunks WHERE note_id = ?')

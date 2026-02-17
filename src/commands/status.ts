@@ -40,8 +40,11 @@ export const statusCommand = new Command('status')
         }
       }
 
+      const totalChunks = db.getChunkCount()
+
       const summary = {
         totalNotes: notes.length,
+        totalChunks,
         byTier,
         byType,
         embeddingModel: embeddingModel?.model ?? null,
@@ -55,6 +58,7 @@ export const statusCommand = new Command('status')
         process.stdout.write(JSON.stringify(summary) + '\n')
       } else {
         process.stderr.write(`Notes: ${notes.length}\n`)
+        process.stderr.write(`Chunks: ${totalChunks}\n`)
         process.stderr.write(`By tier: ${formatMap(byTier)}\n`)
         process.stderr.write(`By type: ${formatMap(byType)}\n`)
         if (embeddingModel) {
