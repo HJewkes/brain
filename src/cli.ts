@@ -4,6 +4,12 @@ import { initCommand } from './commands/init.js'
 import { indexCommand } from './commands/index-cmd.js'
 import { searchCommand } from './commands/search.js'
 import { statusCommand } from './commands/status.js'
+import { addCommand } from './commands/add.js'
+import { staleCommand } from './commands/stale.js'
+import { graphCommand } from './commands/graph.js'
+import { templateCommand } from './commands/template.js'
+import { archiveCommand } from './commands/archive.js'
+import { configCommand } from './commands/config.js'
 
 const program = new Command()
   .name('brain')
@@ -14,5 +20,11 @@ program.addCommand(initCommand)
 program.addCommand(indexCommand)
 program.addCommand(searchCommand)
 program.addCommand(statusCommand)
+program.addCommand(addCommand)
+program.addCommand(staleCommand)
+program.addCommand(graphCommand)
+program.addCommand(templateCommand)
+program.addCommand(archiveCommand)
+program.addCommand(configCommand)
 
 program.parseAsync()
