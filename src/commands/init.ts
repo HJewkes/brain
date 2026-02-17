@@ -1,6 +1,8 @@
 import { Command } from '@commander-js/extra-typings'
 import { mkdirSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { execSync } from 'node:child_process'
+import { createInterface } from 'node:readline'
 import { loadConfig, saveConfig } from '../services/config.js'
 import { BrainDB } from '../services/brain-db.js'
 import { getEmbedderInfo } from '../adapters/index.js'
@@ -75,6 +77,97 @@ date: "{{date}}"
 `,
 }
 
+interface OllamaStatus {
+  running: boolean
+  hasModel: boolean
+}
+
+async function checkOllama(url: string, model: string): Promise<OllamaStatus> {
+  try {
+    const response = await fetch(`${url}/api/tags`, {
+      signal: AbortSignal.timeout(3_000),
+    })
+    if (!response.ok) return { running: false, hasModel: false }
+    const data = (await response.json()) as { models?: Array<{ name: string }> }
+    const hasModel = data.models?.some((m) => m.name.startsWith(model)) ?? false
+    return { running: true, hasModel }
+  } catch {
+    return { running: false, hasModel: false }
+  }
+}
+
+function pullOllamaModel(model: string): boolean {
+  try {
+    process.stderr.write(`Pulling ${model}...\n`)
+    execSync(`ollama pull ${model}`, { stdio: 'inherit', timeout: 120_000 })
+    return true
+  } catch {
+    process.stderr.write(`Warning: could not pull ${model}. Run "ollama pull ${model}" manually.\n`)
+    return false
+  }
+}
+
+async function isLocalEmbedderAvailable(): Promise<boolean> {
+  try {
+    await import('@huggingface/transformers')
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function promptEmbedderChoice(): Promise<'ollama' | 'local' | null> {
+  if (!process.stdin.isTTY) {
+    process.stderr.write(
+      'No embedding backend detected and stdin is not interactive.\n' +
+        'Install Ollama (https://ollama.com) or run with --embedder local.\n',
+    )
+    return null
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stderr })
+  const ask = (q: string): Promise<string> =>
+    new Promise((resolve) => rl.question(q, resolve))
+
+  process.stderr.write('\nNo embedding backend detected.\n')
+  process.stderr.write('  1. Install Ollama (opens ollama.com)\n')
+  process.stderr.write('  2. Use local embeddings (installs @huggingface/transformers)\n')
+  process.stderr.write('  3. Exit\n')
+
+  const choice = await ask('\nChoice [1/2/3]: ')
+  rl.close()
+
+  switch (choice.trim()) {
+    case '1': {
+      const openCmd = process.platform === 'darwin' ? 'open' : 'xdg-open'
+      try {
+        execSync(`${openCmd} https://ollama.com`, { stdio: 'ignore' })
+      } catch {
+        /* ignore */
+      }
+      process.stderr.write('After installing Ollama, run "brain init" again.\n')
+      return null
+    }
+    case '2': {
+      process.stderr.write('Installing @huggingface/transformers...\n')
+      try {
+        execSync('npm install -g @huggingface/transformers', {
+          stdio: 'inherit',
+          timeout: 120_000,
+        })
+        return 'local'
+      } catch {
+        process.stderr.write(
+          'Failed to install. Run "npm install -g @huggingface/transformers" manually.\n',
+        )
+        return null
+      }
+    }
+    default:
+      return null
+  }
+}
+
 export const initCommand = new Command('init')
   .description('Initialize a new brain workspace')
   .option('--notes-dir <path>', 'path to notes directory')
@@ -84,6 +177,32 @@ export const initCommand = new Command('init')
     const overrides: Record<string, unknown> = {}
     if (opts.notesDir) overrides.notesDir = opts.notesDir
     if (opts.embedder) overrides.embedder = opts.embedder as EmbedderBackend
+
+    if (!opts.embedder) {
+      const ollamaUrl = 'http://localhost:11434'
+      const ollamaModel = 'nomic-embed-text'
+      const status = await checkOllama(ollamaUrl, ollamaModel)
+
+      if (status.running) {
+        if (!status.hasModel) {
+          pullOllamaModel(ollamaModel)
+        }
+        overrides.embedder = 'ollama'
+        overrides.ollamaUrl = ollamaUrl
+      } else if (await isLocalEmbedderAvailable()) {
+        overrides.embedder = 'local'
+      } else {
+        const choice = await promptEmbedderChoice()
+        if (!choice) {
+          process.exitCode = 1
+          return
+        }
+        overrides.embedder = choice
+        if (choice === 'ollama') {
+          overrides.ollamaUrl = 'http://localhost:11434'
+        }
+      }
+    }
 
     saveConfig(overrides)
     const config = loadConfig()
