@@ -1,0 +1,97 @@
+import { Command } from '@commander-js/extra-typings'
+import { loadConfig } from '../services/config.js'
+import { BrainDB } from '../services/brain-db.js'
+
+export const statusCommand = new Command('status')
+  .description('Show database statistics')
+  .option('--json', 'output as JSON')
+  .action((opts) => {
+    const config = loadConfig()
+    const db = new BrainDB(config.dbPath)
+
+    try {
+      const notes = db.getAllNotes()
+      const embeddingModel = db.getEmbeddingModel()
+
+      const byTier: Record<string, number> = {}
+      const byType: Record<string, number> = {}
+      const staleNotes: string[] = []
+      const now = new Date()
+
+      for (const note of notes) {
+        byTier[note.tier] = (byTier[note.tier] ?? 0) + 1
+        byType[note.type] = (byType[note.type] ?? 0) + 1
+
+        if (note.lastReviewed && note.reviewInterval) {
+          const reviewed = new Date(note.lastReviewed)
+          const intervalDays = parseInterval(note.reviewInterval)
+          const due = new Date(reviewed.getTime() + intervalDays * 86_400_000)
+          if (due < now) {
+            staleNotes.push(note.id)
+          }
+        }
+      }
+
+      const files = db.getAllFiles()
+      let lastIndexed: number | null = null
+      for (const [, file] of files) {
+        if (lastIndexed === null || file.indexedAt > lastIndexed) {
+          lastIndexed = file.indexedAt
+        }
+      }
+
+      const summary = {
+        totalNotes: notes.length,
+        byTier,
+        byType,
+        embeddingModel: embeddingModel?.model ?? null,
+        embeddingDimensions: embeddingModel?.dimensions ?? null,
+        lastIndexed: lastIndexed ? new Date(lastIndexed).toISOString() : null,
+        staleNotes: staleNotes.length,
+        staleNoteIds: staleNotes,
+      }
+
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(summary) + '\n')
+      } else {
+        process.stderr.write(`Notes: ${notes.length}\n`)
+        process.stderr.write(`By tier: ${formatMap(byTier)}\n`)
+        process.stderr.write(`By type: ${formatMap(byType)}\n`)
+        if (embeddingModel) {
+          process.stderr.write(
+            `Embedding: ${embeddingModel.model} (${embeddingModel.dimensions}d)\n`,
+          )
+        }
+        if (lastIndexed) {
+          process.stderr.write(
+            `Last indexed: ${new Date(lastIndexed).toISOString()}\n`,
+          )
+        }
+        if (staleNotes.length > 0) {
+          process.stderr.write(
+            `Stale notes needing review: ${staleNotes.length}\n`,
+          )
+        }
+      }
+    } finally {
+      db.close()
+    }
+  })
+
+function parseInterval(interval: string): number {
+  const match = interval.match(/^(\d+)\s*(d|w|m)$/)
+  if (!match) return 30
+  const value = parseInt(match[1], 10)
+  switch (match[2]) {
+    case 'd': return value
+    case 'w': return value * 7
+    case 'm': return value * 30
+    default: return 30
+  }
+}
+
+function formatMap(map: Record<string, number>): string {
+  return Object.entries(map)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(', ')
+}

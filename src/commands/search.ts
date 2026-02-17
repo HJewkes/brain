@@ -1,0 +1,82 @@
+import { Command } from '@commander-js/extra-typings'
+import { loadConfig } from '../services/config.js'
+import { BrainDB } from '../services/brain-db.js'
+import { createEmbedder } from '../adapters/index.js'
+import { search } from '../services/search.js'
+import { expandResults } from '../services/graph.js'
+import type { SearchOptions, SearchResult } from '../types.js'
+
+export const searchCommand = new Command('search')
+  .description('Search notes with hybrid BM25 + vector search')
+  .argument('<query>', 'search query')
+  .option('--json', 'output results as JSON')
+  .option('--limit <n>', 'max results', '10')
+  .option('--tier <tier>', 'filter by tier (slow, fast)')
+  .option('--tags <tags>', 'filter by tags (comma-separated)')
+  .option('--category <cat>', 'filter by category')
+  .option('--confidence <level>', 'filter by confidence')
+  .option('--since <date>', 'only notes modified after this date')
+  .option('--expand', 'include graph-connected notes')
+  .action(async (query, opts) => {
+    const config = loadConfig()
+    const db = new BrainDB(config.dbPath)
+    const embedder = createEmbedder(config)
+
+    try {
+      const searchOpts: SearchOptions = {
+        limit: parseInt(opts.limit, 10),
+        tier: opts.tier as SearchOptions['tier'],
+        tags: opts.tags ? opts.tags.split(',').map((t) => t.trim()) : undefined,
+        category: opts.category,
+        confidence: opts.confidence as SearchOptions['confidence'],
+        since: opts.since,
+      }
+
+      const results = await search(db, embedder, query, searchOpts)
+
+      const expanded: SearchResult[] = []
+      if (opts.expand && results.length > 0) {
+        const noteIds = results.map((r) => r.noteId)
+        const graphExpanded = expandResults(db, noteIds, 1)
+
+        for (const item of graphExpanded) {
+          const note = db.getNoteById(item.noteId)
+          if (!note) continue
+          expanded.push({
+            score: item.decayedScore,
+            filePath: note.filePath,
+            noteId: note.id,
+            heading: null,
+            excerpt: note.summary ?? '',
+            tier: note.tier,
+            tags: note.tags ? note.tags.split(',') : [],
+            confidence: note.confidence,
+          })
+        }
+      }
+
+      const allResults = [...results, ...expanded]
+
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(allResults) + '\n')
+      } else {
+        if (allResults.length === 0) {
+          process.stderr.write('No results found.\n')
+          return
+        }
+        for (const r of allResults) {
+          const score = r.score.toFixed(3)
+          process.stdout.write(`[${score}] ${r.filePath}\n`)
+          if (r.heading) {
+            process.stdout.write(`  \u00A7 ${r.heading}\n`)
+          }
+          if (r.excerpt) {
+            process.stdout.write(`  ${r.excerpt}\n`)
+          }
+          process.stdout.write('\n')
+        }
+      }
+    } finally {
+      db.close()
+    }
+  })
