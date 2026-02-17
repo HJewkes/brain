@@ -12,23 +12,22 @@ const corpus: EvalCorpus = JSON.parse(
   readFileSync(resolve(__dirname, '../fixtures/eval-corpus.json'), 'utf-8'),
 )
 
+// Note: overlap is not yet implemented in the harness rechunker.
+// Only chunk size varies; overlap values are recorded for future implementation.
 const CHUNK_CONFIGS = [
-  { size: 128, overlap: 0 },
-  { size: 128, overlap: 16 },
-  { size: 256, overlap: 0 },
-  { size: 256, overlap: 32 },
-  { size: 512, overlap: 0 },
-  { size: 512, overlap: 51 },
+  { size: 128 },
+  { size: 256 },
+  { size: 512 },
 ] as const
 
 describe('chunk size sweep — DISCOVERY (log, no hard assertions)', () => {
   const sweepResults: Array<{
-    config: { size: number; overlap: number }
+    config: { size: number }
     metrics: ReturnType<typeof aggregateMetrics>
   }> = []
 
   for (const config of CHUNK_CONFIGS) {
-    describe(`chunk_size=${config.size}, overlap=${config.overlap}`, () => {
+    describe(`chunk_size=${config.size}`, () => {
       let env: EvalEnvironment
 
       beforeAll(async () => {
@@ -48,7 +47,7 @@ describe('chunk size sweep — DISCOVERY (log, no hard assertions)', () => {
         const metrics = aggregateMetrics(forMetrics, K)
         sweepResults.push({ config, metrics })
 
-        console.log(`\n--- chunk_size=${config.size}, overlap=${config.overlap} ---`)
+        console.log(`\n--- chunk_size=${config.size} ---`)
         console.log(`  hit_rate@${K}:    ${metrics.hitRate.toFixed(3)}`)
         console.log(`  MRR@${K}:         ${metrics.mrr.toFixed(3)}`)
         console.log(`  recall@${K}:      ${metrics.recallAtK.toFixed(3)}`)
@@ -63,11 +62,11 @@ describe('chunk size sweep — DISCOVERY (log, no hard assertions)', () => {
 
   test('summary table', () => {
     console.log('\n=== Chunk Size Sweep Summary ===')
-    console.log('Size | Overlap | hit_rate | MRR    | recall | precision | NDCG')
-    console.log('-----|---------|----------|--------|--------|-----------|------')
+    console.log('Size | hit_rate | MRR    | recall | precision | NDCG')
+    console.log('-----|----------|--------|--------|-----------|------')
     for (const { config, metrics } of sweepResults) {
       console.log(
-        `${String(config.size).padStart(4)} | ${String(config.overlap).padStart(7)} | ${metrics.hitRate.toFixed(3).padStart(8)} | ${metrics.mrr.toFixed(3).padStart(6)} | ${metrics.recallAtK.toFixed(3).padStart(6)} | ${metrics.precisionAtK.toFixed(3).padStart(9)} | ${metrics.ndcgAtK.toFixed(3).padStart(5)}`,
+        `${String(config.size).padStart(4)} | ${metrics.hitRate.toFixed(3).padStart(8)} | ${metrics.mrr.toFixed(3).padStart(6)} | ${metrics.recallAtK.toFixed(3).padStart(6)} | ${metrics.precisionAtK.toFixed(3).padStart(9)} | ${metrics.ndcgAtK.toFixed(3).padStart(5)}`,
       )
     }
     expect(sweepResults.length).toBe(CHUNK_CONFIGS.length)

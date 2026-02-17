@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { BrainDB } from '../../src/services/brain-db.js'
 import { search } from '../../src/services/search.js'
 import { unlinkSync } from 'node:fs'
-import type { Chunk, Embedder } from '../../src/types.js'
+import type { Chunk, Embedder, NoteRecord } from '../../src/types.js'
 import { tmpDbPath, makeNote } from '../helpers.js'
 
 /**

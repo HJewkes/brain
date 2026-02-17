@@ -83,6 +83,13 @@ describe('relevance threshold calibration', () => {
         correctScores.push(result.scores[correctIdx])
       }
     }
+
+    if (correctScores.length === 0) {
+      console.log('\n=== Score Separation ===')
+      console.log('  SKIP: no correct hits found in on-topic results')
+      return
+    }
+
     const onTopicMin = Math.min(...correctScores)
 
     const gap = onTopicMin - offTopicMax
@@ -99,11 +106,9 @@ describe('relevance threshold calibration', () => {
       console.log(`  suggested threshold:  ${threshold.toFixed(6)}`)
     } else {
       console.log('  WARNING: Distributions overlap — threshold filtering will have false positives/negatives')
-      const p50OffTopic = offTopicMaxScores.sort((a, b) => a - b)[Math.floor(offTopicMaxScores.length * 0.5)]
+      const sorted = [...offTopicMaxScores].sort((a, b) => a - b)
+      const p50OffTopic = sorted[Math.floor(sorted.length * 0.5)]
       console.log(`  off-topic p50:        ${p50OffTopic.toFixed(6)}`)
     }
-
-    // No hard assertion — just analysis
-    expect(true).toBe(true)
   })
 })
