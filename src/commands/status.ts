@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings'
 import { loadConfig } from '../services/config.js'
 import { BrainDB } from '../services/brain-db.js'
+import { parseIntervalDays } from '../utils.js'
 
 export const statusCommand = new Command('status')
   .description('Show database statistics')
@@ -24,7 +25,7 @@ export const statusCommand = new Command('status')
 
         if (note.lastReviewed && note.reviewInterval) {
           const reviewed = new Date(note.lastReviewed)
-          const intervalDays = parseInterval(note.reviewInterval)
+          const intervalDays = parseIntervalDays(note.reviewInterval)
           const due = new Date(reviewed.getTime() + intervalDays * 86_400_000)
           if (due < now) {
             staleNotes.push(note.id)
@@ -81,18 +82,6 @@ export const statusCommand = new Command('status')
       db.close()
     }
   })
-
-function parseInterval(interval: string): number {
-  const match = interval.match(/^(\d+)\s*(d|w|m)$/)
-  if (!match) return 30
-  const value = parseInt(match[1], 10)
-  switch (match[2]) {
-    case 'd': return value
-    case 'w': return value * 7
-    case 'm': return value * 30
-    default: return 30
-  }
-}
 
 function formatMap(map: Record<string, number>): string {
   return Object.entries(map)

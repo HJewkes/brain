@@ -1,37 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { BrainDB } from '../../src/services/brain-db.js'
 import { search } from '../../src/services/search.js'
-import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { unlinkSync } from 'node:fs'
-import type { NoteRecord, Chunk, Embedder } from '../../src/types.js'
-
-function tmpDbPath(): string {
-  return join(tmpdir(), `brain-search-test-${randomUUID()}.db`)
-}
-
-function makeNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
-  return {
-    id: overrides.id ?? `note-${randomUUID().slice(0, 8)}`,
-    filePath: overrides.filePath ?? `/notes/${randomUUID().slice(0, 8)}.md`,
-    title: overrides.title ?? 'Test Note',
-    type: overrides.type ?? 'note',
-    tier: overrides.tier ?? 'slow',
-    category: overrides.category ?? null,
-    tags: overrides.tags ?? null,
-    summary: overrides.summary ?? null,
-    confidence: overrides.confidence ?? null,
-    status: overrides.status ?? 'current',
-    sources: overrides.sources ?? null,
-    createdAt: overrides.createdAt ?? null,
-    modifiedAt: overrides.modifiedAt ?? null,
-    lastReviewed: overrides.lastReviewed ?? null,
-    reviewInterval: overrides.reviewInterval ?? null,
-    expires: overrides.expires ?? null,
-    metadata: overrides.metadata ?? null,
-  }
-}
+import type { Chunk, Embedder } from '../../src/types.js'
+import { tmpDbPath, makeNote } from '../helpers.js'
 
 /**
  * Deterministic mock embedder: generates vectors from a simple hash of the input text.

@@ -103,12 +103,11 @@ function splitOversizedSection(
   let overlapPrefix = ''
 
   for (const para of paragraphs) {
-    const withOverlap = overlapPrefix.length > 0
-      ? overlapPrefix + '\n\n' + (buffer.length > 0 ? buffer + '\n\n' + para : para)
-      : (buffer.length > 0 ? buffer + '\n\n' + para : para)
-    const fullTokens = estimateTokens(withOverlap)
-
-    if (fullTokens > MAX_CHUNK_TOKENS && buffer.length > 0) {
+    const budgetForContent = overlapPrefix.length > 0
+      ? MAX_CHUNK_TOKENS - estimateTokens(overlapPrefix + '\n\n')
+      : MAX_CHUNK_TOKENS
+    const bufferWithPara = buffer.length > 0 ? buffer + '\n\n' + para : para
+    if (estimateTokens(bufferWithPara) > budgetForContent && buffer.length > 0) {
       const chunkText = overlapPrefix.length > 0
         ? overlapPrefix + '\n\n' + buffer
         : buffer

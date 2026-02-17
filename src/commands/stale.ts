@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings'
 import { loadConfig } from '../services/config.js'
 import { BrainDB } from '../services/brain-db.js'
+import { parseIntervalDays } from '../utils.js'
 import type { NoteRecord, NoteTier } from '../types.js'
 
 interface StaleNote {
@@ -8,11 +9,6 @@ interface StaleNote {
   lastReviewed: string
   reviewInterval: string
   daysOverdue: number
-}
-
-function parseIntervalDays(interval: string): number {
-  const match = interval.match(/^(\d+)d$/)
-  return match ? Number(match[1]) : 90
 }
 
 function computeDaysOverdue(note: NoteRecord, overrideDays?: number): number | null {

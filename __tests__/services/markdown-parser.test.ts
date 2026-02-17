@@ -324,6 +324,16 @@ ${body}
     }
   })
 
+  it('chunks with overlap do not exceed MAX_CHUNK_TOKENS', () => {
+    const longParagraph = 'Word '.repeat(200)
+    const body = `${longParagraph}\n\n${longParagraph}\n\n${longParagraph}\n\n${longParagraph}`
+    const result = parseMarkdown('test.md', `---\ntitle: test\ntype: note\ntier: slow\n---\n\n${body}`)
+
+    for (const chunk of result.chunks) {
+      expect(chunk.tokenCount).toBeLessThanOrEqual(512)
+    }
+  })
+
   it('adds ~10% overlap between paragraph-split chunks', () => {
     const paragraph = 'Unique sentence number one for testing overlap behavior. '.repeat(12) + '\n\n'
     const body = paragraph.repeat(4)
