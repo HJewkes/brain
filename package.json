@@ -1,8 +1,16 @@
 {
   "name": "@hjewkes/brain",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "description": "Developer second brain with hybrid RAG search",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HJewkes/brain.git"
+  },
+  "files": [
+    "dist"
+  ],
   "bin": {
     "brain": "./dist/cli.js"
   },
