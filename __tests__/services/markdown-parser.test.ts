@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseMarkdown, estimateTokens } from '../../src/services/markdown-parser.js'
+import { parseMarkdown, estimateTokens, coerceFrontmatter } from '../../src/services/markdown-parser.js'
 
 describe('estimateTokens', () => {
   it('estimates tokens as ceil(length / 4)', () => {
@@ -66,7 +66,7 @@ Content.
     expect(result.id).toBe('custom-id')
   })
 
-  it('preserves unknown fields in frontmatter', () => {
+  it('drops unknown fields from frontmatter', () => {
     const content = `---
 title: My Note
 type: note
@@ -78,8 +78,8 @@ anotherField: 42
 Content.
 `
     const result = parseMarkdown('note.md', content)
-    expect(result.frontmatter.customField).toBe('custom-value')
-    expect(result.frontmatter.anotherField).toBe(42)
+    expect('customField' in result.frontmatter).toBe(false)
+    expect('anotherField' in result.frontmatter).toBe(false)
   })
 
   it('produces sensible defaults for missing required fields', () => {
@@ -436,5 +436,162 @@ Content with enough text to generate at least one chunk for the parser output.
 `
     const result = parseMarkdown('test.md', content)
     expect(result.relations).toEqual([])
+  })
+})
+
+describe('frontmatter coercion', () => {
+  it('normalizes comma-separated tags string to array', () => {
+    const fm = coerceFrontmatter('test.md', { tags: 'react, hooks, state' })
+    expect(fm.tags).toEqual(['react', 'hooks', 'state'])
+  })
+
+  it('wraps a single tag string in an array', () => {
+    const fm = coerceFrontmatter('test.md', { tags: 'react' })
+    expect(fm.tags).toEqual(['react'])
+  })
+
+  it('keeps tags array as-is', () => {
+    const fm = coerceFrontmatter('test.md', { tags: ['react', 'hooks'] })
+    expect(fm.tags).toEqual(['react', 'hooks'])
+  })
+
+  it('filters non-string entries from tags array', () => {
+    const fm = coerceFrontmatter('test.md', { tags: ['react', 42, null, 'hooks'] })
+    expect(fm.tags).toEqual(['react', 'hooks'])
+  })
+
+  it('coerces YAML Date object to ISO string', () => {
+    const date = new Date('2026-02-17T00:00:00.000Z')
+    const fm = coerceFrontmatter('test.md', { created: date })
+    expect(fm.created).toBe('2026-02-17T00:00:00.000Z')
+  })
+
+  it('keeps date strings as-is', () => {
+    const fm = coerceFrontmatter('test.md', { created: '2026-02-17' })
+    expect(fm.created).toBe('2026-02-17')
+  })
+
+  it('returns undefined for invalid Date objects', () => {
+    const fm = coerceFrontmatter('test.md', { created: new Date('invalid') })
+    expect(fm.created).toBeUndefined()
+  })
+
+  it('falls back to default for invalid type', () => {
+    const fm = coerceFrontmatter('test.md', { type: 'invalid-type' })
+    expect(fm.type).toBe('note')
+  })
+
+  it('falls back to default for invalid tier', () => {
+    const fm = coerceFrontmatter('test.md', { tier: 'invalid-tier' })
+    expect(fm.tier).toBe('slow')
+  })
+
+  it('returns undefined for invalid confidence', () => {
+    const fm = coerceFrontmatter('test.md', { confidence: 'invalid' })
+    expect(fm.confidence).toBeUndefined()
+  })
+
+  it('returns undefined for invalid status', () => {
+    const fm = coerceFrontmatter('test.md', { status: 'invalid' })
+    expect(fm.status).toBeUndefined()
+  })
+
+  it('does not spread unknown fields into frontmatter', () => {
+    const fm = coerceFrontmatter('test.md', {
+      title: 'Test',
+      type: 'note',
+      tier: 'slow',
+      unknownField: 'should-not-appear',
+      anotherUnknown: 123,
+    })
+    expect('unknownField' in fm).toBe(false)
+    expect('anotherUnknown' in fm).toBe(false)
+  })
+
+  it('applies defaults for missing required fields', () => {
+    const fm = coerceFrontmatter('my-great-note.md', {})
+    expect(fm.title).toBe('my-great-note')
+    expect(fm.type).toBe('note')
+    expect(fm.tier).toBe('slow')
+  })
+
+  it('drops malformed source entries', () => {
+    const fm = coerceFrontmatter('test.md', {
+      sources: [
+        { url: 'https://example.com', accessed: '2026-01-01', type: 'web' },
+        { noUrl: true },
+        'not-an-object',
+        null,
+      ],
+    })
+    expect(fm.sources).toHaveLength(1)
+    expect(fm.sources![0].url).toBe('https://example.com')
+  })
+
+  it('returns undefined for sources that are not an array', () => {
+    const fm = coerceFrontmatter('test.md', { sources: 'not-an-array' })
+    expect(fm.sources).toBeUndefined()
+  })
+
+  it('returns undefined for sources where all entries are malformed', () => {
+    const fm = coerceFrontmatter('test.md', {
+      sources: [{ noUrl: true }, 'bad'],
+    })
+    expect(fm.sources).toBeUndefined()
+  })
+
+  it('validates review-interval format', () => {
+    expect(coerceFrontmatter('t.md', { 'review-interval': '30d' })['review-interval']).toBe('30d')
+    expect(coerceFrontmatter('t.md', { 'review-interval': '2w' })['review-interval']).toBe('2w')
+    expect(coerceFrontmatter('t.md', { 'review-interval': '6m' })['review-interval']).toBe('6m')
+    expect(coerceFrontmatter('t.md', { 'review-interval': 'invalid' })['review-interval']).toBeUndefined()
+    expect(coerceFrontmatter('t.md', { 'review-interval': '30' })['review-interval']).toBeUndefined()
+    expect(coerceFrontmatter('t.md', { 'review-interval': 'dx' })['review-interval']).toBeUndefined()
+  })
+
+  it('coerces related to string array and drops non-strings', () => {
+    const fm = coerceFrontmatter('test.md', { related: ['note-a', 42, 'note-b'] })
+    expect(fm.related).toEqual(['note-a', 'note-b'])
+  })
+
+  it('coerces supersedes to string', () => {
+    const fm = coerceFrontmatter('test.md', { supersedes: 'old-note' })
+    expect(fm.supersedes).toBe('old-note')
+  })
+
+  it('coerces numeric supersedes to string', () => {
+    const fm = coerceFrontmatter('test.md', { supersedes: 42 })
+    expect(fm.supersedes).toBe('42')
+  })
+
+  it('drops supersedes if it is an object', () => {
+    const fm = coerceFrontmatter('test.md', { supersedes: { id: 'note' } })
+    expect(fm.supersedes).toBeUndefined()
+  })
+
+  it('coerces parent to string', () => {
+    const fm = coerceFrontmatter('test.md', { parent: 'parent-note' })
+    expect(fm.parent).toBe('parent-note')
+  })
+
+  it('coerces numeric title to string via coerceString fallback', () => {
+    const fm = coerceFrontmatter('test.md', { title: 42 })
+    expect(fm.title).toBe('test')
+  })
+
+  it('handles all date fields consistently', () => {
+    const date = new Date('2026-03-01T00:00:00.000Z')
+    const fm = coerceFrontmatter('test.md', {
+      created: date,
+      modified: '2026-03-02',
+      'last-reviewed': date,
+      expires: 'never',
+      date: date,
+    })
+    expect(fm.created).toBe('2026-03-01T00:00:00.000Z')
+    expect(fm.modified).toBe('2026-03-02')
+    expect(fm['last-reviewed']).toBe('2026-03-01T00:00:00.000Z')
+    expect(fm.expires).toBe('never')
+    expect(fm.date).toBe('2026-03-01T00:00:00.000Z')
   })
 })

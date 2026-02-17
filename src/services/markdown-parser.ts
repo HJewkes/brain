@@ -2,11 +2,16 @@ import matter from 'gray-matter'
 import type {
   ParsedNote,
   NoteFrontmatter,
-  NoteType,
-  NoteTier,
   RawChunk,
   Relation,
   RelationType,
+  NoteSource,
+} from '../types.js'
+import {
+  VALID_NOTE_TYPES,
+  VALID_NOTE_TIERS,
+  VALID_NOTE_CONFIDENCES,
+  VALID_NOTE_STATUSES,
 } from '../types.js'
 
 const MAX_CHUNK_TOKENS = 512
@@ -23,7 +28,7 @@ export function parseMarkdown(filePath: string, content: string): ParsedNote {
   const { data, content: body } = matter(content)
 
   const id = deriveId(filePath, data)
-  const frontmatter = buildFrontmatter(filePath, data)
+  const frontmatter = coerceFrontmatter(filePath, data)
   const chunks = chunkBody(body)
   const relations = extractRelations(id, data)
 
@@ -36,17 +41,118 @@ function deriveId(filePath: string, data: Record<string, unknown>): string {
   return filename.replace(/\.md$/, '')
 }
 
-function buildFrontmatter(
+export function coerceFrontmatter(
   filePath: string,
   data: Record<string, unknown>,
 ): NoteFrontmatter {
   const filename = (filePath.split('/').pop() ?? filePath).replace(/\.md$/, '')
+
   return {
-    ...data,
+    id: typeof data.id === 'string' ? data.id : undefined,
     title: typeof data.title === 'string' ? data.title : filename,
-    type: (data.type as NoteType) ?? 'note',
-    tier: (data.tier as NoteTier) ?? 'slow',
+    type: coerceEnum(data.type, VALID_NOTE_TYPES, 'note'),
+    tier: coerceEnum(data.tier, VALID_NOTE_TIERS, 'slow'),
+    category: coerceString(data.category),
+    tags: coerceTags(data.tags),
+    summary: coerceString(data.summary),
+    confidence: coerceEnum(data.confidence, VALID_NOTE_CONFIDENCES, undefined),
+    status: coerceEnum(data.status, VALID_NOTE_STATUSES, undefined),
+    sources: coerceSources(data.sources),
+    created: coerceDate(data.created),
+    modified: coerceDate(data.modified),
+    'last-reviewed': coerceDate(data['last-reviewed']),
+    'review-interval': coerceReviewInterval(data['review-interval']),
+    expires: coerceDate(data.expires),
+    date: coerceDate(data.date),
+    participants: coerceStringArray(data.participants),
+    project: coerceString(data.project),
+    outcome: coerceString(data.outcome),
+    related: coerceStringArray(data.related),
+    supersedes: coerceString(data.supersedes),
+    parent: coerceString(data.parent),
   }
+}
+
+function coerceString(value: unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (value != null && typeof value !== 'object') return String(value)
+  return undefined
+}
+
+function coerceEnum<T extends string>(
+  value: unknown,
+  valid: T[],
+  fallback: T,
+): T
+function coerceEnum<T extends string>(
+  value: unknown,
+  valid: T[],
+  fallback: undefined,
+): T | undefined
+function coerceEnum<T extends string>(
+  value: unknown,
+  valid: T[],
+  fallback: T | undefined,
+): T | undefined {
+  if (typeof value === 'string' && valid.includes(value as T)) return value as T
+  return fallback
+}
+
+function coerceTags(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === 'string')
+  }
+  if (typeof value === 'string') {
+    if (value.includes(',')) {
+      return value.split(',').map((s) => s.trim()).filter(Boolean)
+    }
+    return [value]
+  }
+  return undefined
+}
+
+function coerceDate(value: unknown): string | undefined {
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? undefined : value.toISOString()
+  }
+  if (typeof value === 'string') return value
+  return undefined
+}
+
+function coerceSources(value: unknown): NoteSource[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const valid: NoteSource[] = []
+  for (const entry of value) {
+    if (
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as Record<string, unknown>).url === 'string'
+    ) {
+      valid.push({
+        url: (entry as Record<string, unknown>).url as string,
+        accessed: typeof (entry as Record<string, unknown>).accessed === 'string'
+          ? ((entry as Record<string, unknown>).accessed as string)
+          : '',
+        type: typeof (entry as Record<string, unknown>).type === 'string'
+          ? ((entry as Record<string, unknown>).type as string)
+          : '',
+      })
+    }
+  }
+  return valid.length > 0 ? valid : undefined
+}
+
+function coerceReviewInterval(value: unknown): string | undefined {
+  if (typeof value === 'string' && /^\d+[dwm]$/.test(value)) return value
+  return undefined
+}
+
+function coerceStringArray(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const filtered = value.filter((v): v is string => typeof v === 'string')
+    return filtered.length > 0 ? filtered : undefined
+  }
+  return undefined
 }
 
 interface Section {

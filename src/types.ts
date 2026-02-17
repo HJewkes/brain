@@ -23,6 +23,11 @@ export type NoteConfidence = 'high' | 'medium' | 'low' | 'speculative'
 
 export type NoteStatus = 'current' | 'outdated' | 'deprecated' | 'draft'
 
+export const VALID_NOTE_TYPES: NoteType[] = ['note', 'decision', 'pattern', 'research', 'meeting', 'session-log', 'guide']
+export const VALID_NOTE_TIERS: NoteTier[] = ['slow', 'fast']
+export const VALID_NOTE_CONFIDENCES: NoteConfidence[] = ['high', 'medium', 'low', 'speculative']
+export const VALID_NOTE_STATUSES: NoteStatus[] = ['current', 'outdated', 'deprecated', 'draft']
+
 export type RelationType = 'related-to' | 'supersedes' | 'informs' | 'parent'
 
 export interface NoteSource {
@@ -54,7 +59,6 @@ export interface NoteFrontmatter {
   related?: string[]
   supersedes?: string
   parent?: string
-  [key: string]: unknown
 }
 
 // === Chunk Types ===
