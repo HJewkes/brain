@@ -93,6 +93,8 @@ export interface SearchResult {
   confidence: NoteConfidence | null
 }
 
+export type FusionStrategy = 'rrf' | 'score'
+
 export interface SearchOptions {
   limit: number
   tier?: NoteTier
@@ -101,6 +103,7 @@ export interface SearchOptions {
   confidence?: NoteConfidence
   since?: string
   expand?: boolean
+  fusionStrategy?: FusionStrategy
 }
 
 // === Graph Types ===

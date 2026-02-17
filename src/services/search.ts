@@ -1,6 +1,7 @@
 import type { BrainDB } from './brain-db.js'
 import type {
   Embedder,
+  FusionStrategy,
   SearchOptions,
   SearchResult,
   NoteTier,
@@ -11,10 +12,17 @@ const RRF_K = 60
 const EXCERPT_MAX_LENGTH = 200
 const OVERFETCH_MULTIPLIER = 3
 
-interface FusionEntry {
+interface RRFEntry {
   noteId: string
   bm25Rank: number | null
   vectorRank: number | null
+  chunkId: string | null
+}
+
+interface ScoreEntry {
+  noteId: string
+  bm25Score: number | null
+  vectorDistance: number | null
   chunkId: string | null
 }
 
@@ -26,6 +34,127 @@ function truncateExcerpt(content: string): string {
 function parseTags(tagsStr: string | null): string[] {
   if (!tagsStr) return []
   return tagsStr.split(',').map((t) => t.trim()).filter(Boolean)
+}
+
+interface FTSHit { noteId: string; rank: number }
+interface VectorHit { chunkId: string; noteId: string; distance: number }
+type ScoredResult = { noteId: string; score: number; chunkId: string | null }
+
+function fuseByRRF(
+  ftsResults: FTSHit[],
+  vectorByNote: Map<string, VectorHit>,
+  weights: { bm25: number; vector: number },
+): ScoredResult[] {
+  const fusionMap = new Map<string, RRFEntry>()
+
+  for (let i = 0; i < ftsResults.length; i++) {
+    const { noteId } = ftsResults[i]
+    fusionMap.set(noteId, {
+      noteId,
+      bm25Rank: i + 1,
+      vectorRank: null,
+      chunkId: null,
+    })
+  }
+
+  let vectorRank = 1
+  for (const [noteId, vr] of vectorByNote) {
+    const existing = fusionMap.get(noteId)
+    if (existing) {
+      existing.vectorRank = vectorRank
+      existing.chunkId = vr.chunkId
+    } else {
+      fusionMap.set(noteId, {
+        noteId,
+        bm25Rank: null,
+        vectorRank,
+        chunkId: vr.chunkId,
+      })
+    }
+    vectorRank++
+  }
+
+  const scored: ScoredResult[] = []
+  for (const entry of fusionMap.values()) {
+    let score = 0
+    if (entry.bm25Rank !== null) {
+      score += weights.bm25 * (1 / (RRF_K + entry.bm25Rank))
+    }
+    if (entry.vectorRank !== null) {
+      score += weights.vector * (1 / (RRF_K + entry.vectorRank))
+    }
+    scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId })
+  }
+
+  return scored
+}
+
+function fuseByScore(
+  ftsResults: FTSHit[],
+  vectorByNote: Map<string, VectorHit>,
+  weights: { bm25: number; vector: number },
+): ScoredResult[] {
+  const fusionMap = new Map<string, ScoreEntry>()
+
+  for (const { noteId, rank } of ftsResults) {
+    fusionMap.set(noteId, {
+      noteId,
+      bm25Score: rank,
+      vectorDistance: null,
+      chunkId: null,
+    })
+  }
+
+  for (const [noteId, vr] of vectorByNote) {
+    const existing = fusionMap.get(noteId)
+    if (existing) {
+      existing.vectorDistance = vr.distance
+      existing.chunkId = vr.chunkId
+    } else {
+      fusionMap.set(noteId, {
+        noteId,
+        bm25Score: null,
+        vectorDistance: vr.distance,
+        chunkId: vr.chunkId,
+      })
+    }
+  }
+
+  // Min-max normalize BM25 scores (FTS5 rank: negative, lower = better)
+  const bm25Scores = [...fusionMap.values()]
+    .map((e) => e.bm25Score)
+    .filter((s): s is number => s !== null)
+
+  let bm25Best = 0
+  let bm25Worst = 0
+  let bm25Range = 0
+  if (bm25Scores.length > 0) {
+    bm25Best = Math.min(...bm25Scores)  // most negative = best match
+    bm25Worst = Math.max(...bm25Scores) // least negative = worst match
+    bm25Range = bm25Worst - bm25Best
+  }
+
+  const scored: ScoredResult[] = []
+  for (const entry of fusionMap.values()) {
+    let score = 0
+
+    if (entry.bm25Score !== null) {
+      const normBm25 = bm25Range === 0
+        ? 1.0
+        : (bm25Worst - entry.bm25Score) / bm25Range
+      score += weights.bm25 * normBm25
+    }
+
+    if (entry.vectorDistance !== null) {
+      // For unit-normalized embeddings: cosine_sim = 1 - (euclidean_dist² / 2)
+      const cosineSim = 1 - (entry.vectorDistance * entry.vectorDistance) / 2
+      score += weights.vector * Math.max(0, cosineSim)
+    }
+
+    scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId })
+  }
+
+  return scored
 }
 
 export async function search(
@@ -75,48 +204,11 @@ export async function search(
     }
   }
 
-  // Step 3: RRF fusion
-  const fusionMap = new Map<string, FusionEntry>()
-
-  for (let i = 0; i < filteredFts.length; i++) {
-    const { noteId } = filteredFts[i]
-    fusionMap.set(noteId, {
-      noteId,
-      bm25Rank: i + 1,
-      vectorRank: null,
-      chunkId: null,
-    })
-  }
-
-  let vectorRank = 1
-  for (const [noteId, vr] of bestVectorByNote) {
-    const existing = fusionMap.get(noteId)
-    if (existing) {
-      existing.vectorRank = vectorRank
-      existing.chunkId = vr.chunkId
-    } else {
-      fusionMap.set(noteId, {
-        noteId,
-        bm25Rank: null,
-        vectorRank,
-        chunkId: vr.chunkId,
-      })
-    }
-    vectorRank++
-  }
-
-  // Compute RRF scores
-  const scored: { noteId: string; score: number; chunkId: string | null }[] = []
-  for (const entry of fusionMap.values()) {
-    let score = 0
-    if (entry.bm25Rank !== null) {
-      score += fusionWeights.bm25 * (1 / (RRF_K + entry.bm25Rank))
-    }
-    if (entry.vectorRank !== null) {
-      score += fusionWeights.vector * (1 / (RRF_K + entry.vectorRank))
-    }
-    scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId })
-  }
+  // Step 3: Fusion
+  const strategy: FusionStrategy = options.fusionStrategy ?? 'score'
+  const scored = strategy === 'score'
+    ? fuseByScore(filteredFts, bestVectorByNote, fusionWeights)
+    : fuseByRRF(filteredFts, bestVectorByNote, fusionWeights)
 
   scored.sort((a, b) => b.score - a.score)
   const topResults = scored.slice(0, limit)
