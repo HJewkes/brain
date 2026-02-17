@@ -99,6 +99,14 @@ const setSubcommand = new Command('set')
       return
     }
 
+    if (existing !== null && typeof value !== typeof existing) {
+      console.error(
+        `Error: type mismatch for "${key}". Expected ${typeof existing}, got ${typeof value}`,
+      )
+      process.exitCode = 1
+      return
+    }
+
     const updated = setNestedValue(config, camelKey, value)
 
     try {

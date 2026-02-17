@@ -1,4 +1,22 @@
-import type { BrainConfig, Embedder } from '../types.js'
+import type { BrainConfig, Embedder, EmbedderBackend } from '../types.js'
+
+interface EmbedderInfo {
+  model: string
+  dimensions: number
+}
+
+export function getEmbedderInfo(backend: EmbedderBackend): EmbedderInfo {
+  switch (backend) {
+    case 'local':
+      return { model: 'bge-small-en-v1.5', dimensions: 384 }
+    case 'ollama':
+      return { model: 'nomic-embed-text', dimensions: 768 }
+    case 'remote':
+      return { model: 'nomic-embed-text', dimensions: 768 }
+    default:
+      throw new Error(`Unknown embedder backend: ${backend as string}`)
+  }
+}
 import { LocalEmbedder } from './local-embedder.js'
 import { OllamaEmbedder } from './ollama-embedder.js'
 import { RemoteEmbedder } from './remote-embedder.js'

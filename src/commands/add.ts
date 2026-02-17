@@ -57,7 +57,16 @@ function resolveOutputPath(
     return join(notesDir, 'logs', yyyy, mm, `${yyyy}-${mm}-${dd}-${id}.md`)
   }
 
-  const typeDir = type === 'note' ? 'notes' : `${type}s`
+  const TYPE_DIRS: Record<NoteType, string> = {
+    note: 'notes',
+    decision: 'decisions',
+    research: 'research',
+    pattern: 'patterns',
+    meeting: 'logs',
+    'session-log': 'logs',
+    guide: 'notes',
+  }
+  const typeDir = TYPE_DIRS[type]
   return join(notesDir, typeDir, `${id}.md`)
 }
 
@@ -65,10 +74,25 @@ export const addCommand = new Command('add')
   .description('Create a new note from file or stdin')
   .argument('[file]', 'Input file path')
   .option('--title <title>', 'Note title')
-  .option('--type <type>', 'Note type (note, decision, pattern, research, meeting, session-log)')
+  .option('--type <type>', 'Note type (note, decision, pattern, research, meeting, session-log, guide)')
   .option('--tier <tier>', 'Note tier (slow, fast)')
   .option('--tags <tags>', 'Comma-separated tags')
   .action(async (file, opts) => {
+    const VALID_TYPES: NoteType[] = ['note', 'decision', 'pattern', 'research', 'meeting', 'session-log', 'guide']
+    const VALID_TIERS: NoteTier[] = ['slow', 'fast']
+
+    if (opts.type && !VALID_TYPES.includes(opts.type as NoteType)) {
+      console.error(`Error: invalid type "${opts.type}". Valid types: ${VALID_TYPES.join(', ')}`)
+      process.exitCode = 1
+      return
+    }
+
+    if (opts.tier && !VALID_TIERS.includes(opts.tier as NoteTier)) {
+      console.error(`Error: invalid tier "${opts.tier}". Valid tiers: ${VALID_TIERS.join(', ')}`)
+      process.exitCode = 1
+      return
+    }
+
     let content: string
 
     if (file) {

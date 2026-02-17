@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings'
 import type { NoteType } from '../types.js'
 
 const VALID_TYPES = new Set<NoteType>([
-  'note', 'decision', 'meeting', 'research', 'pattern', 'session-log',
+  'note', 'decision', 'meeting', 'research', 'pattern', 'session-log', 'guide',
 ])
 
 function todayISO(): string {
@@ -91,6 +91,17 @@ function generateTemplate(type: NoteType): string {
         '## Goal', '', '## Log', '', '## Outcome', '',
       )
 
+    case 'guide':
+      return lines(
+        ...base,
+        'tier: slow', 'category: ""', 'tags: []', 'summary: ""',
+        'confidence: high', 'status: current',
+        `created: ${today}`, `modified: ${today}`,
+        `last-reviewed: ${today}`, 'review-interval: 180d',
+        'sources: []', 'related: []', '---', '',
+        '## Purpose', '', '## Steps', '', '## Tips', '',
+      )
+
     default:
       return ''
   }
@@ -102,7 +113,7 @@ function lines(...parts: string[]): string {
 
 export const templateCommand = new Command('template')
   .description('Output a frontmatter template for a note type')
-  .argument('<type>', 'Note type (note, decision, meeting, research, pattern, session-log)')
+  .argument('<type>', 'Note type (note, decision, meeting, research, pattern, session-log, guide)')
   .action((type) => {
     if (!VALID_TYPES.has(type as NoteType)) {
       console.error(

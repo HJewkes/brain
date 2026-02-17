@@ -15,6 +15,8 @@ const program = new Command()
   .name('brain')
   .description('Developer second brain with hybrid RAG search')
   .version('0.1.0')
+  .option('--config-dir <path>', 'override config directory')
+  .option('--db-path <path>', 'override database path')
 
 program.addCommand(initCommand)
 program.addCommand(indexCommand)
@@ -27,4 +29,7 @@ program.addCommand(templateCommand)
 program.addCommand(archiveCommand)
 program.addCommand(configCommand)
 
-program.parseAsync()
+program.parseAsync().catch((err: Error) => {
+  process.stderr.write(`Error: ${err.message}\n`)
+  process.exitCode = 1
+})

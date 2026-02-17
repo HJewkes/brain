@@ -3,7 +3,7 @@ import { mkdirSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadConfig, saveConfig } from '../services/config.js'
 import { BrainDB } from '../services/brain-db.js'
-import { createEmbedder } from '../adapters/index.js'
+import { getEmbedderInfo } from '../adapters/index.js'
 import type { EmbedderBackend } from '../types.js'
 
 const SUBDIRS = [
@@ -106,8 +106,8 @@ export const initCommand = new Command('init')
     }
 
     const db = new BrainDB(config.dbPath)
-    const embedder = createEmbedder(config)
-    db.setEmbeddingModel(embedder.model, embedder.dimensions)
+    const info = getEmbedderInfo(config.embedder)
+    db.setEmbeddingModel(info.model, info.dimensions)
     db.close()
 
     const summary = {
