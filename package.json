@@ -1,15 +1,17 @@
 {
-  "name": "@hjewkes/brain",
-  "version": "0.1.0",
+  "name": "@titan-design/brain",
+  "version": "0.2.0",
   "type": "module",
   "description": "Developer second brain with hybrid RAG search",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/HJewkes/brain.git"
+    "url": "https://github.com/titan-design/brain.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "skill",
+    "scripts"
   ],
   "bin": {
     "brain": "./dist/cli.js"
@@ -20,18 +22,22 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src __tests__ --no-error-on-unmatched-pattern"
+    "lint": "eslint src __tests__ --no-error-on-unmatched-pattern",
+    "postinstall": "node scripts/postinstall.js",
+    "preuninstall": "node scripts/preuninstall.js"
   },
   "dependencies": {
     "commander": "^13.1.0",
     "@commander-js/extra-typings": "^13.1.0",
     "better-sqlite3": "^11.8.1",
     "sqlite-vec": "^0.1.6",
-    "@huggingface/transformers": "^3.3.3",
     "ollama": "^0.5.14",
     "gray-matter": "^4.0.3",
     "glob": "^11.0.1",
     "env-paths": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^3.3.3"
   },
   "devDependencies": {
     "typescript": "^5.7.3",
@@ -43,6 +49,10 @@
     "eslint": "^9.20.0",
     "@eslint/js": "^9.20.0",
     "typescript-eslint": "^8.24.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "engines": {
     "node": ">=22"
