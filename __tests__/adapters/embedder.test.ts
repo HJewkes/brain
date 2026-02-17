@@ -176,6 +176,7 @@ describe('RemoteEmbedder', () => {
         model: 'nomic-embed-text',
         input: ['search_document: hello'],
       }),
+      signal: expect.any(AbortSignal),
     })
     expect(result).toEqual([fakeVec])
   })

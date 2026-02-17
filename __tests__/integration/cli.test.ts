@@ -5,30 +5,26 @@ import {
   rmSync,
   existsSync,
   readFileSync,
-  writeFileSync,
   mkdirSync,
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import envPaths from 'env-paths'
 
 const PROJECT_ROOT = join(import.meta.dirname, '..', '..')
 const CLI = `npx tsx ${join(PROJECT_ROOT, 'src', 'cli.ts')}`
-const paths = envPaths('brain', { suffix: '' })
-const CONFIG_PATH = join(paths.config, 'config.json')
 
 let tmpDir: string
 let notesDir: string
 let dbPath: string
-let savedConfig: string | null = null
+let fakeHome: string
 
-function run(cmd: string, options?: { input?: string }): string {
-  return execSync(cmd, {
+function cli(args: string, options?: { input?: string }): string {
+  return execSync(`${CLI} ${args}`, {
     cwd: PROJECT_ROOT,
     encoding: 'utf-8',
     timeout: 30_000,
     input: options?.input,
-    env: { ...process.env, NODE_NO_WARNINGS: '1' },
+    env: { ...process.env, HOME: fakeHome, NODE_NO_WARNINGS: '1' },
   }).trim()
 }
 
@@ -36,45 +32,29 @@ beforeAll(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'brain-integration-'))
   notesDir = join(tmpDir, 'notes')
   dbPath = join(tmpDir, 'brain.db')
-
-  if (existsSync(CONFIG_PATH)) {
-    savedConfig = readFileSync(CONFIG_PATH, 'utf-8')
-  }
-
-  mkdirSync(paths.config, { recursive: true })
-  writeFileSync(
-    CONFIG_PATH,
-    JSON.stringify({
-      notesDir,
-      dbPath,
-      embedder: 'local',
-      fusionWeights: { bm25: 0.3, vector: 0.7 },
-    }),
-  )
+  fakeHome = join(tmpDir, 'home')
+  mkdirSync(fakeHome, { recursive: true })
 })
 
 afterAll(() => {
-  if (savedConfig !== null) {
-    writeFileSync(CONFIG_PATH, savedConfig)
-  } else if (existsSync(CONFIG_PATH)) {
-    rmSync(CONFIG_PATH)
-  }
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
 describe('CLI integration', () => {
   it('init creates directory structure and database', () => {
-    const output = run(`${CLI} init --notes-dir "${notesDir}" --json`)
+    const output = cli(`init --notes-dir "${notesDir}" --json`)
     const result = JSON.parse(output)
 
     expect(result.notesDir).toBe(notesDir)
-    expect(result.dbPath).toBe(dbPath)
     expect(result.embedder).toBe('local')
     expect(existsSync(notesDir)).toBe(true)
     expect(existsSync(join(notesDir, 'notes'))).toBe(true)
     expect(existsSync(join(notesDir, 'decisions'))).toBe(true)
     expect(existsSync(join(notesDir, 'research'))).toBe(true)
     expect(existsSync(join(notesDir, '_templates'))).toBe(true)
+
+    // Update dbPath to match what init actually created
+    dbPath = result.dbPath
     expect(existsSync(dbPath)).toBe(true)
   })
 
@@ -102,7 +82,7 @@ describe('CLI integration', () => {
       'This is a test note for integration testing.',
     ].join('\n')
 
-    const outputPath = run(`${CLI} add --type note --tier slow`, {
+    const outputPath = cli('add --type note --tier slow', {
       input: content,
     })
 
@@ -140,7 +120,7 @@ describe('CLI integration', () => {
       'It works by exercising the full CLI pipeline.',
     ].join('\n')
 
-    const outputPath = run(`${CLI} add --type research --tier slow`, {
+    const outputPath = cli('add --type research --tier slow', {
       input: content,
     })
 
@@ -148,7 +128,7 @@ describe('CLI integration', () => {
   })
 
   it('index processes notes into the database', () => {
-    const output = run(`${CLI} index --json`)
+    const output = cli('index --json')
     const result = JSON.parse(output)
 
     expect(result.indexed).toBeGreaterThanOrEqual(2)
@@ -156,7 +136,7 @@ describe('CLI integration', () => {
   })
 
   it('search returns results with correct shape (FTS)', () => {
-    const output = run(`${CLI} search "integration testing" --json --limit 5`)
+    const output = cli('search "integration testing" --json --limit 5')
     const results = JSON.parse(output)
 
     expect(Array.isArray(results)).toBe(true)
@@ -173,7 +153,7 @@ describe('CLI integration', () => {
   })
 
   it('stale identifies notes needing review', () => {
-    const output = run(`${CLI} stale --json`)
+    const output = cli('stale --json')
     const results = JSON.parse(output)
 
     expect(Array.isArray(results)).toBe(true)
@@ -187,7 +167,7 @@ describe('CLI integration', () => {
   })
 
   it('graph shows relations for a note', () => {
-    const output = run(`${CLI} graph test-note-two --json`)
+    const output = cli('graph test-note-two --json')
     const result = JSON.parse(output)
 
     expect(result).toHaveProperty('root')
@@ -199,7 +179,7 @@ describe('CLI integration', () => {
   })
 
   it('template outputs valid YAML frontmatter', () => {
-    const output = run(`${CLI} template note`)
+    const output = cli('template note')
 
     expect(output).toContain('---')
     expect(output).toContain('type: note')
@@ -212,7 +192,7 @@ describe('CLI integration', () => {
   })
 
   it('status returns stats object with correct shape', () => {
-    const output = run(`${CLI} status --json`)
+    const output = cli('status --json')
     const result = JSON.parse(output)
 
     expect(result).toHaveProperty('totalNotes')
