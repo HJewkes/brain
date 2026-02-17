@@ -32,7 +32,7 @@ export const searchCommand = new Command('search')
         since: opts.since,
       }
 
-      const results = await search(db, embedder, query, searchOpts)
+      const results = await search(db, embedder, query, searchOpts, config.fusionWeights)
 
       const expanded: SearchResult[] = []
       if (opts.expand && results.length > 0) {

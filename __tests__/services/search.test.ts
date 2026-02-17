@@ -422,6 +422,18 @@ describe('search service', () => {
     })
   })
 
+  describe('custom fusion weights', () => {
+    it('respects custom fusion weights', async () => {
+      const bm25Heavy = await search(ctx.db, ctx.embedder, 'TypeScript patterns', { limit: 5 }, { bm25: 0.9, vector: 0.1 })
+      const vectorHeavy = await search(ctx.db, ctx.embedder, 'TypeScript patterns', { limit: 5 }, { bm25: 0.1, vector: 0.9 })
+
+      expect(bm25Heavy.length).toBeGreaterThan(0)
+      expect(vectorHeavy.length).toBeGreaterThan(0)
+      // Scores should differ when weights change
+      expect(bm25Heavy[0].score).not.toBeCloseTo(vectorHeavy[0].score, 5)
+    })
+  })
+
   describe('nomic model query prefix', () => {
     it('prefixes query with search_query: for nomic-embed-text model', async () => {
       let embeddedTexts: string[] = []

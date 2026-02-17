@@ -1,4 +1,3 @@
-import type Database from 'better-sqlite3'
 import type { BrainDB } from './brain-db.js'
 import type {
   Embedder,
@@ -9,107 +8,14 @@ import type {
 } from '../types.js'
 
 const RRF_K = 60
-const DEFAULT_BM25_WEIGHT = 0.3
-const DEFAULT_VECTOR_WEIGHT = 0.7
 const EXCERPT_MAX_LENGTH = 200
 const OVERFETCH_MULTIPLIER = 3
-
-interface VectorResult {
-  chunkId: string
-  noteId: string
-  distance: number
-}
 
 interface FusionEntry {
   noteId: string
   bm25Rank: number | null
   vectorRank: number | null
   chunkId: string | null
-}
-
-function getInternalDb(brainDb: BrainDB): Database.Database {
-  return (brainDb as unknown as { db: Database.Database }).db
-}
-
-function searchVector(
-  rawDb: Database.Database,
-  queryEmbedding: Float32Array,
-  limit: number,
-): VectorResult[] {
-  try {
-    const rows = rawDb
-      .prepare(
-        `SELECT
-          cv.chunk_id as chunkId,
-          c.note_id as noteId,
-          cv.distance
-        FROM chunk_vectors cv
-        JOIN chunks c ON c.id = cv.chunk_id
-        WHERE embedding MATCH ?
-          AND k = ?
-        ORDER BY distance`,
-      )
-      .all(Buffer.from(queryEmbedding.buffer), limit) as VectorResult[]
-    return rows
-  } catch {
-    return []
-  }
-}
-
-function buildFilteredNoteIds(
-  rawDb: Database.Database,
-  options: SearchOptions,
-): Set<string> | null {
-  const conditions: string[] = []
-  const params: unknown[] = []
-
-  if (options.tier) {
-    conditions.push('tier = ?')
-    params.push(options.tier)
-  }
-
-  if (options.category) {
-    conditions.push('category = ?')
-    params.push(options.category)
-  }
-
-  if (options.confidence) {
-    conditions.push('confidence = ?')
-    params.push(options.confidence)
-  }
-
-  if (options.since) {
-    conditions.push('modified_at >= ?')
-    params.push(options.since)
-  }
-
-  if (options.tags && options.tags.length > 0) {
-    const tagConditions = options.tags.map(() => 'tags LIKE ?')
-    conditions.push(`(${tagConditions.join(' AND ')})`)
-    for (const tag of options.tags) {
-      params.push(`%${tag}%`)
-    }
-  }
-
-  if (conditions.length === 0) return null
-
-  const sql = `SELECT id FROM notes WHERE ${conditions.join(' AND ')}`
-  const rows = rawDb.prepare(sql).all(...params) as { id: string }[]
-  return new Set(rows.map((r) => r.id))
-}
-
-function getFirstChunkContent(rawDb: Database.Database, noteId: string): string {
-  const row = rawDb
-    .prepare('SELECT content FROM chunks WHERE note_id = ? ORDER BY rowid LIMIT 1')
-    .get(noteId) as { content: string } | undefined
-  return row?.content ?? ''
-}
-
-function getChunkContent(rawDb: Database.Database, chunkId: string): string {
-  const row = rawDb
-    .prepare('SELECT content FROM chunks WHERE id = ?')
-    .get(chunkId) as { content: string } | undefined
-  return row?.content ?? ''
 }
 
 function truncateExcerpt(content: string): string {
@@ -127,14 +33,20 @@ export async function search(
   embedder: Embedder,
   query: string,
   options: SearchOptions,
+  fusionWeights: { bm25: number; vector: number } = { bm25: 0.3, vector: 0.7 },
 ): Promise<SearchResult[]> {
   if (!query.trim()) return []
 
-  const rawDb = getInternalDb(db)
   const limit = options.limit
   const overfetchLimit = limit * OVERFETCH_MULTIPLIER
 
-  const allowedNoteIds = buildFilteredNoteIds(rawDb, options)
+  const allowedNoteIds = db.getFilteredNoteIds({
+    tier: options.tier,
+    category: options.category,
+    confidence: options.confidence,
+    since: options.since,
+    tags: options.tags,
+  })
 
   // Step 1: BM25 search via FTS5
   const ftsResults = db.searchFTS(query, overfetchLimit)
@@ -149,13 +61,13 @@ export async function search(
   const [queryEmbedding] = await embedder.embed([queryText])
   const queryVec = new Float32Array(queryEmbedding)
 
-  const vectorResults = searchVector(rawDb, queryVec, overfetchLimit)
+  const vectorResults = db.searchVector(queryVec, overfetchLimit)
   const filteredVector = allowedNoteIds
     ? vectorResults.filter((r) => allowedNoteIds.has(r.noteId))
     : vectorResults
 
   // Deduplicate vector results by noteId (keep best distance per note)
-  const bestVectorByNote = new Map<string, VectorResult>()
+  const bestVectorByNote = new Map<string, { chunkId: string; noteId: string; distance: number }>()
   for (const vr of filteredVector) {
     const existing = bestVectorByNote.get(vr.noteId)
     if (!existing || vr.distance < existing.distance) {
@@ -198,10 +110,10 @@ export async function search(
   for (const entry of fusionMap.values()) {
     let score = 0
     if (entry.bm25Rank !== null) {
-      score += DEFAULT_BM25_WEIGHT * (1 / (RRF_K + entry.bm25Rank))
+      score += fusionWeights.bm25 * (1 / (RRF_K + entry.bm25Rank))
     }
     if (entry.vectorRank !== null) {
-      score += DEFAULT_VECTOR_WEIGHT * (1 / (RRF_K + entry.vectorRank))
+      score += fusionWeights.vector * (1 / (RRF_K + entry.vectorRank))
     }
     scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId })
   }
@@ -216,14 +128,14 @@ export async function search(
     if (!note) continue
 
     const excerptContent = item.chunkId
-      ? getChunkContent(rawDb, item.chunkId)
-      : getFirstChunkContent(rawDb, item.noteId)
+      ? db.getChunkContent(item.chunkId)
+      : (db.getFirstChunkForNote(item.noteId)?.content ?? '')
 
     results.push({
       score: item.score,
       filePath: note.filePath,
       noteId: note.id,
-      heading: getChunkHeading(rawDb, item.chunkId, item.noteId),
+      heading: db.getChunkHeading(item.chunkId, item.noteId),
       excerpt: truncateExcerpt(excerptContent),
       tier: note.tier as NoteTier,
       tags: parseTags(note.tags),
@@ -232,21 +144,4 @@ export async function search(
   }
 
   return results
-}
-
-function getChunkHeading(
-  rawDb: Database.Database,
-  chunkId: string | null,
-  noteId: string,
-): string | null {
-  if (chunkId) {
-    const row = rawDb
-      .prepare('SELECT heading FROM chunks WHERE id = ?')
-      .get(chunkId) as { heading: string | null } | undefined
-    if (row?.heading) return row.heading
-  }
-  const row = rawDb
-    .prepare('SELECT heading FROM chunks WHERE note_id = ? ORDER BY rowid LIMIT 1')
-    .get(noteId) as { heading: string | null } | undefined
-  return row?.heading ?? null
 }
