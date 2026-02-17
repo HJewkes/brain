@@ -42,7 +42,7 @@ afterAll(() => {
 
 describe('CLI integration', () => {
   it('init creates directory structure and database', () => {
-    const output = cli(`init --notes-dir "${notesDir}" --json`)
+    const output = cli(`init --notes-dir "${notesDir}" --embedder local --json`)
     const result = JSON.parse(output)
 
     expect(result.notesDir).toBe(notesDir)
