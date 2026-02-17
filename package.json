@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/titan-design/brain.git"
+    "url": "git+https://github.com/HJewkes/brain.git"
   },
   "files": [
     "dist",
