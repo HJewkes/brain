@@ -1,0 +1,1573 @@
+{
+  "notes": [
+    {
+      "id": "vbt-fundamentals",
+      "filename": "vbt-fundamentals.md",
+      "frontmatter": {
+        "title": "Velocity-Based Training Fundamentals",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "exercise-science",
+          "velocity"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "velocity-thresholds-v3",
+          "rpe-velocity-relationship",
+          "movement-phases",
+          "mvt-research"
+        ],
+        "created": "2025-08-15"
+      },
+      "body": "# Velocity-Based Training Fundamentals\n\n## Overview\n\nVelocity-based training (VBT) is a method of prescribing and monitoring resistance training intensity using barbell or implement velocity rather than percentages of one-repetition maximum (1RM). The core premise is that movement velocity has a strong inverse relationship with relative load — as load increases toward 1RM, concentric velocity decreases in a near-linear fashion.\n\n## Key Principles\n\n### Load-Velocity Relationship\n\nThe load-velocity profile is individual and exercise-specific. For the back squat, mean concentric velocity at 1RM typically falls between 0.15–0.35 m/s depending on the athlete. This relationship allows practitioners to estimate daily 1RM without maximal testing, reducing fatigue accumulation across a training block.\n\nResearch by González-Badillo and Sánchez-Medina (2010) established that mean propulsive velocity (MPV) provides more reliable load-velocity profiles than mean velocity (MV) for most exercises. However, for movements where the deceleration phase is minimal (e.g., squat jump, bench press throw), MV and MPV converge.\n\n### Velocity Zones\n\n| Zone | Velocity Range | Training Goal |\n|------|---------------|---------------|\n| Strength-Speed | 0.75–1.0 m/s | Power development |\n| Speed-Strength | 1.0–1.3 m/s | Ballistic power |\n| Starting Strength | 0.5–0.75 m/s | Rate of force development |\n| Max Strength | 0.15–0.5 m/s | Maximal force production |\n| Absolute Strength | < 0.15 m/s | Near-1RM efforts |\n\n### Velocity Loss and Fatigue\n\nMonitoring velocity loss within a set provides an objective measure of neuromuscular fatigue. Research suggests limiting velocity loss to 20% preserves power output and reduces metabolic stress, while allowing 40%+ velocity loss maximizes hypertrophic stimulus.\n\n## Application in the Voltra System\n\nThe Voltra device measures barbell velocity via a linear position transducer connected over BLE. The SDK exposes real-time velocity data at approximately 11 Hz, enabling the mobile app to display live feedback and compute per-rep metrics. The key challenge is filtering noise from the raw position signal while maintaining low latency for real-time display.\n\n## References\n\n- González-Badillo, J.J., & Sánchez-Medina, L. (2010). Movement velocity as a measure of loading intensity in resistance training.\n- Jovanović, M., & Flanagan, E.P. (2014). Researched applications of velocity based strength training.\n- Banyard, H.G., et al. (2017). Reliability of the load-velocity relationship in the free-weight back squat."
+    },
+    {
+      "id": "rpe-velocity-relationship",
+      "filename": "rpe-velocity-relationship.md",
+      "frontmatter": {
+        "title": "RPE and Velocity Correlation in Resistance Training",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "rpe",
+          "autoregulation"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "related": [
+          "vbt-fundamentals",
+          "velocity-thresholds-v3"
+        ],
+        "created": "2025-09-01"
+      },
+      "body": "# RPE and Velocity Correlation in Resistance Training\n\n## Background\n\nRating of Perceived Exertion (RPE) is a subjective autoregulation tool where athletes rate set difficulty on a 1–10 scale. The modified RPE scale (Zourdos et al., 2016) maps RPE values to repetitions in reserve (RIR): RPE 10 = 0 RIR (failure), RPE 9 = 1 RIR, RPE 8 = 2 RIR, and so on.\n\n## Velocity as Objective RPE\n\nA key insight is that mean concentric velocity at a given RPE is relatively stable within an individual for a given exercise. If an athlete's RPE 8 squat consistently occurs at 0.40 m/s, then velocity can serve as an objective cross-reference for their subjective rating.\n\n### Practical Mapping\n\nFor the back squat in trained males, approximate relationships observed in research:\n\n- RPE 6 (~4 RIR): 0.55–0.65 m/s\n- RPE 7 (~3 RIR): 0.45–0.55 m/s\n- RPE 8 (~2 RIR): 0.35–0.45 m/s\n- RPE 9 (~1 RIR): 0.25–0.35 m/s\n- RPE 10 (0 RIR): 0.15–0.25 m/s\n\nThese ranges vary by exercise and individual. The Voltra system can learn an athlete's personal velocity-RPE profile over time, improving autoregulation accuracy.\n\n## Implementation Considerations\n\nThe workout-analytics package computes RPE estimates from velocity data using a configurable lookup table. The default table uses population-level data, but the app can override it with individualized profiles stored locally. The key metric is last-rep velocity relative to the athlete's known minimum velocity threshold (MVT).\n\n## Limitations\n\n- Subjective RPE can be influenced by sleep, caffeine, mood, and training history\n- Velocity-RPE mapping drifts across a training block as fatigue accumulates\n- Exercise technique changes (e.g., wider squat stance) invalidate existing profiles"
+    },
+    {
+      "id": "ble-protocol-research",
+      "filename": "ble-protocol-research.md",
+      "frontmatter": {
+        "title": "BLE Protocol Design for Fitness Devices",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "ble",
+          "protocol",
+          "embedded"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "ble-command-pattern",
+          "ble-setup-guide"
+        ],
+        "created": "2025-07-20"
+      },
+      "body": "# BLE Protocol Design for Fitness Devices\n\n## Overview\n\nThe Voltra device communicates with the mobile app over Bluetooth Low Energy (BLE) using a custom GATT profile. The protocol is designed for low-latency telemetry streaming with reliable command delivery.\n\n## GATT Service Structure\n\nThe device exposes a primary service with three characteristics:\n\n1. **Telemetry Characteristic** (Notify): Streams position and IMU data at ~100 Hz raw, decimated to ~11 Hz for BLE transmission. Each notification payload is 20 bytes containing timestamp (4B), position (4B float), velocity (4B float), acceleration (4B float), and flags (4B).\n\n2. **Command Characteristic** (Write with Response): Accepts commands from the app. Commands use a TLV (Type-Length-Value) encoding with a CRC-16/CCITT checksum for integrity. The CRC polynomial is 0x1021 with an initial value of 0xFFFF.\n\n3. **Status Characteristic** (Read/Notify): Reports device state (idle, recording, calibrating, error) and battery level.\n\n## Packet Format\n\n```\n| Byte 0    | Byte 1    | Bytes 2..N-2 | Bytes N-2..N-1 |\n| CMD Type  | Length    | Payload       | CRC-16         |\n```\n\nCommand types include: START_RECORDING (0x01), STOP_RECORDING (0x02), CALIBRATE (0x03), SET_CONFIG (0x04), GET_STATUS (0x05), and FIRMWARE_VERSION (0x06).\n\n## Reliability Considerations\n\nBLE notifications are unreliable by design — they do not require acknowledgment. For telemetry this is acceptable since missing a single sample at 11 Hz causes minimal data loss. However, commands use Write with Response to guarantee delivery. The SDK implements a command queue with retry logic (3 attempts, 500ms timeout per attempt).\n\n## MTU Negotiation\n\nModern iOS and Android devices support MTU sizes of 185+ bytes, but the protocol conservatively uses 20-byte payloads to ensure compatibility with older peripherals and avoid fragmentation. Future protocol versions may negotiate larger MTUs for bulk data transfer (e.g., downloading stored workout data)."
+    },
+    {
+      "id": "telemetry-processing",
+      "filename": "telemetry-processing.md",
+      "frontmatter": {
+        "title": "Real-Time Telemetry Processing Pipeline",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "telemetry",
+          "signal-processing",
+          "real-time"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "vbt-fundamentals"
+        ],
+        "created": "2025-08-01"
+      },
+      "body": "# Real-Time Telemetry Processing Pipeline\n\n## Signal Flow\n\nRaw position data from the Voltra linear position transducer arrives at approximately 11 Hz over BLE. The processing pipeline transforms this into usable velocity and acceleration metrics with minimal latency.\n\n### Stage 1: Denoising\n\nThe raw position signal contains noise from BLE transmission jitter, sensor quantization, and mechanical vibration. A second-order Butterworth low-pass filter with a cutoff frequency of 4 Hz is applied. This preserves the movement dynamics of typical resistance training (rep durations of 0.5–3.0 seconds) while attenuating high-frequency noise.\n\n### Stage 2: Differentiation\n\nVelocity is computed as the first derivative of filtered position using a central difference method. At the edges of the signal window, forward and backward differences are used respectively. Acceleration is the second derivative, computed similarly.\n\n### Stage 3: Rep Detection\n\nRep boundaries are identified using a state machine that tracks velocity sign changes. A rep begins when velocity crosses a positive threshold (0.02 m/s) and ends when position returns to within 5% of the starting position. Minimum rep duration (0.3s) and minimum displacement (0.05m) thresholds reject false triggers from noise.\n\n### Stage 4: Metric Computation\n\nFor each detected rep, the following metrics are computed:\n- Mean velocity (MV): average velocity over the concentric phase\n- Mean propulsive velocity (MPV): average velocity during the acceleration phase only\n- Peak velocity (PV): maximum instantaneous velocity\n- Time to peak velocity (tPV): duration from rep start to PV\n- Range of motion (ROM): total displacement\n- Rep duration: time from start to end of concentric phase\n\n## Latency Budget\n\nThe total pipeline latency from sensor to display must remain under 100ms for acceptable real-time feedback. Current measurements show ~45ms BLE transmission + ~10ms processing + ~16ms render frame = ~71ms typical."
+    },
+    {
+      "id": "exercise-science-overview",
+      "filename": "exercise-science-overview.md",
+      "frontmatter": {
+        "title": "Exercise Science Foundations for VBT Applications",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "exercise-science",
+          "biomechanics",
+          "strength-training"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-06-10"
+      },
+      "body": "# Exercise Science Foundations for VBT Applications\n\n## Force-Velocity Curve\n\nThe force-velocity relationship is fundamental to understanding athletic performance. Muscles produce maximum force at zero velocity (isometric) and maximum velocity at zero load. The hyperbolic relationship between these extremes was first described by A.V. Hill in 1938.\n\nFor practical purposes in VBT, we operate on the descending portion of this curve during loaded movements. As external load increases, movement velocity decreases. This is the basis for using velocity as a proxy for intensity.\n\n## Periodization Models\n\nTraditional periodization prescribes training phases (hypertrophy, strength, power, peaking) with predetermined loads. VBT-enhanced periodization uses velocity targets instead, allowing daily autoregulation based on readiness. This accounts for the well-documented day-to-day variation in maximal strength (±5-10% in trained athletes).\n\n### Undulating Periodization with VBT\n\nRather than fixed percentages, each session targets a velocity zone:\n- Heavy day: target velocity 0.3–0.5 m/s (85–95% 1RM equivalent)\n- Moderate day: target velocity 0.5–0.7 m/s (70–85% 1RM equivalent)\n- Light/power day: target velocity 0.7–1.0 m/s (50–70% 1RM equivalent)\n\n## Muscle Fiber Type Considerations\n\nType II (fast-twitch) fibers are preferentially recruited at higher force levels and contribute disproportionately to velocity production. VBT training with velocity cutoffs (stopping the set when velocity drops below a threshold) may better preserve Type II fiber recruitment compared to training to failure.\n\n## Practical Implications for Software\n\nThe mobile app needs to understand these principles to provide useful coaching cues. When velocity drops below 80% of the first rep's velocity, the app should signal the user to end the set for power-focused training. For hypertrophy, allowing drops to 60% of first-rep velocity maximizes mechanical tension."
+    },
+    {
+      "id": "crc-checksum-research",
+      "filename": "crc-checksum-research.md",
+      "frontmatter": {
+        "title": "CRC Checksum Implementation for BLE Commands",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "crc",
+          "protocol",
+          "integrity"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "ble-protocol-research"
+        ],
+        "created": "2025-07-25"
+      },
+      "body": "# CRC Checksum Implementation for BLE Commands\n\n## Algorithm Selection\n\nThe Voltra BLE protocol uses CRC-16/CCITT (also known as CRC-16/XMODEM) for command integrity verification. This was chosen over simpler checksums (XOR, Fletcher) because:\n\n1. Superior burst error detection — detects all single, double, and odd-number bit errors\n2. Well-supported across embedded platforms (many MCUs have hardware CRC-16 peripherals)\n3. 16-bit width provides sufficient protection for our small packet sizes (max 20 bytes)\n\n## Parameters\n\n- Polynomial: 0x1021 (x^16 + x^12 + x^5 + 1)\n- Initial value: 0xFFFF\n- Input reflection: false\n- Output reflection: false\n- Final XOR: 0x0000\n\n## Implementation\n\nThe SDK implements CRC computation in TypeScript for command construction:\n\n```typescript\nfunction crc16ccitt(data: Uint8Array): number {\n  let crc = 0xFFFF;\n  for (let i = 0; i < data.length; i++) {\n    crc ^= data[i] << 8;\n    for (let j = 0; j < 8; j++) {\n      if (crc & 0x8000) {\n        crc = (crc << 1) ^ 0x1021;\n      } else {\n        crc = crc << 1;\n      }\n      crc &= 0xFFFF;\n    }\n  }\n  return crc;\n}\n```\n\n## Verification\n\nThe device firmware computes the same CRC over the received payload and compares it with the transmitted CRC. Mismatches result in a NAK response, triggering the SDK's retry logic. In testing, CRC mismatches occur in approximately 0.1% of commands, primarily during high-interference RF environments."
+    },
+    {
+      "id": "velocity-thresholds-v1",
+      "filename": "velocity-thresholds-v1.md",
+      "frontmatter": {
+        "title": "Velocity Threshold Configuration v1",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "thresholds",
+          "configuration"
+        ],
+        "confidence": "low",
+        "status": "deprecated",
+        "created": "2025-05-01"
+      },
+      "body": "# Velocity Threshold Configuration v1\n\n## Initial Thresholds\n\nThe first version of velocity thresholds used fixed values for rep detection and velocity zone classification:\n\n- Minimum velocity for rep start: 0.05 m/s\n- Minimum displacement for valid rep: 0.10 m\n- Velocity zone boundaries: [0.5, 0.75, 1.0, 1.3] m/s\n\n## Issues Identified\n\nThese thresholds were too aggressive for some exercises and too lenient for others. Specifically:\n- Slow tempo squats were sometimes not detected due to the 0.05 m/s minimum\n- Partial ROM exercises (board press, pin squat) were rejected by the 0.10 m displacement threshold\n- Zone boundaries did not account for exercise-specific differences\n\nThis version was superseded due to user reports of missed reps during slow eccentric training."
+    },
+    {
+      "id": "velocity-thresholds-v2",
+      "filename": "velocity-thresholds-v2.md",
+      "frontmatter": {
+        "title": "Velocity Threshold Configuration v2",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "thresholds",
+          "configuration"
+        ],
+        "confidence": "medium",
+        "status": "outdated",
+        "supersedes": "velocity-thresholds-v1",
+        "created": "2025-07-15"
+      },
+      "body": "# Velocity Threshold Configuration v2\n\n## Changes from v1\n\nReduced minimum velocity threshold and added exercise-specific displacement minimums:\n\n- Minimum velocity for rep start: 0.02 m/s (reduced from 0.05)\n- Default minimum displacement: 0.05 m (reduced from 0.10)\n- Exercise-specific overrides added for squat (0.15 m), bench (0.08 m), deadlift (0.12 m)\n- Added minimum rep duration: 0.3 s to reject noise spikes\n\n## Improvement\n\nRep detection accuracy improved from 89% to 96% across the test dataset. However, the exercise-specific overrides required the user to select their exercise before each set, which was a UX friction point.\n\n## Remaining Issues\n\n- Users frequently forgot to select exercise, getting wrong thresholds applied\n- No adaptation to individual differences in movement speed\n- Zone boundaries still static and exercise-agnostic"
+    },
+    {
+      "id": "velocity-thresholds-v3",
+      "filename": "velocity-thresholds-v3.md",
+      "frontmatter": {
+        "title": "Velocity Threshold Configuration v3 — Adaptive",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "thresholds",
+          "adaptive",
+          "configuration"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "supersedes": "velocity-thresholds-v2",
+        "related": [
+          "vbt-fundamentals",
+          "rpe-velocity-relationship"
+        ],
+        "created": "2025-10-01"
+      },
+      "body": "# Velocity Threshold Configuration v3 — Adaptive\n\n## Design Philosophy\n\nVersion 3 eliminates fixed thresholds in favor of an adaptive system that learns from the user's movement patterns. The first 3 reps of each set establish baseline parameters, and subsequent reps use adaptive thresholds derived from the baseline.\n\n## Algorithm\n\n1. **Warm-up Detection**: First set of a session uses conservative defaults (v2 values). Data from this set calibrates thresholds for the session.\n2. **Baseline Window**: Reps 1–3 of each working set define the baseline velocity and ROM. Mean velocity and displacement are computed.\n3. **Adaptive Thresholds**: Minimum velocity = 20% of baseline MV. Minimum displacement = 50% of baseline ROM. These adapt per-set.\n4. **Velocity Zones**: Zone boundaries are computed relative to the athlete's first-rep velocity rather than absolute values.\n\n## Results\n\nRep detection accuracy improved to 99.2% across the expanded test dataset (n=4,200 reps across 12 athletes and 6 exercises). False positive rate decreased from 2.1% (v2) to 0.3%.\n\n## Configuration\n\n```typescript\ninterface AdaptiveThresholdConfig {\n  baselineReps: number           // default: 3\n  velocityFraction: number       // default: 0.20\n  displacementFraction: number   // default: 0.50\n  minRepDuration: number         // default: 0.3 (seconds)\n  fallbackMinVelocity: number   // default: 0.02 (m/s)\n  fallbackMinDisplacement: number // default: 0.05 (m)\n}\n```\n\n## Migration\n\nThe workout-analytics package exposes both v2 (fixed) and v3 (adaptive) threshold strategies via a strategy pattern. The mobile app defaults to v3 but can fall back to v2 via a settings toggle."
+    },
+    {
+      "id": "movement-phases",
+      "filename": "movement-phases.md",
+      "frontmatter": {
+        "title": "Movement Phase Detection in Resistance Exercises",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "biomechanics",
+          "signal-processing",
+          "vbt"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "related": [
+          "vbt-fundamentals",
+          "telemetry-processing"
+        ],
+        "created": "2025-08-20"
+      },
+      "body": "# Movement Phase Detection in Resistance Exercises\n\n## Phases of a Repetition\n\nEach repetition in resistance training consists of distinct phases that carry different training significance:\n\n1. **Eccentric phase**: The lowering/lengthening portion. Velocity is negative (downward movement). Duration typically 1–4 seconds depending on tempo prescription.\n2. **Amortization phase**: The transition between eccentric and concentric. Also called the \"turnaround\" or \"stretch-shortening cycle\" transition. Duration is typically 0.1–0.5 seconds.\n3. **Concentric phase**: The lifting/shortening portion. This is the primary phase of interest for VBT metrics. Velocity is positive.\n4. **Lockout/rest phase**: The brief pause at the top of the rep before the next eccentric.\n\n## Detection Algorithm\n\nPhase transitions are detected by analyzing velocity zero-crossings and acceleration sign changes:\n\n- Eccentric start: velocity crosses below -0.02 m/s threshold\n- Amortization: velocity magnitude < 0.02 m/s with position at or near minimum\n- Concentric start: velocity crosses above +0.02 m/s from amortization\n- Lockout: velocity returns to near-zero with position at or near maximum\n\n## Eccentric Velocity Tracking\n\nWhile VBT traditionally focuses on concentric velocity, eccentric velocity monitoring provides additional training insights. Controlled eccentrics (slow eccentric velocity) indicate intentional tempo training. Fast eccentric velocities may indicate loss of control or intentional stretch-shortening cycle training.\n\n## Implementation Notes\n\nThe movement phase detector in workout-analytics runs as a state machine that processes each velocity sample. It outputs phase labels with timestamps, allowing the mobile app to display phase-specific metrics (concentric MV, eccentric duration, amortization time)."
+    },
+    {
+      "id": "mvt-research",
+      "filename": "mvt-research.md",
+      "frontmatter": {
+        "title": "Minimum Velocity Threshold (MVT) Research",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "mvt",
+          "1rm-estimation"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "related": [
+          "vbt-fundamentals",
+          "rpe-velocity-relationship"
+        ],
+        "created": "2025-09-15"
+      },
+      "body": "# Minimum Velocity Threshold (MVT) Research\n\n## Definition\n\nThe Minimum Velocity Threshold (MVT) is the lowest mean concentric velocity an athlete can achieve against a maximal load (1RM) for a given exercise. It represents the velocity at which no further load can be lifted — the rightmost point on the load-velocity curve.\n\n## Exercise-Specific MVT Values\n\nResearch has established typical MVT ranges for common exercises:\n\n| Exercise | MVT Range (m/s) | Mean MVT (m/s) |\n|----------|-----------------|-----------------|\n| Back Squat | 0.25–0.36 | 0.30 |\n| Bench Press | 0.10–0.20 | 0.15 |\n| Deadlift | 0.12–0.20 | 0.16 |\n| Overhead Press | 0.18–0.28 | 0.22 |\n| Bent-over Row | 0.20–0.30 | 0.25 |\n\n## Application in 1RM Estimation\n\nKnowing an athlete's MVT enables daily 1RM estimation from submaximal sets. By fitting a linear regression to the load-velocity data from warm-up sets, the predicted load at MVT gives an estimated 1RM. This avoids the fatigue and injury risk of true maximal testing.\n\n## Individualization\n\nMVT varies between athletes by up to 0.15 m/s for the same exercise. Factors include:\n- Training experience (more experienced lifters tend to have lower MVTs)\n- Limb proportions\n- Muscle fiber type composition\n- Technique proficiency\n\nThe Voltra system builds individual MVT profiles over time by tracking velocity at near-maximal loads (RPE 9.5–10 sets)."
+    },
+    {
+      "id": "sdk-architecture",
+      "filename": "sdk-architecture.md",
+      "frontmatter": {
+        "title": "SDK Architecture: Manager Pattern with Adapter Layer",
+        "type": "decision",
+        "tier": "slow",
+        "tags": [
+          "architecture",
+          "sdk",
+          "ble"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "mobile-architecture",
+          "ble-command-pattern"
+        ],
+        "created": "2025-06-01"
+      },
+      "body": "# SDK Architecture: Manager Pattern with Adapter Layer\n\n## Context\n\nThe voltra-node-sdk needs to support multiple BLE backends (React Native BLE PLX for production, MockBLEAdapter for testing and web preview) while providing a consistent API to consumers.\n\n## Decision\n\nAdopt a Manager pattern with a pluggable adapter layer:\n\n- `VoltraManager` is the main entry point. It owns connection lifecycle, command queuing, and telemetry event emission.\n- `BLEAdapter` is an interface that abstracts platform-specific BLE operations (scan, connect, read, write, subscribe).\n- Concrete adapters implement BLEAdapter: `RNBLEAdapter` (React Native), `MockBLEAdapter` (synthetic data), and potentially `WebBLEAdapter` (Web Bluetooth API).\n\n## Rationale\n\n- Adapter pattern enables testing without hardware\n- Manager centralizes state machine logic (disconnected → scanning → connecting → connected → streaming)\n- Event-based telemetry (EventEmitter) decouples data production from consumption\n- React hook layer (`@voltras/node-sdk/react`) wraps Manager in useSyncExternalStore for reactive UI updates\n\n## Consequences\n\n- Adding a new platform requires only a new adapter implementation\n- Manager tests can use MockBLEAdapter for deterministic behavior\n- Dual CJS/ESM build ensures compatibility with both Node.js tooling and React Native bundlers"
+    },
+    {
+      "id": "mobile-architecture",
+      "filename": "mobile-architecture.md",
+      "frontmatter": {
+        "title": "Mobile App State Management Architecture",
+        "type": "decision",
+        "tier": "slow",
+        "tags": [
+          "architecture",
+          "mobile",
+          "zustand",
+          "state-management"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "sdk-architecture",
+          "titan-design-system",
+          "zustand-store-patterns"
+        ],
+        "created": "2025-06-15"
+      },
+      "body": "# Mobile App State Management Architecture\n\n## Context\n\nThe Voltras mobile app (React Native/Expo) needs to manage several state domains: BLE connection, real-time workout data, user preferences, and exercise library. Redux was considered but deemed overly verbose for our team size and state complexity.\n\n## Decision\n\nUse Zustand for all application state, with domain-specific store slices:\n\n1. **connection-store**: BLE connection state, device info, signal strength. Driven by SDK events.\n2. **workout-store**: Active workout state, rep history, current set metrics. Updated from telemetry stream.\n3. **settings-store**: User preferences (units, velocity zones, threshold config). Persisted with AsyncStorage.\n4. **exercise-store**: Exercise library with custom exercises. Persisted with AsyncStorage.\n\n## Rationale\n\n- Zustand has minimal boilerplate compared to Redux (no action types, reducers, or middleware setup)\n- Built-in support for subscriptions and selectors, works naturally with React rendering\n- Small bundle size (~1KB) matters for mobile\n- Middleware for persistence (zustand/middleware) handles AsyncStorage integration cleanly\n\n## Store Composition\n\nStores are independent singletons. Cross-store coordination happens in React components or custom hooks, not in the stores themselves. For example, the `useWorkoutSession` hook subscribes to both connection-store and workout-store to orchestrate recording start/stop.\n\n## Consequences\n\n- No centralized action log (unlike Redux DevTools) — debugging relies on Zustand's built-in devtools middleware\n- Store independence means no guaranteed ordering of cross-store updates\n- Selectors must be carefully memoized to avoid unnecessary re-renders in the hot telemetry path"
+    },
+    {
+      "id": "titan-design-system",
+      "filename": "titan-design-system.md",
+      "frontmatter": {
+        "title": "Titan Design System Adoption Decision",
+        "type": "decision",
+        "tier": "slow",
+        "tags": [
+          "design-system",
+          "ui",
+          "titan"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "mobile-architecture",
+          "sdk-architecture"
+        ],
+        "created": "2025-11-01"
+      },
+      "body": "# Titan Design System Adoption Decision\n\n## Context\n\nThe mobile app had accumulated ad-hoc UI components with inconsistent styling. A custom theme system in `@/theme` defined colors and spacing, but lacked component-level standardization. We needed a design system that works across React Native and web (for Storybook).\n\n## Decision\n\nBuild and adopt `@titan-design/react-ui` as the shared design system:\n\n- Cross-platform components using NativeWind v4 for styling\n- Semantic color tokens (not raw hex values) for theme consistency\n- Component library: Button, Card, Input, Badge, Toggle, Text, Heading\n- Dark/light mode support via CSS custom properties on web and NativeWind dark: variants on native\n\n## Migration Strategy\n\nPhased migration over two sprints:\n1. Phase 1: Replace all custom components with Titan equivalents. Delete old `src/components/ui/` files.\n2. Phase 2: Replace `@/theme` color tokens with Titan semantic tokens. Delete `@/theme`.\n3. Phase 3: Remaining custom components (WeightPicker, LinkCard) either migrated or kept as app-specific.\n\n## Consequences\n\n- Consistent visual language across the app\n- Storybook 10 integration for component documentation\n- NativeWind v4 dependency adds build complexity (PostCSS, Tailwind config)\n- Design system is a separate repo with its own release cycle, adding coordination overhead"
+    },
+    {
+      "id": "testing-strategy",
+      "filename": "testing-strategy.md",
+      "frontmatter": {
+        "title": "Testing Strategy for the Voltras Ecosystem",
+        "type": "decision",
+        "tier": "slow",
+        "tags": [
+          "testing",
+          "vitest",
+          "strategy"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-06-20"
+      },
+      "body": "# Testing Strategy for the Voltras Ecosystem\n\n## Context\n\nWith multiple packages (SDK, analytics, design system, mobile app), we need a consistent and efficient testing approach. Each package has different testing needs: the SDK needs adapter mocking, analytics needs numerical precision tests, and the mobile app needs component rendering tests.\n\n## Decision\n\nVitest as the universal test runner across all repos, with package-specific configurations:\n\n### SDK Testing\n- Unit tests for protocol encoding/decoding, CRC computation, state machine transitions\n- Integration tests using MockBLEAdapter for full command-response cycles\n- No E2E BLE tests in CI (require hardware)\n\n### Analytics Testing\n- Property-based tests for metric computation (e.g., velocity always positive during concentric phase)\n- Snapshot tests for regression on known datasets\n- Numerical precision assertions with configurable epsilon (default 1e-6)\n\n### Mobile App Testing\n- Component tests with React Native Testing Library\n- Store tests with direct Zustand store manipulation\n- Vitest config requires `server.deps.inline: ['@titan-design/react-ui']` for NativeWind\n- `define: { __DEV__: true }` for React Native conditional code\n\n### Design System Testing\n- Visual regression tests via Storybook\n- Accessibility tests with axe-core\n- Cross-platform rendering tests (web + native)\n\n## Consequences\n\n- Vitest provides fast execution and native ESM support\n- Consistent test patterns across repos reduce context switching\n- No Playwright E2E tests yet — deferred until app is more stable"
+    },
+    {
+      "id": "publishing-decision",
+      "filename": "publishing-decision.md",
+      "frontmatter": {
+        "title": "NPM Publishing via OIDC Trusted Publishing",
+        "type": "decision",
+        "tier": "slow",
+        "tags": [
+          "publishing",
+          "npm",
+          "ci-cd",
+          "oidc"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-10-15"
+      },
+      "body": "# NPM Publishing via OIDC Trusted Publishing\n\n## Context\n\nPublishing npm packages traditionally requires storing an NPM_TOKEN secret in CI. This token is long-lived, has broad permissions, and is a security risk if leaked. We needed a safer approach for publishing @voltras/node-sdk and @voltras/workout-analytics.\n\n## Decision\n\nUse npm's OIDC trusted publishing with GitHub Actions. This leverages GitHub's OIDC identity provider to generate short-lived, scoped publish tokens automatically.\n\n## How It Works\n\n1. GitHub Actions workflow requests an OIDC token from GitHub's identity provider\n2. npm verifies the token against the package's trusted publisher configuration\n3. npm issues a short-lived publish token scoped to the specific package\n4. The workflow uses this token to publish — no stored secrets needed\n\n## Configuration\n\n- npm registry: configure trusted publisher linking the GitHub repo to the npm package\n- GitHub Actions: use `permissions: id-token: write` in the workflow\n- Workflow file: `release.yml` with Node 24, runs on tag push matching `v*`\n\n## Consequences\n\n- No NPM_TOKEN secret to rotate or protect\n- Publish permissions are tied to the specific repo and workflow, not a personal account\n- Requires npm registry support for OIDC (available since 2024)\n- Slightly more complex workflow setup compared to simple token auth"
+    },
+    {
+      "id": "database-choice",
+      "filename": "database-choice.md",
+      "frontmatter": {
+        "title": "SQLite with better-sqlite3 for Local Brain Storage",
+        "type": "decision",
+        "tier": "slow",
+        "tags": [
+          "database",
+          "sqlite",
+          "architecture"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-11-10"
+      },
+      "body": "# SQLite with better-sqlite3 for Local Brain Storage\n\n## Context\n\nThe brain project needs a local database for storing note metadata, embeddings, and search indices. Options considered: plain JSON files, LevelDB, SQLite, and PostgreSQL.\n\n## Decision\n\nUse SQLite via better-sqlite3 for all persistent storage:\n\n- Note metadata (frontmatter fields) in a `notes` table\n- Chunk embeddings in a `chunks` table with BLOB storage for float32 vectors\n- BM25 index using SQLite FTS5 extension\n- File tracking in a `files` table for incremental re-indexing\n\n## Rationale\n\n- Zero server dependency — single file, no daemon process\n- better-sqlite3 is synchronous, avoiding callback complexity for what are fast local operations\n- FTS5 provides solid full-text search out of the box\n- SQLite handles concurrent reads well; writes are serialized but fast enough for our scale (hundreds of notes, not millions)\n- Embedding vectors stored as BLOBs with application-level similarity computation (no need for pgvector)\n\n## Schema Highlights\n\n```sql\nCREATE TABLE notes (\n  id TEXT PRIMARY KEY,\n  filePath TEXT UNIQUE NOT NULL,\n  title TEXT NOT NULL,\n  type TEXT NOT NULL,\n  tier TEXT NOT NULL DEFAULT 'slow',\n  tags TEXT,\n  confidence TEXT,\n  status TEXT DEFAULT 'current'\n);\n\nCREATE VIRTUAL TABLE notes_fts USING fts5(\n  title, content, tags,\n  content_rowid='rowid'\n);\n```\n\n## Consequences\n\n- Application code handles vector similarity (cosine distance) rather than database\n- No network dependency — works offline\n- Database migrations handled by simple version checks on startup\n- File size grows with embedding count but remains manageable (estimated ~10MB for 1000 notes with 384-dim embeddings)"
+    },
+    {
+      "id": "zustand-store-patterns",
+      "filename": "zustand-store-patterns.md",
+      "frontmatter": {
+        "title": "Zustand Store Patterns for React Native",
+        "type": "pattern",
+        "tier": "slow",
+        "tags": [
+          "zustand",
+          "state-management",
+          "react-native",
+          "patterns"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "mobile-architecture"
+        ],
+        "created": "2025-07-01"
+      },
+      "body": "# Zustand Store Patterns for React Native\n\n## Slice Pattern\n\nEach domain gets its own store created with `create()`. Avoid combining all state into a single monolithic store — this causes unnecessary re-renders when unrelated state changes.\n\n```typescript\n// Good: separate stores\nconst useConnectionStore = create<ConnectionState>((set) => ({\n  status: 'disconnected',\n  device: null,\n  connect: async (deviceId) => { /* ... */ },\n}));\n\nconst useWorkoutStore = create<WorkoutState>((set) => ({\n  reps: [],\n  isRecording: false,\n  addRep: (rep) => set((s) => ({ reps: [...s.reps, rep] })),\n}));\n```\n\n## Selector Pattern\n\nAlways use selectors to subscribe to specific state slices. Selecting the entire store object causes re-renders on every state change.\n\n```typescript\n// Good: narrow selector\nconst status = useConnectionStore((s) => s.status);\n\n// Bad: selects entire store\nconst store = useConnectionStore();\n```\n\n## Persistence Pattern\n\nUse Zustand's persist middleware with AsyncStorage for state that should survive app restarts:\n\n```typescript\nconst useSettingsStore = create(\n  persist<SettingsState>(\n    (set) => ({\n      units: 'metric',\n      velocityZones: defaultZones,\n    }),\n    { name: 'settings-storage', storage: createJSONStorage(() => AsyncStorage) }\n  )\n);\n```\n\n## Derived State\n\nCompute derived values in selectors rather than storing them. This avoids stale derived state:\n\n```typescript\nconst averageVelocity = useWorkoutStore(\n  (s) => s.reps.length > 0\n    ? s.reps.reduce((sum, r) => sum + r.velocity, 0) / s.reps.length\n    : 0\n);\n```"
+    },
+    {
+      "id": "ble-command-pattern",
+      "filename": "ble-command-pattern.md",
+      "frontmatter": {
+        "title": "BLE Command Queue Pattern",
+        "type": "pattern",
+        "tier": "slow",
+        "tags": [
+          "ble",
+          "patterns",
+          "queue",
+          "sdk"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "sdk-architecture",
+          "ble-protocol-research"
+        ],
+        "created": "2025-07-10"
+      },
+      "body": "# BLE Command Queue Pattern\n\n## Problem\n\nBLE Write with Response operations must be serialized — sending a second write before the first response arrives causes undefined behavior on most platforms. Concurrent command requests from different parts of the app need to be queued and executed sequentially.\n\n## Pattern\n\nThe SDK implements a command queue using an async mutex:\n\n```typescript\nclass CommandQueue {\n  private queue: Array<() => Promise<void>> = [];\n  private processing = false;\n\n  async enqueue<T>(command: () => Promise<T>): Promise<T> {\n    return new Promise((resolve, reject) => {\n      this.queue.push(async () => {\n        try {\n          resolve(await command());\n        } catch (e) {\n          reject(e);\n        }\n      });\n      this.processNext();\n    });\n  }\n\n  private async processNext(): Promise<void> {\n    if (this.processing || this.queue.length === 0) return;\n    this.processing = true;\n    const next = this.queue.shift()!;\n    try {\n      await next();\n    } finally {\n      this.processing = false;\n      this.processNext();\n    }\n  }\n}\n```\n\n## Retry Logic\n\nEach command attempt has a 500ms timeout. On timeout or NAK response, the command is retried up to 3 times. After 3 failures, the promise rejects with a `CommandTimeoutError`.\n\n## Usage in VoltraManager\n\n```typescript\nclass VoltraManager {\n  private commandQueue = new CommandQueue();\n\n  async startRecording(): Promise<void> {\n    await this.commandQueue.enqueue(() =>\n      this.adapter.write(COMMAND_CHAR, encodeCommand(Commands.START_RECORDING))\n    );\n  }\n}\n```"
+    },
+    {
+      "id": "component-composition-pattern",
+      "filename": "component-composition-pattern.md",
+      "frontmatter": {
+        "title": "Component Composition Patterns for React Native",
+        "type": "pattern",
+        "tier": "slow",
+        "tags": [
+          "react-native",
+          "patterns",
+          "components"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-08-05"
+      },
+      "body": "# Component Composition Patterns for React Native\n\n## Compound Component Pattern\n\nFor complex UI components with multiple related sub-elements, use the compound component pattern. This provides a clean API while maintaining flexibility.\n\n```typescript\n// Usage\n<Card>\n  <Card.Header>\n    <Card.Title>Set Summary</Card.Title>\n  </Card.Header>\n  <Card.Body>\n    <RepList reps={reps} />\n  </Card.Body>\n  <Card.Footer>\n    <Button onPress={finishSet}>Complete Set</Button>\n  </Card.Footer>\n</Card>\n```\n\n## Render Prop Pattern for Data\n\nWhen components need to fetch or derive data and render it flexibly:\n\n```typescript\n<VelocityDataProvider exerciseId={id}>\n  {({ velocity, isLoading }) => (\n    isLoading ? <Spinner /> : <VelocityChart data={velocity} />\n  )}\n</VelocityDataProvider>\n```\n\n## Platform-Specific Composition\n\nUse `.ios.tsx` and `.android.tsx` file extensions for platform-specific implementations, with a shared `.tsx` for common logic. The Metro bundler resolves the correct file automatically.\n\n## Slot Pattern for Titan Design\n\nThe Titan design system uses a slot-based approach for customization:\n\n```typescript\n<Button\n  leftSlot={<Icon name=\"bluetooth\" />}\n  rightSlot={<Badge count={3} />}\n>\n  Connect Device\n</Button>\n```"
+    },
+    {
+      "id": "error-boundary-pattern",
+      "filename": "error-boundary-pattern.md",
+      "frontmatter": {
+        "title": "Error Boundary Strategy for React Native",
+        "type": "pattern",
+        "tier": "slow",
+        "tags": [
+          "error-handling",
+          "react-native",
+          "patterns"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-08-10"
+      },
+      "body": "# Error Boundary Strategy for React Native\n\n## Layered Boundaries\n\nError boundaries are placed at three levels in the component tree:\n\n### App-Level Boundary\nCatches unhandled errors and displays a full-screen error state with a restart button. This is the last line of defense.\n\n### Screen-Level Boundary\nEach navigation screen is wrapped in an error boundary that shows a screen-specific error state. The user can navigate away without restarting the app.\n\n### Feature-Level Boundary\nCritical features (BLE connection panel, workout recording, velocity chart) have individual error boundaries. A chart rendering error should not take down the entire workout screen.\n\n## BLE Error Recovery\n\nBLE operations have specific error handling outside React error boundaries:\n\n- **Connection lost**: Auto-reconnect with exponential backoff (1s, 2s, 4s, max 30s)\n- **Command timeout**: Retry via command queue (3 attempts)\n- **Scan failure**: Surface to UI with actionable message (\"Enable Bluetooth in Settings\")\n- **Adapter error**: Log and surface — usually indicates a platform bug\n\n## Implementation\n\n```typescript\nclass FeatureErrorBoundary extends React.Component<Props, State> {\n  state = { hasError: false, error: null };\n\n  static getDerivedStateFromError(error: Error) {\n    return { hasError: true, error };\n  }\n\n  componentDidCatch(error: Error, info: React.ErrorInfo) {\n    logError(error, { componentStack: info.componentStack });\n  }\n\n  render() {\n    if (this.state.hasError) {\n      return <ErrorFallback error={this.state.error} onRetry={this.reset} />;\n    }\n    return this.props.children;\n  }\n}\n```"
+    },
+    {
+      "id": "hook-patterns",
+      "filename": "hook-patterns.md",
+      "frontmatter": {
+        "title": "Custom Hook Patterns for Voltra Integration",
+        "type": "pattern",
+        "tier": "slow",
+        "tags": [
+          "hooks",
+          "react",
+          "patterns",
+          "sdk"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-08-15"
+      },
+      "body": "# Custom Hook Patterns for Voltra Integration\n\n## useTelemetry Hook\n\nSubscribes to the SDK's telemetry stream and provides debounced values for UI rendering:\n\n```typescript\nfunction useTelemetry(manager: VoltraManager) {\n  const [data, setData] = useState<TelemetryData | null>(null);\n\n  useEffect(() => {\n    const handler = (sample: TelemetrySample) => {\n      setData(processSample(sample));\n    };\n    manager.on('telemetry', handler);\n    return () => manager.off('telemetry', handler);\n  }, [manager]);\n\n  return data;\n}\n```\n\n## useConnectionStatus Hook\n\nWraps the SDK's connection state with automatic cleanup:\n\n```typescript\nfunction useConnectionStatus(manager: VoltraManager) {\n  return useSyncExternalStore(\n    (callback) => {\n      manager.on('connectionChange', callback);\n      return () => manager.off('connectionChange', callback);\n    },\n    () => manager.connectionStatus\n  );\n}\n```\n\n## useRepCounter Hook\n\nCombines telemetry data with rep detection logic:\n\n```typescript\nfunction useRepCounter(manager: VoltraManager) {\n  const telemetry = useTelemetry(manager);\n  const [reps, setReps] = useState<Rep[]>([]);\n\n  useEffect(() => {\n    const handler = (rep: Rep) => setReps(prev => [...prev, rep]);\n    manager.on('rep', handler);\n    return () => manager.off('rep', handler);\n  }, [manager]);\n\n  return { currentVelocity: telemetry?.velocity ?? 0, reps, repCount: reps.length };\n}\n```\n\n## Rules\n\n- Always clean up subscriptions in useEffect return\n- Use useSyncExternalStore for SDK state that changes frequently\n- Memoize derived values with useMemo when used in render"
+    },
+    {
+      "id": "typescript-generics-pattern",
+      "filename": "typescript-generics-pattern.md",
+      "frontmatter": {
+        "title": "TypeScript Generics Patterns in the SDK",
+        "type": "pattern",
+        "tier": "slow",
+        "tags": [
+          "typescript",
+          "generics",
+          "patterns",
+          "sdk"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-09-01"
+      },
+      "body": "# TypeScript Generics Patterns in the SDK\n\n## Generic Command Encoding\n\nThe SDK uses a generic command encoder that maps command types to their payload schemas:\n\n```typescript\ninterface CommandMap {\n  START_RECORDING: { sampleRate?: number };\n  STOP_RECORDING: {};\n  CALIBRATE: { axis: 'x' | 'y' | 'z' };\n  SET_CONFIG: { key: string; value: number };\n}\n\nfunction encodeCommand<K extends keyof CommandMap>(\n  type: K,\n  payload: CommandMap[K]\n): Uint8Array {\n  // Type-safe encoding — payload shape enforced by command type\n}\n```\n\n## Generic Event Emitter\n\nThe VoltraManager's event system uses generics to enforce listener type safety:\n\n```typescript\ninterface ManagerEvents {\n  telemetry: TelemetrySample;\n  rep: RepData;\n  connectionChange: ConnectionStatus;\n  error: VoltraError;\n}\n\nclass TypedEmitter<Events extends Record<string, unknown>> {\n  on<K extends keyof Events>(event: K, handler: (data: Events[K]) => void): void;\n  off<K extends keyof Events>(event: K, handler: (data: Events[K]) => void): void;\n  emit<K extends keyof Events>(event: K, data: Events[K]): void;\n}\n```\n\n## Constrained Generics for Adapters\n\n```typescript\ninterface BLEAdapter<TDevice = unknown> {\n  scan(filter?: ScanFilter): AsyncGenerator<TDevice>;\n  connect(device: TDevice): Promise<Connection>;\n}\n```\n\nThis allows each adapter to define its own device type while maintaining the shared interface contract."
+    },
+    {
+      "id": "fitness-device-observations",
+      "filename": "fitness-device-observations.md",
+      "frontmatter": {
+        "title": "Observations on Consumer Fitness Device Market",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "fitness",
+          "market",
+          "devices"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "created": "2025-07-05"
+      },
+      "body": "# Observations on Consumer Fitness Device Market\n\nThe consumer fitness device market for velocity-based training is surprisingly small. Most VBT devices target elite athletes or sports science labs, with price points between $300–$1,500. The few consumer-oriented options (GymAware, PUSH band, Vmaxpro) have varying levels of app quality and BLE reliability.\n\nKey observations from evaluating competitor products:\n\n- GymAware FLEX is the gold standard for accuracy but costs $900+ and has a bulky form factor\n- PUSH band 2.0 is wrist-worn, which introduces measurement artifacts from arm swing\n- Vmaxpro uses camera-based tracking, which is sensitive to lighting and camera angle\n- RepOne is the closest competitor in the linear position transducer category\n\nThe opportunity for Voltra is a consumer-friendly price point ($150–200) with SDK-level extensibility that existing products lack. Most competitors have closed ecosystems with no API access, limiting third-party integration.\n\nBattery life is a differentiating factor — most competitors manage 6–10 hours, while the Voltra device targets 20+ hours through aggressive BLE power management (connection interval negotiation, latency trading during idle periods)."
+    },
+    {
+      "id": "sdk-versioning-notes",
+      "filename": "sdk-versioning-notes.md",
+      "frontmatter": {
+        "title": "SDK Versioning and Breaking Change Policy",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "sdk",
+          "versioning",
+          "semver"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "created": "2025-08-25"
+      },
+      "body": "# SDK Versioning and Breaking Change Policy\n\nCurrently at v0.3.0, the SDK follows semver but with pre-1.0 conventions: minor versions can include breaking changes. Once we hit 1.0, breaking changes must go in major versions only.\n\nObserved pain points with current versioning:\n- The mobile app pins to exact SDK versions, so even minor bumps require manual update\n- Protocol changes (new command types, changed telemetry format) force SDK breaking changes\n- The dual CJS/ESM build means some breaking changes are only visible in one module format\n\nPlan for 1.0:\n- Freeze the public API surface (VoltraManager, React hooks, event types)\n- Protocol changes handled internally via version negotiation with the device\n- Subpath exports (@voltras/node-sdk/react) are part of the public API and must be stable\n- Deprecation warnings for at least one minor version before removal"
+    },
+    {
+      "id": "mobile-performance-notes",
+      "filename": "mobile-performance-notes.md",
+      "frontmatter": {
+        "title": "Mobile App Performance Observations",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "performance",
+          "mobile",
+          "react-native"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "created": "2025-09-10"
+      },
+      "body": "# Mobile App Performance Observations\n\nDuring profiling of the workout recording screen, several performance characteristics were noted:\n\n## Telemetry Rendering\n\nAt 11 Hz telemetry updates, the velocity chart re-renders ~11 times per second. Without optimization, this causes frame drops on older devices (iPhone 11, Pixel 4a). Solutions applied:\n- Chart component uses `React.memo` with custom comparison (only re-render when velocity changes by > 0.01 m/s)\n- Telemetry state stored outside React (in a ref) and synced to state at 4 Hz for display\n- Chart library switched from Victory Native to a custom SVG path renderer for lower overhead\n\n## Zustand Store Updates\n\nThe workout store accumulates rep data throughout a session. With hundreds of reps, naive array spreading (`[...state.reps, newRep]`) creates GC pressure. Switched to an immer-based updater for the reps array, which uses structural sharing.\n\n## BLE Processing\n\nThe SDK's telemetry event handler runs on the JS thread. Heavy processing in the handler blocks other JS execution. Moved signal processing (filtering, differentiation) to a separate realm using react-native-worklets for the velocity calculation pipeline.\n\n## Memory\n\nA 60-minute workout session with continuous telemetry generates approximately 40,000 samples. Storing all raw samples in memory is feasible (~3MB) but unnecessary. The app now retains only the last 100 samples for the live chart and persists summarized rep data."
+    },
+    {
+      "id": "expo-update-notes",
+      "filename": "expo-update-notes.md",
+      "frontmatter": {
+        "title": "Expo SDK Update Experiences",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "expo",
+          "updates",
+          "mobile"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "created": "2025-10-05"
+      },
+      "body": "# Expo SDK Update Experiences\n\nNotes from updating the mobile app through Expo SDK versions:\n\n## Expo 53 → 54\n\nThe update to Expo 54 was relatively smooth. Key changes:\n- React 19 adoption required updating several patterns (no more forwardRef needed, use ref as prop)\n- New Architecture enabled by default — most third-party libraries now support it\n- expo-router v4 changes: layout routes now use a different file naming convention\n\n## Gotchas Encountered\n\n1. **NativeWind v4 compatibility**: Had to update NativeWind to 4.1+ for React 19 compatibility. The className prop forwarding changed.\n2. **AsyncStorage**: Migrated from @react-native-async-storage/async-storage to expo-secure-store for sensitive settings (API keys). Non-sensitive settings remain in AsyncStorage.\n3. **BLE library**: react-native-ble-plx required a patch for the New Architecture. The maintainers merged the fix in 3.2.0.\n4. **Metro config**: Custom Metro configuration for monorepo-style imports needed updating for the new Metro version bundled with Expo 54.\n\n## Recommendations\n\n- Always read the Expo changelog thoroughly before updating\n- Run the full test suite after update, including BLE integration tests on physical devices\n- Keep a branch with the old SDK version for rollback capability\n- Update one major dependency at a time (Expo first, then NativeWind, then BLE library)"
+    },
+    {
+      "id": "nativewind-quirks",
+      "filename": "nativewind-quirks.md",
+      "frontmatter": {
+        "title": "NativeWind v4 Quirks and Workarounds",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "nativewind",
+          "styling",
+          "react-native",
+          "tailwind"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "created": "2025-10-20"
+      },
+      "body": "# NativeWind v4 Quirks and Workarounds\n\nCollection of issues encountered with NativeWind v4 in the Voltras mobile app:\n\n## className Prop on Custom Components\n\nNativeWind v4 requires the `cssInterop` wrapper for custom components to receive Tailwind classes. Without it, className is passed as a string but not processed into style objects.\n\n## Dark Mode\n\nThe `dark:` variant works differently on web vs native. On web, it uses CSS `@media (prefers-color-scheme: dark)`. On native, it uses NativeWind's runtime theme context. This means dark mode in Storybook web preview behaves differently than on-device.\n\nWorkaround: Use the `colorScheme` prop on the NativeWind provider to force dark mode in Storybook stories.\n\n## Animation Classes\n\nTailwind animation classes (`animate-spin`, `animate-pulse`) are not supported in NativeWind v4. Use Reanimated instead for native animations.\n\n## Arbitrary Values\n\nArbitrary values like `w-[127px]` work but are less performant than using the Tailwind scale. Each unique arbitrary value generates a new style object at runtime. Prefer standard classes (`w-32`) when possible.\n\n## Platform-Specific Classes\n\nNativeWind supports `ios:` and `android:` variants, but they cannot be composed with other variants. For example, `ios:dark:bg-gray-900` does not work. Use platform-specific files or conditional rendering instead."
+    },
+    {
+      "id": "ble-setup-guide",
+      "filename": "ble-setup-guide.md",
+      "frontmatter": {
+        "title": "BLE Development Setup Guide",
+        "type": "guide",
+        "tier": "slow",
+        "tags": [
+          "ble",
+          "setup",
+          "development"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "ble-protocol-research",
+          "ble-command-pattern"
+        ],
+        "created": "2025-07-15"
+      },
+      "body": "# BLE Development Setup Guide\n\n## Prerequisites\n\n- macOS or Linux (BLE development on Windows requires additional drivers)\n- Node.js 20+ for SDK development\n- Xcode 15+ for iOS BLE testing\n- Android Studio with SDK 34+ for Android BLE testing\n- A physical Voltra device or the MockBLEAdapter for software-only development\n\n## Mock Development (No Hardware Required)\n\nThe SDK's MockBLEAdapter simulates a Voltra device entirely in software:\n\n```typescript\nimport { VoltraManager, MockBLEAdapter } from '@voltras/node-sdk';\n\nconst adapter = new MockBLEAdapter({ telemetryHz: 11 });\nconst manager = new VoltraManager({ adapter });\n\nawait manager.scan();     // Returns a mock device\nawait manager.connect();  // Instant connection\nawait manager.startRecording(); // Begins synthetic telemetry\n```\n\nThe mock generates realistic velocity profiles based on configurable parameters (exercise type, rep count, velocity range).\n\n## Physical Device Testing\n\n### iOS\n\n1. Enable Bluetooth in Settings\n2. Add `NSBluetoothAlwaysUsageDescription` to Info.plist\n3. Build and run on physical device (BLE does not work in Simulator)\n4. Pair device via the app's scan screen\n\n### Android\n\n1. Enable Bluetooth and Location Services (required for BLE scanning on Android)\n2. Add permissions to AndroidManifest.xml: BLUETOOTH_SCAN, BLUETOOTH_CONNECT, ACCESS_FINE_LOCATION\n3. Build and run on physical device (BLE partially works in emulator with host forwarding)\n\n## Debugging BLE\n\n- Use nRF Connect app (Nordic Semiconductor) to inspect GATT services directly\n- Enable SDK debug logging: `manager.setLogLevel('debug')`\n- On iOS, use PacketLogger for low-level BLE packet inspection\n- On Android, enable Bluetooth HCI snoop log in Developer Options"
+    },
+    {
+      "id": "sdk-integration-guide",
+      "filename": "sdk-integration-guide.md",
+      "frontmatter": {
+        "title": "SDK Integration Guide for React Native Apps",
+        "type": "guide",
+        "tier": "slow",
+        "tags": [
+          "sdk",
+          "integration",
+          "react-native",
+          "guide"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "related": [
+          "sdk-architecture",
+          "hook-patterns"
+        ],
+        "created": "2025-08-01"
+      },
+      "body": "# SDK Integration Guide for React Native Apps\n\n## Installation\n\n```bash\nnpm install @voltras/node-sdk\n```\n\n## Basic Setup\n\n```typescript\nimport { VoltraManager, RNBLEAdapter } from '@voltras/node-sdk';\n\n// Create manager with React Native BLE adapter\nconst manager = new VoltraManager({\n  adapter: new RNBLEAdapter(),\n});\n\n// Scan for devices\nconst devices = [];\nfor await (const device of manager.scan({ timeout: 10000 })) {\n  devices.push(device);\n}\n\n// Connect to first found device\nawait manager.connect(devices[0]);\n```\n\n## React Integration\n\nThe SDK provides React hooks via the `@voltras/node-sdk/react` subpath:\n\n```typescript\nimport { VoltraProvider, useVoltra, useTelemetry } from '@voltras/node-sdk/react';\n\nfunction App() {\n  return (\n    <VoltraProvider manager={manager}>\n      <WorkoutScreen />\n    </VoltraProvider>\n  );\n}\n\nfunction WorkoutScreen() {\n  const { status, connect, disconnect } = useVoltra();\n  const telemetry = useTelemetry();\n\n  return (\n    <View>\n      <Text>Status: {status}</Text>\n      <Text>Velocity: {telemetry?.velocity.toFixed(2)} m/s</Text>\n    </View>\n  );\n}\n```\n\n## Error Handling\n\nThe SDK emits errors through the event system and throws on async operations:\n\n```typescript\nmanager.on('error', (error) => {\n  if (error.code === 'CONNECTION_LOST') {\n    // Handle reconnection\n  }\n});\n\ntry {\n  await manager.connect(device);\n} catch (e) {\n  if (e instanceof VoltraConnectionError) {\n    // Handle connection failure\n  }\n}\n```\n\n## Cleanup\n\nAlways dispose of the manager when the app unmounts or the user navigates away:\n\n```typescript\nuseEffect(() => {\n  return () => {\n    manager.disconnect();\n    manager.dispose();\n  };\n}, []);\n```"
+    },
+    {
+      "id": "storybook-setup-guide",
+      "filename": "storybook-setup-guide.md",
+      "frontmatter": {
+        "title": "Storybook 10 Setup for Cross-Platform Components",
+        "type": "guide",
+        "tier": "slow",
+        "tags": [
+          "storybook",
+          "design-system",
+          "setup"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-11-15"
+      },
+      "body": "# Storybook 10 Setup for Cross-Platform Components\n\n## Overview\n\nThe titan-design repo uses Storybook 10 for component development and documentation. The setup targets web rendering of React Native components using react-native-web.\n\n## Installation\n\n```bash\npnpm add -D @storybook/react-vite @storybook/addon-essentials\n```\n\n## Configuration\n\n```typescript\n// .storybook/main.ts\nexport default {\n  stories: ['../src/**/*.stories.tsx'],\n  framework: '@storybook/react-vite',\n  addons: ['@storybook/addon-essentials'],\n  viteFinal: (config) => {\n    config.resolve.alias = {\n      'react-native': 'react-native-web',\n    };\n    return config;\n  },\n};\n```\n\n## Writing Stories\n\n```typescript\nimport type { Meta, StoryObj } from '@storybook/react';\nimport { Button } from './Button';\n\nconst meta: Meta<typeof Button> = {\n  component: Button,\n  argTypes: {\n    variant: { control: 'select', options: ['primary', 'secondary', 'ghost'] },\n    size: { control: 'select', options: ['sm', 'md', 'lg'] },\n  },\n};\n\nexport default meta;\ntype Story = StoryObj<typeof Button>;\n\nexport const Primary: Story = {\n  args: { variant: 'primary', children: 'Click me' },\n};\n```\n\n## NativeWind in Storybook\n\nNativeWind styles require the PostCSS/Tailwind build pipeline. The Vite config includes:\n\n```typescript\nimport nativewind from 'nativewind/postcss';\n\nexport default defineConfig({\n  css: { postcss: { plugins: [nativewind()] } },\n});\n```\n\n## Known Issues\n\n- Animations using Reanimated do not render in Storybook web — use CSS animations as fallback\n- Platform-specific files (.ios.tsx, .android.tsx) are not resolved — use the .tsx default\n- Dark mode toggle requires the NativeWind theme provider wrapper in the Storybook decorator"
+    },
+    {
+      "id": "sprint-planning-2025w42",
+      "filename": "sprint-planning-2025w42.md",
+      "frontmatter": {
+        "title": "Sprint Planning — Week 42, 2025",
+        "type": "meeting",
+        "tier": "fast",
+        "tags": [
+          "sprint",
+          "planning"
+        ],
+        "status": "current",
+        "review-interval": "2w",
+        "created": "2025-10-13",
+        "expires": "2025-12-31"
+      },
+      "body": "# Sprint Planning — Week 42, 2025\n\n## Attendees\n\n- Harry (mobile dev)\n- Jake (firmware)\n- Sarah (design)\n\n## Sprint Goals\n\n1. Complete titan-design migration Phase 2 (token replacement)\n2. Ship SDK v0.3.0 with MockBLEAdapter\n3. Fix velocity chart frame drops on older devices\n\n## Task Breakdown\n\n### Mobile App\n- Replace all @/theme color tokens with Titan semantic tokens (Harry, 3 pts)\n- Optimize telemetry rendering with React.memo and ref-based state (Harry, 2 pts)\n- Update BLE permission flow for Android 14 (Harry, 1 pt)\n\n### SDK\n- Implement MockBLEAdapter with configurable telemetry profiles (Harry, 3 pts)\n- Publish v0.3.0 to npm via OIDC pipeline (Harry, 1 pt)\n\n### Firmware\n- Implement MTU negotiation for larger telemetry payloads (Jake, 3 pts)\n- Add battery level to status characteristic (Jake, 1 pt)\n\n### Design\n- Finalize dark mode token palette for Titan (Sarah, 2 pts)\n- Create Storybook stories for all Titan components (Sarah, 3 pts)\n\n## Decisions\n\n- Deferred Playwright E2E testing to next sprint\n- Agreed to keep WeightPicker as app-specific component (not in Titan)"
+    },
+    {
+      "id": "design-review-2025w40",
+      "filename": "design-review-2025w40.md",
+      "frontmatter": {
+        "title": "Design Review — Workout Recording Screen",
+        "type": "meeting",
+        "tier": "fast",
+        "tags": [
+          "design",
+          "review",
+          "workout-screen"
+        ],
+        "status": "current",
+        "review-interval": "4w",
+        "created": "2025-09-29",
+        "expires": "2026-03-31"
+      },
+      "body": "# Design Review — Workout Recording Screen\n\n## Attendees\n\n- Harry (mobile dev)\n- Sarah (design)\n\n## Current State\n\nThe workout recording screen shows real-time velocity, rep count, and set summary. The velocity chart dominates the top half, with rep cards below.\n\n## Feedback\n\n### Sarah's Design Feedback\n- Velocity number should be larger (48pt → 64pt) and centered above the chart\n- Rep cards need more visual hierarchy — highlight the latest rep\n- Add a subtle pulse animation when a new rep is detected\n- Color coding for velocity zones: red (slow), yellow (moderate), green (fast)\n- Set rest timer should appear between sets, not just in the header\n\n### Technical Constraints Discussed\n- Pulse animation needs Reanimated, not CSS (NativeWind limitation)\n- Velocity zone colors must come from Titan semantic tokens for theme consistency\n- Chart cannot use gradient fills on Android without additional native module\n\n## Action Items\n\n- [ ] Harry: Update velocity display size and centering\n- [ ] Harry: Implement rep highlight animation with Reanimated\n- [ ] Sarah: Provide velocity zone color tokens for light/dark themes\n- [ ] Sarah: Design the between-set rest timer overlay"
+    },
+    {
+      "id": "api-discussion-2025w38",
+      "filename": "api-discussion-2025w38.md",
+      "frontmatter": {
+        "title": "API Discussion — Workout Data Export Format",
+        "type": "meeting",
+        "tier": "fast",
+        "tags": [
+          "api",
+          "data-export",
+          "workout"
+        ],
+        "status": "current",
+        "review-interval": "4w",
+        "created": "2025-09-15",
+        "expires": "2026-06-30"
+      },
+      "body": "# API Discussion — Workout Data Export Format\n\n## Attendees\n\n- Harry (mobile dev)\n- Marcus (backend, contractor)\n\n## Context\n\nUsers want to export workout data to third-party platforms (TrainingPeaks, Google Fit, Apple Health). We need a standardized export format.\n\n## Options Discussed\n\n### Option A: JSON Export\n- Pros: Simple, full fidelity, easy to parse\n- Cons: No standard schema, large file size, no ecosystem support\n\n### Option B: FIT File Format (Garmin)\n- Pros: Industry standard for fitness devices, supported by TrainingPeaks, Strava, etc.\n- Cons: Binary format, complex SDK, designed for endurance sports not strength training\n\n### Option C: Custom CSV\n- Pros: Universal compatibility, human-readable\n- Cons: Loses hierarchical structure (sets within exercises within workouts)\n\n## Decision\n\nStart with JSON export (Option A) for v1. Investigate FIT file support for v2 once we understand what fields are needed for strength training compatibility. The JSON schema will be:\n\n```json\n{\n  \"version\": \"1.0\",\n  \"workout\": {\n    \"date\": \"ISO-8601\",\n    \"exercises\": [{\n      \"name\": \"Back Squat\",\n      \"sets\": [{\n        \"reps\": [{ \"velocity\": 0.45, \"rom\": 0.62, \"duration\": 1.2 }]\n      }]\n    }]\n  }\n}\n```\n\n## Follow-ups\n\n- Marcus to research FIT SDK for TypeScript/JavaScript\n- Harry to implement JSON export in the mobile app\n- Both to review Apple HealthKit strength training data model"
+    },
+    {
+      "id": "debug-session-ble-disconnect",
+      "filename": "debug-session-ble-disconnect.md",
+      "frontmatter": {
+        "title": "Debug Session: Intermittent BLE Disconnects on Android",
+        "type": "session-log",
+        "tier": "fast",
+        "tags": [
+          "debugging",
+          "ble",
+          "android"
+        ],
+        "status": "current",
+        "review-interval": "2w",
+        "created": "2025-09-20",
+        "expires": "2026-01-31"
+      },
+      "body": "# Debug Session: Intermittent BLE Disconnects on Android\n\n## Problem\n\nUsers on Android 13+ reported intermittent BLE disconnections during workout recording, typically 5–15 minutes into a session. iOS users were unaffected.\n\n## Investigation\n\n### Step 1: Reproduce\n- Reproduced on Pixel 7 (Android 14) within 10 minutes\n- Not reproducible on Samsung S23 (Android 14) — Samsung uses different BLE stack\n- Consistent reproduction when WiFi scanning is active\n\n### Step 2: Logs\nBLE HCI snoop logs showed the connection being terminated with reason 0x08 (Connection Timeout). The device was still advertising, suggesting the phone was dropping the connection, not the device.\n\n### Step 3: Root Cause\nAndroid's aggressive battery optimization was suspending BLE connections for apps in the background. Even though our app was in the foreground, the system BLE service was being throttled when WiFi scanning ran simultaneously.\n\n## Fix\n\n1. Added `android:foregroundServiceType=\"connectedDevice\"` to the manifest\n2. Implemented a foreground service notification during active recording\n3. Requested battery optimization exemption in the onboarding flow\n4. Added connection parameter request: connection interval 15ms, slave latency 0, supervision timeout 4000ms\n\n## Verification\n\nAfter the fix, no disconnections observed in 8 hours of continuous testing across 3 Android devices. Battery impact of the foreground service was minimal (~2% per hour)."
+    },
+    {
+      "id": "refactoring-session-stores",
+      "filename": "refactoring-session-stores.md",
+      "frontmatter": {
+        "title": "Refactoring Session: Store Consolidation",
+        "type": "session-log",
+        "tier": "fast",
+        "tags": [
+          "refactoring",
+          "zustand",
+          "stores"
+        ],
+        "status": "current",
+        "review-interval": "2w",
+        "created": "2025-10-01",
+        "expires": "2026-02-28"
+      },
+      "body": "# Refactoring Session: Store Consolidation\n\n## Goal\n\nReduce the number of Zustand stores from 6 to 4 by merging related stores and removing dead state.\n\n## Changes Made\n\n### Merged: device-store + connection-store → connection-store\nThe device-store only held the selected device ID and name, which is inherently part of connection state. Merged all fields into connection-store.\n\n### Removed: calibration-store\nThe calibration-store held temporary calibration data that was only used during a single screen flow. Replaced with local React state in the CalibrationScreen component. No need for global state.\n\n### Kept: workout-store, settings-store, exercise-store, connection-store\nThese four stores have clearly distinct domains and lifecycle requirements.\n\n## Impact\n\n- Reduced store file count from 6 to 4\n- Removed 120 lines of boilerplate (store creation, types, selectors)\n- Fixed a bug where device info was stale after reconnection (connection-store now owns it)\n- 3 component files updated to use new connection-store selectors\n\n## Test Results\n\nAll 617 tests pass. No type errors. No new lint warnings."
+    },
+    {
+      "id": "edge-tiny",
+      "filename": "edge-tiny.md",
+      "frontmatter": {
+        "title": "Quick Note on BLE MTU",
+        "type": "note",
+        "tier": "fast",
+        "tags": [
+          "ble",
+          "mtu"
+        ],
+        "created": "2025-10-25"
+      },
+      "body": "BLE MTU defaults to 23 bytes but can be negotiated up to 517 bytes on modern devices."
+    },
+    {
+      "id": "edge-huge",
+      "filename": "edge-huge.md",
+      "frontmatter": {
+        "title": "Comprehensive VBT Implementation Guide",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "comprehensive",
+          "guide"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-11-20"
+      },
+      "body": "# Comprehensive Guide to Velocity-Based Training Implementation\n\n## Introduction\n\nVelocity-based training (VBT) has emerged as one of the most significant advances in strength and conditioning over the past two decades. By measuring the speed at which an athlete moves a load, coaches and athletes gain objective, real-time feedback about training intensity, fatigue, and readiness. This comprehensive guide covers the theoretical foundations, practical applications, and technical implementation details relevant to the Voltra ecosystem.\n\n## Part 1: Theoretical Foundations\n\n### The Load-Velocity Relationship\n\nThe fundamental principle underlying VBT is the inverse relationship between external load and movement velocity. As load increases toward an athlete's one-repetition maximum (1RM), concentric velocity decreases in a near-linear fashion. This relationship was formalized by González-Badillo and Sánchez-Medina in their landmark 2010 study, which demonstrated that mean propulsive velocity (MPV) could predict relative load (%1RM) with high accuracy (R² > 0.95) for the bench press.\n\nThe practical implication is powerful: rather than prescribing training loads as percentages of a previously tested 1RM (which may be outdated due to training adaptations or daily fluctuations), coaches can prescribe target velocities that correspond to desired intensity zones. This accounts for the well-documented day-to-day variation in maximal strength, which can range from 5% to 18% depending on factors like sleep quality, nutrition, psychological stress, and accumulated training fatigue.\n\n### Force-Velocity-Power Relationships\n\nThe force-velocity curve describes the hyperbolic relationship between the force a muscle can produce and the velocity of shortening. At zero velocity (isometric contraction), force production is maximal. As shortening velocity increases, force capacity decreases until reaching maximum shortening velocity at zero load. Power, being the product of force and velocity, is maximized at approximately one-third of maximum velocity and one-third of maximum force.\n\nFor practical training purposes, this means different velocity zones correspond to different training adaptations:\n\n- Maximum strength (< 0.5 m/s): High force, low velocity. Develops neural drive and rate coding.\n- Strength-speed (0.5–0.75 m/s): Moderate force, moderate velocity. Develops force production under moderate speeds.\n- Power (0.75–1.0 m/s): Balanced force-velocity. Maximizes mechanical power output.\n- Speed-strength (1.0–1.3 m/s): Lower force, higher velocity. Develops velocity capabilities.\n- Speed (> 1.3 m/s): Minimal external load, maximum velocity. Develops rate of force development.\n\n### Velocity Loss as a Fatigue Indicator\n\nOne of the most practical applications of VBT is using within-set velocity loss to quantify and control neuromuscular fatigue. Sánchez-Medina and González-Badillo (2011) demonstrated that the magnitude of velocity loss within a set is directly related to the metabolic and mechanical stress imposed on the neuromuscular system.\n\nTheir research showed that limiting velocity loss to 20% of the first repetition's velocity resulted in roughly half the repetitions possible for a given load, but preserved over 90% of the power output and induced significantly less metabolic stress (lower blood lactate, ammonia, and uric acid concentrations). In contrast, training to failure (40%+ velocity loss) maximized mechanical tension and metabolic stress but came at the cost of greater fatigue, longer recovery times, and potentially diminished training frequency.\n\n## Part 2: Measurement Technology\n\n### Linear Position Transducers\n\nLinear position transducers (LPTs) are considered the gold standard for barbell velocity measurement. They consist of a spool of cable attached to the barbell, with a rotary encoder measuring cable displacement over time. Velocity is derived by differentiating position with respect to time.\n\nThe Voltra device uses a high-resolution optical encoder (0.1mm resolution) connected to a lightweight retractable cable. The raw position signal is sampled at 1000 Hz by the onboard microcontroller, filtered with a hardware anti-aliasing filter (200 Hz cutoff), and decimated to 100 Hz for BLE transmission.\n\n### Inertial Measurement Units\n\nAn alternative to LPTs, accelerometer-based systems (like the PUSH band) use inertial measurement units (IMUs) to estimate velocity through integration of acceleration data. While more convenient (no cable), they suffer from integration drift, are sensitive to sensor placement, and generally show lower agreement with LPT measurements (typical correlation r = 0.85–0.92 vs. criterion devices).\n\n### Camera-Based Systems\n\nComputer vision systems (like Vmaxpro) use smartphone cameras to track barbell markers or features. They offer contactless measurement but require consistent lighting, camera angle, and marker visibility. Recent advances in machine learning-based pose estimation have improved markerless tracking, but latency remains a challenge for real-time feedback applications.\n\n## Part 3: Signal Processing\n\n### Noise Sources\n\nThe raw position signal from the Voltra LPT contains several noise components that must be addressed:\n\n1. Quantization noise: The optical encoder has finite resolution (0.1mm steps), producing staircase-like position data. This is particularly problematic at very low velocities where position changes between samples are small.\n\n2. Cable vibration: The retractable cable can vibrate at its natural frequency, especially during rapid direction changes. This manifests as high-frequency oscillation in the position signal.\n\n3. BLE transmission jitter: While the device samples at a consistent rate internally, BLE notification delivery timing varies by several milliseconds, causing apparent timing irregularities in the received data.\n\n### Filtering Strategy\n\nThe signal processing pipeline uses a cascade of filters optimized for different noise sources:\n\nStage 1: A second-order Butterworth low-pass filter with 10 Hz cutoff removes cable vibration and quantization noise while preserving the full bandwidth of human movement (typical rep frequencies are 0.3–2 Hz).\n\nStage 2: A median filter (window size 3) removes any remaining impulse noise from BLE timing jitter.\n\nStage 3: Velocity is computed using a Savitzky-Golay differentiation filter (order 2, window 5) which provides smoother derivatives than simple finite differences.\n\n### Rep Detection Algorithm\n\nThe rep detection algorithm uses a state machine with four states: IDLE, ECCENTRIC, AMORTIZATION, and CONCENTRIC. Transitions are based on velocity thresholds and duration criteria:\n\nIDLE → ECCENTRIC: Velocity falls below -0.02 m/s for more than 100ms\nECCENTRIC → AMORTIZATION: Velocity magnitude drops below 0.02 m/s\nAMORTIZATION → CONCENTRIC: Velocity rises above 0.02 m/s for more than 50ms\nCONCENTRIC → IDLE: Velocity drops below 0.02 m/s with position near starting position\n\n## Part 4: Software Architecture\n\n### Real-Time Data Flow\n\nThe data flow from device to display follows this pipeline:\n\nDevice (1000 Hz) → BLE decimation (100 Hz) → BLE transmission (~11 Hz) → SDK reception → Signal processing → Metric computation → UI update\n\nThe total latency budget from physical movement to visual feedback is 150ms. Beyond this threshold, users perceive the feedback as delayed and stop trusting it for intra-rep adjustments.\n\n### SDK Architecture\n\nThe Voltra SDK uses a Manager-Adapter pattern where the VoltraManager handles the protocol logic and state machine, while platform-specific BLEAdapter implementations handle the actual Bluetooth operations. This allows the same core logic to run on React Native (production), in a browser with MockBLEAdapter (development), and in Node.js for automated testing.\n\n### Analytics Engine\n\nThe workout-analytics package provides hardware-agnostic metric computation. It receives timestamped velocity data and produces per-rep metrics (mean velocity, peak velocity, mean propulsive velocity, ROM, duration) and per-set summaries (velocity loss, estimated 1RM, RPE estimate). All computations are O(1) per sample, enabling real-time processing without buffering.\n\n## Part 5: Practical Applications\n\n### Daily Readiness Assessment\n\nBy tracking first-rep velocity of a standardized warm-up load over time, athletes and coaches can assess daily neuromuscular readiness. A velocity decrease of more than 5% from baseline suggests accumulated fatigue or reduced readiness, warranting a load reduction or modified session.\n\n### Autoregulated Training\n\nVBT enables truly autoregulated training where loads are adjusted within a session based on velocity performance. If target velocity for a given zone is not achieved, the load is reduced. If velocity exceeds the target zone, the load can be increased. This eliminates the need for fixed percentage-based programs.\n\n### Fatigue-Limited Sets\n\nRather than prescribing fixed rep counts, coaches can prescribe velocity loss thresholds. For example, \"perform sets of back squat at 0.5 m/s target velocity, terminate set when velocity drops to 0.4 m/s (20% loss).\" This ensures consistent training stimulus regardless of daily strength fluctuations."
+    },
+    {
+      "id": "edge-code",
+      "filename": "edge-code.md",
+      "frontmatter": {
+        "title": "BLE Protocol Encoding Implementation",
+        "type": "pattern",
+        "tier": "slow",
+        "tags": [
+          "ble",
+          "protocol",
+          "typescript",
+          "code"
+        ],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-08-30"
+      },
+      "body": "# BLE Protocol Encoding Implementation\n\n```typescript\nconst CommandType = {\n  START_RECORDING: 0x01,\n  STOP_RECORDING: 0x02,\n  CALIBRATE: 0x03,\n  SET_CONFIG: 0x04,\n  GET_STATUS: 0x05,\n  FIRMWARE_VERSION: 0x06,\n} as const;\n\ntype CommandTypeKey = keyof typeof CommandType;\n\ninterface CommandPayloads {\n  START_RECORDING: { sampleRate: number };\n  STOP_RECORDING: Record<string, never>;\n  CALIBRATE: { axis: 0 | 1 | 2 };\n  SET_CONFIG: { key: number; value: number };\n  GET_STATUS: Record<string, never>;\n  FIRMWARE_VERSION: Record<string, never>;\n}\n\nfunction encodeCommand<K extends CommandTypeKey>(\n  type: K,\n  payload: CommandPayloads[K],\n): Uint8Array {\n  const payloadBytes = encodePayload(type, payload);\n  const packet = new Uint8Array(2 + payloadBytes.length + 2);\n\n  packet[0] = CommandType[type];\n  packet[1] = payloadBytes.length;\n  packet.set(payloadBytes, 2);\n\n  const crc = crc16ccitt(packet.subarray(0, 2 + payloadBytes.length));\n  packet[packet.length - 2] = (crc >> 8) & 0xff;\n  packet[packet.length - 1] = crc & 0xff;\n\n  return packet;\n}\n\nfunction encodePayload<K extends CommandTypeKey>(\n  type: K,\n  payload: CommandPayloads[K],\n): Uint8Array {\n  switch (type) {\n    case 'START_RECORDING': {\n      const p = payload as CommandPayloads['START_RECORDING'];\n      const buf = new ArrayBuffer(2);\n      new DataView(buf).setUint16(0, p.sampleRate, true);\n      return new Uint8Array(buf);\n    }\n    case 'STOP_RECORDING':\n    case 'GET_STATUS':\n    case 'FIRMWARE_VERSION':\n      return new Uint8Array(0);\n    case 'CALIBRATE': {\n      const p = payload as CommandPayloads['CALIBRATE'];\n      return new Uint8Array([p.axis]);\n    }\n    case 'SET_CONFIG': {\n      const p = payload as CommandPayloads['SET_CONFIG'];\n      const buf = new ArrayBuffer(6);\n      const view = new DataView(buf);\n      view.setUint16(0, p.key, true);\n      view.setFloat32(2, p.value, true);\n      return new Uint8Array(buf);\n    }\n    default:\n      throw new Error('Unknown command type');\n  }\n}\n\nfunction crc16ccitt(data: Uint8Array): number {\n  let crc = 0xffff;\n  for (let i = 0; i < data.length; i++) {\n    crc ^= data[i] << 8;\n    for (let j = 0; j < 8; j++) {\n      if (crc & 0x8000) {\n        crc = (crc << 1) ^ 0x1021;\n      } else {\n        crc = crc << 1;\n      }\n      crc &= 0xffff;\n    }\n  }\n  return crc;\n}\n\nfunction decodeResponse(data: Uint8Array): {\n  type: number;\n  status: number;\n  payload: Uint8Array;\n} {\n  if (data.length < 4) throw new Error('Response too short');\n\n  const receivedCrc =\n    (data[data.length - 2] << 8) | data[data.length - 1];\n  const computedCrc = crc16ccitt(data.subarray(0, data.length - 2));\n\n  if (receivedCrc !== computedCrc) {\n    throw new Error(\n      `CRC mismatch: expected ${computedCrc.toString(16)}, got ${receivedCrc.toString(16)}`,\n    );\n  }\n\n  return {\n    type: data[0],\n    status: data[1],\n    payload: data.subarray(2, data.length - 2),\n  };\n}\n\nfunction decodeTelemetry(data: Uint8Array): {\n  timestamp: number;\n  position: number;\n  velocity: number;\n  acceleration: number;\n  flags: number;\n} {\n  if (data.length !== 20) throw new Error('Invalid telemetry packet size');\n\n  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);\n  return {\n    timestamp: view.getUint32(0, true),\n    position: view.getFloat32(4, true),\n    velocity: view.getFloat32(8, true),\n    acceleration: view.getFloat32(12, true),\n    flags: view.getUint32(16, true),\n  };\n}\n```\n\nUsage is straightforward — call encodeCommand with the command name and typed payload."
+    },
+    {
+      "id": "edge-tables",
+      "filename": "edge-tables.md",
+      "frontmatter": {
+        "title": "Exercise Velocity Reference Tables",
+        "type": "research",
+        "tier": "slow",
+        "tags": [
+          "vbt",
+          "reference",
+          "tables"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "created": "2025-09-05"
+      },
+      "body": "# Exercise Velocity Reference Tables\n\n## Back Squat Load-Velocity Table\n\n| %1RM | Mean Velocity (m/s) | MPV (m/s) | Peak Velocity (m/s) |\n|------|-------------------|-----------|---------------------|\n| 40%  | 1.13 ± 0.08      | 1.02 ± 0.07 | 1.85 ± 0.12     |\n| 50%  | 0.96 ± 0.07      | 0.87 ± 0.06 | 1.62 ± 0.11     |\n| 60%  | 0.82 ± 0.06      | 0.74 ± 0.05 | 1.41 ± 0.10     |\n| 70%  | 0.68 ± 0.05      | 0.61 ± 0.04 | 1.21 ± 0.09     |\n| 80%  | 0.54 ± 0.05      | 0.48 ± 0.04 | 1.00 ± 0.08     |\n| 85%  | 0.46 ± 0.04      | 0.41 ± 0.04 | 0.89 ± 0.08     |\n| 90%  | 0.38 ± 0.04      | 0.34 ± 0.03 | 0.78 ± 0.07     |\n| 95%  | 0.30 ± 0.03      | 0.27 ± 0.03 | 0.65 ± 0.07     |\n| 100% | 0.22 ± 0.03      | 0.20 ± 0.03 | 0.52 ± 0.06     |\n\n## Bench Press Load-Velocity Table\n\n| %1RM | Mean Velocity (m/s) | MPV (m/s) | Peak Velocity (m/s) |\n|------|-------------------|-----------|---------------------|\n| 40%  | 0.96 ± 0.07      | 0.91 ± 0.06 | 1.55 ± 0.10     |\n| 50%  | 0.82 ± 0.06      | 0.77 ± 0.05 | 1.35 ± 0.09     |\n| 60%  | 0.68 ± 0.05      | 0.64 ± 0.05 | 1.15 ± 0.08     |\n| 70%  | 0.54 ± 0.05      | 0.50 ± 0.04 | 0.95 ± 0.08     |\n| 80%  | 0.40 ± 0.04      | 0.37 ± 0.04 | 0.76 ± 0.07     |\n| 85%  | 0.33 ± 0.04      | 0.30 ± 0.03 | 0.65 ± 0.07     |\n| 90%  | 0.26 ± 0.03      | 0.24 ± 0.03 | 0.55 ± 0.06     |\n| 95%  | 0.18 ± 0.03      | 0.17 ± 0.02 | 0.44 ± 0.06     |\n| 100% | 0.12 ± 0.02      | 0.11 ± 0.02 | 0.33 ± 0.05     |\n\n## Deadlift Load-Velocity Table\n\n| %1RM | Mean Velocity (m/s) | Peak Velocity (m/s) |\n|------|-------------------|---------------------|\n| 50%  | 0.88 ± 0.07      | 1.45 ± 0.11        |\n| 60%  | 0.74 ± 0.06      | 1.25 ± 0.10        |\n| 70%  | 0.60 ± 0.05      | 1.05 ± 0.09        |\n| 80%  | 0.46 ± 0.04      | 0.85 ± 0.08        |\n| 90%  | 0.32 ± 0.03      | 0.65 ± 0.07        |\n| 100% | 0.16 ± 0.02      | 0.42 ± 0.06        |\n\n## MVT Comparison Across Exercises\n\n| Exercise | MVT (m/s) | SD |\n|----------|----------|----|\n| Back Squat | 0.30 | 0.04 |\n| Bench Press | 0.15 | 0.03 |\n| Deadlift | 0.16 | 0.02 |\n| Overhead Press | 0.22 | 0.04 |\n| Bent-over Row | 0.25 | 0.04 |\n| Hip Thrust | 0.20 | 0.03 |"
+    },
+    {
+      "id": "edge-no-headings",
+      "filename": "edge-no-headings.md",
+      "frontmatter": {
+        "title": "Thoughts on Wearable Sensor Placement",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "sensors",
+          "wearables",
+          "ergonomics"
+        ],
+        "confidence": "low",
+        "status": "current",
+        "created": "2025-10-30"
+      },
+      "body": "The placement of inertial measurement units on the body or barbell significantly affects measurement accuracy for velocity-based training applications. Wrist-mounted sensors like the PUSH band capture the velocity of the hand rather than the barbell itself, introducing errors due to wrist flexion and extension during heavy lifts. The magnitude of this error depends on grip width, exercise type, and individual technique — for bench press, wrist-mounted sensors typically overestimate mean velocity by 8-15% compared to linear position transducers attached directly to the barbell. Barbell-mounted sensors avoid this issue but add setup friction (the athlete must attach the device before each exercise). The Voltra system uses a cable-based linear position transducer that clips to the barbell via a magnetic mount, providing direct measurement of barbell displacement without the complexity of IMU-based velocity estimation. One consideration for future products is whether a smaller, barbell-mounted IMU with on-device sensor fusion could achieve comparable accuracy to the cable-based system while reducing setup time. Early prototyping suggests this is feasible for exercises with primarily vertical bar paths (squat, bench press, overhead press) but remains challenging for exercises with significant horizontal displacement (bent-over row, hip thrust). The machine learning approach of training a model on paired LPT and IMU data shows promise but requires a large training dataset covering diverse athletes and exercises."
+    },
+    {
+      "id": "edge-unicode",
+      "filename": "edge-unicode.md",
+      "frontmatter": {
+        "title": "Notas sobre la Localización de la App — Übersetzung & 翻訳",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "i18n",
+          "localization",
+          "unicode"
+        ],
+        "confidence": "low",
+        "status": "draft",
+        "created": "2025-11-01"
+      },
+      "body": "# Notas sobre la Localización de la App\n\n## Caractères spéciaux et symboles\n\nLa aplicación necesita soportar múltiples idiomas y caracteres especiales:\n\n- **Español**: Velocidad máxima: 1.5 m/s — ¡Excelente rendimiento!\n- **Français**: Vitesse de répétition: 0.8 m/s — Très bien\n- **Deutsch**: Geschwindigkeit: 0.6 m/s — Überdurchschnittlich\n- **日本語**: 速度: 0.45 m/s — 良い\n- **中文**: 速度: 0.3 m/s — 很好\n\n## Symboles mathématiques\n\n- Velocidad promedio: x̄ = Σvᵢ/n\n- Desviación estándar: σ = √(Σ(xᵢ - x̄)² / n)\n- Fuerza ≈ masa × aceleración (F ≈ m·a)\n- Potencia = Fuerza × Velocidad (P = F·v)\n\n## Unidades de medida\n\n| Métrique | Unité SI | Unité impériale |\n|----------|---------|-----------------|\n| Velocidad | m/s | ft/s |\n| Masa | kg | lbs |\n| Distancia | m | ft |\n| Fuerza | N | lbf |\n\n## Emojis en notificaciones\n\nLas notificaciones de la app usan emojis para feedback rápido:\n- 🟢 Nueva mejor marca personal\n- 🔴 Velocidad por debajo del umbral\n- ⚡ Potencia máxima alcanzada\n- 🔋 Batería baja del dispositivo"
+    },
+    {
+      "id": "edge-empty-sections",
+      "filename": "edge-empty-sections.md",
+      "frontmatter": {
+        "title": "Placeholder Architecture Notes",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "architecture",
+          "placeholder"
+        ],
+        "confidence": "speculative",
+        "status": "draft",
+        "created": "2025-11-05"
+      },
+      "body": "# Placeholder Architecture Notes\n\n## Authentication\n\n## Data Sync Strategy\n\n## Offline Mode\n\n## Push Notifications\n\n## Analytics and Telemetry\n\nSome initial thoughts on analytics: we need to track workout completion rates, feature usage, and BLE reliability metrics. Privacy-first approach — no PII in analytics events.\n\n## A/B Testing Framework\n\n## Deep Linking"
+    },
+    {
+      "id": "edge-deep-nesting",
+      "filename": "edge-deep-nesting.md",
+      "frontmatter": {
+        "title": "Deeply Nested Document Structure Test",
+        "type": "note",
+        "tier": "slow",
+        "tags": [
+          "structure",
+          "nesting",
+          "edge-case"
+        ],
+        "confidence": "medium",
+        "status": "current",
+        "created": "2025-11-10"
+      },
+      "body": "# Level 1: System Architecture\n\nThe Voltra ecosystem comprises several interconnected subsystems.\n\n## Level 2: Mobile Application Layer\n\nThe mobile app serves as the primary user interface for the Voltra system.\n\n### Level 3: State Management\n\nState is managed through domain-specific Zustand stores, each handling a distinct concern.\n\n#### Level 4: Connection Store Details\n\nThe connection store manages BLE device state transitions through a finite state machine with five states: disconnected, scanning, connecting, connected, and streaming. Each transition is guarded by preconditions (e.g., cannot transition from disconnected to connected without passing through scanning and connecting). The store exposes actions that trigger transitions and selectors that derive UI state from the raw connection state.\n\n### Level 3: Navigation\n\nNavigation uses expo-router with a tab-based layout. The main tabs are: Workout, History, Exercises, and Settings.\n\n#### Level 4: Workout Flow Navigation\n\nThe workout flow uses a nested stack navigator within the Workout tab. Screens are: ExerciseSelect → SetConfig → Recording → SetSummary → WorkoutSummary. Back navigation is restricted during active recording to prevent accidental data loss.\n\n## Level 2: SDK Layer\n\nThe SDK abstracts BLE communication and provides a typed API for device interaction.\n\n### Level 3: Protocol Encoding\n\nCommands are encoded using a TLV format with CRC-16 integrity checking.\n\n#### Level 4: Payload Serialization\n\nEach command type has a specific payload format. Numeric values use little-endian byte order. Floating-point values use IEEE 754 single-precision format. String values are UTF-8 encoded with a 2-byte length prefix.\n\n## Level 2: Firmware Layer\n\nThe device firmware runs on an ARM Cortex-M4 microcontroller.\n\n### Level 3: Sampling Pipeline\n\nThe firmware samples the linear encoder at 1000 Hz and applies hardware anti-aliasing before decimation to 100 Hz for BLE transmission."
+    }
+  ],
+  "queries": [
+    {
+      "id": "q01",
+      "text": "What is the load-velocity relationship in resistance training?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "vbt-fundamentals"
+      ]
+    },
+    {
+      "id": "q02",
+      "text": "What are the different velocity training zones and their ranges?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "vbt-fundamentals",
+        "exercise-science-overview"
+      ]
+    },
+    {
+      "id": "q03",
+      "text": "How can you estimate exercise difficulty from barbell speed?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "rpe-velocity-relationship",
+        "vbt-fundamentals"
+      ]
+    },
+    {
+      "id": "q04",
+      "text": "What is the relationship between RPE and mean concentric velocity?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "rpe-velocity-relationship"
+      ]
+    },
+    {
+      "id": "q05",
+      "text": "What CRC polynomial does the Voltra BLE protocol use?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "crc-checksum-research",
+        "ble-protocol-research"
+      ]
+    },
+    {
+      "id": "q06",
+      "text": "How does the BLE GATT service structure work for the Voltra device?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "ble-protocol-research"
+      ]
+    },
+    {
+      "id": "q07",
+      "text": "How is noise removed from the raw position sensor data?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "telemetry-processing"
+      ]
+    },
+    {
+      "id": "q08",
+      "text": "What is the latency budget for real-time telemetry display?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "telemetry-processing"
+      ]
+    },
+    {
+      "id": "q09",
+      "text": "How does the force-velocity curve apply to strength training?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "exercise-science-overview",
+        "vbt-fundamentals"
+      ]
+    },
+    {
+      "id": "q10",
+      "text": "What does undulating periodization look like with velocity targets?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "exercise-science-overview"
+      ]
+    },
+    {
+      "id": "q11",
+      "text": "How is the CRC-16/CCITT checksum computed for BLE commands?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "crc-checksum-research"
+      ]
+    },
+    {
+      "id": "q12",
+      "text": "What happens when a CRC mismatch is detected in a command response?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "crc-checksum-research",
+        "ble-command-pattern"
+      ]
+    },
+    {
+      "id": "q13",
+      "text": "Why were the original velocity thresholds replaced?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "velocity-thresholds-v1",
+        "velocity-thresholds-v2"
+      ]
+    },
+    {
+      "id": "q14",
+      "text": "How does the adaptive threshold system learn from user movement patterns?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "velocity-thresholds-v3"
+      ]
+    },
+    {
+      "id": "q15",
+      "text": "What are the four phases of a resistance training repetition?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "movement-phases"
+      ]
+    },
+    {
+      "id": "q16",
+      "text": "How does the state machine detect transitions between movement phases?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "movement-phases",
+        "telemetry-processing"
+      ]
+    },
+    {
+      "id": "q17",
+      "text": "What is the minimum velocity threshold and why does it matter?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "mvt-research",
+        "vbt-fundamentals"
+      ]
+    },
+    {
+      "id": "q18",
+      "text": "How can submaximal sets be used to estimate daily one-rep max?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "mvt-research",
+        "vbt-fundamentals"
+      ]
+    },
+    {
+      "id": "q19",
+      "text": "How did rep detection accuracy improve across threshold versions?",
+      "type": "multi-hop",
+      "relevantNoteIds": [
+        "velocity-thresholds-v1",
+        "velocity-thresholds-v2",
+        "velocity-thresholds-v3"
+      ]
+    },
+    {
+      "id": "q20",
+      "text": "What exercises have the lowest minimum velocity thresholds?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "mvt-research"
+      ]
+    },
+    {
+      "id": "q21",
+      "text": "Why was the Manager-Adapter pattern chosen for the SDK?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "sdk-architecture"
+      ]
+    },
+    {
+      "id": "q22",
+      "text": "How does the SDK support multiple BLE backends?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "sdk-architecture",
+        "ble-command-pattern"
+      ]
+    },
+    {
+      "id": "q23",
+      "text": "Why was Zustand chosen over Redux for the mobile app?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "mobile-architecture"
+      ]
+    },
+    {
+      "id": "q24",
+      "text": "How is cross-store coordination handled in the mobile app?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "mobile-architecture",
+        "zustand-store-patterns"
+      ]
+    },
+    {
+      "id": "q25",
+      "text": "What problems did the custom theme system have before Titan?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "titan-design-system"
+      ]
+    },
+    {
+      "id": "q26",
+      "text": "How was the Titan design system migration phased?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "titan-design-system"
+      ]
+    },
+    {
+      "id": "q27",
+      "text": "What testing framework do all Voltras repos use?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "testing-strategy"
+      ]
+    },
+    {
+      "id": "q28",
+      "text": "How does the mobile app test configuration differ from other repos?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "testing-strategy"
+      ]
+    },
+    {
+      "id": "q29",
+      "text": "How does OIDC trusted publishing work for npm packages?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "publishing-decision"
+      ]
+    },
+    {
+      "id": "q30",
+      "text": "Why doesn't the Voltras project need an NPM_TOKEN secret?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "publishing-decision"
+      ]
+    },
+    {
+      "id": "q31",
+      "text": "Why was SQLite chosen over PostgreSQL for the brain project?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "database-choice"
+      ]
+    },
+    {
+      "id": "q32",
+      "text": "How are embedding vectors stored and queried in the brain database?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "database-choice"
+      ]
+    },
+    {
+      "id": "q33",
+      "text": "What is the Zustand selector pattern and why does it matter?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "zustand-store-patterns"
+      ]
+    },
+    {
+      "id": "q34",
+      "text": "How do you persist Zustand state with AsyncStorage?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "zustand-store-patterns"
+      ]
+    },
+    {
+      "id": "q35",
+      "text": "Why must BLE write operations be serialized?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "ble-command-pattern"
+      ]
+    },
+    {
+      "id": "q36",
+      "text": "How does the SDK command queue handle concurrent requests?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "ble-command-pattern",
+        "sdk-architecture"
+      ]
+    },
+    {
+      "id": "q37",
+      "text": "What is the compound component pattern in React Native?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "component-composition-pattern"
+      ]
+    },
+    {
+      "id": "q38",
+      "text": "How does the Titan design system handle component customization?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "component-composition-pattern",
+        "titan-design-system"
+      ]
+    },
+    {
+      "id": "q39",
+      "text": "What are the three levels of error boundaries in the mobile app?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "error-boundary-pattern"
+      ]
+    },
+    {
+      "id": "q40",
+      "text": "How does the app handle BLE connection loss automatically?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "error-boundary-pattern",
+        "debug-session-ble-disconnect"
+      ]
+    },
+    {
+      "id": "q41",
+      "text": "How does the useTelemetry hook subscribe to SDK events?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "hook-patterns"
+      ]
+    },
+    {
+      "id": "q42",
+      "text": "What React patterns are used for integrating with the Voltra SDK?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "hook-patterns",
+        "sdk-integration-guide"
+      ]
+    },
+    {
+      "id": "q43",
+      "text": "How does the SDK enforce type safety for command payloads?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "typescript-generics-pattern"
+      ]
+    },
+    {
+      "id": "q44",
+      "text": "What generic patterns does the SDK use for its event system?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "typescript-generics-pattern"
+      ]
+    },
+    {
+      "id": "q45",
+      "text": "How does the Voltra device compare to competitor VBT products?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "fitness-device-observations"
+      ]
+    },
+    {
+      "id": "q46",
+      "text": "What is the target price point for the Voltra consumer device?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "fitness-device-observations"
+      ]
+    },
+    {
+      "id": "q47",
+      "text": "What is the SDK's breaking change policy before version 1.0?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "sdk-versioning-notes"
+      ]
+    },
+    {
+      "id": "q48",
+      "text": "What needs to happen before the SDK can reach 1.0?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "sdk-versioning-notes"
+      ]
+    },
+    {
+      "id": "q49",
+      "text": "What caused frame drops in the workout recording screen?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "mobile-performance-notes"
+      ]
+    },
+    {
+      "id": "q50",
+      "text": "How was the telemetry rendering optimized for older devices?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "mobile-performance-notes",
+        "telemetry-processing"
+      ]
+    },
+    {
+      "id": "q51",
+      "text": "What issues were encountered updating from Expo 53 to 54?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "expo-update-notes"
+      ]
+    },
+    {
+      "id": "q52",
+      "text": "What NativeWind workarounds were needed for the Expo update?",
+      "type": "multi-hop",
+      "relevantNoteIds": [
+        "expo-update-notes",
+        "nativewind-quirks"
+      ]
+    },
+    {
+      "id": "q53",
+      "text": "Why don't Tailwind animation classes work in NativeWind v4?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "nativewind-quirks"
+      ]
+    },
+    {
+      "id": "q54",
+      "text": "How does dark mode behave differently on web versus native with NativeWind?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "nativewind-quirks"
+      ]
+    },
+    {
+      "id": "q55",
+      "text": "How do you set up BLE development without a physical device?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "ble-setup-guide"
+      ]
+    },
+    {
+      "id": "q56",
+      "text": "What Android permissions are required for BLE scanning?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "ble-setup-guide"
+      ]
+    },
+    {
+      "id": "q57",
+      "text": "How do you integrate the Voltra SDK into a React Native app?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "sdk-integration-guide"
+      ]
+    },
+    {
+      "id": "q58",
+      "text": "How do you properly clean up SDK resources when a component unmounts?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "sdk-integration-guide",
+        "hook-patterns"
+      ]
+    },
+    {
+      "id": "q59",
+      "text": "How do you configure Storybook to work with NativeWind styles?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "storybook-setup-guide"
+      ]
+    },
+    {
+      "id": "q60",
+      "text": "What are the known Storybook limitations with React Native components?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "storybook-setup-guide",
+        "nativewind-quirks"
+      ]
+    },
+    {
+      "id": "q61",
+      "text": "What were the sprint goals for Week 42?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "sprint-planning-2025w42"
+      ]
+    },
+    {
+      "id": "q62",
+      "text": "What was decided about Playwright E2E testing?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "sprint-planning-2025w42",
+        "testing-strategy"
+      ]
+    },
+    {
+      "id": "q63",
+      "text": "What design feedback was given for the workout recording screen?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "design-review-2025w40"
+      ]
+    },
+    {
+      "id": "q64",
+      "text": "Why can't the velocity chart use gradient fills on Android?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "design-review-2025w40"
+      ]
+    },
+    {
+      "id": "q65",
+      "text": "What workout data export format was chosen and why?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "api-discussion-2025w38"
+      ]
+    },
+    {
+      "id": "q66",
+      "text": "Why wasn't FIT file format adopted for the first version of data export?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "api-discussion-2025w38"
+      ]
+    },
+    {
+      "id": "q67",
+      "text": "What caused intermittent BLE disconnections on Android?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "debug-session-ble-disconnect"
+      ]
+    },
+    {
+      "id": "q68",
+      "text": "How was the Android BLE disconnect issue fixed?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "debug-session-ble-disconnect"
+      ]
+    },
+    {
+      "id": "q69",
+      "text": "What stores were consolidated during the refactoring session?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "refactoring-session-stores"
+      ]
+    },
+    {
+      "id": "q70",
+      "text": "Why was the calibration store replaced with local component state?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "refactoring-session-stores",
+        "zustand-store-patterns"
+      ]
+    },
+    {
+      "id": "q71",
+      "text": "What is the default BLE MTU size?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "edge-tiny",
+        "ble-protocol-research"
+      ]
+    },
+    {
+      "id": "q72",
+      "text": "How does velocity loss within a set relate to training adaptations?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "edge-huge",
+        "vbt-fundamentals"
+      ]
+    },
+    {
+      "id": "q73",
+      "text": "How is the BLE command packet encoded in TypeScript?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "edge-code",
+        "ble-protocol-research"
+      ]
+    },
+    {
+      "id": "q74",
+      "text": "What is the mean velocity for a back squat at 80% of 1RM?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "edge-tables"
+      ]
+    },
+    {
+      "id": "q75",
+      "text": "How does sensor placement affect velocity measurement accuracy?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "edge-no-headings"
+      ]
+    },
+    {
+      "id": "q76",
+      "text": "What localization considerations does the app need to handle?",
+      "type": "semantic",
+      "relevantNoteIds": [
+        "edge-unicode"
+      ]
+    },
+    {
+      "id": "q77",
+      "text": "What placeholder architecture areas still need to be defined?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "edge-empty-sections"
+      ]
+    },
+    {
+      "id": "q78",
+      "text": "How deep is the navigation nesting in the connection store implementation?",
+      "type": "factual",
+      "relevantNoteIds": [
+        "edge-deep-nesting"
+      ]
+    },
+    {
+      "id": "q79",
+      "text": "How does the SDK architecture influence the mobile app's state management?",
+      "type": "multi-hop",
+      "relevantNoteIds": [
+        "sdk-architecture",
+        "mobile-architecture",
+        "zustand-store-patterns"
+      ]
+    },
+    {
+      "id": "q80",
+      "text": "How do BLE protocol reliability features propagate through the SDK to the React hooks layer?",
+      "type": "multi-hop",
+      "relevantNoteIds": [
+        "ble-protocol-research",
+        "ble-command-pattern",
+        "hook-patterns",
+        "sdk-architecture"
+      ]
+    },
+    {
+      "id": "q81",
+      "text": "How did the velocity threshold evolution affect the mobile app's real-time performance?",
+      "type": "multi-hop",
+      "relevantNoteIds": [
+        "velocity-thresholds-v3",
+        "telemetry-processing",
+        "mobile-performance-notes"
+      ]
+    },
+    {
+      "id": "q82",
+      "text": "How does the Titan design system decision connect to the NativeWind quirks found in practice?",
+      "type": "multi-hop",
+      "relevantNoteIds": [
+        "titan-design-system",
+        "nativewind-quirks",
+        "storybook-setup-guide"
+      ]
+    }
+  ],
+  "offTopicQueries": [
+    "What is the best recipe for sourdough bread?",
+    "How does quantum entanglement work at the atomic level?",
+    "What were the major causes of the French Revolution?",
+    "How do you train a golden retriever puppy?",
+    "What is the current weather forecast for Tokyo?",
+    "How does photosynthesis convert sunlight into energy?",
+    "What are the rules of cricket?",
+    "How do you change a car tire on the highway?",
+    "What is the history of the Roman Colosseum?",
+    "How do you solve a Rubik's cube in under two minutes?"
+  ]
+}
