@@ -5,5 +5,5 @@ export default defineConfig({
   format: ['esm'],
   target: 'node22',
   clean: true,
-  external: ['better-sqlite3', 'sqlite-vec'],
+  external: ['better-sqlite3', 'sqlite-vec', '@huggingface/transformers'],
 })

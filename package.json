@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/titan-design/brain.git"
+    "url": "git+https://github.com/titan-design/brain.git"
   },
   "files": [
     "dist",
@@ -14,7 +14,7 @@
     "scripts"
   ],
   "bin": {
-    "brain": "./dist/cli.js"
+    "brain": "dist/cli.js"
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
