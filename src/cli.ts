@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module'
 import { Command } from '@commander-js/extra-typings'
 import { initCommand } from './commands/init.js'
 import { indexCommand } from './commands/index-cmd.js'
@@ -14,7 +15,7 @@ import { configCommand } from './commands/config.js'
 const program = new Command()
   .name('brain')
   .description('Developer second brain with hybrid RAG search')
-  .version('0.1.0')
+  .version((createRequire(import.meta.url)('../package.json') as { version: string }).version)
   .option('--config-dir <path>', 'override config directory')
   .option('--db-path <path>', 'override database path')
 

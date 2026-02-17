@@ -33,7 +33,6 @@
     "sqlite-vec": "^0.1.6",
     "ollama": "^0.5.14",
     "gray-matter": "^4.0.3",
-    "glob": "^11.0.1",
     "env-paths": "^3.0.0"
   },
   "optionalDependencies": {

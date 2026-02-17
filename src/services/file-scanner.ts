@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { readFile, stat } from 'node:fs/promises'
-import { glob } from 'glob'
+import { readFile, stat, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { FileRecord } from '../types.js'
 
 export interface ScanResult {
@@ -25,11 +25,10 @@ export async function scanForChanges(
     unchanged: 0,
   }
 
-  const files = await glob('**/*.md', {
-    cwd: rootDir,
-    absolute: true,
-    ignore: ['**/node_modules/**', '**/.git/**'],
-  })
+  const entries = await readdir(rootDir, { recursive: true })
+  const files = entries
+    .filter((e) => e.endsWith('.md') && !e.includes('node_modules') && !e.includes('.git'))
+    .map((e) => join(rootDir, e))
 
   const seen = new Set<string>()
 
