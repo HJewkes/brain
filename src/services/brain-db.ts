@@ -7,8 +7,7 @@ import type {
   Relation,
 } from '../types.js'
 
-const SCHEMA_VERSION = 1
-const VECTOR_DIMENSIONS = 384
+const SCHEMA_VERSION = 2
 
 interface FTSResult {
   noteId: string
@@ -17,6 +16,7 @@ interface FTSResult {
 
 export class BrainDB {
   private db: Database.Database
+  private vectorDimensions: number | null = null
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath)
@@ -38,8 +38,35 @@ export class BrainDB {
     if (currentVersion < 1) {
       this.db.exec(this.schemaV1())
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
-      this.setMetaValue('schema_version', '1')
+      this.setMetaValue('schema_version', String(SCHEMA_VERSION))
     }
+    if (currentVersion >= 1 && currentVersion < 2) {
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_chunks_note_id ON chunks(note_id)')
+      this.db.pragma('user_version = 2')
+      this.setMetaValue('schema_version', '2')
+    }
+
+    const dims = this.getMetaValue('embedding_dimensions')
+    if (dims) {
+      this.ensureVectorTable(Number(dims))
+    }
+  }
+
+  ensureVectorTable(dimensions: number): void {
+    if (this.vectorDimensions === dimensions) return
+
+    const existing = this.getMetaValue('embedding_dimensions')
+    if (existing && Number(existing) !== dimensions) {
+      this.db.exec('DROP TABLE IF EXISTS chunk_vectors')
+    }
+
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(
+        chunk_id TEXT PRIMARY KEY,
+        embedding float[${dimensions}]
+      )
+    `)
+    this.vectorDimensions = dimensions
   }
 
   private schemaV1(): string {
@@ -97,10 +124,7 @@ export class BrainDB {
         FOREIGN KEY (note_id) REFERENCES notes(id)
       );
 
-      CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(
-        chunk_id TEXT PRIMARY KEY,
-        embedding float[${VECTOR_DIMENSIONS}]
-      );
+      CREATE INDEX IF NOT EXISTS idx_chunks_note_id ON chunks(note_id);
 
       CREATE TABLE IF NOT EXISTS db_meta (
         key   TEXT PRIMARY KEY,
@@ -129,6 +153,7 @@ export class BrainDB {
   setEmbeddingModel(model: string, dimensions: number): void {
     this.setMetaValue('embedding_model', model)
     this.setMetaValue('embedding_dimensions', String(dimensions))
+    this.ensureVectorTable(dimensions)
   }
 
   getEmbeddingModel(): { model: string; dimensions: number } | null {
@@ -250,6 +275,9 @@ export class BrainDB {
   // --- Chunk + Vector Operations ---
 
   upsertChunks(noteId: string, chunks: Chunk[], embeddings: Float32Array[]): void {
+    if (embeddings.length > 0) {
+      this.ensureVectorTable(embeddings[0].length)
+    }
     this.deleteChunksForNote(noteId)
 
     const insertChunk = this.db.prepare(
@@ -341,6 +369,70 @@ export class BrainDB {
     return rows.map(rowToRelation)
   }
 
+  // --- Search API ---
+
+  searchVector(embedding: Float32Array, limit: number): Array<{ chunkId: string; noteId: string; distance: number }> {
+    try {
+      return this.db.prepare(
+        `SELECT cv.chunk_id as chunkId, c.note_id as noteId, cv.distance
+         FROM chunk_vectors cv
+         JOIN chunks c ON c.id = cv.chunk_id
+         WHERE embedding MATCH ? AND k = ?
+         ORDER BY distance`,
+      ).all(Buffer.from(embedding.buffer), limit) as Array<{ chunkId: string; noteId: string; distance: number }>
+    } catch {
+      return []
+    }
+  }
+
+  getFilteredNoteIds(filters: {
+    tier?: string; category?: string; confidence?: string; since?: string; tags?: string[]
+  }): Set<string> | null {
+    const conditions: string[] = []
+    const params: unknown[] = []
+    if (filters.tier) { conditions.push('tier = ?'); params.push(filters.tier) }
+    if (filters.category) { conditions.push('category = ?'); params.push(filters.category) }
+    if (filters.confidence) { conditions.push('confidence = ?'); params.push(filters.confidence) }
+    if (filters.since) { conditions.push('modified_at >= ?'); params.push(filters.since) }
+    if (filters.tags?.length) {
+      conditions.push(`(${filters.tags.map(() => 'tags LIKE ?').join(' AND ')})`)
+      for (const tag of filters.tags) params.push(`%${tag}%`)
+    }
+    if (conditions.length === 0) return null
+    const rows = this.db.prepare(
+      `SELECT id FROM notes WHERE ${conditions.join(' AND ')}`,
+    ).all(...params) as { id: string }[]
+    return new Set(rows.map(r => r.id))
+  }
+
+  getChunkContent(chunkId: string): string {
+    const row = this.db.prepare('SELECT content FROM chunks WHERE id = ?').get(chunkId) as { content: string } | undefined
+    return row?.content ?? ''
+  }
+
+  getFirstChunkForNote(noteId: string): { content: string; heading: string | null } | null {
+    const row = this.db.prepare(
+      'SELECT content, heading FROM chunks WHERE note_id = ? ORDER BY rowid LIMIT 1',
+    ).get(noteId) as { content: string; heading: string | null } | undefined
+    return row ?? null
+  }
+
+  getChunkHeading(chunkId: string | null, noteId: string): string | null {
+    if (chunkId) {
+      const row = this.db.prepare('SELECT heading FROM chunks WHERE id = ?').get(chunkId) as { heading: string | null } | undefined
+      if (row?.heading) return row.heading
+    }
+    const row = this.db.prepare(
+      'SELECT heading FROM chunks WHERE note_id = ? ORDER BY rowid LIMIT 1',
+    ).get(noteId) as { heading: string | null } | undefined
+    return row?.heading ?? null
+  }
+
+  getNoteByFilePath(filePath: string): NoteRecord | null {
+    const row = this.db.prepare('SELECT * FROM notes WHERE file_path = ?').get(filePath) as NoteRow | undefined
+    return row ? rowToNoteRecord(row) : null
+  }
+
   // --- FTS ---
 
   upsertNoteFTS(noteId: string, title: string, summary: string, content: string): void {
@@ -352,6 +444,8 @@ export class BrainDB {
 
   searchFTS(query: string, limit: number): FTSResult[] {
     if (!query.trim()) return []
+    const sanitized = sanitizeFtsQuery(query)
+    if (!sanitized) return []
     const rows = this.db
       .prepare(
         `SELECT note_id as noteId, rank
@@ -360,9 +454,19 @@ export class BrainDB {
          ORDER BY rank
          LIMIT ?`,
       )
-      .all(query, limit) as FTSResult[]
+      .all(sanitized, limit) as FTSResult[]
     return rows
   }
+}
+
+// --- FTS Helpers ---
+
+export function sanitizeFtsQuery(query: string): string {
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(term => `"${term.replace(/"/g, '""')}"`)
+    .join(' ')
 }
 
 // --- Row Types (snake_case from SQLite) ---
