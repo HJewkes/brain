@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import jsYaml from 'js-yaml'
 import { BrainDB } from '../../src/services/brain-db.js'
 import { LocalEmbedder } from '../../src/adapters/local-embedder.js'
-import { parseMarkdown } from '../../src/services/markdown-parser.js'
+import { parseMarkdown, estimateTokens } from '../../src/services/markdown-parser.js'
 import { search } from '../../src/services/search.js'
-import type { Chunk, SearchResult } from '../../src/types.js'
+import type { Chunk, RawChunk, SearchResult } from '../../src/types.js'
 import type { EvalCorpus, CorpusNote } from '../fixtures/corpus-types.js'
 
 export interface EvalEnvironment {
@@ -47,8 +47,60 @@ function rawChunksToChunks(
   }))
 }
 
+function rechunkBody(body: string, maxTokens: number): RawChunk[] {
+  const lines = body.split('\n')
+  const sections: Array<{ heading: string | null; lines: string[] }> = []
+  let current: { heading: string | null; lines: string[] } = { heading: null, lines: [] }
+
+  for (const line of lines) {
+    const match = line.match(/^(#{1,3})\s+(.+)$/)
+    if (match) {
+      sections.push(current)
+      current = { heading: match[2], lines: [] }
+    } else {
+      current.lines.push(line)
+    }
+  }
+  sections.push(current)
+
+  const chunks: RawChunk[] = []
+  const MIN_CHUNK_LENGTH = 20
+
+  for (const section of sections) {
+    const text = section.lines.join('\n').trim()
+    if (text.length < MIN_CHUNK_LENGTH) continue
+
+    const tokens = estimateTokens(text)
+    if (tokens <= maxTokens) {
+      chunks.push({ heading: section.heading, text, tokenCount: tokens })
+    } else {
+      const paragraphs = text.split(/\n\n+/)
+      let buffer = ''
+
+      for (const para of paragraphs) {
+        const candidate = buffer.length > 0 ? buffer + '\n\n' + para : para
+        if (estimateTokens(candidate) > maxTokens && buffer.length > 0) {
+          const tokenCount = estimateTokens(buffer)
+          chunks.push({ heading: section.heading, text: buffer.trim(), tokenCount })
+          buffer = para
+        } else {
+          buffer = candidate
+        }
+      }
+
+      if (buffer.trim().length >= MIN_CHUNK_LENGTH) {
+        const tokenCount = estimateTokens(buffer)
+        chunks.push({ heading: section.heading, text: buffer.trim(), tokenCount })
+      }
+    }
+  }
+
+  return chunks
+}
+
 export async function setupEvalEnvironment(
   corpus: EvalCorpus,
+  options?: { chunkSize?: number },
 ): Promise<EvalEnvironment> {
   const tempDir = mkdtempSync(join(tmpdir(), 'brain-eval-'))
   const notesDir = join(tempDir, 'notes')
@@ -101,7 +153,10 @@ export async function setupEvalEnvironment(
       parsed.content,
     )
 
-    const chunks = rawChunksToChunks(parsed.id, parsed.chunks)
+    const rawChunks = options?.chunkSize
+      ? rechunkBody(parsed.content, options.chunkSize)
+      : parsed.chunks
+    const chunks = rawChunksToChunks(parsed.id, rawChunks)
     if (chunks.length > 0) {
       const texts = chunks.map((c) => c.content)
       const embeddings = await embedder.embed(texts)
