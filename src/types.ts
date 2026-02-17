@@ -104,6 +104,7 @@ export interface SearchOptions {
   since?: string
   expand?: boolean
   fusionStrategy?: FusionStrategy
+  minScore?: number
 }
 
 // === Graph Types ===

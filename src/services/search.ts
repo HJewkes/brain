@@ -211,7 +211,10 @@ export async function search(
     : fuseByRRF(filteredFts, bestVectorByNote, fusionWeights)
 
   scored.sort((a, b) => b.score - a.score)
-  const topResults = scored.slice(0, limit)
+  const filtered = options.minScore != null
+    ? scored.filter((s) => s.score >= options.minScore!)
+    : scored
+  const topResults = filtered.slice(0, limit)
 
   // Step 4: Build SearchResult objects
   const results: SearchResult[] = []

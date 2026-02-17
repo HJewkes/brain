@@ -422,6 +422,60 @@ describe('search service', () => {
     })
   })
 
+  describe('minScore threshold', () => {
+    it('filters out results below the threshold', async () => {
+      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+      })
+      expect(allResults.length).toBeGreaterThan(1)
+
+      const highThreshold = allResults[0].score - 0.01
+      const filtered = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        minScore: highThreshold,
+      })
+
+      expect(filtered.length).toBeGreaterThanOrEqual(1)
+      expect(filtered.length).toBeLessThanOrEqual(allResults.length)
+      for (const result of filtered) {
+        expect(result.score).toBeGreaterThanOrEqual(highThreshold)
+      }
+    })
+
+    it('returns all results when minScore is undefined', async () => {
+      const withoutMinScore = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+      })
+      const withUndefined = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        minScore: undefined,
+      })
+
+      expect(withUndefined.length).toBe(withoutMinScore.length)
+    })
+
+    it('returns empty results when minScore is 1.0', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        minScore: 1.0,
+      })
+
+      expect(results).toEqual([])
+    })
+
+    it('returns all results when minScore is 0', async () => {
+      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+      })
+      const withZero = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        minScore: 0,
+      })
+
+      expect(withZero.length).toBe(allResults.length)
+    })
+  })
+
   describe('custom fusion weights', () => {
     it('respects custom fusion weights', async () => {
       const bm25Heavy = await search(ctx.db, ctx.embedder, 'TypeScript patterns', { limit: 5 }, { bm25: 0.9, vector: 0.1 })
