@@ -1,114 +1,212 @@
-import { Command } from '@commander-js/extra-typings'
-import type { NoteType } from '../types.js'
+import { Command } from '@commander-js/extra-typings';
+import type { NoteType } from '../types.js';
 
 const VALID_TYPES = new Set<NoteType>([
-  'note', 'decision', 'meeting', 'research', 'pattern', 'session-log', 'guide',
-])
+  'note',
+  'decision',
+  'meeting',
+  'research',
+  'pattern',
+  'session-log',
+  'guide',
+]);
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  return new Date().toISOString().slice(0, 10);
 }
 
 function titleCase(s: string): string {
   return s
     .split('-')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
+    .join(' ');
 }
 
 function generateTemplate(type: NoteType): string {
-  const today = todayISO()
+  const today = todayISO();
 
   const base = [
     '---',
     `id: untitled-${type}`,
     `title: Untitled ${titleCase(type)}`,
     `type: ${type}`,
-  ]
+  ];
 
   switch (type) {
     case 'note':
       return lines(
         ...base,
-        'tier: slow', 'category: ""', 'tags: []', 'summary: ""',
-        'confidence: medium', 'status: draft',
-        `created: ${today}`, `modified: ${today}`,
-        `last-reviewed: ${today}`, 'review-interval: 90d',
-        'sources: []', 'related: []', '---', '',
-        '## Overview', '',
-      )
+        'tier: slow',
+        'category: ""',
+        'tags: []',
+        'summary: ""',
+        'confidence: medium',
+        'status: draft',
+        `created: ${today}`,
+        `modified: ${today}`,
+        `last-reviewed: ${today}`,
+        'review-interval: 90d',
+        'sources: []',
+        'related: []',
+        '---',
+        '',
+        '## Overview',
+        ''
+      );
 
     case 'decision':
       return lines(
         ...base,
-        'tier: slow', 'category: ""', 'tags: []', 'summary: ""',
-        'confidence: high', 'status: current',
-        `created: ${today}`, `modified: ${today}`,
-        `last-reviewed: ${today}`, 'review-interval: 180d',
-        'sources: []', 'related: []', '---', '',
-        '## Context', '', '## Decision', '', '## Consequences', '',
-      )
+        'tier: slow',
+        'category: ""',
+        'tags: []',
+        'summary: ""',
+        'confidence: high',
+        'status: current',
+        `created: ${today}`,
+        `modified: ${today}`,
+        `last-reviewed: ${today}`,
+        'review-interval: 180d',
+        'sources: []',
+        'related: []',
+        '---',
+        '',
+        '## Context',
+        '',
+        '## Decision',
+        '',
+        '## Consequences',
+        ''
+      );
 
     case 'meeting':
       return lines(
         ...base,
-        'tier: fast', `date: ${today}`, 'participants: []',
-        'project: ""', 'tags: []', 'summary: ""', 'outcome: ""',
-        `created: ${today}`, `modified: ${today}`,
-        'review-interval: 30d', 'related: []', '---', '',
-        '## Agenda', '', '## Notes', '', '## Action Items', '',
-      )
+        'tier: fast',
+        `date: ${today}`,
+        'participants: []',
+        'project: ""',
+        'tags: []',
+        'summary: ""',
+        'outcome: ""',
+        `created: ${today}`,
+        `modified: ${today}`,
+        'review-interval: 30d',
+        'related: []',
+        '---',
+        '',
+        '## Agenda',
+        '',
+        '## Notes',
+        '',
+        '## Action Items',
+        ''
+      );
 
     case 'research':
       return lines(
         ...base,
-        'tier: slow', 'category: ""', 'tags: []', 'summary: ""',
-        'confidence: medium', 'status: draft',
-        `created: ${today}`, `modified: ${today}`,
-        `last-reviewed: ${today}`, 'review-interval: 90d',
-        'sources: []', 'related: []', '---', '',
-        '## Question', '', '## Findings', '', '## Conclusion', '',
-      )
+        'tier: slow',
+        'category: ""',
+        'tags: []',
+        'summary: ""',
+        'confidence: medium',
+        'status: draft',
+        `created: ${today}`,
+        `modified: ${today}`,
+        `last-reviewed: ${today}`,
+        'review-interval: 90d',
+        'sources: []',
+        'related: []',
+        '---',
+        '',
+        '## Question',
+        '',
+        '## Findings',
+        '',
+        '## Conclusion',
+        ''
+      );
 
     case 'pattern':
       return lines(
         ...base,
-        'tier: slow', 'category: ""', 'tags: []', 'summary: ""',
-        'confidence: high', 'status: current',
-        `created: ${today}`, `modified: ${today}`,
-        `last-reviewed: ${today}`, 'review-interval: 180d',
-        'sources: []', 'related: []', '---', '',
-        '## Problem', '', '## Solution', '', '## Examples', '',
-      )
+        'tier: slow',
+        'category: ""',
+        'tags: []',
+        'summary: ""',
+        'confidence: high',
+        'status: current',
+        `created: ${today}`,
+        `modified: ${today}`,
+        `last-reviewed: ${today}`,
+        'review-interval: 180d',
+        'sources: []',
+        'related: []',
+        '---',
+        '',
+        '## Problem',
+        '',
+        '## Solution',
+        '',
+        '## Examples',
+        ''
+      );
 
     case 'session-log':
       return lines(
         ...base,
-        'tier: fast', `date: ${today}`, 'project: ""',
-        'tags: []', 'summary: ""',
-        `created: ${today}`, `modified: ${today}`,
-        'expires: ""', 'related: []', '---', '',
-        '## Goal', '', '## Log', '', '## Outcome', '',
-      )
+        'tier: fast',
+        `date: ${today}`,
+        'project: ""',
+        'tags: []',
+        'summary: ""',
+        `created: ${today}`,
+        `modified: ${today}`,
+        'expires: ""',
+        'related: []',
+        '---',
+        '',
+        '## Goal',
+        '',
+        '## Log',
+        '',
+        '## Outcome',
+        ''
+      );
 
     case 'guide':
       return lines(
         ...base,
-        'tier: slow', 'category: ""', 'tags: []', 'summary: ""',
-        'confidence: high', 'status: current',
-        `created: ${today}`, `modified: ${today}`,
-        `last-reviewed: ${today}`, 'review-interval: 180d',
-        'sources: []', 'related: []', '---', '',
-        '## Purpose', '', '## Steps', '', '## Tips', '',
-      )
+        'tier: slow',
+        'category: ""',
+        'tags: []',
+        'summary: ""',
+        'confidence: high',
+        'status: current',
+        `created: ${today}`,
+        `modified: ${today}`,
+        `last-reviewed: ${today}`,
+        'review-interval: 180d',
+        'sources: []',
+        'related: []',
+        '---',
+        '',
+        '## Purpose',
+        '',
+        '## Steps',
+        '',
+        '## Tips',
+        ''
+      );
 
     default:
-      return ''
+      return '';
   }
 }
 
 function lines(...parts: string[]): string {
-  return parts.join('\n')
+  return parts.join('\n');
 }
 
 export const templateCommand = new Command('template')
@@ -116,12 +214,10 @@ export const templateCommand = new Command('template')
   .argument('<type>', 'Note type (note, decision, meeting, research, pattern, session-log, guide)')
   .action((type) => {
     if (!VALID_TYPES.has(type as NoteType)) {
-      console.error(
-        `Error: unknown type "${type}". Valid types: ${[...VALID_TYPES].join(', ')}`,
-      )
-      process.exitCode = 1
-      return
+      console.error(`Error: unknown type "${type}". Valid types: ${[...VALID_TYPES].join(', ')}`);
+      process.exitCode = 1;
+      return;
     }
 
-    process.stdout.write(generateTemplate(type as NoteType))
-  })
+    process.stdout.write(generateTemplate(type as NoteType));
+  });

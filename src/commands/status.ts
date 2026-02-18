@@ -1,47 +1,47 @@
-import { Command } from '@commander-js/extra-typings'
-import { loadConfig } from '../services/config.js'
-import { BrainDB } from '../services/brain-db.js'
-import { parseIntervalDays } from '../utils.js'
+import { Command } from '@commander-js/extra-typings';
+import { loadConfig } from '../services/config.js';
+import { BrainDB } from '../services/brain-db.js';
+import { parseIntervalDays } from '../utils.js';
 
 export const statusCommand = new Command('status')
   .description('Show database statistics')
   .option('--json', 'output as JSON')
   .action((opts) => {
-    const config = loadConfig()
-    const db = new BrainDB(config.dbPath)
+    const config = loadConfig();
+    const db = new BrainDB(config.dbPath);
 
     try {
-      const notes = db.getAllNotes()
-      const embeddingModel = db.getEmbeddingModel()
+      const notes = db.getAllNotes();
+      const embeddingModel = db.getEmbeddingModel();
 
-      const byTier: Record<string, number> = {}
-      const byType: Record<string, number> = {}
-      const staleNotes: string[] = []
-      const now = new Date()
+      const byTier: Record<string, number> = {};
+      const byType: Record<string, number> = {};
+      const staleNotes: string[] = [];
+      const now = new Date();
 
       for (const note of notes) {
-        byTier[note.tier] = (byTier[note.tier] ?? 0) + 1
-        byType[note.type] = (byType[note.type] ?? 0) + 1
+        byTier[note.tier] = (byTier[note.tier] ?? 0) + 1;
+        byType[note.type] = (byType[note.type] ?? 0) + 1;
 
         if (note.lastReviewed && note.reviewInterval) {
-          const reviewed = new Date(note.lastReviewed)
-          const intervalDays = parseIntervalDays(note.reviewInterval)
-          const due = new Date(reviewed.getTime() + intervalDays * 86_400_000)
+          const reviewed = new Date(note.lastReviewed);
+          const intervalDays = parseIntervalDays(note.reviewInterval);
+          const due = new Date(reviewed.getTime() + intervalDays * 86_400_000);
           if (due < now) {
-            staleNotes.push(note.id)
+            staleNotes.push(note.id);
           }
         }
       }
 
-      const files = db.getAllFiles()
-      let lastIndexed: number | null = null
+      const files = db.getAllFiles();
+      let lastIndexed: number | null = null;
       for (const [, file] of files) {
         if (lastIndexed === null || file.indexedAt > lastIndexed) {
-          lastIndexed = file.indexedAt
+          lastIndexed = file.indexedAt;
         }
       }
 
-      const totalChunks = db.getChunkCount()
+      const totalChunks = db.getChunkCount();
 
       const summary = {
         totalNotes: notes.length,
@@ -53,38 +53,34 @@ export const statusCommand = new Command('status')
         lastIndexed: lastIndexed ? new Date(lastIndexed).toISOString() : null,
         staleNotes: staleNotes.length,
         staleNoteIds: staleNotes,
-      }
+      };
 
       if (opts.json) {
-        process.stdout.write(JSON.stringify(summary) + '\n')
+        process.stdout.write(JSON.stringify(summary) + '\n');
       } else {
-        process.stderr.write(`Notes: ${notes.length}\n`)
-        process.stderr.write(`Chunks: ${totalChunks}\n`)
-        process.stderr.write(`By tier: ${formatMap(byTier)}\n`)
-        process.stderr.write(`By type: ${formatMap(byType)}\n`)
+        process.stderr.write(`Notes: ${notes.length}\n`);
+        process.stderr.write(`Chunks: ${totalChunks}\n`);
+        process.stderr.write(`By tier: ${formatMap(byTier)}\n`);
+        process.stderr.write(`By type: ${formatMap(byType)}\n`);
         if (embeddingModel) {
           process.stderr.write(
-            `Embedding: ${embeddingModel.model} (${embeddingModel.dimensions}d)\n`,
-          )
+            `Embedding: ${embeddingModel.model} (${embeddingModel.dimensions}d)\n`
+          );
         }
         if (lastIndexed) {
-          process.stderr.write(
-            `Last indexed: ${new Date(lastIndexed).toISOString()}\n`,
-          )
+          process.stderr.write(`Last indexed: ${new Date(lastIndexed).toISOString()}\n`);
         }
         if (staleNotes.length > 0) {
-          process.stderr.write(
-            `Stale notes needing review: ${staleNotes.length}\n`,
-          )
+          process.stderr.write(`Stale notes needing review: ${staleNotes.length}\n`);
         }
       }
     } finally {
-      db.close()
+      db.close();
     }
-  })
+  });
 
 function formatMap(map: Record<string, number>): string {
   return Object.entries(map)
     .map(([k, v]) => `${k}=${v}`)
-    .join(', ')
+    .join(', ');
 }
