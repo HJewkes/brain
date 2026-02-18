@@ -1,10 +1,10 @@
-import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { NoteRecord } from '../src/types.js'
+import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import type { NoteRecord } from '../src/types.js';
 
 export function tmpDbPath(prefix = 'brain-test'): string {
-  return join(tmpdir(), `${prefix}-${randomUUID()}.db`)
+  return join(tmpdir(), `${prefix}-${randomUUID()}.db`);
 }
 
 export function makeNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
@@ -26,5 +26,5 @@ export function makeNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
     reviewInterval: overrides.reviewInterval ?? null,
     expires: overrides.expires ?? null,
     metadata: overrides.metadata ?? null,
-  }
+  };
 }

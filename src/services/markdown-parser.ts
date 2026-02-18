@@ -1,4 +1,4 @@
-import matter from 'gray-matter'
+import matter from 'gray-matter';
 import type {
   ParsedNote,
   NoteFrontmatter,
@@ -6,54 +6,54 @@ import type {
   Relation,
   RelationType,
   NoteSource,
-} from '../types.js'
+} from '../types.js';
 import {
   VALID_NOTE_TYPES,
   VALID_NOTE_TIERS,
   VALID_NOTE_CONFIDENCES,
   VALID_NOTE_STATUSES,
-} from '../types.js'
+} from '../types.js';
 
-const MAX_CHUNK_TOKENS = 512
-const FENCE_OPEN = /^```/
-const FENCE_CLOSE = /^```\s*$/
-const MIN_CHUNK_LENGTH = 20
+const MAX_CHUNK_TOKENS = 512;
+const FENCE_OPEN = /^```/;
+const FENCE_CLOSE = /^```\s*$/;
+const MIN_CHUNK_LENGTH = 20;
 
 export function estimateTokens(text: string): number {
-  if (text.length === 0) return 0
-  return Math.ceil(text.length / 4)
+  if (text.length === 0) return 0;
+  return Math.ceil(text.length / 4);
 }
 
 export function parseMarkdown(filePath: string, content: string): ParsedNote {
-  const { data, content: body } = matter(content)
+  const { data, content: body } = matter(content);
 
-  const id = deriveId(filePath, data)
-  const frontmatter = coerceFrontmatter(filePath, data)
-  const chunks = chunkBody(body)
-  const relations = extractRelations(id, data)
+  const id = deriveId(filePath, data);
+  const frontmatter = coerceFrontmatter(filePath, data);
+  const chunks = chunkBody(body);
+  const relations = extractRelations(id, data);
 
-  return { id, filePath, frontmatter, content: body, chunks, relations }
+  return { id, filePath, frontmatter, content: body, chunks, relations };
 }
 
 function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/^-+|-+$/g, '');
 }
 
 function deriveId(filePath: string, data: Record<string, unknown>): string {
-  if (typeof data.id === 'string' && data.id.length > 0) return data.id
-  if (typeof data.title === 'string' && data.title.length > 0) return slugify(data.title)
-  const filename = filePath.split('/').pop() ?? filePath
-  return filename.replace(/\.md$/, '')
+  if (typeof data.id === 'string' && data.id.length > 0) return data.id;
+  if (typeof data.title === 'string' && data.title.length > 0) return slugify(data.title);
+  const filename = filePath.split('/').pop() ?? filePath;
+  return filename.replace(/\.md$/, '');
 }
 
 export function coerceFrontmatter(
   filePath: string,
-  data: Record<string, unknown>,
+  data: Record<string, unknown>
 ): NoteFrontmatter {
-  const filename = (filePath.split('/').pop() ?? filePath).replace(/\.md$/, '')
+  const filename = (filePath.split('/').pop() ?? filePath).replace(/\.md$/, '');
 
   return {
     id: typeof data.id === 'string' ? data.id : undefined,
@@ -78,58 +78,57 @@ export function coerceFrontmatter(
     related: coerceStringArray(data.related),
     supersedes: coerceString(data.supersedes),
     parent: coerceString(data.parent),
-  }
+  };
 }
 
 function coerceString(value: unknown): string | undefined {
-  if (typeof value === 'string') return value
-  if (value != null && typeof value !== 'object') return String(value)
-  return undefined
+  if (typeof value === 'string') return value;
+  if (value != null && typeof value !== 'object') return String(value);
+  return undefined;
 }
 
+function coerceEnum<T extends string>(value: unknown, valid: T[], fallback: T): T;
 function coerceEnum<T extends string>(
   value: unknown,
   valid: T[],
-  fallback: T,
-): T
+  fallback: undefined
+): T | undefined;
 function coerceEnum<T extends string>(
   value: unknown,
   valid: T[],
-  fallback: undefined,
-): T | undefined
-function coerceEnum<T extends string>(
-  value: unknown,
-  valid: T[],
-  fallback: T | undefined,
+  fallback: T | undefined
 ): T | undefined {
-  if (typeof value === 'string' && valid.includes(value as T)) return value as T
-  return fallback
+  if (typeof value === 'string' && valid.includes(value as T)) return value as T;
+  return fallback;
 }
 
 function coerceTags(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
-    return value.filter((v): v is string => typeof v === 'string')
+    return value.filter((v): v is string => typeof v === 'string');
   }
   if (typeof value === 'string') {
     if (value.includes(',')) {
-      return value.split(',').map((s) => s.trim()).filter(Boolean)
+      return value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
-    return [value]
+    return [value];
   }
-  return undefined
+  return undefined;
 }
 
 function coerceDate(value: unknown): string | undefined {
   if (value instanceof Date) {
-    return isNaN(value.getTime()) ? undefined : value.toISOString()
+    return isNaN(value.getTime()) ? undefined : value.toISOString();
   }
-  if (typeof value === 'string') return value
-  return undefined
+  if (typeof value === 'string') return value;
+  return undefined;
 }
 
 function coerceSources(value: unknown): NoteSource[] | undefined {
-  if (!Array.isArray(value)) return undefined
-  const valid: NoteSource[] = []
+  if (!Array.isArray(value)) return undefined;
+  const valid: NoteSource[] = [];
   for (const entry of value) {
     if (
       typeof entry === 'object' &&
@@ -138,177 +137,170 @@ function coerceSources(value: unknown): NoteSource[] | undefined {
     ) {
       valid.push({
         url: (entry as Record<string, unknown>).url as string,
-        accessed: typeof (entry as Record<string, unknown>).accessed === 'string'
-          ? ((entry as Record<string, unknown>).accessed as string)
-          : '',
-        type: typeof (entry as Record<string, unknown>).type === 'string'
-          ? ((entry as Record<string, unknown>).type as string)
-          : '',
-      })
+        accessed:
+          typeof (entry as Record<string, unknown>).accessed === 'string'
+            ? ((entry as Record<string, unknown>).accessed as string)
+            : '',
+        type:
+          typeof (entry as Record<string, unknown>).type === 'string'
+            ? ((entry as Record<string, unknown>).type as string)
+            : '',
+      });
     }
   }
-  return valid.length > 0 ? valid : undefined
+  return valid.length > 0 ? valid : undefined;
 }
 
 function coerceReviewInterval(value: unknown): string | undefined {
-  if (typeof value === 'string' && /^\d+[dwm]$/.test(value)) return value
-  return undefined
+  if (typeof value === 'string' && /^\d+[dwm]$/.test(value)) return value;
+  return undefined;
 }
 
 function coerceStringArray(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
-    const filtered = value.filter((v): v is string => typeof v === 'string')
-    return filtered.length > 0 ? filtered : undefined
+    const filtered = value.filter((v): v is string => typeof v === 'string');
+    return filtered.length > 0 ? filtered : undefined;
   }
-  return undefined
+  return undefined;
 }
 
 interface Section {
-  heading: string | null
-  lines: string[]
+  heading: string | null;
+  lines: string[];
 }
 
 function splitIntoSections(body: string): Section[] {
-  const lines = body.split('\n')
-  const sections: Section[] = []
-  let current: Section = { heading: null, lines: [] }
+  const lines = body.split('\n');
+  const sections: Section[] = [];
+  let current: Section = { heading: null, lines: [] };
 
   for (const line of lines) {
-    const match = line.match(/^(#{1,3})\s+(.+)$/)
+    const match = line.match(/^(#{1,3})\s+(.+)$/);
     if (match) {
-      sections.push(current)
-      current = { heading: match[2], lines: [] }
+      sections.push(current);
+      current = { heading: match[2], lines: [] };
     } else {
-      current.lines.push(line)
+      current.lines.push(line);
     }
   }
-  sections.push(current)
+  sections.push(current);
 
-  return sections
+  return sections;
 }
 
 function chunkBody(body: string): RawChunk[] {
-  const sections = splitIntoSections(body)
-  const chunks: RawChunk[] = []
+  const sections = splitIntoSections(body);
+  const chunks: RawChunk[] = [];
 
   for (const section of sections) {
-    const text = section.lines.join('\n').trim()
-    if (text.length < MIN_CHUNK_LENGTH) continue
+    const text = section.lines.join('\n').trim();
+    if (text.length < MIN_CHUNK_LENGTH) continue;
 
-    const tokens = estimateTokens(text)
+    const tokens = estimateTokens(text);
     if (tokens <= MAX_CHUNK_TOKENS) {
-      chunks.push({ heading: section.heading, text, tokenCount: tokens })
+      chunks.push({ heading: section.heading, text, tokenCount: tokens });
     } else {
-      const subChunks = splitOversizedSection(section.heading, text)
-      chunks.push(...subChunks)
+      const subChunks = splitOversizedSection(section.heading, text);
+      chunks.push(...subChunks);
     }
   }
 
-  return chunks
+  return chunks;
 }
 
-function splitOversizedSection(
-  heading: string | null,
-  text: string,
-): RawChunk[] {
-  const paragraphs = splitParagraphsProtectingFences(text)
-  const chunks: RawChunk[] = []
-  let buffer = ''
-  let overlapPrefix = ''
+function splitOversizedSection(heading: string | null, text: string): RawChunk[] {
+  const paragraphs = splitParagraphsProtectingFences(text);
+  const chunks: RawChunk[] = [];
+  let buffer = '';
+  let overlapPrefix = '';
 
   for (const para of paragraphs) {
-    const budgetForContent = overlapPrefix.length > 0
-      ? MAX_CHUNK_TOKENS - estimateTokens(overlapPrefix + '\n\n')
-      : MAX_CHUNK_TOKENS
-    const bufferWithPara = buffer.length > 0 ? buffer + '\n\n' + para : para
+    const budgetForContent =
+      overlapPrefix.length > 0
+        ? MAX_CHUNK_TOKENS - estimateTokens(overlapPrefix + '\n\n')
+        : MAX_CHUNK_TOKENS;
+    const bufferWithPara = buffer.length > 0 ? buffer + '\n\n' + para : para;
     if (estimateTokens(bufferWithPara) > budgetForContent && buffer.length > 0) {
-      const chunkText = overlapPrefix.length > 0
-        ? overlapPrefix + '\n\n' + buffer
-        : buffer
-      const tokenCount = estimateTokens(chunkText)
-      chunks.push({ heading, text: chunkText.trim(), tokenCount })
-      overlapPrefix = extractOverlap(buffer)
-      buffer = para
+      const chunkText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
+      const tokenCount = estimateTokens(chunkText);
+      chunks.push({ heading, text: chunkText.trim(), tokenCount });
+      overlapPrefix = extractOverlap(buffer);
+      buffer = para;
     } else {
-      buffer = buffer.length > 0 ? buffer + '\n\n' + para : para
+      buffer = buffer.length > 0 ? buffer + '\n\n' + para : para;
     }
   }
 
   if (buffer.length > 0) {
-    const chunkText = overlapPrefix.length > 0
-      ? overlapPrefix + '\n\n' + buffer
-      : buffer
-    const tokenCount = estimateTokens(chunkText)
-    chunks.push({ heading, text: chunkText.trim(), tokenCount })
+    const chunkText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
+    const tokenCount = estimateTokens(chunkText);
+    chunks.push({ heading, text: chunkText.trim(), tokenCount });
   }
 
-  return chunks
+  return chunks;
 }
 
 function extractOverlap(text: string): string {
-  const targetTokens = Math.ceil(estimateTokens(text) * 0.1)
-  const targetChars = targetTokens * 4
-  if (text.length <= targetChars) return text
-  return text.slice(-targetChars)
+  const targetTokens = Math.ceil(estimateTokens(text) * 0.1);
+  const targetChars = targetTokens * 4;
+  if (text.length <= targetChars) return text;
+  return text.slice(-targetChars);
 }
 
 function splitParagraphsProtectingFences(text: string): string[] {
-  const lines = text.split('\n')
-  const paragraphs: string[] = []
-  let current: string[] = []
-  let inFence = false
+  const lines = text.split('\n');
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  let inFence = false;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const line = lines[i];
 
     if (!inFence && FENCE_OPEN.test(line)) {
       // If there's accumulated non-fence text, flush it first
       if (current.length > 0) {
-        const joined = current.join('\n').trim()
-        if (joined.length > 0) paragraphs.push(joined)
-        current = []
+        const joined = current.join('\n').trim();
+        if (joined.length > 0) paragraphs.push(joined);
+        current = [];
       }
-      inFence = true
-      current.push(line)
-      continue
+      inFence = true;
+      current.push(line);
+      continue;
     }
 
     if (inFence) {
-      current.push(line)
+      current.push(line);
       // Close fence: a line that is just ``` (possibly with trailing whitespace)
       // but not the opening line itself
       if (FENCE_CLOSE.test(line) && current.length > 1) {
-        const joined = current.join('\n').trim()
-        if (joined.length > 0) paragraphs.push(joined)
-        current = []
-        inFence = false
+        const joined = current.join('\n').trim();
+        if (joined.length > 0) paragraphs.push(joined);
+        current = [];
+        inFence = false;
       }
-      continue
+      continue;
     }
 
     // Outside fence: split on blank lines
     if (line.trim() === '') {
       if (current.length > 0) {
-        const joined = current.join('\n').trim()
-        if (joined.length > 0) paragraphs.push(joined)
-        current = []
+        const joined = current.join('\n').trim();
+        if (joined.length > 0) paragraphs.push(joined);
+        current = [];
       }
     } else {
-      current.push(line)
+      current.push(line);
     }
   }
 
-  const joined = current.join('\n').trim()
-  if (joined.length > 0) paragraphs.push(joined)
+  const joined = current.join('\n').trim();
+  if (joined.length > 0) paragraphs.push(joined);
 
-  return paragraphs
+  return paragraphs;
 }
 
-function extractRelations(
-  sourceId: string,
-  data: Record<string, unknown>,
-): Relation[] {
-  const relations: Relation[] = []
+function extractRelations(sourceId: string, data: Record<string, unknown>): Relation[] {
+  const relations: Relation[] = [];
 
   if (Array.isArray(data.related)) {
     for (const target of data.related) {
@@ -317,7 +309,7 @@ function extractRelations(
           sourceId,
           targetId: target,
           type: 'related-to' as RelationType,
-        })
+        });
       }
     }
   }
@@ -327,7 +319,7 @@ function extractRelations(
       sourceId,
       targetId: data.supersedes,
       type: 'supersedes' as RelationType,
-    })
+    });
   }
 
   if (typeof data.parent === 'string') {
@@ -335,8 +327,8 @@ function extractRelations(
       sourceId,
       targetId: data.parent,
       type: 'parent' as RelationType,
-    })
+    });
   }
 
-  return relations
+  return relations;
 }

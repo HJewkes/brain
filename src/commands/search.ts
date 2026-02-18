@@ -1,10 +1,10 @@
-import { Command } from '@commander-js/extra-typings'
-import { loadConfig } from '../services/config.js'
-import { BrainDB } from '../services/brain-db.js'
-import { createEmbedder } from '../adapters/index.js'
-import { search } from '../services/search.js'
-import { expandResults } from '../services/graph.js'
-import type { SearchOptions, SearchResult } from '../types.js'
+import { Command } from '@commander-js/extra-typings';
+import { loadConfig } from '../services/config.js';
+import { BrainDB } from '../services/brain-db.js';
+import { createEmbedder } from '../adapters/index.js';
+import { search } from '../services/search.js';
+import { expandResults } from '../services/graph.js';
+import type { SearchOptions, SearchResult } from '../types.js';
 
 export const searchCommand = new Command('search')
   .description('Search notes with hybrid BM25 + vector search')
@@ -19,9 +19,9 @@ export const searchCommand = new Command('search')
   .option('--min-score <score>', 'minimum relevance score (0-1)')
   .option('--expand', 'include graph-connected notes')
   .action(async (query, opts) => {
-    const config = loadConfig()
-    const db = new BrainDB(config.dbPath)
-    const embedder = createEmbedder(config)
+    const config = loadConfig();
+    const db = new BrainDB(config.dbPath);
+    const embedder = createEmbedder(config);
 
     try {
       const searchOpts: SearchOptions = {
@@ -32,18 +32,18 @@ export const searchCommand = new Command('search')
         confidence: opts.confidence as SearchOptions['confidence'],
         since: opts.since,
         minScore: opts.minScore ? parseFloat(opts.minScore) : undefined,
-      }
+      };
 
-      const results = await search(db, embedder, query, searchOpts, config.fusionWeights)
+      const results = await search(db, embedder, query, searchOpts, config.fusionWeights);
 
-      const expanded: SearchResult[] = []
+      const expanded: SearchResult[] = [];
       if (opts.expand && results.length > 0) {
-        const noteIds = results.map((r) => r.noteId)
-        const graphExpanded = expandResults(db, noteIds, 1)
+        const noteIds = results.map((r) => r.noteId);
+        const graphExpanded = expandResults(db, noteIds, 1);
 
         for (const item of graphExpanded) {
-          const note = db.getNoteById(item.noteId)
-          if (!note) continue
+          const note = db.getNoteById(item.noteId);
+          if (!note) continue;
           expanded.push({
             score: item.decayedScore,
             filePath: note.filePath,
@@ -53,32 +53,32 @@ export const searchCommand = new Command('search')
             tier: note.tier,
             tags: note.tags ? note.tags.split(',') : [],
             confidence: note.confidence,
-          })
+          });
         }
       }
 
-      const allResults = [...results, ...expanded]
+      const allResults = [...results, ...expanded];
 
       if (opts.json) {
-        process.stdout.write(JSON.stringify(allResults) + '\n')
+        process.stdout.write(JSON.stringify(allResults) + '\n');
       } else {
         if (allResults.length === 0) {
-          process.stderr.write('No results found.\n')
-          return
+          process.stderr.write('No results found.\n');
+          return;
         }
         for (const r of allResults) {
-          const score = r.score.toFixed(3)
-          process.stdout.write(`[${score}] ${r.filePath}\n`)
+          const score = r.score.toFixed(3);
+          process.stdout.write(`[${score}] ${r.filePath}\n`);
           if (r.heading) {
-            process.stdout.write(`  \u00A7 ${r.heading}\n`)
+            process.stdout.write(`  \u00A7 ${r.heading}\n`);
           }
           if (r.excerpt) {
-            process.stdout.write(`  ${r.excerpt}\n`)
+            process.stdout.write(`  ${r.excerpt}\n`);
           }
-          process.stdout.write('\n')
+          process.stdout.write('\n');
         }
       }
     } finally {
-      db.close()
+      db.close();
     }
-  })
+  });
