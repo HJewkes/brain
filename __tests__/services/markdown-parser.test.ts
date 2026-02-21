@@ -234,6 +234,113 @@ This section also has enough content to be included as a meaningful chunk in res
   });
 });
 
+describe('parseMarkdown — heading ancestry', () => {
+  it('prepends heading ancestry to chunk text', () => {
+    const content = `---
+title: Test
+type: note
+tier: slow
+---
+
+## Section One
+
+Content of section one with enough text to be meaningful and pass the minimum threshold.
+`;
+    const result = parseMarkdown('test.md', content);
+    expect(result.chunks[0].text).toContain('## Section One');
+    expect(result.chunks[0].text).toContain('Content of section one');
+    expect(result.chunks[0].headingAncestry).toBe('## Section One');
+  });
+
+  it('builds nested ancestry for sub-headings', () => {
+    const content = `---
+title: Test
+type: note
+tier: slow
+---
+
+## Parent
+
+Content for the parent section that is long enough to pass the threshold.
+
+### Child
+
+Content for the child section that is long enough to pass the threshold.
+`;
+    const result = parseMarkdown('test.md', content);
+    const childChunk = result.chunks.find((c) => c.heading === 'Child');
+    expect(childChunk).toBeDefined();
+    expect(childChunk!.headingAncestry).toBe('## Parent\n### Child');
+    expect(childChunk!.text).toContain('## Parent\n### Child');
+    expect(childChunk!.text).toContain('Content for the child');
+  });
+
+  it('resets ancestry when a sibling heading appears', () => {
+    const content = `---
+title: Test
+type: note
+tier: slow
+---
+
+## Section A
+
+### Nested A
+
+Content for nested A section that is long enough to pass the minimum threshold.
+
+## Section B
+
+Content for section B that is long enough to pass the minimum threshold clearly.
+`;
+    const result = parseMarkdown('test.md', content);
+    const sectionB = result.chunks.find((c) => c.heading === 'Section B');
+    expect(sectionB).toBeDefined();
+    expect(sectionB!.headingAncestry).toBe('## Section B');
+    expect(sectionB!.text).not.toContain('Section A');
+  });
+
+  it('sets position incrementally across chunks', () => {
+    const content = `---
+title: Test
+type: note
+tier: slow
+---
+
+## First
+
+Content of the first section with enough text to be meaningful and pass threshold.
+
+## Second
+
+Content of the second section with enough text to be meaningful and pass threshold.
+
+## Third
+
+Content of the third section with enough text to be meaningful and pass threshold.
+`;
+    const result = parseMarkdown('test.md', content);
+    expect(result.chunks[0].position).toBe(0);
+    expect(result.chunks[1].position).toBe(1);
+    expect(result.chunks[2].position).toBe(2);
+  });
+
+  it('sets cutType to heading_boundary for normal sections', () => {
+    const content = `---
+title: Test
+type: note
+tier: slow
+---
+
+## Section
+
+Content of the section with enough text to be meaningful and pass the minimum threshold.
+`;
+    const result = parseMarkdown('test.md', content);
+    expect(result.chunks[0].cutType).toBe('heading_boundary');
+    expect(result.chunks[0].chunkType).toBe('section');
+  });
+});
+
 describe('parseMarkdown — code fence protection', () => {
   it('does not split inside a fenced code block', () => {
     const longCode = 'const x = 1;\n'.repeat(200); // >600 tokens worth

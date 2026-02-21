@@ -71,21 +71,35 @@ export interface NoteFrontmatter {
 
 // === Chunk Types ===
 
-export type ChunkType = 'section' | 'observation';
+export type ChunkType = 'section' | 'heading' | 'paragraph' | 'code' | 'list' | 'blockquote';
+
+export type CutType =
+  | 'heading_boundary'
+  | 'paragraph_end'
+  | 'semantic_split'
+  | 'token_limit'
+  | 'code_fence';
 
 export interface RawChunk {
   heading: string | null;
+  headingAncestry: string | null;
   text: string;
   tokenCount: number;
+  chunkType: ChunkType;
+  cutType: CutType;
+  position: number;
 }
 
 export interface Chunk {
   id: string;
   noteId: string;
   heading: string | null;
+  headingAncestry: string | null;
   content: string;
   tokenCount: number;
   chunkType: ChunkType;
+  cutType: CutType;
+  position: number;
 }
 
 // === Search Types ===
@@ -113,6 +127,7 @@ export interface SearchOptions {
   expand?: boolean;
   fusionStrategy?: FusionStrategy;
   minScore?: number;
+  rerank?: boolean;
 }
 
 // === Graph Types ===

@@ -1,8 +1,8 @@
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-import type { NoteRecord, FileRecord, Chunk, Relation } from '../types.js';
+import type { NoteRecord, FileRecord, Chunk, Relation, ChunkType, CutType } from '../types.js';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 interface FTSResult {
   noteId: string;
@@ -39,6 +39,11 @@ export class BrainDB {
       this.db.exec('CREATE INDEX IF NOT EXISTS idx_chunks_note_id ON chunks(note_id)');
       this.db.pragma('user_version = 2');
       this.setMetaValue('schema_version', '2');
+    }
+    if (currentVersion >= 1 && currentVersion < 3) {
+      this.migrateToV3();
+      this.db.pragma('user_version = 3');
+      this.setMetaValue('schema_version', '3');
     }
 
     const dims = this.getMetaValue('embedding_dimensions');
@@ -110,12 +115,15 @@ export class BrainDB {
       );
 
       CREATE TABLE IF NOT EXISTS chunks (
-        id          TEXT PRIMARY KEY,
-        note_id     TEXT NOT NULL,
-        heading     TEXT,
-        content     TEXT NOT NULL,
-        token_count INTEGER,
-        chunk_type  TEXT DEFAULT 'section',
+        id                TEXT PRIMARY KEY,
+        note_id           TEXT NOT NULL,
+        heading           TEXT,
+        heading_ancestry  TEXT,
+        content           TEXT NOT NULL,
+        token_count       INTEGER,
+        chunk_type        TEXT DEFAULT 'section',
+        cut_type          TEXT DEFAULT 'heading_boundary',
+        position          INTEGER DEFAULT 0,
         FOREIGN KEY (note_id) REFERENCES notes(id)
       );
 
@@ -126,6 +134,21 @@ export class BrainDB {
         value TEXT NOT NULL
       );
     `;
+  }
+
+  private migrateToV3(): void {
+    const columns = this.db.pragma('table_info(chunks)') as { name: string }[];
+    const columnNames = new Set(columns.map((c) => c.name));
+
+    if (!columnNames.has('heading_ancestry')) {
+      this.db.exec('ALTER TABLE chunks ADD COLUMN heading_ancestry TEXT');
+    }
+    if (!columnNames.has('cut_type')) {
+      this.db.exec("ALTER TABLE chunks ADD COLUMN cut_type TEXT DEFAULT 'heading_boundary'");
+    }
+    if (!columnNames.has('position')) {
+      this.db.exec('ALTER TABLE chunks ADD COLUMN position INTEGER DEFAULT 0');
+    }
   }
 
   // --- Meta ---
@@ -270,8 +293,8 @@ export class BrainDB {
     this.deleteChunksForNote(noteId);
 
     const insertChunk = this.db.prepare(
-      `INSERT INTO chunks (id, note_id, heading, content, token_count, chunk_type)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO chunks (id, note_id, heading, heading_ancestry, content, token_count, chunk_type, cut_type, position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertVector = this.db.prepare(
       `INSERT INTO chunk_vectors (chunk_id, embedding)
@@ -285,9 +308,12 @@ export class BrainDB {
           chunk.id,
           noteId,
           chunk.heading,
+          chunk.headingAncestry,
           chunk.content,
           chunk.tokenCount,
-          chunk.chunkType
+          chunk.chunkType,
+          chunk.cutType,
+          chunk.position
         );
         insertVector.run(chunk.id, Buffer.from(embeddings[i].buffer));
       }
@@ -519,9 +545,12 @@ interface ChunkRow {
   id: string;
   note_id: string;
   heading: string | null;
+  heading_ancestry: string | null;
   content: string;
   token_count: number;
   chunk_type: string;
+  cut_type: string;
+  position: number;
 }
 
 interface RelationRow {
@@ -568,9 +597,12 @@ function rowToChunk(row: ChunkRow): Chunk {
     id: row.id,
     noteId: row.note_id,
     heading: row.heading,
+    headingAncestry: row.heading_ancestry,
     content: row.content,
     tokenCount: row.token_count,
-    chunkType: row.chunk_type as Chunk['chunkType'],
+    chunkType: (row.chunk_type ?? 'section') as ChunkType,
+    cutType: (row.cut_type ?? 'heading_boundary') as CutType,
+    position: row.position ?? 0,
   };
 }
 

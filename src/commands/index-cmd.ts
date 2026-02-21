@@ -1,4 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { loadConfig } from '../services/config.js';
@@ -6,7 +7,7 @@ import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { scanForChanges } from '../services/file-scanner.js';
 import { parseMarkdown } from '../services/markdown-parser.js';
-import type { Chunk, NoteRecord } from '../types.js';
+import type { Chunk, NoteRecord, RawChunk } from '../types.js';
 
 export const indexCommand = new Command('index')
   .description('Index new and modified notes')
@@ -132,17 +133,22 @@ function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): NoteReco
   };
 }
 
-function rawChunksToChunks(
-  noteId: string,
-  rawChunks: Array<{ heading: string | null; text: string; tokenCount: number }>
-): Chunk[] {
-  return rawChunks.map((rc, i) => ({
-    id: `${noteId}::chunk-${i}`,
+function chunkId(noteId: string, content: string): string {
+  const hash = createHash('sha256').update(`${noteId}:${content}`).digest('hex').slice(0, 16);
+  return `${noteId}::${hash}`;
+}
+
+function rawChunksToChunks(noteId: string, rawChunks: RawChunk[]): Chunk[] {
+  return rawChunks.map((rc) => ({
+    id: chunkId(noteId, rc.text),
     noteId,
     heading: rc.heading,
+    headingAncestry: rc.headingAncestry,
     content: rc.text,
     tokenCount: rc.tokenCount,
-    chunkType: 'section' as const,
+    chunkType: rc.chunkType,
+    cutType: rc.cutType,
+    position: rc.position,
   }));
 }
 

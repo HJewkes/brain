@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB, sanitizeFtsQuery } from '../../src/services/brain-db.js';
 import { unlinkSync } from 'node:fs';
 import type { FileRecord, Chunk, Relation } from '../../src/types.js';
-import { tmpDbPath, makeNote } from '../helpers.js';
+import { tmpDbPath, makeNote, makeChunk } from '../helpers.js';
 
 function makeFileRecord(overrides: Partial<FileRecord> = {}): FileRecord {
   return {
@@ -42,9 +42,9 @@ describe('BrainDB', () => {
       expect(tables).toContain('db_meta');
     });
 
-    it('sets schema_version to 2 in db_meta', () => {
+    it('sets schema_version to 3 in db_meta', () => {
       const version = db.getMetaValue('schema_version');
-      expect(version).toBe('2');
+      expect(version).toBe('3');
     });
 
     it('sets and gets embedding model metadata', () => {
@@ -112,9 +112,12 @@ describe('BrainDB', () => {
           id: 'delete-me:intro:0',
           noteId: 'delete-me',
           heading: 'Intro',
+          headingAncestry: null,
           content: 'Hello',
           tokenCount: 1,
           chunkType: 'section',
+          cutType: 'heading_boundary',
+          position: 0,
         },
       ];
       const embeddings = [new Float32Array(384)];
@@ -177,22 +180,8 @@ describe('BrainDB', () => {
       db.upsertNote(note);
 
       const chunks: Chunk[] = [
-        {
-          id: 'chunked:intro:0',
-          noteId: 'chunked',
-          heading: 'Intro',
-          content: 'Hello world',
-          tokenCount: 2,
-          chunkType: 'section',
-        },
-        {
-          id: 'chunked:body:1',
-          noteId: 'chunked',
-          heading: 'Body',
-          content: 'More content',
-          tokenCount: 3,
-          chunkType: 'section',
-        },
+        makeChunk({ id: 'chunked:intro:0', noteId: 'chunked', heading: 'Intro', content: 'Hello world', tokenCount: 2, position: 0 }),
+        makeChunk({ id: 'chunked:body:1', noteId: 'chunked', heading: 'Body', content: 'More content', tokenCount: 3, position: 1 }),
       ];
       const embeddings = [new Float32Array(384), new Float32Array(384)];
 
@@ -210,14 +199,7 @@ describe('BrainDB', () => {
       db.upsertNote(note);
 
       const chunks: Chunk[] = [
-        {
-          id: 'to-clear:s:0',
-          noteId: 'to-clear',
-          heading: null,
-          content: 'data',
-          tokenCount: 1,
-          chunkType: 'section',
-        },
+        makeChunk({ id: 'to-clear:s:0', noteId: 'to-clear', content: 'data', tokenCount: 1 }),
       ];
       db.upsertChunks('to-clear', chunks, [new Float32Array(384)]);
 
@@ -347,14 +329,7 @@ describe('BrainDB', () => {
       const note = makeNote({ id: 'dim-test' });
       db.upsertNote(note);
       const chunks: Chunk[] = [
-        {
-          id: 'dim-test:s:0',
-          noteId: 'dim-test',
-          heading: null,
-          content: 'data',
-          tokenCount: 1,
-          chunkType: 'section',
-        },
+        makeChunk({ id: 'dim-test:s:0', noteId: 'dim-test', content: 'data', tokenCount: 1 }),
       ];
       db.upsertChunks('dim-test', chunks, [new Float32Array(384)]);
 
@@ -375,14 +350,7 @@ describe('BrainDB', () => {
       db.upsertNote(note);
 
       const chunks: Chunk[] = [
-        {
-          id: 'vec-note:s:0',
-          noteId: 'vec-note',
-          heading: 'Test',
-          content: 'Hello world',
-          tokenCount: 2,
-          chunkType: 'section',
-        },
+        makeChunk({ id: 'vec-note:s:0', noteId: 'vec-note', heading: 'Test', content: 'Hello world', tokenCount: 2 }),
       ];
       const vec = new Float32Array(384);
       vec[0] = 1.0;
@@ -437,14 +405,7 @@ describe('BrainDB', () => {
       const note = makeNote({ id: 'cc-test' });
       db.upsertNote(note);
       const chunks: Chunk[] = [
-        {
-          id: 'cc-test:s:0',
-          noteId: 'cc-test',
-          heading: null,
-          content: 'Chunk content here',
-          tokenCount: 3,
-          chunkType: 'section',
-        },
+        makeChunk({ id: 'cc-test:s:0', noteId: 'cc-test', content: 'Chunk content here', tokenCount: 3 }),
       ];
       db.upsertChunks('cc-test', chunks, [new Float32Array(384)]);
 
@@ -457,22 +418,8 @@ describe('BrainDB', () => {
       const note = makeNote({ id: 'fc-test' });
       db.upsertNote(note);
       const chunks: Chunk[] = [
-        {
-          id: 'fc-test:intro:0',
-          noteId: 'fc-test',
-          heading: 'Intro',
-          content: 'First chunk',
-          tokenCount: 2,
-          chunkType: 'section',
-        },
-        {
-          id: 'fc-test:body:1',
-          noteId: 'fc-test',
-          heading: 'Body',
-          content: 'Second chunk',
-          tokenCount: 2,
-          chunkType: 'section',
-        },
+        makeChunk({ id: 'fc-test:intro:0', noteId: 'fc-test', heading: 'Intro', content: 'First chunk', tokenCount: 2, position: 0 }),
+        makeChunk({ id: 'fc-test:body:1', noteId: 'fc-test', heading: 'Body', content: 'Second chunk', tokenCount: 2, position: 1 }),
       ];
       db.upsertChunks('fc-test', chunks, [new Float32Array(384), new Float32Array(384)]);
 
@@ -487,14 +434,7 @@ describe('BrainDB', () => {
       const note = makeNote({ id: 'ch-test' });
       db.upsertNote(note);
       const chunks: Chunk[] = [
-        {
-          id: 'ch-test:s:0',
-          noteId: 'ch-test',
-          heading: 'My Heading',
-          content: 'data',
-          tokenCount: 1,
-          chunkType: 'section',
-        },
+        makeChunk({ id: 'ch-test:s:0', noteId: 'ch-test', heading: 'My Heading', content: 'data', tokenCount: 1 }),
       ];
       db.upsertChunks('ch-test', chunks, [new Float32Array(384)]);
 
@@ -520,11 +460,9 @@ describe('BrainDB', () => {
     });
   });
 
-  describe('schema v2 migration', () => {
-    it('new databases get chunk index', () => {
-      // Verify by inserting chunks and checking performance is not degraded
-      // The index existence is verified indirectly through the schema version
-      expect(db.getMetaValue('schema_version')).toBe('2');
+  describe('schema v3 migration', () => {
+    it('new databases get chunk metadata columns', () => {
+      expect(db.getMetaValue('schema_version')).toBe('3');
     });
   });
 });

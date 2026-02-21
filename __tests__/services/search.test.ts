@@ -174,9 +174,12 @@ function seedTestNotes(db: BrainDB): void {
       id: `${note.id}:${c.heading.toLowerCase().replace(/\s+/g, '-')}:${i}`,
       noteId: note.id,
       heading: c.heading,
+      headingAncestry: null,
       content: c.content,
       tokenCount: c.content.split(/\s+/).length,
       chunkType: 'section' as const,
+      cutType: 'heading_boundary' as const,
+      position: i,
     }));
 
     // Generate embeddings synchronously from mock embedder internals

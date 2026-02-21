@@ -1,10 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { NoteRecord } from '../src/types.js';
+import type { Chunk, NoteRecord } from '../src/types.js';
 
 export function tmpDbPath(prefix = 'brain-test'): string {
   return join(tmpdir(), `${prefix}-${randomUUID()}.db`);
+}
+
+export function makeChunk(overrides: Partial<Chunk> = {}): Chunk {
+  return {
+    id: overrides.id ?? `chunk-${randomUUID().slice(0, 8)}`,
+    noteId: overrides.noteId ?? 'test-note',
+    heading: overrides.heading ?? null,
+    headingAncestry: overrides.headingAncestry ?? null,
+    content: overrides.content ?? 'test content',
+    tokenCount: overrides.tokenCount ?? 2,
+    chunkType: overrides.chunkType ?? 'section',
+    cutType: overrides.cutType ?? 'heading_boundary',
+    position: overrides.position ?? 0,
+  };
 }
 
 export function makeNote(overrides: Partial<NoteRecord> = {}): NoteRecord {

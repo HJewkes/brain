@@ -1,4 +1,5 @@
 import type { BrainDB } from './brain-db.js';
+import { rerank } from './reranker.js';
 import type {
   Embedder,
   FusionStrategy,
@@ -242,6 +243,11 @@ export async function search(
       tags: parseTags(note.tags),
       confidence: note.confidence as NoteConfidence | null,
     });
+  }
+
+  // Step 5: Optional cross-encoder reranking
+  if (options.rerank && results.length > 1) {
+    return rerank(query, results, limit);
   }
 
   return results;

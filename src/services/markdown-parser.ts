@@ -6,6 +6,7 @@ import type {
   Relation,
   RelationType,
   NoteSource,
+  CutType,
 } from '../types.js';
 import {
   VALID_NOTE_TYPES,
@@ -166,19 +167,41 @@ function coerceStringArray(value: unknown): string[] | undefined {
 
 interface Section {
   heading: string | null;
+  headingLevel: number;
+  headingAncestry: string | null;
   lines: string[];
+}
+
+function buildAncestry(stack: Array<{ level: number; text: string }>): string | null {
+  if (stack.length === 0) return null;
+  return stack.map((h) => `${'#'.repeat(h.level)} ${h.text}`).join('\n');
 }
 
 function splitIntoSections(body: string): Section[] {
   const lines = body.split('\n');
   const sections: Section[] = [];
-  let current: Section = { heading: null, lines: [] };
+  const headingStack: Array<{ level: number; text: string }> = [];
+  let current: Section = { heading: null, headingLevel: 0, headingAncestry: null, lines: [] };
 
   for (const line of lines) {
     const match = line.match(/^(#{1,3})\s+(.+)$/);
     if (match) {
       sections.push(current);
-      current = { heading: match[2], lines: [] };
+      const level = match[1].length;
+      const text = match[2];
+
+      // Pop stack to parent level
+      while (headingStack.length > 0 && headingStack[headingStack.length - 1].level >= level) {
+        headingStack.pop();
+      }
+      headingStack.push({ level, text });
+
+      current = {
+        heading: text,
+        headingLevel: level,
+        headingAncestry: buildAncestry(headingStack),
+        lines: [],
+      };
     } else {
       current.lines.push(line);
     }
@@ -188,19 +211,40 @@ function splitIntoSections(body: string): Section[] {
   return sections;
 }
 
+function prependAncestry(ancestry: string | null, text: string): string {
+  if (!ancestry) return text;
+  return `${ancestry}\n\n${text}`;
+}
+
 function chunkBody(body: string): RawChunk[] {
   const sections = splitIntoSections(body);
   const chunks: RawChunk[] = [];
+  let position = 0;
 
   for (const section of sections) {
     const text = section.lines.join('\n').trim();
     if (text.length < MIN_CHUNK_LENGTH) continue;
 
-    const tokens = estimateTokens(text);
+    const contentWithAncestry = prependAncestry(section.headingAncestry, text);
+    const tokens = estimateTokens(contentWithAncestry);
     if (tokens <= MAX_CHUNK_TOKENS) {
-      chunks.push({ heading: section.heading, text, tokenCount: tokens });
+      chunks.push({
+        heading: section.heading,
+        headingAncestry: section.headingAncestry,
+        text: contentWithAncestry,
+        tokenCount: tokens,
+        chunkType: 'section',
+        cutType: 'heading_boundary',
+        position: position++,
+      });
     } else {
-      const subChunks = splitOversizedSection(section.heading, text);
+      const subChunks = splitOversizedSection(
+        section.heading,
+        section.headingAncestry,
+        text,
+        position
+      );
+      position += subChunks.length;
       chunks.push(...subChunks);
     }
   }
@@ -208,22 +252,40 @@ function chunkBody(body: string): RawChunk[] {
   return chunks;
 }
 
-function splitOversizedSection(heading: string | null, text: string): RawChunk[] {
+function splitOversizedSection(
+  heading: string | null,
+  headingAncestry: string | null,
+  text: string,
+  startPosition: number
+): RawChunk[] {
   const paragraphs = splitParagraphsProtectingFences(text);
   const chunks: RawChunk[] = [];
   let buffer = '';
   let overlapPrefix = '';
+  let pos = startPosition;
+
+  const ancestryPrefix = headingAncestry ? headingAncestry + '\n\n' : '';
+  const ancestryTokens = estimateTokens(ancestryPrefix);
+  const chunkBudget = MAX_CHUNK_TOKENS - ancestryTokens;
 
   for (const para of paragraphs) {
     const budgetForContent =
-      overlapPrefix.length > 0
-        ? MAX_CHUNK_TOKENS - estimateTokens(overlapPrefix + '\n\n')
-        : MAX_CHUNK_TOKENS;
+      overlapPrefix.length > 0 ? chunkBudget - estimateTokens(overlapPrefix + '\n\n') : chunkBudget;
     const bufferWithPara = buffer.length > 0 ? buffer + '\n\n' + para : para;
     if (estimateTokens(bufferWithPara) > budgetForContent && buffer.length > 0) {
-      const chunkText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
+      const rawText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
+      const chunkText = ancestryPrefix + rawText.trim();
       const tokenCount = estimateTokens(chunkText);
-      chunks.push({ heading, text: chunkText.trim(), tokenCount });
+      const cutType: CutType = para.startsWith('```') ? 'code_fence' : 'paragraph_end';
+      chunks.push({
+        heading,
+        headingAncestry,
+        text: chunkText,
+        tokenCount,
+        chunkType: 'paragraph',
+        cutType,
+        position: pos++,
+      });
       overlapPrefix = extractOverlap(buffer);
       buffer = para;
     } else {
@@ -232,9 +294,18 @@ function splitOversizedSection(heading: string | null, text: string): RawChunk[]
   }
 
   if (buffer.length > 0) {
-    const chunkText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
+    const rawText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
+    const chunkText = ancestryPrefix + rawText.trim();
     const tokenCount = estimateTokens(chunkText);
-    chunks.push({ heading, text: chunkText.trim(), tokenCount });
+    chunks.push({
+      heading,
+      headingAncestry,
+      text: chunkText,
+      tokenCount,
+      chunkType: 'paragraph',
+      cutType: 'paragraph_end',
+      position: pos++,
+    });
   }
 
   return chunks;

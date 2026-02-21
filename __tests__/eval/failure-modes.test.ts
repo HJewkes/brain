@@ -58,9 +58,12 @@ describe('failure modes', { timeout: 120_000 }, () => {
             id: 'chunk-1',
             noteId: 'test-note',
             heading: null,
+            headingAncestry: null,
             content: chunkContent,
             tokenCount: 6,
             chunkType: 'section',
+            cutType: 'heading_boundary' as const,
+            position: 0,
           },
         ],
         [new Float32Array(embedding)]
