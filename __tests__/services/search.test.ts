@@ -2,38 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
 import { search, searchMemories } from '../../src/services/search.js';
 import { unlinkSync } from 'node:fs';
-import type { Chunk, Embedder, NoteRecord } from '../../src/types.js';
+import type { Chunk, NoteRecord } from '../../src/types.js';
 import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
-
-/**
- * Deterministic mock embedder: generates vectors from a simple hash of the input text.
- * This ensures the same text always produces the same embedding, making tests predictable.
- */
-function createMockEmbedder(dimensions = 384): Embedder {
-  function hashToVector(text: string): number[] {
-    const vec = new Array<number>(dimensions).fill(0);
-    for (let i = 0; i < text.length; i++) {
-      const idx = i % dimensions;
-      vec[idx] += text.charCodeAt(i) / 1000;
-    }
-    // Normalize to unit vector
-    const magnitude = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
-    if (magnitude > 0) {
-      for (let i = 0; i < vec.length; i++) {
-        vec[i] /= magnitude;
-      }
-    }
-    return vec;
-  }
-
-  return {
-    model: 'mock-embedder',
-    dimensions,
-    async embed(texts: string[]): Promise<number[][]> {
-      return texts.map(hashToVector);
-    },
-  };
-}
 
 interface TestContext {
   db: BrainDB;

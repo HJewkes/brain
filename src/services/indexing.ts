@@ -64,7 +64,7 @@ export function inboxItemToMarkdown(item: InboxItem): string {
   const lines = [
     '---',
     `id: ${id}`,
-    `title: "${title}"`,
+    `title: "${title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`,
     'type: note',
     'tier: fast',
     `status: draft`,

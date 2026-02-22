@@ -80,10 +80,12 @@ export const indexCommand = new Command('index')
       }
 
       if (opts.watch) {
-        process.on('SIGINT', () => {
+        const cleanup = () => {
           db.close();
           process.exit(0);
-        });
+        };
+        process.on('SIGINT', cleanup);
+        process.on('SIGTERM', cleanup);
         startWatcher(db, embedder, config.notesDir);
         await new Promise(() => {});
       }

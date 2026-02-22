@@ -24,9 +24,8 @@ export const contextCommand = new Command('context')
       ]);
       relatedNoteIds.delete(id);
 
-      const relatedNotes = [...relatedNoteIds]
-        .map((nid) => db.getNoteById(nid))
-        .filter((n) => n !== null);
+      const relatedNotesById = db.getNotesByIds([...relatedNoteIds]);
+      const relatedNotes = [...relatedNotesById.values()];
 
       if (opts.json) {
         process.stdout.write(

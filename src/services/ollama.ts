@@ -1,5 +1,6 @@
 const DEFAULT_URL = 'http://localhost:11434';
 const DEFAULT_MODEL = 'qwen2.5:3b';
+const REQUEST_TIMEOUT_MS = 120_000;
 
 interface OllamaGenerateResponse {
   response: string;
@@ -34,6 +35,7 @@ export function createOllamaClient(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
       if (!res.ok) {
