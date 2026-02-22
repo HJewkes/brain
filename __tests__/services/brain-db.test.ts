@@ -691,5 +691,45 @@ describe('BrainDB', () => {
       expect(history[0].event).toBe('add');
       expect(history[0].newMemory).toBe('TypeScript uses structural typing');
     });
+
+    it('forgets expired memories', () => {
+      const past = '2020-01-01T00:00:00Z';
+      db.addMemory(makeMemory({ id: 'expiring', forgetAfter: past }));
+      db.addMemory(makeMemory({ id: 'permanent' }));
+
+      const forgotten = db.forgetExpiredMemories();
+      expect(forgotten).toBe(1);
+
+      const mem = db.getMemory('expiring')!;
+      expect(mem.isForgotten).toBe(true);
+      expect(db.getMemoryCount()).toBe(1);
+    });
+
+    it('does not forget future-dated memories', () => {
+      const future = '2099-01-01T00:00:00Z';
+      db.addMemory(makeMemory({ id: 'future', forgetAfter: future }));
+
+      const forgotten = db.forgetExpiredMemories();
+      expect(forgotten).toBe(0);
+      expect(db.getMemory('future')!.isForgotten).toBe(false);
+    });
+
+    it('queries memories since a date', () => {
+      db.addMemory(makeMemory({ id: 'old', createdAt: '2025-01-01T00:00:00Z' }));
+      db.addMemory(makeMemory({ id: 'recent', createdAt: '2026-02-01T00:00:00Z' }));
+
+      const since = db.getMemoriesSince('2026-01-01T00:00:00Z');
+      expect(since).toHaveLength(1);
+      expect(since[0].id).toBe('recent');
+    });
+
+    it('queries memories since a date filtered by container', () => {
+      db.addMemory(makeMemory({ id: 'm1', createdAt: '2026-02-01T00:00:00Z', containerTag: 'a' }));
+      db.addMemory(makeMemory({ id: 'm2', createdAt: '2026-02-01T00:00:00Z', containerTag: 'b' }));
+
+      const filtered = db.getMemoriesSince('2026-01-01T00:00:00Z', 'a');
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].containerTag).toBe('a');
+    });
   });
 });

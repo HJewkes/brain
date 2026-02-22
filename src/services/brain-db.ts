@@ -801,6 +801,52 @@ export class BrainDB {
     this.db.prepare('DELETE FROM memory_entries WHERE source_note_id = ?').run(noteId);
   }
 
+  forgetExpiredMemories(): number {
+    const now = new Date().toISOString();
+    const expired = this.db
+      .prepare(
+        'SELECT id, memory FROM memory_entries WHERE forget_after IS NOT NULL AND forget_after <= ? AND is_forgotten = 0 AND is_latest = 1'
+      )
+      .all(now) as { id: string; memory: string }[];
+
+    if (expired.length === 0) return 0;
+
+    const update = this.db.prepare(
+      'UPDATE memory_entries SET is_forgotten = 1 WHERE id = ?'
+    );
+    const insertHistory = this.db.prepare(
+      `INSERT INTO memory_history (memory_id, event, old_memory, new_memory, actor, created_at)
+       VALUES (?, 'forget', ?, NULL, 'system', ?)`
+    );
+
+    const txn = this.db.transaction(() => {
+      for (const { id, memory } of expired) {
+        update.run(id);
+        insertHistory.run(id, memory, now);
+      }
+    });
+    txn();
+
+    return expired.length;
+  }
+
+  getMemoriesSince(since: string, containerTag?: string): MemoryEntry[] {
+    if (containerTag) {
+      const rows = this.db
+        .prepare(
+          'SELECT * FROM memory_entries WHERE created_at >= ? AND container_tag = ? AND is_latest = 1 ORDER BY created_at DESC'
+        )
+        .all(since, containerTag) as MemoryRow[];
+      return rows.map(rowToMemoryEntry);
+    }
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM memory_entries WHERE created_at >= ? AND is_latest = 1 ORDER BY created_at DESC'
+      )
+      .all(since) as MemoryRow[];
+    return rows.map(rowToMemoryEntry);
+  }
+
   getMemoryCount(): number {
     const row = this.db
       .prepare('SELECT COUNT(*) as count FROM memory_entries WHERE is_latest = 1 AND is_forgotten = 0')

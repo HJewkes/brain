@@ -16,6 +16,8 @@ import { inboxCommand } from './commands/inbox.js';
 import { ingestCommand } from './commands/ingest.js';
 import { feedCommand } from './commands/feed.js';
 import { extractCommand } from './commands/extract.js';
+import { memoriesCommand } from './commands/memories.js';
+import { contextCommand } from './commands/context.js';
 
 const program = new Command()
   .name('brain')
@@ -39,6 +41,8 @@ program.addCommand(inboxCommand);
 program.addCommand(ingestCommand);
 program.addCommand(feedCommand);
 program.addCommand(extractCommand);
+program.addCommand(memoriesCommand);
+program.addCommand(contextCommand);
 
 program.parseAsync().catch((err: Error) => {
   process.stderr.write(`Error: ${err.message}\n`);
