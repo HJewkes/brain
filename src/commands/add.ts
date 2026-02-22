@@ -10,13 +10,7 @@ import {
   VALID_NOTE_CONFIDENCES,
   VALID_NOTE_STATUSES,
 } from '../types.js';
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+import { slugify } from '../services/indexing.js';
 
 function buildFrontmatter(opts: {
   title?: string;
