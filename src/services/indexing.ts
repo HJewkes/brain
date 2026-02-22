@@ -5,19 +5,14 @@ import { parseMarkdown } from './markdown-parser.js';
 import type { BrainDB } from './brain-db.js';
 import type { Chunk, Embedder, InboxItem, NoteRecord, RawChunk } from '../types.js';
 import { scanForChanges } from './file-scanner.js';
+import { slugify } from '../utils.js';
+export { slugify };
 
 export interface IndexResult {
   indexed: number;
   deleted: number;
   unchanged: number;
   indexedNoteIds: string[];
-}
-
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
 }
 
 export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): NoteRecord {

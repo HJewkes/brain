@@ -1,3 +1,10 @@
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export function parseIntervalDays(interval: string): number {
   const match = interval.match(/^(\d+)\s*(d|w|m)$/);
   if (!match) return 90;

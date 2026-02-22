@@ -10,7 +10,7 @@ import {
   VALID_NOTE_CONFIDENCES,
   VALID_NOTE_STATUSES,
 } from '../types.js';
-import { slugify } from '../services/indexing.js';
+import { slugify } from '../utils.js';
 
 function buildFrontmatter(opts: {
   title?: string;

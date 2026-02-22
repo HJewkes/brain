@@ -14,6 +14,7 @@ import {
   VALID_NOTE_CONFIDENCES,
   VALID_NOTE_STATUSES,
 } from '../types.js';
+import { slugify } from '../utils.js';
 
 const MAX_CHUNK_TOKENS = 512;
 const FENCE_OPEN = /^```/;
@@ -34,13 +35,6 @@ export function parseMarkdown(filePath: string, content: string): ParsedNote {
   const relations = extractRelations(id, data);
 
   return { id, filePath, frontmatter, content: body, chunks, relations };
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
 }
 
 function deriveId(filePath: string, data: Record<string, unknown>): string {
