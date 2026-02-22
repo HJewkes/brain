@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { Chunk, NoteRecord } from '../src/types.js';
+import type {
+  Chunk,
+  Embedder,
+  FeedRecord,
+  InboxItem,
+  MemoryEntry,
+  NoteRecord,
+} from '../src/types.js';
 
 export function tmpDbPath(prefix = 'brain-test'): string {
   return join(tmpdir(), `${prefix}-${randomUUID()}.db`);
@@ -18,6 +25,77 @@ export function makeChunk(overrides: Partial<Chunk> = {}): Chunk {
     chunkType: overrides.chunkType ?? 'section',
     cutType: overrides.cutType ?? 'heading_boundary',
     position: overrides.position ?? 0,
+  };
+}
+
+export function makeMemoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
+  return {
+    id: overrides.id ?? `mem-${randomUUID().slice(0, 8)}`,
+    memory: overrides.memory ?? 'Test memory fact',
+    sourceNoteId: overrides.sourceNoteId ?? 'test-note',
+    sourceChunkId: overrides.sourceChunkId ?? null,
+    containerTag: overrides.containerTag ?? 'default',
+    isLatest: overrides.isLatest ?? true,
+    parentMemoryId: overrides.parentMemoryId ?? null,
+    rootMemoryId: overrides.rootMemoryId ?? null,
+    relationType: overrides.relationType ?? null,
+    validAt: overrides.validAt ?? '2026-01-01T00:00:00Z',
+    invalidAt: overrides.invalidAt ?? null,
+    forgetAfter: overrides.forgetAfter ?? null,
+    isForgotten: overrides.isForgotten ?? false,
+    isInference: overrides.isInference ?? false,
+    createdAt: overrides.createdAt ?? '2026-01-01T00:00:00Z',
+  };
+}
+
+export function makeFeedRecord(overrides: Partial<FeedRecord> = {}): FeedRecord {
+  return {
+    id: overrides.id ?? `feed-${randomUUID().slice(0, 8)}`,
+    url: overrides.url ?? `https://example.com/${randomUUID().slice(0, 8)}.xml`,
+    name: overrides.name ?? 'Test Feed',
+    containerTag: overrides.containerTag ?? 'default',
+    filterPrompt: overrides.filterPrompt ?? null,
+    lastPolled: overrides.lastPolled ?? null,
+    createdAt: overrides.createdAt ?? '2026-01-01T00:00:00Z',
+  };
+}
+
+export function makeInboxItem(overrides: Partial<InboxItem> = {}): InboxItem {
+  return {
+    id: overrides.id ?? `inbox-${randomUUID().slice(0, 8)}`,
+    content: overrides.content ?? 'Test inbox content',
+    title: overrides.title ?? null,
+    source: overrides.source ?? 'cli',
+    sourceUrl: overrides.sourceUrl ?? null,
+    sourceMeta: overrides.sourceMeta ?? null,
+    status: overrides.status ?? 'pending',
+    createdAt: overrides.createdAt ?? '2026-01-01T00:00:00Z',
+    processedAt: overrides.processedAt ?? null,
+  };
+}
+
+export function createMockEmbedder(dimensions = 384): Embedder {
+  function hashToVector(text: string): number[] {
+    const vec = new Array<number>(dimensions).fill(0);
+    for (let i = 0; i < text.length; i++) {
+      const idx = i % dimensions;
+      vec[idx] += text.charCodeAt(i) / 1000;
+    }
+    const magnitude = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
+    if (magnitude > 0) {
+      for (let i = 0; i < vec.length; i++) {
+        vec[i] /= magnitude;
+      }
+    }
+    return vec;
+  }
+
+  return {
+    model: 'mock-embedder',
+    dimensions,
+    async embed(texts: string[]): Promise<number[][]> {
+      return texts.map(hashToVector);
+    },
   };
 }
 

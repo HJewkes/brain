@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB, sanitizeFtsQuery } from '../../src/services/brain-db.js';
 import { unlinkSync } from 'node:fs';
@@ -766,6 +767,66 @@ describe('BrainDB', () => {
       const filtered = db.getMemoriesSince('2026-01-01T00:00:00Z', 'a');
       expect(filtered).toHaveLength(1);
       expect(filtered[0].containerTag).toBe('a');
+    });
+
+    it('upsertMemoryVector + searchMemoryVectors round-trip', () => {
+      db.ensureVectorTable(384);
+      db.addMemory(makeMemory({ id: 'mv-1' }));
+      db.addMemory(makeMemory({ id: 'mv-2' }));
+
+      const vec1 = new Float32Array(384);
+      vec1[0] = 1.0;
+      const vec2 = new Float32Array(384);
+      vec2[1] = 1.0;
+
+      db.upsertMemoryVector('mv-1', vec1);
+      db.upsertMemoryVector('mv-2', vec2);
+
+      const results = db.searchMemoryVectors(vec1, 5);
+      expect(results.length).toBe(2);
+      expect(results[0].memoryId).toBe('mv-1');
+      expect(results[0].distance).toBeLessThan(results[1].distance);
+    });
+
+    it('upsertMemoryVector replaces existing vector', () => {
+      db.ensureVectorTable(384);
+      db.addMemory(makeMemory({ id: 'mv-replace' }));
+
+      const vec1 = new Float32Array(384);
+      vec1[0] = 1.0;
+      db.upsertMemoryVector('mv-replace', vec1);
+
+      const vec2 = new Float32Array(384);
+      vec2[1] = 1.0;
+      db.upsertMemoryVector('mv-replace', vec2);
+
+      const results = db.searchMemoryVectors(vec2, 5);
+      expect(results).toHaveLength(1);
+      expect(results[0].memoryId).toBe('mv-replace');
+    });
+
+    it('getMemoriesByIds returns batch of memories', () => {
+      db.addMemory(makeMemory({ id: 'batch-1', memory: 'Fact one' }));
+      db.addMemory(makeMemory({ id: 'batch-2', memory: 'Fact two' }));
+      db.addMemory(makeMemory({ id: 'batch-3', memory: 'Fact three' }));
+
+      const result = db.getMemoriesByIds(['batch-1', 'batch-3']);
+      expect(result.size).toBe(2);
+      expect(result.get('batch-1')?.memory).toBe('Fact one');
+      expect(result.get('batch-3')?.memory).toBe('Fact three');
+      expect(result.has('batch-2')).toBe(false);
+    });
+
+    it('getMemoriesByIds returns empty map for empty input', () => {
+      const result = db.getMemoriesByIds([]);
+      expect(result.size).toBe(0);
+    });
+
+    it('getMemoriesByIds ignores non-existent ids', () => {
+      db.addMemory(makeMemory({ id: 'exists' }));
+      const result = db.getMemoriesByIds(['exists', 'does-not-exist']);
+      expect(result.size).toBe(1);
+      expect(result.has('exists')).toBe(true);
     });
   });
 });

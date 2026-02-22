@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { search } from '../../src/services/search.js';
+import { search, searchMemories } from '../../src/services/search.js';
 import { unlinkSync } from 'node:fs';
 import type { Chunk, Embedder, NoteRecord } from '../../src/types.js';
-import { tmpDbPath, makeNote } from '../helpers.js';
+import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
 
 /**
  * Deterministic mock embedder: generates vectors from a simple hash of the input text.
@@ -626,5 +626,83 @@ describe('search service', () => {
       await search(ctx.db, otherEmbedder, 'test query', { limit: 3 });
       expect(embeddedTexts[0]).toBe('test query');
     });
+  });
+});
+
+describe('searchMemories', () => {
+  let db: BrainDB;
+  let dbPath: string;
+  let embedder: Embedder;
+
+  beforeEach(async () => {
+    dbPath = tmpDbPath();
+    db = new BrainDB(dbPath);
+    embedder = createMockEmbedder();
+
+    db.upsertNote(makeNote({ id: 'note-1', filePath: '/notes/note-1.md' }));
+    db.ensureVectorTable(384);
+
+    const memories = [
+      makeMemoryEntry({ id: 'mem-ts', memory: 'TypeScript uses structural typing', sourceNoteId: 'note-1', containerTag: 'dev' }),
+      makeMemoryEntry({ id: 'mem-react', memory: 'React hooks must follow rules of hooks', sourceNoteId: 'note-1', containerTag: 'dev' }),
+      makeMemoryEntry({ id: 'mem-css', memory: 'CSS grid provides two-dimensional layouts', sourceNoteId: 'note-1', containerTag: 'design' }),
+      makeMemoryEntry({ id: 'mem-old', memory: 'Old superseded fact', sourceNoteId: 'note-1', isLatest: false }),
+      makeMemoryEntry({ id: 'mem-forgotten', memory: 'Forgotten memory', sourceNoteId: 'note-1', isForgotten: true }),
+    ];
+
+    for (const mem of memories) {
+      db.addMemory(mem);
+      const [vec] = await embedder.embed([mem.memory]);
+      db.upsertMemoryVector(mem.id, new Float32Array(vec));
+    }
+  });
+
+  afterEach(() => {
+    db.close();
+    try { unlinkSync(dbPath); } catch { /* ignore */ }
+  });
+
+  it('returns scored memory results', async () => {
+    const results = await searchMemories(db, embedder, 'TypeScript structural typing', 10);
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].score).toBeGreaterThan(0);
+    expect(results[0].memoryId).toBeDefined();
+    expect(results[0].memory).toBeDefined();
+  });
+
+  it('results are sorted by score descending', async () => {
+    const results = await searchMemories(db, embedder, 'TypeScript', 10);
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
+    }
+  });
+
+  it('excludes non-latest memories', async () => {
+    const results = await searchMemories(db, embedder, 'Old superseded fact', 10);
+    const ids = results.map((r) => r.memoryId);
+    expect(ids).not.toContain('mem-old');
+  });
+
+  it('excludes forgotten memories', async () => {
+    const results = await searchMemories(db, embedder, 'Forgotten memory', 10);
+    const ids = results.map((r) => r.memoryId);
+    expect(ids).not.toContain('mem-forgotten');
+  });
+
+  it('filters by container tag', async () => {
+    const results = await searchMemories(db, embedder, 'TypeScript React CSS', 10, 'design');
+    for (const r of results) {
+      expect(r.containerTag).toBe('design');
+    }
+  });
+
+  it('returns empty for empty query', async () => {
+    const results = await searchMemories(db, embedder, '', 10);
+    expect(results).toEqual([]);
+  });
+
+  it('respects limit parameter', async () => {
+    const results = await searchMemories(db, embedder, 'TypeScript React CSS', 1);
+    expect(results.length).toBeLessThanOrEqual(1);
   });
 });
