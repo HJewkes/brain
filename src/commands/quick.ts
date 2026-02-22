@@ -3,8 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { withDb } from '../services/brain-service.js';
 import type { InboxItem, InboxSource } from '../types.js';
-
-const VALID_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file'];
+import { VALID_INBOX_SOURCES } from '../types.js';
 
 export const quickCommand = new Command('quick')
   .description('Quickly capture a thought into the inbox')
@@ -32,9 +31,9 @@ export const quickCommand = new Command('quick')
     }
 
     const source = opts.source ?? 'cli';
-    if (!VALID_SOURCES.includes(source as InboxSource)) {
+    if (!VALID_INBOX_SOURCES.includes(source as InboxSource)) {
       process.stderr.write(
-        `Error: invalid source "${source}". Valid: ${VALID_SOURCES.join(', ')}\n`
+        `Error: invalid source "${source}". Valid: ${VALID_INBOX_SOURCES.join(', ')}\n`
       );
       process.exitCode = 1;
       return;

@@ -157,6 +157,8 @@ export interface GraphResult {
 
 export type InboxSource = 'cli' | 'rss' | 'crawler' | 'alert' | 'api' | 'file';
 
+export const VALID_INBOX_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file'];
+
 export type InboxStatus = 'pending' | 'processing' | 'indexed' | 'failed' | 'discarded';
 
 export interface InboxItem {

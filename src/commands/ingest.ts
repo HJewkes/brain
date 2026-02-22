@@ -4,8 +4,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import { withDb } from '../services/brain-service.js';
 import type { InboxItem, InboxSource } from '../types.js';
-
-const VALID_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file'];
+import { VALID_INBOX_SOURCES } from '../types.js';
 
 export const ingestCommand = new Command('ingest')
   .description('Bulk-import files into the inbox')
@@ -14,9 +13,9 @@ export const ingestCommand = new Command('ingest')
   .option('--url <url>', 'Source URL for all items')
   .action(async (files, opts) => {
     const source = opts.source ?? 'file';
-    if (!VALID_SOURCES.includes(source as InboxSource)) {
+    if (!VALID_INBOX_SOURCES.includes(source as InboxSource)) {
       process.stderr.write(
-        `Error: invalid source "${source}". Valid: ${VALID_SOURCES.join(', ')}\n`
+        `Error: invalid source "${source}". Valid: ${VALID_INBOX_SOURCES.join(', ')}\n`
       );
       process.exitCode = 1;
       return;
