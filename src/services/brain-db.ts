@@ -42,9 +42,14 @@ export class BrainDB {
   }
 
   // --- Schema Migration ---
-  // TODO: schemaV1() contains full schema (including v4/v5 tables) and migrateToV4/V5
-  // duplicate the same DDL. When adding v6, refactor so schemaV1() calls migration
-  // functions or extract shared DDL constants to avoid silent divergence.
+
+  private applyMigration(current: number, target: number, fn: () => void): void {
+    if (current >= 1 && current < target) {
+      fn();
+      this.db.pragma(`user_version = ${target}`);
+      this.setMetaValue('schema_version', String(target));
+    }
+  }
 
   private migrate(): void {
     const currentVersion = this.db.pragma('user_version', { simple: true }) as number;
@@ -54,26 +59,12 @@ export class BrainDB {
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`);
       this.setMetaValue('schema_version', String(SCHEMA_VERSION));
     }
-    if (currentVersion >= 1 && currentVersion < 2) {
-      this.db.exec('CREATE INDEX IF NOT EXISTS idx_chunks_note_id ON chunks(note_id)');
-      this.db.pragma('user_version = 2');
-      this.setMetaValue('schema_version', '2');
-    }
-    if (currentVersion >= 1 && currentVersion < 3) {
-      this.migrateToV3();
-      this.db.pragma('user_version = 3');
-      this.setMetaValue('schema_version', '3');
-    }
-    if (currentVersion >= 1 && currentVersion < 4) {
-      this.migrateToV4();
-      this.db.pragma('user_version = 4');
-      this.setMetaValue('schema_version', '4');
-    }
-    if (currentVersion >= 1 && currentVersion < 5) {
-      this.migrateToV5();
-      this.db.pragma('user_version = 5');
-      this.setMetaValue('schema_version', '5');
-    }
+    this.applyMigration(currentVersion, 2, () =>
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_chunks_note_id ON chunks(note_id)')
+    );
+    this.applyMigration(currentVersion, 3, () => this.migrateToV3());
+    this.applyMigration(currentVersion, 4, () => this.db.exec(this.captureDDL()));
+    this.applyMigration(currentVersion, 5, () => this.db.exec(this.memoryDDL()));
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -103,6 +94,72 @@ export class BrainDB {
       )
     `);
     this.vectorDimensions = dimensions;
+  }
+
+  private captureDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS inbox (
+        id            TEXT PRIMARY KEY,
+        content       TEXT NOT NULL,
+        title         TEXT,
+        source        TEXT NOT NULL DEFAULT 'cli',
+        source_url    TEXT,
+        source_meta   TEXT,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        created_at    TEXT NOT NULL,
+        processed_at  TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS feeds (
+        id            TEXT PRIMARY KEY,
+        url           TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        container_tag TEXT NOT NULL DEFAULT 'default',
+        filter_prompt TEXT,
+        last_polled   TEXT,
+        created_at    TEXT NOT NULL
+      );
+    `;
+  }
+
+  private memoryDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS memory_entries (
+        id                TEXT PRIMARY KEY,
+        memory            TEXT NOT NULL,
+        source_note_id    TEXT NOT NULL,
+        source_chunk_id   TEXT,
+        container_tag     TEXT NOT NULL DEFAULT 'default',
+        is_latest         INTEGER NOT NULL DEFAULT 1,
+        parent_memory_id  TEXT,
+        root_memory_id    TEXT,
+        relation_type     TEXT,
+        valid_at          TEXT,
+        invalid_at        TEXT,
+        forget_after      TEXT,
+        is_forgotten      INTEGER NOT NULL DEFAULT 0,
+        is_inference      INTEGER NOT NULL DEFAULT 0,
+        created_at        TEXT NOT NULL,
+        FOREIGN KEY (source_note_id) REFERENCES notes(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
+      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
+      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
+
+      CREATE TABLE IF NOT EXISTS memory_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id   TEXT NOT NULL,
+        event       TEXT NOT NULL,
+        old_memory  TEXT,
+        new_memory  TEXT,
+        actor       TEXT NOT NULL DEFAULT 'system',
+        created_at  TEXT NOT NULL,
+        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
+    `;
   }
 
   private schemaV1(): string {
@@ -170,130 +227,9 @@ export class BrainDB {
         value TEXT NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS inbox (
-        id            TEXT PRIMARY KEY,
-        content       TEXT NOT NULL,
-        title         TEXT,
-        source        TEXT NOT NULL DEFAULT 'cli',
-        source_url    TEXT,
-        source_meta   TEXT,
-        status        TEXT NOT NULL DEFAULT 'pending',
-        created_at    TEXT NOT NULL,
-        processed_at  TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS feeds (
-        id            TEXT PRIMARY KEY,
-        url           TEXT NOT NULL UNIQUE,
-        name          TEXT NOT NULL,
-        container_tag TEXT NOT NULL DEFAULT 'default',
-        filter_prompt TEXT,
-        last_polled   TEXT,
-        created_at    TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS memory_entries (
-        id                TEXT PRIMARY KEY,
-        memory            TEXT NOT NULL,
-        source_note_id    TEXT NOT NULL,
-        source_chunk_id   TEXT,
-        container_tag     TEXT NOT NULL DEFAULT 'default',
-        is_latest         INTEGER NOT NULL DEFAULT 1,
-        parent_memory_id  TEXT,
-        root_memory_id    TEXT,
-        relation_type     TEXT,
-        valid_at          TEXT,
-        invalid_at        TEXT,
-        forget_after      TEXT,
-        is_forgotten      INTEGER NOT NULL DEFAULT 0,
-        is_inference      INTEGER NOT NULL DEFAULT 0,
-        created_at        TEXT NOT NULL,
-        FOREIGN KEY (source_note_id) REFERENCES notes(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
-      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
-      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
-
-      CREATE TABLE IF NOT EXISTS memory_history (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        memory_id   TEXT NOT NULL,
-        event       TEXT NOT NULL,
-        old_memory  TEXT,
-        new_memory  TEXT,
-        actor       TEXT NOT NULL DEFAULT 'system',
-        created_at  TEXT NOT NULL,
-        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
+      ${this.captureDDL()}
+      ${this.memoryDDL()}
     `;
-  }
-
-  private migrateToV4(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS inbox (
-        id            TEXT PRIMARY KEY,
-        content       TEXT NOT NULL,
-        title         TEXT,
-        source        TEXT NOT NULL DEFAULT 'cli',
-        source_url    TEXT,
-        source_meta   TEXT,
-        status        TEXT NOT NULL DEFAULT 'pending',
-        created_at    TEXT NOT NULL,
-        processed_at  TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS feeds (
-        id            TEXT PRIMARY KEY,
-        url           TEXT NOT NULL UNIQUE,
-        name          TEXT NOT NULL,
-        container_tag TEXT NOT NULL DEFAULT 'default',
-        filter_prompt TEXT,
-        last_polled   TEXT,
-        created_at    TEXT NOT NULL
-      );
-    `);
-  }
-
-  private migrateToV5(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS memory_entries (
-        id                TEXT PRIMARY KEY,
-        memory            TEXT NOT NULL,
-        source_note_id    TEXT NOT NULL,
-        source_chunk_id   TEXT,
-        container_tag     TEXT NOT NULL DEFAULT 'default',
-        is_latest         INTEGER NOT NULL DEFAULT 1,
-        parent_memory_id  TEXT,
-        root_memory_id    TEXT,
-        relation_type     TEXT,
-        valid_at          TEXT,
-        invalid_at        TEXT,
-        forget_after      TEXT,
-        is_forgotten      INTEGER NOT NULL DEFAULT 0,
-        is_inference      INTEGER NOT NULL DEFAULT 0,
-        created_at        TEXT NOT NULL,
-        FOREIGN KEY (source_note_id) REFERENCES notes(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
-      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
-      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
-
-      CREATE TABLE IF NOT EXISTS memory_history (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        memory_id   TEXT NOT NULL,
-        event       TEXT NOT NULL,
-        old_memory  TEXT,
-        new_memory  TEXT,
-        actor       TEXT NOT NULL DEFAULT 'system',
-        created_at  TEXT NOT NULL,
-        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
-    `);
   }
 
   private migrateToV3(): void {
