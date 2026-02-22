@@ -664,10 +664,46 @@ describe('BrainDB', () => {
       expect(chain[1].id).toBe('v2');
     });
 
-    it('deletes memories for a note', () => {
+    it('deletes memories for a note including vectors and history', () => {
+      db.ensureVectorTable(384);
       db.addMemory(makeMemory());
+      db.upsertMemoryVector('mem-1', new Float32Array(384));
+      db.addMemoryHistory({
+        memoryId: 'mem-1',
+        event: 'add',
+        oldMemory: null,
+        newMemory: 'TypeScript uses structural typing',
+        actor: 'extractor',
+        createdAt: '2026-01-01T00:00:00Z',
+      });
+
       db.deleteMemoriesForNote('test-note');
+
       expect(db.getMemoriesForNote('test-note')).toHaveLength(0);
+      expect(db.getMemory('mem-1')).toBeNull();
+      expect(db.getMemoryHistory('mem-1')).toHaveLength(0);
+      expect(db.searchMemoryVectors(new Float32Array(384), 10)).toHaveLength(0);
+    });
+
+    it('deleteNote cascades to memories, vectors, and history', () => {
+      db.ensureVectorTable(384);
+      db.addMemory(makeMemory());
+      db.upsertMemoryVector('mem-1', new Float32Array(384));
+      db.addMemoryHistory({
+        memoryId: 'mem-1',
+        event: 'add',
+        oldMemory: null,
+        newMemory: 'TypeScript uses structural typing',
+        actor: 'extractor',
+        createdAt: '2026-01-01T00:00:00Z',
+      });
+
+      db.deleteNote('test-note');
+
+      expect(db.getNoteById('test-note')).toBeNull();
+      expect(db.getMemory('mem-1')).toBeNull();
+      expect(db.getMemoryHistory('mem-1')).toHaveLength(0);
+      expect(db.searchMemoryVectors(new Float32Array(384), 10)).toHaveLength(0);
     });
 
     it('counts active memories', () => {

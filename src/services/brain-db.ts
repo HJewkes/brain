@@ -400,6 +400,7 @@ export class BrainDB {
 
   deleteNote(id: string): void {
     const txn = this.db.transaction(() => {
+      this.deleteMemoriesForNote(id);
       this.deleteChunksForNote(id);
       this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(id);
       this.db.prepare('DELETE FROM relations WHERE source_id = ? OR target_id = ?').run(id, id);
@@ -798,6 +799,22 @@ export class BrainDB {
   }
 
   deleteMemoriesForNote(noteId: string): void {
+    const memoryIds = this.db
+      .prepare('SELECT id FROM memory_entries WHERE source_note_id = ?')
+      .all(noteId) as { id: string }[];
+
+    if (memoryIds.length > 0) {
+      const deleteVector = this.db.prepare('DELETE FROM memory_vectors WHERE memory_id = ?');
+      const deleteHistory = this.db.prepare('DELETE FROM memory_history WHERE memory_id = ?');
+      const txn = this.db.transaction(() => {
+        for (const { id } of memoryIds) {
+          deleteVector.run(id);
+          deleteHistory.run(id);
+        }
+      });
+      txn();
+    }
+
     this.db.prepare('DELETE FROM memory_entries WHERE source_note_id = ?').run(noteId);
   }
 
