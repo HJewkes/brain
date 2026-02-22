@@ -179,6 +179,14 @@ export const addCommand = new Command('add')
       mkdirSync(dir, { recursive: true });
     }
 
-    writeFileSync(outPath, content, 'utf-8');
+    try {
+      writeFileSync(outPath, content, 'utf-8');
+    } catch (err) {
+      process.stderr.write(
+        `Error: failed to write ${outPath}: ${err instanceof Error ? err.message : String(err)}\n`
+      );
+      process.exitCode = 1;
+      return;
+    }
     process.stdout.write(outPath + '\n');
   });

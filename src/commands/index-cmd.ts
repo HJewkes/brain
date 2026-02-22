@@ -80,6 +80,10 @@ export const indexCommand = new Command('index')
       }
 
       if (opts.watch) {
+        process.on('SIGINT', () => {
+          db.close();
+          process.exit(0);
+        });
         startWatcher(db, embedder, config.notesDir);
         await new Promise(() => {});
       }
