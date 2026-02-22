@@ -52,7 +52,7 @@ export const indexCommand = new Command('index')
               'Skipping memory extraction: Ollama not running. Run `brain doctor` to check.\n'
             );
           }
-        } else if (!health.models.some((m) => m.startsWith(extractModel))) {
+        } else if (!health.models.some((m) => m === extractModel || m.startsWith(extractModel + ':'))) {
           if (!opts.quiet) {
             process.stderr.write(
               `Skipping memory extraction: model "${extractModel}" not found. Run \`ollama pull ${extractModel}\`.\n`

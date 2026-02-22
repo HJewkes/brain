@@ -161,13 +161,15 @@ export const initCommand = new Command('init')
     if (opts.notesDir) overrides.notesDir = opts.notesDir;
     if (opts.embedder) overrides.embedder = opts.embedder as EmbedderBackend;
 
-    if (!opts.embedder) {
-      const ollamaUrl = 'http://localhost:11434';
-      const ollamaModel = 'nomic-embed-text';
-      const health = await checkOllamaHealth(ollamaUrl);
+    // Single Ollama health check — reused for both embedder and LLM setup
+    const ollamaUrl = 'http://localhost:11434';
+    const ollamaHealth = await checkOllamaHealth(ollamaUrl);
 
-      if (health.running) {
-        if (!health.models.some((m) => m.startsWith(ollamaModel))) {
+    if (!opts.embedder) {
+      const ollamaModel = 'nomic-embed-text';
+
+      if (ollamaHealth.running) {
+        if (!ollamaHealth.models.some((m) => m === ollamaModel || m.startsWith(ollamaModel + ':'))) {
           pullOllamaModel(ollamaModel);
         }
         overrides.embedder = 'ollama';
@@ -182,7 +184,7 @@ export const initCommand = new Command('init')
         }
         overrides.embedder = choice;
         if (choice === 'ollama') {
-          overrides.ollamaUrl = 'http://localhost:11434';
+          overrides.ollamaUrl = ollamaUrl;
         }
       }
     }
@@ -212,19 +214,14 @@ export const initCommand = new Command('init')
     db.setEmbeddingModel(info.model, info.dimensions);
     db.close();
 
-    // LLM setup — check if Ollama has the extraction model
+    // LLM setup — reuses the Ollama health check from above
     const llmModel = config.ollamaModel ?? 'qwen2.5:3b';
     let llmReady = false;
-
-    if (config.embedder === 'ollama' || overrides.ollamaUrl) {
-      const llmHealth = await checkOllamaHealth(config.ollamaUrl);
-      if (llmHealth.running) {
-        if (llmHealth.models.some((m) => m.startsWith(llmModel))) {
-          llmReady = true;
-        } else {
-          const pulled = pullOllamaModel(llmModel);
-          llmReady = pulled;
-        }
+    if (ollamaHealth.running) {
+      if (ollamaHealth.models.some((m) => m === llmModel || m.startsWith(llmModel + ':'))) {
+        llmReady = true;
+      } else {
+        llmReady = pullOllamaModel(llmModel);
       }
     }
 

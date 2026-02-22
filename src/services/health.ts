@@ -56,7 +56,7 @@ export function checkLlm(
     };
   }
 
-  const hasModel = ollamaHealth.models.some((m) => m.startsWith(model));
+  const hasModel = ollamaHealth.models.some((m) => m === model || m.startsWith(model + ':'));
   if (!hasModel) {
     return {
       name: 'LLM',
@@ -76,18 +76,18 @@ export function checkInbox(db: BrainDB): HealthCheckResult {
   const pending = db.getInboxItems('pending');
   const failed = db.getInboxItems('failed');
 
-  if (pending.length === 0 && failed.length === 0) {
-    return { name: 'Inbox', status: 'ok', message: '0 pending, 0 failed' };
-  }
-
   const parts: string[] = [];
   if (pending.length > 0) parts.push(`${pending.length} pending`);
   if (failed.length > 0) parts.push(`${failed.length} failed`);
 
+  if (failed.length > 0) {
+    return { name: 'Inbox', status: 'warning', message: parts.join(', ') };
+  }
+
   return {
     name: 'Inbox',
-    status: 'warning',
-    message: parts.join(', '),
+    status: 'ok',
+    message: parts.length > 0 ? parts.join(', ') : '0 pending, 0 failed',
   };
 }
 

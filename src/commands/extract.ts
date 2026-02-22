@@ -28,7 +28,7 @@ export const extractCommand = new Command('extract')
         process.exitCode = 1;
         return;
       }
-      if (!health.models.some((m) => m.startsWith(model))) {
+      if (!health.models.some((m) => m === model || m.startsWith(model + ':'))) {
         process.stderr.write(
           `Error: model "${model}" not found. Run \`ollama pull ${model}\`.\n`
         );

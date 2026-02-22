@@ -76,10 +76,10 @@ describe('health checks', () => {
       expect(result.status).toBe('ok');
     });
 
-    it('returns warning with pending items', () => {
+    it('returns ok with pending items (pending is normal)', () => {
       db.addInboxItem(makeInboxItem({ status: 'pending' }));
       const result = checkInbox(db);
-      expect(result.status).toBe('warning');
+      expect(result.status).toBe('ok');
       expect(result.message).toContain('1 pending');
     });
 

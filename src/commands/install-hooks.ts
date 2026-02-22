@@ -100,7 +100,13 @@ function installLaunchd(intervalMinutes: number, notesDir: string): void {
   }
 
   writeFileSync(PLIST_PATH, plist, 'utf-8');
-  execSync(`launchctl load "${PLIST_PATH}"`);
+  try {
+    execSync(`launchctl load "${PLIST_PATH}"`);
+  } catch {
+    process.stderr.write(`Error: launchctl load failed. Check ${PLIST_PATH} manually.\n`);
+    process.exitCode = 1;
+    return;
+  }
   process.stderr.write(`Installed launchd agent: ${PLIST_PATH}\n`);
   process.stderr.write(
     `Brain will index every ${intervalMinutes} minutes.\n`
@@ -117,8 +123,14 @@ function installSystemd(intervalMinutes: number): void {
   writeFileSync(servicePath, generateSystemdService(brainBin), 'utf-8');
   writeFileSync(timerPath, generateSystemdTimer(intervalMinutes), 'utf-8');
 
-  execSync('systemctl --user daemon-reload');
-  execSync(`systemctl --user enable --now ${SYSTEMD_TIMER}`);
+  try {
+    execSync('systemctl --user daemon-reload');
+    execSync(`systemctl --user enable --now ${SYSTEMD_TIMER}`);
+  } catch {
+    process.stderr.write('Error: systemctl commands failed. Check systemd configuration manually.\n');
+    process.exitCode = 1;
+    return;
+  }
   process.stderr.write(`Installed systemd timer: ${timerPath}\n`);
   process.stderr.write(
     `Brain will index every ${intervalMinutes} minutes.\n`

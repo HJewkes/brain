@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { withDb } from '../services/brain-service.js';
 import { runAllChecks } from '../services/health.js';
 import type { HealthCheckResult, HealthReport } from '../types.js';
@@ -14,7 +14,8 @@ function statusIcon(status: HealthCheckResult['status']): string {
 
 function formatCheck(check: HealthCheckResult): string {
   const dots = '.'.repeat(Math.max(1, 25 - check.name.length));
-  return `  ${check.name} ${dots} ${statusIcon(check.status)} (${check.message})`;
+  const detail = check.detail ? ` — ${check.detail}` : '';
+  return `  ${check.name} ${dots} ${statusIcon(check.status)} (${check.message}${detail})`;
 }
 
 function printReport(report: HealthReport): void {
@@ -32,21 +33,13 @@ function printReport(report: HealthReport): void {
   }
 }
 
-async function applyFixes(report: HealthReport): Promise<void> {
-  for (const check of report.checks) {
-    if (check.status !== 'warning' && check.status !== 'error') continue;
-
-    if (check.name === 'LLM' && check.message.includes('not found')) {
-      const modelMatch = check.message.match(/"([^"]+)"/);
-      const model = modelMatch?.[1] ?? 'qwen2.5:3b';
-      process.stderr.write(`\nFixing: pulling ${model}...\n`);
-      try {
-        execSync(`ollama pull ${model}`, { stdio: 'inherit', timeout: 120_000 });
-        process.stderr.write(`Pulled ${model} successfully.\n`);
-      } catch {
-        process.stderr.write(`Failed to pull ${model}. Run \`ollama pull ${model}\` manually.\n`);
-      }
-    }
+function pullModel(model: string): void {
+  process.stderr.write(`\nFixing: pulling ${model}...\n`);
+  try {
+    execFileSync('ollama', ['pull', model], { stdio: 'inherit', timeout: 120_000 });
+    process.stderr.write(`Pulled ${model} successfully.\n`);
+  } catch {
+    process.stderr.write(`Failed to pull ${model}. Run \`ollama pull ${model}\` manually.\n`);
   }
 }
 
@@ -72,13 +65,16 @@ export const doctorCommand = new Command('doctor')
       printReport(report);
 
       if (opts.fix) {
-        await applyFixes(report);
+        const llmCheck = report.checks.find((c) => c.name === 'LLM');
+        if (llmCheck?.status === 'warning' && llmCheck.message.includes('not found')) {
+          pullModel(config.ollamaModel ?? 'qwen2.5:3b');
+        }
 
         const failedItems = db.getInboxItems('failed');
-        for (const item of failedItems) {
-          db.updateInboxStatus(item.id, 'pending');
-        }
         if (failedItems.length > 0) {
+          for (const item of failedItems) {
+            db.updateInboxStatus(item.id, 'pending');
+          }
           process.stderr.write(`Reset ${failedItems.length} failed inbox item(s) to pending.\n`);
         }
       } else if (report.summary.warnings > 0 || report.summary.errors > 0) {
