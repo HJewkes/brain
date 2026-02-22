@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, watch } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
@@ -20,6 +20,7 @@ export const indexCommand = new Command('index')
   .option('--extract', 'extract memories from indexed notes after indexing')
   .option('--extract-model <model>', 'Ollama model for extraction (default: qwen2.5:3b)')
   .option('--extract-tag <tag>', 'container tag for extracted memories', 'default')
+  .option('--watch', 'watch for file changes and re-index automatically')
   .action(async (opts) => {
     const config = loadConfig();
     const db = new BrainDB(config.dbPath);
@@ -138,6 +139,63 @@ export const indexCommand = new Command('index')
           process.stderr.write(`Memories: extracted ${memoriesExtracted} from indexed notes\n`);
         }
         process.stderr.write(`Total notes: ${summary.total}\n`);
+      }
+      if (opts.watch) {
+        process.stderr.write(`Watching ${config.notesDir} for changes...\n`);
+
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const reindex = async () => {
+          const knownFiles2 = db.getAllFiles();
+          const changes2 = await scanForChanges(config.notesDir, knownFiles2);
+          const toProcess2 = [...changes2.new, ...changes2.modified].filter(
+            (f) => !isSkipped(f.path)
+          );
+
+          for (const file of toProcess2) {
+            const content2 = readFileSync(file.path, 'utf-8');
+            const parsed2 = parseMarkdown(file.path, content2);
+            db.upsertNote(frontmatterToRecord(parsed2));
+            db.upsertNoteFTS(
+              parsed2.id,
+              parsed2.frontmatter.title,
+              parsed2.frontmatter.summary ?? '',
+              parsed2.content
+            );
+            const chunks2 = rawChunksToChunks(parsed2.id, parsed2.chunks);
+            if (chunks2.length > 0) {
+              const texts2 = chunks2.map((c) => c.content);
+              const embeddings2 = await embedder.embed(texts2);
+              const vectors2 = embeddings2.map((e) => new Float32Array(e));
+              db.upsertChunks(parsed2.id, chunks2, vectors2);
+            }
+            db.upsertFile({
+              path: file.path,
+              hash: file.hash,
+              mtime: file.mtime,
+              indexedAt: Date.now(),
+            });
+            process.stderr.write(`  Re-indexed: ${file.path}\n`);
+          }
+
+          if (toProcess2.length > 0) {
+            generateIndex(db, config.notesDir);
+          }
+        };
+
+        watch(config.notesDir, { recursive: true }, (_event, filename) => {
+          if (!filename || !filename.endsWith('.md')) return;
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            reindex().catch((err) => {
+              process.stderr.write(
+                `Watch error: ${err instanceof Error ? err.message : String(err)}\n`
+              );
+            });
+          }, 500);
+        });
+
+        // Keep process alive
+        await new Promise(() => {});
       }
     } finally {
       db.close();
