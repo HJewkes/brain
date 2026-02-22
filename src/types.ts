@@ -180,6 +180,45 @@ export interface FeedRecord {
   createdAt: string;
 }
 
+// === Memory Types ===
+
+export type MemoryRelationType = 'updates' | 'extends' | 'derives';
+
+export type MemoryEvent = 'add' | 'update' | 'delete' | 'forget';
+
+export interface MemoryEntry {
+  id: string;
+  memory: string;
+  sourceNoteId: string;
+  sourceChunkId: string | null;
+  containerTag: string;
+  isLatest: boolean;
+  parentMemoryId: string | null;
+  rootMemoryId: string | null;
+  relationType: MemoryRelationType | null;
+  validAt: string | null;
+  invalidAt: string | null;
+  forgetAfter: string | null;
+  isForgotten: boolean;
+  isInference: boolean;
+  createdAt: string;
+}
+
+export interface MemoryHistoryEntry {
+  id: number;
+  memoryId: string;
+  event: MemoryEvent;
+  oldMemory: string | null;
+  newMemory: string | null;
+  actor: string;
+  createdAt: string;
+}
+
+export interface ExtractedFact {
+  fact: string;
+  sourceChunkId: string | null;
+}
+
 // === Config Types ===
 
 export type EmbedderBackend = 'local' | 'ollama' | 'remote';
@@ -189,6 +228,7 @@ export interface BrainConfig {
   dbPath: string;
   embedder: EmbedderBackend;
   ollamaUrl?: string;
+  ollamaModel?: string;
   fusionWeights: {
     bm25: number;
     vector: number;

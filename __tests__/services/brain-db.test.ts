@@ -42,9 +42,9 @@ describe('BrainDB', () => {
       expect(tables).toContain('db_meta');
     });
 
-    it('sets schema_version to 4 in db_meta', () => {
+    it('sets schema_version to 5 in db_meta', () => {
       const version = db.getMetaValue('schema_version');
-      expect(version).toBe('4');
+      expect(version).toBe('5');
     });
 
     it('sets and gets embedding model metadata', () => {
@@ -460,9 +460,9 @@ describe('BrainDB', () => {
     });
   });
 
-  describe('schema v4 migration', () => {
+  describe('schema v5 migration', () => {
     it('new databases get latest schema version', () => {
-      expect(db.getMetaValue('schema_version')).toBe('4');
+      expect(db.getMetaValue('schema_version')).toBe('5');
     });
 
     it('creates inbox table', () => {
@@ -471,6 +471,14 @@ describe('BrainDB', () => {
 
     it('creates feeds table', () => {
       expect(db.listTables()).toContain('feeds');
+    });
+
+    it('creates memory_entries table', () => {
+      expect(db.listTables()).toContain('memory_entries');
+    });
+
+    it('creates memory_history table', () => {
+      expect(db.listTables()).toContain('memory_history');
     });
   });
 
@@ -565,6 +573,123 @@ describe('BrainDB', () => {
       db.updateFeedLastPolled('feed-1', '2026-02-01T00:00:00Z');
       const feed = db.getFeedById('feed-1')!;
       expect(feed.lastPolled).toBe('2026-02-01T00:00:00Z');
+    });
+  });
+
+  describe('memory CRUD', () => {
+    const makeMemory = (overrides: Partial<import('../../src/types.js').MemoryEntry> = {}): import('../../src/types.js').MemoryEntry => ({
+      id: 'mem-1',
+      memory: 'TypeScript uses structural typing',
+      sourceNoteId: 'test-note',
+      sourceChunkId: null,
+      containerTag: 'default',
+      isLatest: true,
+      parentMemoryId: null,
+      rootMemoryId: null,
+      relationType: null,
+      validAt: '2026-01-01T00:00:00Z',
+      invalidAt: null,
+      forgetAfter: null,
+      isForgotten: false,
+      isInference: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      db.upsertNote({
+        id: 'test-note',
+        filePath: '/tmp/test.md',
+        title: 'Test',
+        type: 'note',
+        tier: 'slow',
+        category: null,
+        tags: null,
+        summary: null,
+        confidence: null,
+        status: 'current',
+        sources: null,
+        createdAt: null,
+        modifiedAt: null,
+        lastReviewed: null,
+        reviewInterval: null,
+        expires: null,
+        metadata: null,
+      });
+    });
+
+    it('adds and retrieves a memory', () => {
+      db.addMemory(makeMemory());
+      const mem = db.getMemory('mem-1');
+      expect(mem).not.toBeNull();
+      expect(mem!.memory).toBe('TypeScript uses structural typing');
+      expect(mem!.isLatest).toBe(true);
+      expect(mem!.isForgotten).toBe(false);
+    });
+
+    it('gets memories for a note', () => {
+      db.addMemory(makeMemory({ id: 'mem-1' }));
+      db.addMemory(makeMemory({ id: 'mem-2', memory: 'Second fact' }));
+      const memories = db.getMemoriesForNote('test-note');
+      expect(memories).toHaveLength(2);
+    });
+
+    it('gets latest memories filtered by container', () => {
+      db.addMemory(makeMemory({ id: 'mem-1', containerTag: 'project-a' }));
+      db.addMemory(makeMemory({ id: 'mem-2', containerTag: 'project-b' }));
+      expect(db.getLatestMemories('project-a')).toHaveLength(1);
+      expect(db.getLatestMemories()).toHaveLength(2);
+    });
+
+    it('marks memory as superseded', () => {
+      db.addMemory(makeMemory());
+      db.markMemorySuperseded('mem-1');
+      const mem = db.getMemory('mem-1')!;
+      expect(mem.isLatest).toBe(false);
+    });
+
+    it('tracks version chain', () => {
+      db.addMemory(makeMemory({ id: 'root' }));
+      db.markMemorySuperseded('root');
+      db.addMemory(makeMemory({
+        id: 'v2',
+        memory: 'Updated fact',
+        parentMemoryId: 'root',
+        rootMemoryId: 'root',
+        relationType: 'updates',
+      }));
+      const chain = db.getMemoryVersionChain('root');
+      expect(chain).toHaveLength(2);
+      expect(chain[0].id).toBe('root');
+      expect(chain[1].id).toBe('v2');
+    });
+
+    it('deletes memories for a note', () => {
+      db.addMemory(makeMemory());
+      db.deleteMemoriesForNote('test-note');
+      expect(db.getMemoriesForNote('test-note')).toHaveLength(0);
+    });
+
+    it('counts active memories', () => {
+      db.addMemory(makeMemory({ id: 'mem-1' }));
+      db.addMemory(makeMemory({ id: 'mem-2', isForgotten: true }));
+      expect(db.getMemoryCount()).toBe(1);
+    });
+
+    it('records and retrieves history', () => {
+      db.addMemory(makeMemory());
+      db.addMemoryHistory({
+        memoryId: 'mem-1',
+        event: 'add',
+        oldMemory: null,
+        newMemory: 'TypeScript uses structural typing',
+        actor: 'extractor',
+        createdAt: '2026-01-01T00:00:00Z',
+      });
+      const history = db.getMemoryHistory('mem-1');
+      expect(history).toHaveLength(1);
+      expect(history[0].event).toBe('add');
+      expect(history[0].newMemory).toBe('TypeScript uses structural typing');
     });
   });
 });

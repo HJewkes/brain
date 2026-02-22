@@ -15,6 +15,7 @@ import { quickCommand } from './commands/quick.js';
 import { inboxCommand } from './commands/inbox.js';
 import { ingestCommand } from './commands/ingest.js';
 import { feedCommand } from './commands/feed.js';
+import { extractCommand } from './commands/extract.js';
 
 const program = new Command()
   .name('brain')
@@ -37,6 +38,7 @@ program.addCommand(quickCommand);
 program.addCommand(inboxCommand);
 program.addCommand(ingestCommand);
 program.addCommand(feedCommand);
+program.addCommand(extractCommand);
 
 program.parseAsync().catch((err: Error) => {
   process.stderr.write(`Error: ${err.message}\n`);
