@@ -258,6 +258,22 @@ export interface ParsedNote {
   relations: Relation[];
 }
 
+// === Health Check Types ===
+
+export type HealthStatus = 'ok' | 'warning' | 'error';
+
+export interface HealthCheckResult {
+  name: string;
+  status: HealthStatus;
+  message: string;
+  detail?: string;
+}
+
+export interface HealthReport {
+  checks: HealthCheckResult[];
+  summary: { ok: number; warnings: number; errors: number };
+}
+
 // === DB Record Types ===
 
 export interface FileRecord {
