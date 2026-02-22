@@ -3,20 +3,12 @@ import { rerank } from './reranker.js';
 import type {
   Embedder,
   FusionStrategy,
+  MemorySearchResult,
   SearchOptions,
   SearchResult,
   NoteTier,
   NoteConfidence,
 } from '../types.js';
-
-export interface MemorySearchResult {
-  score: number;
-  memory: string;
-  memoryId: string;
-  sourceNoteId: string;
-  containerTag: string;
-  createdAt: string;
-}
 
 const RRF_K = 60;
 const EXCERPT_MAX_LENGTH = 200;
@@ -34,6 +26,10 @@ interface ScoreEntry {
   bm25Score: number | null;
   vectorDistance: number | null;
   chunkId: string | null;
+}
+
+function distanceToCosineSim(distance: number): number {
+  return 1 - (distance * distance) / 2;
 }
 
 function truncateExcerpt(content: string): string {
@@ -193,8 +189,7 @@ function fuseByScore(
     }
 
     if (entry.vectorDistance !== null) {
-      // For unit-normalized embeddings: cosine_sim = 1 - (euclidean_dist² / 2)
-      const cosineSim = 1 - (entry.vectorDistance * entry.vectorDistance) / 2;
+      const cosineSim = distanceToCosineSim(entry.vectorDistance);
       score += weights.vector * Math.max(0, cosineSim);
     }
 
@@ -306,15 +301,19 @@ export async function searchMemories(
   const queryVec = new Float32Array(queryEmbedding);
 
   const vectorResults = db.searchMemoryVectors(queryVec, limit * 3);
+  if (vectorResults.length === 0) return [];
+
+  const memoryIds = vectorResults.map((vr) => vr.memoryId);
+  const memoriesById = db.getMemoriesByIds(memoryIds);
 
   const results: MemorySearchResult[] = [];
   for (const vr of vectorResults) {
-    const memory = db.getMemory(vr.memoryId);
+    const memory = memoriesById.get(vr.memoryId);
     if (!memory) continue;
     if (!memory.isLatest || memory.isForgotten) continue;
     if (containerTag && memory.containerTag !== containerTag) continue;
 
-    const cosineSim = 1 - (vr.distance * vr.distance) / 2;
+    const cosineSim = distanceToCosineSim(vr.distance);
     results.push({
       score: Math.max(0, cosineSim),
       memory: memory.memory,

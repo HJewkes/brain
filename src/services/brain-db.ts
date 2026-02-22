@@ -915,6 +915,19 @@ export class BrainDB {
     }
   }
 
+  getMemoriesByIds(ids: string[]): Map<string, MemoryEntry> {
+    if (ids.length === 0) return new Map();
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(`SELECT * FROM memory_entries WHERE id IN (${placeholders})`)
+      .all(...ids) as MemoryRow[];
+    const map = new Map<string, MemoryEntry>();
+    for (const row of rows) {
+      map.set(row.id, rowToMemoryEntry(row));
+    }
+    return map;
+  }
+
   getMemoryHistory(memoryId: string): MemoryHistoryEntry[] {
     const rows = this.db
       .prepare('SELECT * FROM memory_history WHERE memory_id = ? ORDER BY created_at')

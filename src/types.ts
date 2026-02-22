@@ -215,6 +215,15 @@ export interface MemoryHistoryEntry {
   createdAt: string;
 }
 
+export interface MemorySearchResult {
+  score: number;
+  memory: string;
+  memoryId: string;
+  sourceNoteId: string;
+  containerTag: string;
+  createdAt: string;
+}
+
 export interface ExtractedFact {
   fact: string;
   sourceChunkId: string | null;
