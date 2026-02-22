@@ -9,6 +9,15 @@ import type {
   NoteConfidence,
 } from '../types.js';
 
+export interface MemorySearchResult {
+  score: number;
+  memory: string;
+  memoryId: string;
+  sourceNoteId: string;
+  containerTag: string;
+  createdAt: string;
+}
+
 const RRF_K = 60;
 const EXCERPT_MAX_LENGTH = 200;
 const OVERFETCH_MULTIPLIER = 3;
@@ -251,4 +260,41 @@ export async function search(
   }
 
   return results;
+}
+
+export async function searchMemories(
+  db: BrainDB,
+  embedder: Embedder,
+  query: string,
+  limit: number = 10,
+  containerTag?: string
+): Promise<MemorySearchResult[]> {
+  if (!query.trim()) return [];
+
+  const queryText = embedder.model.includes('nomic') ? `search_query: ${query}` : query;
+  const [queryEmbedding] = await embedder.embed([queryText]);
+  const queryVec = new Float32Array(queryEmbedding);
+
+  const vectorResults = db.searchMemoryVectors(queryVec, limit * 3);
+
+  const results: MemorySearchResult[] = [];
+  for (const vr of vectorResults) {
+    const memory = db.getMemory(vr.memoryId);
+    if (!memory) continue;
+    if (!memory.isLatest || memory.isForgotten) continue;
+    if (containerTag && memory.containerTag !== containerTag) continue;
+
+    const cosineSim = 1 - (vr.distance * vr.distance) / 2;
+    results.push({
+      score: Math.max(0, cosineSim),
+      memory: memory.memory,
+      memoryId: memory.id,
+      sourceNoteId: memory.sourceNoteId,
+      containerTag: memory.containerTag,
+      createdAt: memory.createdAt,
+    });
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit);
 }

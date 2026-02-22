@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { OllamaClient } from './ollama.js';
 import type { BrainDB } from './brain-db.js';
-import type { Chunk, ExtractedFact, MemoryEntry } from '../types.js';
+import type { Chunk, Embedder, ExtractedFact, MemoryEntry } from '../types.js';
 
 const EXTRACTION_SYSTEM = `You are a fact extraction engine. Given a text, extract discrete, self-contained facts.
 Each fact should be a single sentence that stands alone without context.
@@ -46,7 +46,8 @@ export async function extractMemoriesFromNote(
   db: BrainDB,
   llm: OllamaClient,
   noteId: string,
-  containerTag: string = 'default'
+  containerTag: string = 'default',
+  embedder?: Embedder
 ): Promise<ExtractionResult> {
   const chunks = db.getChunksForNote(noteId);
   if (chunks.length === 0) {
@@ -66,12 +67,12 @@ export async function extractMemoriesFromNote(
   const existingMemories = db.getMemoriesForNote(noteId);
 
   if (existingMemories.length === 0) {
-    const created = applyAdditions(db, allFacts, noteId, containerTag);
+    const created = await applyAdditions(db, allFacts, noteId, containerTag, embedder);
     return { noteId, facts: allFacts, memoriesCreated: created, memoriesUpdated: 0, memoriesDeleted: 0 };
   }
 
   const actions = await reconcile(llm, allFacts, existingMemories);
-  const result = applyActions(db, actions, existingMemories, noteId, containerTag);
+  const result = await applyActions(db, actions, existingMemories, noteId, containerTag, embedder);
 
   return {
     noteId,
@@ -82,12 +83,24 @@ export async function extractMemoriesFromNote(
   };
 }
 
-function applyAdditions(
+async function embedMemory(
+  db: BrainDB,
+  memoryId: string,
+  text: string,
+  embedder?: Embedder
+): Promise<void> {
+  if (!embedder) return;
+  const [embedding] = await embedder.embed([text]);
+  db.upsertMemoryVector(memoryId, new Float32Array(embedding));
+}
+
+async function applyAdditions(
   db: BrainDB,
   facts: ExtractedFact[],
   noteId: string,
-  containerTag: string
-): number {
+  containerTag: string,
+  embedder?: Embedder
+): Promise<number> {
   const now = new Date().toISOString();
   let created = 0;
 
@@ -112,6 +125,7 @@ function applyAdditions(
     };
 
     db.addMemory(entry);
+    await embedMemory(db, id, fact.fact, embedder);
     db.addMemoryHistory({
       memoryId: id,
       event: 'add',
@@ -162,13 +176,14 @@ export function parseReconciliationResponse(response: string): ReconcileAction[]
   }
 }
 
-function applyActions(
+async function applyActions(
   db: BrainDB,
   actions: ReconcileAction[],
   existingMemories: MemoryEntry[],
   noteId: string,
-  containerTag: string
-): { created: number; updated: number; deleted: number } {
+  containerTag: string,
+  embedder?: Embedder
+): Promise<{ created: number; updated: number; deleted: number }> {
   const now = new Date().toISOString();
   const existingById = new Map(existingMemories.map((m) => [m.id, m]));
   let created = 0;
@@ -195,6 +210,7 @@ function applyActions(
         isInference: false,
         createdAt: now,
       });
+      await embedMemory(db, id, action.fact, embedder);
       db.addMemoryHistory({
         memoryId: id,
         event: 'add',
@@ -229,6 +245,7 @@ function applyActions(
         isInference: false,
         createdAt: now,
       });
+      await embedMemory(db, newId, action.fact, embedder);
       db.addMemoryHistory({
         memoryId: newId,
         event: 'update',

@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
+import { createEmbedder } from '../adapters/index.js';
 import { createOllamaClient } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 
@@ -21,12 +22,14 @@ export const extractCommand = new Command('extract')
 
     const config = loadConfig();
     const db = new BrainDB(config.dbPath);
+    const embedder = createEmbedder(config);
     const llm = createOllamaClient(
       config.ollamaUrl,
       opts.model ?? config.ollamaModel
     );
 
     try {
+      db.setEmbeddingModel(embedder.model, embedder.dimensions);
       const noteIds: string[] = [];
 
       if (opts.note) {
@@ -57,7 +60,8 @@ export const extractCommand = new Command('extract')
           db,
           llm,
           noteId,
-          opts.tag
+          opts.tag,
+          embedder
         );
 
         totalFacts += result.facts.length;

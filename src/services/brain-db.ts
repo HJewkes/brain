@@ -83,11 +83,18 @@ export class BrainDB {
     const existing = this.getMetaValue('embedding_dimensions');
     if (existing && Number(existing) !== dimensions) {
       this.db.exec('DROP TABLE IF EXISTS chunk_vectors');
+      this.db.exec('DROP TABLE IF EXISTS memory_vectors');
     }
 
     this.db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(
         chunk_id TEXT PRIMARY KEY,
+        embedding float[${dimensions}]
+      )
+    `);
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS memory_vectors USING vec0(
+        memory_id TEXT PRIMARY KEY,
         embedding float[${dimensions}]
       )
     `);
@@ -815,6 +822,34 @@ export class BrainDB {
         entry.actor,
         entry.createdAt
       );
+  }
+
+  upsertMemoryVector(memoryId: string, embedding: Float32Array): void {
+    this.db.prepare('DELETE FROM memory_vectors WHERE memory_id = ?').run(memoryId);
+    this.db
+      .prepare('INSERT INTO memory_vectors (memory_id, embedding) VALUES (?, ?)')
+      .run(memoryId, Buffer.from(embedding.buffer));
+  }
+
+  searchMemoryVectors(
+    embedding: Float32Array,
+    limit: number
+  ): Array<{ memoryId: string; distance: number }> {
+    try {
+      return this.db
+        .prepare(
+          `SELECT memory_id as memoryId, distance
+           FROM memory_vectors
+           WHERE embedding MATCH ? AND k = ?
+           ORDER BY distance`
+        )
+        .all(Buffer.from(embedding.buffer), limit) as Array<{
+        memoryId: string;
+        distance: number;
+      }>;
+    } catch {
+      return [];
+    }
   }
 
   getMemoryHistory(memoryId: string): MemoryHistoryEntry[] {

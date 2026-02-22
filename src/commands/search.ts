@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
-import { search } from '../services/search.js';
+import { search, searchMemories } from '../services/search.js';
 import { expandResults } from '../services/graph.js';
 import type { SearchOptions, SearchResult } from '../types.js';
 
@@ -19,6 +19,8 @@ export const searchCommand = new Command('search')
   .option('--min-score <score>', 'minimum relevance score (0-1)')
   .option('--rerank', 'apply cross-encoder reranking for better relevance')
   .option('--expand', 'include graph-connected notes')
+  .option('--memories', 'also search extracted memories')
+  .option('--container <tag>', 'filter memories by container tag')
   .action(async (query, opts) => {
     const config = loadConfig();
     const db = new BrainDB(config.dbPath);
@@ -61,10 +63,23 @@ export const searchCommand = new Command('search')
 
       const allResults = [...results, ...expanded];
 
+      const memoryResults = opts.memories
+        ? await searchMemories(
+            db,
+            embedder,
+            query,
+            parseInt(opts.limit, 10),
+            opts.container
+          )
+        : [];
+
       if (opts.json) {
-        process.stdout.write(JSON.stringify(allResults) + '\n');
+        const output = opts.memories
+          ? { notes: allResults, memories: memoryResults }
+          : allResults;
+        process.stdout.write(JSON.stringify(output) + '\n');
       } else {
-        if (allResults.length === 0) {
+        if (allResults.length === 0 && memoryResults.length === 0) {
           process.stderr.write('No results found.\n');
           return;
         }
@@ -78,6 +93,14 @@ export const searchCommand = new Command('search')
             process.stdout.write(`  ${r.excerpt}\n`);
           }
           process.stdout.write('\n');
+        }
+        if (memoryResults.length > 0) {
+          process.stdout.write('--- Memories ---\n\n');
+          for (const m of memoryResults) {
+            const score = m.score.toFixed(3);
+            process.stdout.write(`[${score}] ${m.memory}\n`);
+            process.stdout.write(`  source: ${m.sourceNoteId} | tag: ${m.containerTag}\n\n`);
+          }
         }
       }
     } finally {
