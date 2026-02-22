@@ -128,6 +128,7 @@ export interface SearchOptions {
   fusionStrategy?: FusionStrategy;
   minScore?: number;
   rerank?: boolean;
+  dropoff?: number;
 }
 
 // === Graph Types ===

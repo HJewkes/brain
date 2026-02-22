@@ -60,6 +60,35 @@ interface VectorHit {
 }
 type ScoredResult = { noteId: string; score: number; chunkId: string | null };
 
+/**
+ * Find the largest relative score gap between consecutive results and cut there,
+ * but only if that gap exceeds the threshold.
+ * Threshold is a fraction (e.g. 0.15 = need at least a 15% relative drop to cut).
+ * Always keeps at least the first result.
+ */
+function applyDropoffFilter(results: ScoredResult[], threshold: number): ScoredResult[] {
+  if (results.length <= 1) return results;
+
+  let maxDrop = 0;
+  let cutIndex = -1;
+
+  for (let i = 1; i < results.length; i++) {
+    const prev = results[i - 1].score;
+    if (prev <= 0) continue;
+    const drop = (prev - results[i].score) / prev;
+    if (drop > maxDrop) {
+      maxDrop = drop;
+      cutIndex = i;
+    }
+  }
+
+  if (cutIndex > 0 && maxDrop >= threshold) {
+    return results.slice(0, cutIndex);
+  }
+
+  return results;
+}
+
 function fuseByRRF(
   ftsResults: FTSHit[],
   vectorByNote: Map<string, VectorHit>,
@@ -230,7 +259,8 @@ export async function search(
   scored.sort((a, b) => b.score - a.score);
   const filtered =
     options.minScore != null ? scored.filter((s) => s.score >= options.minScore!) : scored;
-  const topResults = filtered.slice(0, limit);
+  const afterDropoff = options.dropoff != null ? applyDropoffFilter(filtered, options.dropoff) : filtered;
+  const topResults = afterDropoff.slice(0, limit);
 
   // Step 4: Build SearchResult objects
   const results: SearchResult[] = [];

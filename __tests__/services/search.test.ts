@@ -545,6 +545,57 @@ describe('search service', () => {
     });
   });
 
+  describe('dropoff filter', () => {
+    it('cuts results at the largest relative score gap', async () => {
+      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+      });
+      expect(allResults.length).toBeGreaterThan(1);
+
+      const withDropoff = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        dropoff: 0.01,
+      });
+
+      expect(withDropoff.length).toBeGreaterThanOrEqual(1);
+      expect(withDropoff.length).toBeLessThanOrEqual(allResults.length);
+    });
+
+    it('returns all results when no gap exceeds threshold', async () => {
+      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+      });
+
+      const withHighThreshold = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        dropoff: 0.99,
+      });
+
+      expect(withHighThreshold.length).toBe(allResults.length);
+    });
+
+    it('returns all results when dropoff is undefined', async () => {
+      const withoutDropoff = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+      });
+      const withUndefined = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        dropoff: undefined,
+      });
+
+      expect(withUndefined.length).toBe(withoutDropoff.length);
+    });
+
+    it('keeps at least one result even with aggressive threshold', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 10,
+        dropoff: 0.001,
+      });
+
+      expect(results.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe('nomic model query prefix', () => {
     it('prefixes query with search_query: for nomic-embed-text model', async () => {
       let embeddedTexts: string[] = [];

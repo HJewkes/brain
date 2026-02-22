@@ -17,6 +17,7 @@ export const searchCommand = new Command('search')
   .option('--confidence <level>', 'filter by confidence')
   .option('--since <date>', 'only notes modified after this date')
   .option('--min-score <score>', 'minimum relevance score (0-1)')
+  .option('--dropoff <pct>', 'cut results when score drops by this percentage (e.g. 30)')
   .option('--rerank', 'apply cross-encoder reranking for better relevance')
   .option('--expand', 'include graph-connected notes')
   .option('--memories', 'also search extracted memories')
@@ -35,6 +36,7 @@ export const searchCommand = new Command('search')
         confidence: opts.confidence as SearchOptions['confidence'],
         since: opts.since,
         minScore: opts.minScore ? parseFloat(opts.minScore) : undefined,
+        dropoff: opts.dropoff ? parseFloat(opts.dropoff) / 100 : undefined,
         rerank: opts.rerank,
       };
 
