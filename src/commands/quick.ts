@@ -1,9 +1,10 @@
 import { Command } from '@commander-js/extra-typings';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
+import { withDb } from '../services/brain-service.js';
 import type { InboxItem, InboxSource } from '../types.js';
+
+const VALID_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file'];
 
 export const quickCommand = new Command('quick')
   .description('Quickly capture a thought into the inbox')
@@ -11,7 +12,7 @@ export const quickCommand = new Command('quick')
   .option('--title <title>', 'Optional title for the item')
   .option('--source <source>', 'Source label (cli, api, alert)', 'cli')
   .option('--url <url>', 'Source URL for reference')
-  .action((textParts, opts) => {
+  .action(async (textParts, opts) => {
     let content: string;
 
     if (textParts.length > 0) {
@@ -19,26 +20,32 @@ export const quickCommand = new Command('quick')
     } else if (!process.stdin.isTTY) {
       content = readFileSync(0, 'utf-8').trim();
     } else {
-      console.error('Error: provide text as arguments or pipe via stdin');
+      process.stderr.write('Error: provide text as arguments or pipe via stdin\n');
       process.exitCode = 1;
       return;
     }
 
     if (!content) {
-      console.error('Error: empty content');
+      process.stderr.write('Error: empty content\n');
       process.exitCode = 1;
       return;
     }
 
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
+    const source = opts.source ?? 'cli';
+    if (!VALID_SOURCES.includes(source as InboxSource)) {
+      process.stderr.write(
+        `Error: invalid source "${source}". Valid: ${VALID_SOURCES.join(', ')}\n`
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-    try {
+    await withDb(({ db }) => {
       const item: InboxItem = {
         id: randomUUID(),
         content,
         title: opts.title ?? null,
-        source: (opts.source ?? 'cli') as InboxSource,
+        source: source as InboxSource,
         sourceUrl: opts.url ?? null,
         sourceMeta: null,
         status: 'pending',
@@ -47,8 +54,6 @@ export const quickCommand = new Command('quick')
       };
 
       db.addInboxItem(item);
-      console.log(`Captured to inbox: ${item.id}`);
-    } finally {
-      db.close();
-    }
+      process.stdout.write(`Captured to inbox: ${item.id}\n`);
+    });
   });

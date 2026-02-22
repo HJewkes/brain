@@ -1,19 +1,15 @@
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
+import { withDb } from '../services/brain-service.js';
 
 export const contextCommand = new Command('context')
   .description('Show context for a note: related notes, memories, and graph connections')
   .argument('<id>', 'Note ID')
   .option('--json', 'Output as JSON')
-  .action((id, opts) => {
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-
-    try {
+  .action(async (id, opts) => {
+    await withDb(({ db }) => {
       const note = db.getNoteById(id);
       if (!note) {
-        console.error(`Error: note "${id}" not found`);
+        process.stderr.write(`Error: note "${id}" not found\n`);
         process.exitCode = 1;
         return;
       }
@@ -48,41 +44,39 @@ export const contextCommand = new Command('context')
         return;
       }
 
-      console.log(`${note.title} (${note.type}, ${note.tier})`);
-      console.log(`  id: ${note.id}`);
-      console.log();
+      process.stdout.write(`${note.title} (${note.type}, ${note.tier})\n`);
+      process.stdout.write(`  id: ${note.id}\n`);
+      process.stdout.write('\n');
 
       if (memories.length > 0) {
-        console.log(`Memories (${memories.length}):`);
+        process.stdout.write(`Memories (${memories.length}):\n`);
         for (const m of memories) {
           const tag = m.containerTag !== 'default' ? ` [${m.containerTag}]` : '';
-          console.log(`  - ${m.memory}${tag}`);
+          process.stdout.write(`  - ${m.memory}${tag}\n`);
         }
-        console.log();
+        process.stdout.write('\n');
       }
 
       if (relatedNotes.length > 0) {
-        console.log(`Related notes (${relatedNotes.length}):`);
+        process.stdout.write(`Related notes (${relatedNotes.length}):\n`);
         for (const rn of relatedNotes) {
-          console.log(`  - ${rn.title} (${rn.id})`);
+          process.stdout.write(`  - ${rn.title} (${rn.id})\n`);
         }
-        console.log();
+        process.stdout.write('\n');
       }
 
       const allRelations = [...relationsFrom, ...relationsTo];
       if (allRelations.length > 0) {
-        console.log(`Relations (${allRelations.length}):`);
+        process.stdout.write(`Relations (${allRelations.length}):\n`);
         for (const r of allRelations) {
           const direction = r.sourceId === id ? '->' : '<-';
           const other = r.sourceId === id ? r.targetId : r.sourceId;
-          console.log(`  ${direction} ${r.type} ${other}`);
+          process.stdout.write(`  ${direction} ${r.type} ${other}\n`);
         }
       }
 
       if (memories.length === 0 && relatedNotes.length === 0 && allRelations.length === 0) {
-        console.log('No context found for this note.');
+        process.stdout.write('No context found for this note.\n');
       }
-    } finally {
-      db.close();
-    }
+    });
   });

@@ -1,7 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
-import { createEmbedder } from '../adapters/index.js';
+import { withBrain } from '../services/brain-service.js';
 import { createOllamaClient } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 
@@ -15,27 +13,24 @@ export const extractCommand = new Command('extract')
   .option('--json', 'Output result as JSON')
   .action(async (opts) => {
     if (!opts.note && !opts.all) {
-      console.error('Error: specify --note <id> or --all');
+      process.stderr.write('Error: specify --note <id> or --all\n');
       process.exitCode = 1;
       return;
     }
 
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-    const embedder = createEmbedder(config);
-    const llm = createOllamaClient(
-      config.ollamaUrl,
-      opts.model ?? config.ollamaModel
-    );
+    await withBrain(async ({ db, embedder, config }) => {
+      const llm = createOllamaClient(
+        config.ollamaUrl,
+        opts.model ?? config.ollamaModel
+      );
 
-    try {
       db.setEmbeddingModel(embedder.model, embedder.dimensions);
       const noteIds: string[] = [];
 
       if (opts.note) {
         const note = db.getNoteById(opts.note);
         if (!note) {
-          console.error(`Error: note "${opts.note}" not found`);
+          process.stderr.write(`Error: note "${opts.note}" not found\n`);
           process.exitCode = 1;
           return;
         }
@@ -88,7 +83,5 @@ export const extractCommand = new Command('extract')
         );
         process.stderr.write(`Total active memories: ${summary.totalMemories}\n`);
       }
-    } finally {
-      db.close();
-    }
+    });
   });

@@ -1,16 +1,12 @@
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
+import { withDb } from '../services/brain-service.js';
 import { parseIntervalDays } from '../utils.js';
 
 export const statusCommand = new Command('status')
   .description('Show database statistics')
   .option('--json', 'output as JSON')
-  .action((opts) => {
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-
-    try {
+  .action(async (opts) => {
+    await withDb(({ db }) => {
       const notes = db.getAllNotes();
       const embeddingModel = db.getEmbeddingModel();
 
@@ -74,9 +70,7 @@ export const statusCommand = new Command('status')
           process.stderr.write(`Stale notes needing review: ${staleNotes.length}\n`);
         }
       }
-    } finally {
-      db.close();
-    }
+    });
   });
 
 function formatMap(map: Record<string, number>): string {

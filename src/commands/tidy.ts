@@ -1,7 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync } from 'node:fs';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
+import { withDb } from '../services/brain-service.js';
 import { createOllamaClient } from '../services/ollama.js';
 
 const TIDY_SYSTEM = `You are a note quality reviewer. Given a note, provide brief, actionable suggestions to improve it.
@@ -24,25 +23,23 @@ export const tidyCommand = new Command('tidy')
   .option('--limit <n>', 'Max notes to analyze', '10')
   .action(async (opts) => {
     if (!opts.note && !opts.all) {
-      console.error('Error: specify --note <id> or --all');
+      process.stderr.write('Error: specify --note <id> or --all\n');
       process.exitCode = 1;
       return;
     }
 
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-    const llm = createOllamaClient(
-      config.ollamaUrl,
-      opts.model ?? config.ollamaModel
-    );
+    await withDb(async ({ db, config }) => {
+      const llm = createOllamaClient(
+        config.ollamaUrl,
+        opts.model ?? config.ollamaModel
+      );
 
-    try {
       const notes: Array<{ id: string; filePath: string; title: string }> = [];
 
       if (opts.note) {
         const note = db.getNoteById(opts.note);
         if (!note) {
-          console.error(`Error: note "${opts.note}" not found`);
+          process.stderr.write(`Error: note "${opts.note}" not found\n`);
           process.exitCode = 1;
           return;
         }
@@ -81,10 +78,8 @@ export const tidyCommand = new Command('tidy')
       }
 
       for (const r of results) {
-        console.log(`\n${r.title} (${r.noteId})`);
-        console.log(r.suggestions);
+        process.stdout.write(`\n${r.title} (${r.noteId})\n`);
+        process.stdout.write(r.suggestions + '\n');
       }
-    } finally {
-      db.close();
-    }
+    });
   });

@@ -1,6 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
+import { withDb } from '../services/brain-service.js';
 import { parseIntervalDays } from '../utils.js';
 import type { NoteRecord, NoteTier } from '../types.js';
 
@@ -33,11 +32,8 @@ export const staleCommand = new Command('stale')
   .option('--days <n>', 'Show notes not reviewed in N days', parseInt)
   .option('--tier <tier>', 'Filter by tier (slow, fast)')
   .option('--json', 'Output as JSON')
-  .action((opts) => {
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-
-    try {
+  .action(async (opts) => {
+    await withDb(({ db }) => {
       let notes = db.getAllNotes();
 
       if (opts.tier) {
@@ -60,17 +56,15 @@ export const staleCommand = new Command('stale')
       staleNotes.sort((a, b) => b.daysOverdue - a.daysOverdue);
 
       if (opts.json) {
-        console.log(JSON.stringify(staleNotes, null, 2));
+        process.stdout.write(JSON.stringify(staleNotes, null, 2) + '\n');
       } else if (staleNotes.length === 0) {
-        console.log('No stale notes found.');
+        process.stdout.write('No stale notes found.\n');
       } else {
         for (const s of staleNotes) {
-          console.log(
-            `${s.noteId} — last reviewed ${s.lastReviewed}, interval ${s.reviewInterval}, ${s.daysOverdue} days overdue`
+          process.stdout.write(
+            `${s.noteId} — last reviewed ${s.lastReviewed}, interval ${s.reviewInterval}, ${s.daysOverdue} days overdue\n`
           );
         }
       }
-    } finally {
-      db.close();
-    }
+    });
   });

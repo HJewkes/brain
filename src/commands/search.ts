@@ -1,7 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
-import { createEmbedder } from '../adapters/index.js';
+import { withBrain } from '../services/brain-service.js';
 import { search, searchMemories } from '../services/search.js';
 import { expandResults } from '../services/graph.js';
 import type { SearchOptions, SearchResult } from '../types.js';
@@ -23,11 +21,7 @@ export const searchCommand = new Command('search')
   .option('--memories', 'also search extracted memories')
   .option('--container <tag>', 'filter memories by container tag')
   .action(async (query, opts) => {
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-    const embedder = createEmbedder(config);
-
-    try {
+    await withBrain(async ({ db, embedder, config }) => {
       const searchOpts: SearchOptions = {
         limit: parseInt(opts.limit, 10),
         tier: opts.tier as SearchOptions['tier'],
@@ -105,7 +99,5 @@ export const searchCommand = new Command('search')
           }
         }
       }
-    } finally {
-      db.close();
-    }
+    });
   });

@@ -1,6 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
+import { withDb } from '../services/brain-service.js';
 
 export const profileCommand = new Command('profile')
   .description('Generate a context profile from stable memories for agent system prompts')
@@ -8,11 +7,8 @@ export const profileCommand = new Command('profile')
   .option('--limit <n>', 'Max memories to include', '50')
   .option('--json', 'Output as JSON')
   .option('--format <format>', 'Output format: text, markdown, xml', 'text')
-  .action((opts) => {
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-
-    try {
+  .action(async (opts) => {
+    await withDb(({ db }) => {
       db.forgetExpiredMemories();
 
       const memories = db.getLatestMemories(opts.container);
@@ -76,7 +72,5 @@ export const profileCommand = new Command('profile')
         }
       }
       process.stdout.write(lines.join('\n') + '\n');
-    } finally {
-      db.close();
-    }
+    });
   });
