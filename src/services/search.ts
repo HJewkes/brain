@@ -258,10 +258,24 @@ export async function search(
   const topResults = afterDropoff.slice(0, limit);
 
   // Step 4: Build SearchResult objects
+  const results = buildSearchResults(db, topResults);
+
+  // Step 5: Optional cross-encoder reranking
+  if (options.rerank && results.length > 1) {
+    return rerank(query, results, limit);
+  }
+
+  return results;
+}
+
+function buildSearchResults(
+  db: BrainDB,
+  topResults: ScoredResult[]
+): SearchResult[] {
   const noteIds = topResults.map((r) => r.noteId);
   const notesById = db.getNotesByIds(noteIds);
-
   const results: SearchResult[] = [];
+
   for (const item of topResults) {
     const note = notesById.get(item.noteId);
     if (!note) continue;
@@ -280,11 +294,6 @@ export async function search(
       tags: parseTags(note.tags),
       confidence: note.confidence as NoteConfidence | null,
     });
-  }
-
-  // Step 5: Optional cross-encoder reranking
-  if (options.rerank && results.length > 1) {
-    return rerank(query, results, limit);
   }
 
   return results;

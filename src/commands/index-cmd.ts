@@ -80,49 +80,51 @@ export const indexCommand = new Command('index')
       }
 
       if (opts.watch) {
-        process.stderr.write(`Watching ${config.notesDir} for changes...\n`);
-
-        const isSkipped = (filePath: string): boolean =>
-          filePath.includes('/_templates/') || basename(filePath) === '_index.md';
-
-        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-        const reindex = async () => {
-          const knownFiles = db.getAllFiles();
-          const changes = await scanForChanges(config.notesDir, knownFiles);
-          const toProcess = [...changes.new, ...changes.modified].filter(
-            (f) => !isSkipped(f.path)
-          );
-
-          for (const file of toProcess) {
-            const content = readFileSync(file.path, 'utf-8');
-            await indexSingleFile(db, embedder, file.path, content, file.hash, file.mtime);
-            process.stderr.write(`  Re-indexed: ${file.path}\n`);
-          }
-
-          if (toProcess.length > 0) {
-            generateNoteIndex(db, config.notesDir);
-          }
-        };
-
-        watch(config.notesDir, { recursive: true }, (_event, filename) => {
-          if (!filename || !filename.endsWith('.md')) return;
-          if (debounceTimer) clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(() => {
-            reindex().catch((err) => {
-              process.stderr.write(
-                `Watch error: ${err instanceof Error ? err.message : String(err)}\n`
-              );
-            });
-          }, 500);
-        });
-
-        // Keep process alive
+        startWatcher(db, embedder, config.notesDir);
         await new Promise(() => {});
       }
     } finally {
       db.close();
     }
   });
+
+function startWatcher(db: BrainDB, embedder: Embedder, notesDir: string): void {
+  process.stderr.write(`Watching ${notesDir} for changes...\n`);
+
+  const isSkipped = (filePath: string): boolean =>
+    filePath.includes('/_templates/') || basename(filePath) === '_index.md';
+
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const reindex = async () => {
+    const knownFiles = db.getAllFiles();
+    const changes = await scanForChanges(notesDir, knownFiles);
+    const toProcess = [...changes.new, ...changes.modified].filter(
+      (f) => !isSkipped(f.path)
+    );
+
+    for (const file of toProcess) {
+      const content = readFileSync(file.path, 'utf-8');
+      await indexSingleFile(db, embedder, file.path, content, file.hash, file.mtime);
+      process.stderr.write(`  Re-indexed: ${file.path}\n`);
+    }
+
+    if (toProcess.length > 0) {
+      generateNoteIndex(db, notesDir);
+    }
+  };
+
+  watch(notesDir, { recursive: true }, (_event, filename) => {
+    if (!filename || !filename.endsWith('.md')) return;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      reindex().catch((err) => {
+        process.stderr.write(
+          `Watch error: ${err instanceof Error ? err.message : String(err)}\n`
+        );
+      });
+    }, 500);
+  });
+}
 
 async function extractFromNotes(
   db: BrainDB,

@@ -192,87 +192,111 @@ async function applyActions(
 
   for (const action of actions) {
     if (action.type === 'ADD') {
-      const id = randomUUID();
-      db.addMemory({
-        id,
-        memory: action.fact,
-        sourceNoteId: noteId,
-        sourceChunkId: null,
-        containerTag,
-        isLatest: true,
-        parentMemoryId: null,
-        rootMemoryId: null,
-        relationType: null,
-        validAt: now,
-        invalidAt: null,
-        forgetAfter: null,
-        isForgotten: false,
-        isInference: false,
-        createdAt: now,
-      });
-      await embedMemory(db, id, action.fact, embedder);
-      db.addMemoryHistory({
-        memoryId: id,
-        event: 'add',
-        oldMemory: null,
-        newMemory: action.fact,
-        actor: 'reconciler',
-        createdAt: now,
-      });
+      await createMemoryFromAction(db, action.fact, noteId, containerTag, now, embedder);
       created++;
     } else if (action.type === 'UPDATE') {
       const existing = existingById.get(action.id);
       if (!existing) continue;
-
-      db.markMemorySuperseded(action.id);
-
-      const newId = randomUUID();
-      const rootId = existing.rootMemoryId ?? existing.id;
-      db.addMemory({
-        id: newId,
-        memory: action.fact,
-        sourceNoteId: noteId,
-        sourceChunkId: existing.sourceChunkId,
-        containerTag,
-        isLatest: true,
-        parentMemoryId: existing.id,
-        rootMemoryId: rootId,
-        relationType: 'updates',
-        validAt: now,
-        invalidAt: null,
-        forgetAfter: null,
-        isForgotten: false,
-        isInference: false,
-        createdAt: now,
-      });
-      await embedMemory(db, newId, action.fact, embedder);
-      db.addMemoryHistory({
-        memoryId: newId,
-        event: 'update',
-        oldMemory: existing.memory,
-        newMemory: action.fact,
-        actor: 'reconciler',
-        createdAt: now,
-      });
+      await updateMemoryFromAction(db, existing, action.fact, noteId, containerTag, now, embedder);
       updated++;
     } else if (action.type === 'DELETE') {
       const existing = existingById.get(action.id);
       if (!existing) continue;
-
-      db.markMemorySuperseded(action.id);
-      db.addMemoryHistory({
-        memoryId: action.id,
-        event: 'delete',
-        oldMemory: existing.memory,
-        newMemory: null,
-        actor: 'reconciler',
-        createdAt: now,
-      });
+      deleteMemoryAction(db, existing, now);
       deleted++;
     }
   }
 
   return { created, updated, deleted };
+}
+
+async function createMemoryFromAction(
+  db: BrainDB,
+  fact: string,
+  noteId: string,
+  containerTag: string,
+  now: string,
+  embedder?: Embedder
+): Promise<void> {
+  const id = randomUUID();
+  db.addMemory({
+    id,
+    memory: fact,
+    sourceNoteId: noteId,
+    sourceChunkId: null,
+    containerTag,
+    isLatest: true,
+    parentMemoryId: null,
+    rootMemoryId: null,
+    relationType: null,
+    validAt: now,
+    invalidAt: null,
+    forgetAfter: null,
+    isForgotten: false,
+    isInference: false,
+    createdAt: now,
+  });
+  await embedMemory(db, id, fact, embedder);
+  db.addMemoryHistory({
+    memoryId: id,
+    event: 'add',
+    oldMemory: null,
+    newMemory: fact,
+    actor: 'reconciler',
+    createdAt: now,
+  });
+}
+
+async function updateMemoryFromAction(
+  db: BrainDB,
+  existing: MemoryEntry,
+  fact: string,
+  noteId: string,
+  containerTag: string,
+  now: string,
+  embedder?: Embedder
+): Promise<void> {
+  db.markMemorySuperseded(existing.id);
+  const newId = randomUUID();
+  const rootId = existing.rootMemoryId ?? existing.id;
+  db.addMemory({
+    id: newId,
+    memory: fact,
+    sourceNoteId: noteId,
+    sourceChunkId: existing.sourceChunkId,
+    containerTag,
+    isLatest: true,
+    parentMemoryId: existing.id,
+    rootMemoryId: rootId,
+    relationType: 'updates',
+    validAt: now,
+    invalidAt: null,
+    forgetAfter: null,
+    isForgotten: false,
+    isInference: false,
+    createdAt: now,
+  });
+  await embedMemory(db, newId, fact, embedder);
+  db.addMemoryHistory({
+    memoryId: newId,
+    event: 'update',
+    oldMemory: existing.memory,
+    newMemory: fact,
+    actor: 'reconciler',
+    createdAt: now,
+  });
+}
+
+function deleteMemoryAction(db: BrainDB, existing: MemoryEntry, now: string): void {
+  db.markMemorySuperseded(existing.id);
+  db.addMemoryHistory({
+    memoryId: existing.id,
+    event: 'delete',
+    oldMemory: existing.memory,
+    newMemory: null,
+    actor: 'reconciler',
+    createdAt: now,
+  });
 }
 
 async function extractFactsFromChunk(
