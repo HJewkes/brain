@@ -20,6 +20,7 @@ import { memoriesCommand } from './commands/memories.js';
 import { contextCommand } from './commands/context.js';
 import { profileCommand } from './commands/profile.js';
 import { tidyCommand } from './commands/tidy.js';
+import { installHooksCommand } from './commands/install-hooks.js';
 
 const program = new Command()
   .name('brain')
@@ -47,6 +48,7 @@ program.addCommand(memoriesCommand);
 program.addCommand(contextCommand);
 program.addCommand(profileCommand);
 program.addCommand(tidyCommand);
+program.addCommand(installHooksCommand);
 
 program.parseAsync().catch((err: Error) => {
   process.stderr.write(`Error: ${err.message}\n`);
