@@ -338,8 +338,8 @@ export class NoteRepo {
       params.push(filters.since);
     }
     if (filters.tags?.length) {
-      conditions.push(`(${filters.tags.map(() => 'tags LIKE ?').join(' AND ')})`);
-      for (const tag of filters.tags) params.push(`%${tag}%`);
+      conditions.push(`(${filters.tags.map(() => "',' || tags || ',' LIKE '%,' || ? || ',%'").join(' AND ')})`);
+      for (const tag of filters.tags) params.push(tag);
     }
     if (conditions.length === 0) return null;
     const rows = this.db

@@ -250,6 +250,10 @@ export class MemoryRepo {
     return rows.map(rowToMemoryHistory);
   }
 
+  deleteMemoryVector(memoryId: string): void {
+    this.db.prepare('DELETE FROM memory_vectors WHERE memory_id = ?').run(memoryId);
+  }
+
   upsertMemoryVector(memoryId: string, embedding: Float32Array): void {
     this.db.prepare('DELETE FROM memory_vectors WHERE memory_id = ?').run(memoryId);
     this.db

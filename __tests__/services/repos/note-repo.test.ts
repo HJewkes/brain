@@ -362,6 +362,15 @@ describe('NoteRepo', () => {
       expect(result!.has('untagged')).toBe(false);
     });
 
+    it('getFilteredNoteIds does not match substring tags', () => {
+      db.upsertNote(makeNote({ id: 'ai-note', tags: 'ai,ml' }));
+      db.upsertNote(makeNote({ id: 'railway-note', tags: 'railway' }));
+
+      const result = db.getFilteredNoteIds({ tags: ['ai'] });
+      expect(result!.has('ai-note')).toBe(true);
+      expect(result!.has('railway-note')).toBe(false);
+    });
+
     it('getNoteByFilePath returns correct note', () => {
       const note = makeNote({ id: 'fp-test', filePath: '/notes/test-file.md' });
       db.upsertNote(note);

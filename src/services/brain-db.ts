@@ -428,6 +428,7 @@ export class BrainDB {
   getMemoriesByIds(ids: string[]): Map<string, MemoryEntry> { return this.memoryRepo.getMemoriesByIds(ids); }
   addMemoryHistory(entry: Omit<MemoryHistoryEntry, 'id'>): void { this.memoryRepo.addMemoryHistory(entry); }
   getMemoryHistory(memoryId: string): MemoryHistoryEntry[] { return this.memoryRepo.getMemoryHistory(memoryId); }
+  deleteMemoryVector(memoryId: string): void { this.memoryRepo.deleteMemoryVector(memoryId); }
   upsertMemoryVector(memoryId: string, embedding: Float32Array): void { this.memoryRepo.upsertMemoryVector(memoryId, embedding); }
   searchMemoryVectors(embedding: Float32Array, limit: number): Array<{ memoryId: string; distance: number }> { return this.memoryRepo.searchMemoryVectors(embedding, limit); }
 

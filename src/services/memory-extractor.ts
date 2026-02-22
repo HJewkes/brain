@@ -261,6 +261,7 @@ async function updateMemoryFromAction(
 
 function deleteMemoryAction(db: BrainDB, existing: MemoryEntry, now: string): void {
   db.markMemorySuperseded(existing.id);
+  db.deleteMemoryVector(existing.id);
   db.addMemoryHistory({
     memoryId: existing.id,
     event: 'delete',
