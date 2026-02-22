@@ -398,6 +398,11 @@ export class BrainDB {
     return rows.map(rowToNoteRecord);
   }
 
+  getNoteCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number };
+    return row.count;
+  }
+
   deleteNote(id: string): void {
     const txn = this.db.transaction(() => {
       this.deleteMemoriesForNote(id);

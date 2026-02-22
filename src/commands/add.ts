@@ -92,7 +92,7 @@ function validateEnum<T extends string>(
 ): T | null {
   if (!value) return null;
   if (valid.includes(value as T)) return value as T;
-  console.error(`Error: invalid ${label} "${value}". Valid values: ${valid.join(', ')}`);
+  process.stderr.write(`Error: invalid ${label} "${value}". Valid values: ${valid.join(', ')}\n`);
   process.exitCode = 1;
   return null;
 }
@@ -116,16 +116,16 @@ export const addCommand = new Command('add')
   .option('--created <date>', 'Created date (YYYY-MM-DD), defaults to today')
   .action(async (file, opts) => {
     if (opts.type && !VALID_NOTE_TYPES.includes(opts.type as NoteType)) {
-      console.error(
-        `Error: invalid type "${opts.type}". Valid types: ${VALID_NOTE_TYPES.join(', ')}`
+      process.stderr.write(
+        `Error: invalid type "${opts.type}". Valid types: ${VALID_NOTE_TYPES.join(', ')}\n`
       );
       process.exitCode = 1;
       return;
     }
 
     if (opts.tier && !VALID_NOTE_TIERS.includes(opts.tier as NoteTier)) {
-      console.error(
-        `Error: invalid tier "${opts.tier}". Valid tiers: ${VALID_NOTE_TIERS.join(', ')}`
+      process.stderr.write(
+        `Error: invalid tier "${opts.tier}". Valid tiers: ${VALID_NOTE_TIERS.join(', ')}\n`
       );
       process.exitCode = 1;
       return;
@@ -142,8 +142,8 @@ export const addCommand = new Command('add')
     }
 
     if (opts.reviewInterval && !/^\d+[dwm]$/.test(opts.reviewInterval)) {
-      console.error(
-        `Error: invalid review-interval "${opts.reviewInterval}". Use format like 30d, 4w, 3m`
+      process.stderr.write(
+        `Error: invalid review-interval "${opts.reviewInterval}". Use format like 30d, 4w, 3m\n`
       );
       process.exitCode = 1;
       return;
@@ -156,7 +156,7 @@ export const addCommand = new Command('add')
     } else if (!process.stdin.isTTY) {
       content = readFileSync(0, 'utf-8');
     } else {
-      console.error('Error: provide a file argument or pipe content to stdin');
+      process.stderr.write('Error: provide a file argument or pipe content to stdin\n');
       process.exitCode = 1;
       return;
     }
@@ -180,5 +180,5 @@ export const addCommand = new Command('add')
     }
 
     writeFileSync(outPath, content, 'utf-8');
-    console.log(outPath);
+    process.stdout.write(outPath + '\n');
   });

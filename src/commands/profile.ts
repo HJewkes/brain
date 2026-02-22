@@ -15,7 +15,7 @@ export const profileCommand = new Command('profile')
       const limit = parseInt(opts.limit, 10);
       const limited = memories.slice(0, limit);
 
-      const noteCount = db.getAllNotes().length;
+      const noteCount = db.getNoteCount();
       const memoryCount = db.getMemoryCount();
 
       if (opts.json) {
