@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
-import { checkOllamaHealth, createOllamaClient } from '../services/ollama.js';
+import { requireOllama } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 
 export const extractCommand = new Command('extract')
@@ -19,27 +19,8 @@ export const extractCommand = new Command('extract')
     }
 
     await withBrain(async ({ db, embedder, config }) => {
-      const health = await checkOllamaHealth(config.ollamaUrl);
-      const model = opts.model ?? config.ollamaModel ?? 'qwen2.5:3b';
-      if (!health.running) {
-        process.stderr.write(
-          'Error: Ollama is not running. Start it with `ollama serve` or check `brain doctor`.\n'
-        );
-        process.exitCode = 1;
-        return;
-      }
-      if (!health.models.some((m) => m === model || m.startsWith(model + ':'))) {
-        process.stderr.write(
-          `Error: model "${model}" not found. Run \`ollama pull ${model}\`.\n`
-        );
-        process.exitCode = 1;
-        return;
-      }
-
-      const llm = createOllamaClient(
-        config.ollamaUrl,
-        opts.model ?? config.ollamaModel
-      );
+      const llm = await requireOllama(config.ollamaUrl, opts.model ?? config.ollamaModel);
+      if (!llm) return;
 
       db.setEmbeddingModel(embedder.model, embedder.dimensions);
       const noteIds: string[] = [];

@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
-import { checkOllamaHealth, createOllamaClient } from '../services/ollama.js';
+import { checkOllamaHealth, hasModel, createOllamaClient } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 import { scanForChanges } from '../services/file-scanner.js';
 import {
@@ -52,7 +52,7 @@ export const indexCommand = new Command('index')
               'Skipping memory extraction: Ollama not running. Run `brain doctor` to check.\n'
             );
           }
-        } else if (!health.models.some((m) => m === extractModel || m.startsWith(extractModel + ':'))) {
+        } else if (!hasModel(health, extractModel)) {
           if (!opts.quiet) {
             process.stderr.write(
               `Skipping memory extraction: model "${extractModel}" not found. Run \`ollama pull ${extractModel}\`.\n`

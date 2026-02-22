@@ -1,7 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync } from 'node:fs';
 import { withDb } from '../services/brain-service.js';
-import { checkOllamaHealth, createOllamaClient } from '../services/ollama.js';
+import { requireOllama } from '../services/ollama.js';
 
 const TIDY_SYSTEM = `You are a note quality reviewer. Given a note, provide brief, actionable suggestions to improve it.
 
@@ -29,27 +29,8 @@ export const tidyCommand = new Command('tidy')
     }
 
     await withDb(async ({ db, config }) => {
-      const health = await checkOllamaHealth(config.ollamaUrl);
-      const model = opts.model ?? config.ollamaModel ?? 'qwen2.5:3b';
-      if (!health.running) {
-        process.stderr.write(
-          'Error: Ollama is not running. Start it with `ollama serve` or check `brain doctor`.\n'
-        );
-        process.exitCode = 1;
-        return;
-      }
-      if (!health.models.some((m) => m === model || m.startsWith(model + ':'))) {
-        process.stderr.write(
-          `Error: model "${model}" not found. Run \`ollama pull ${model}\`.\n`
-        );
-        process.exitCode = 1;
-        return;
-      }
-
-      const llm = createOllamaClient(
-        config.ollamaUrl,
-        opts.model ?? config.ollamaModel
-      );
+      const llm = await requireOllama(config.ollamaUrl, opts.model ?? config.ollamaModel);
+      if (!llm) return;
 
       const notes: Array<{ id: string; filePath: string; title: string }> = [];
 

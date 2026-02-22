@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
-import { checkOllamaHealth } from '../services/ollama.js';
+import { checkOllamaHealth, hasModel } from '../services/ollama.js';
 import type { EmbedderBackend } from '../types.js';
 
 const SUBDIRS = [
@@ -169,7 +169,7 @@ export const initCommand = new Command('init')
       const ollamaModel = 'nomic-embed-text';
 
       if (ollamaHealth.running) {
-        if (!ollamaHealth.models.some((m) => m === ollamaModel || m.startsWith(ollamaModel + ':'))) {
+        if (!hasModel(ollamaHealth, ollamaModel)) {
           pullOllamaModel(ollamaModel);
         }
         overrides.embedder = 'ollama';
@@ -218,7 +218,7 @@ export const initCommand = new Command('init')
     const llmModel = config.ollamaModel ?? 'qwen2.5:3b';
     let llmReady = false;
     if (ollamaHealth.running) {
-      if (ollamaHealth.models.some((m) => m === llmModel || m.startsWith(llmModel + ':'))) {
+      if (hasModel(ollamaHealth, llmModel)) {
         llmReady = true;
       } else {
         llmReady = pullOllamaModel(llmModel);

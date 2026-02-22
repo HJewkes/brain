@@ -1,6 +1,6 @@
 import type { BrainDB } from './brain-db.js';
 import type { EmbedderBackend, HealthCheckResult, HealthReport } from '../types.js';
-import { checkOllamaHealth, type OllamaHealthResult } from './ollama.js';
+import { checkOllamaHealth, hasModel, type OllamaHealthResult } from './ollama.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { parseIntervalDays } from '../utils.js';
 
@@ -56,8 +56,8 @@ export function checkLlm(
     };
   }
 
-  const hasModel = ollamaHealth.models.some((m) => m === model || m.startsWith(model + ':'));
-  if (!hasModel) {
+  const modelFound = hasModel(ollamaHealth, model);
+  if (!modelFound) {
     return {
       name: 'LLM',
       status: 'warning',
