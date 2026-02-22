@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
-import { createOllamaClient } from '../services/ollama.js';
+import { checkOllamaHealth, createOllamaClient } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 import { scanForChanges } from '../services/file-scanner.js';
 import {
@@ -44,15 +44,31 @@ export const indexCommand = new Command('index')
 
       let memoriesExtracted = 0;
       if (opts.extract && result.indexedNoteIds.length > 0) {
-        memoriesExtracted = await extractFromNotes(
-          db,
-          embedder,
-          result.indexedNoteIds,
-          config.ollamaUrl,
-          opts.extractModel ?? config.ollamaModel,
-          opts.extractTag ?? 'default',
-          opts.quiet
-        );
+        const health = await checkOllamaHealth(config.ollamaUrl);
+        const extractModel = opts.extractModel ?? config.ollamaModel ?? 'qwen2.5:3b';
+        if (!health.running) {
+          if (!opts.quiet) {
+            process.stderr.write(
+              'Skipping memory extraction: Ollama not running. Run `brain doctor` to check.\n'
+            );
+          }
+        } else if (!health.models.some((m) => m.startsWith(extractModel))) {
+          if (!opts.quiet) {
+            process.stderr.write(
+              `Skipping memory extraction: model "${extractModel}" not found. Run \`ollama pull ${extractModel}\`.\n`
+            );
+          }
+        } else {
+          memoriesExtracted = await extractFromNotes(
+            db,
+            embedder,
+            result.indexedNoteIds,
+            config.ollamaUrl,
+            opts.extractModel ?? config.ollamaModel,
+            opts.extractTag ?? 'default',
+            opts.quiet
+          );
+        }
       }
 
       generateNoteIndex(db, config.notesDir);
