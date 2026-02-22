@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
+import { checkOllamaHealth } from '../services/ollama.js';
 import type { EmbedderBackend } from '../types.js';
 
 const SUBDIRS = [
@@ -76,25 +77,6 @@ date: "{{date}}"
 
 `,
 };
-
-interface OllamaStatus {
-  running: boolean;
-  hasModel: boolean;
-}
-
-async function checkOllama(url: string, model: string): Promise<OllamaStatus> {
-  try {
-    const response = await fetch(`${url}/api/tags`, {
-      signal: AbortSignal.timeout(3_000),
-    });
-    if (!response.ok) return { running: false, hasModel: false };
-    const data = (await response.json()) as { models?: Array<{ name: string }> };
-    const hasModel = data.models?.some((m) => m.name.startsWith(model)) ?? false;
-    return { running: true, hasModel };
-  } catch {
-    return { running: false, hasModel: false };
-  }
-}
 
 function pullOllamaModel(model: string): boolean {
   try {
@@ -182,10 +164,10 @@ export const initCommand = new Command('init')
     if (!opts.embedder) {
       const ollamaUrl = 'http://localhost:11434';
       const ollamaModel = 'nomic-embed-text';
-      const status = await checkOllama(ollamaUrl, ollamaModel);
+      const health = await checkOllamaHealth(ollamaUrl);
 
-      if (status.running) {
-        if (!status.hasModel) {
+      if (health.running) {
+        if (!health.models.some((m) => m.startsWith(ollamaModel))) {
           pullOllamaModel(ollamaModel);
         }
         overrides.embedder = 'ollama';
@@ -230,10 +212,36 @@ export const initCommand = new Command('init')
     db.setEmbeddingModel(info.model, info.dimensions);
     db.close();
 
+    // LLM setup — check if Ollama has the extraction model
+    const llmModel = config.ollamaModel ?? 'qwen2.5:3b';
+    let llmReady = false;
+
+    if (config.embedder === 'ollama' || overrides.ollamaUrl) {
+      const llmHealth = await checkOllamaHealth(config.ollamaUrl);
+      if (llmHealth.running) {
+        if (llmHealth.models.some((m) => m.startsWith(llmModel))) {
+          llmReady = true;
+        } else {
+          const pulled = pullOllamaModel(llmModel);
+          llmReady = pulled;
+        }
+      }
+    }
+
+    const embInfo = getEmbedderInfo(config.embedder);
+    const features = {
+      search: true,
+      extract: llmReady,
+      tidy: llmReady,
+    };
+
     const summary = {
       notesDir: config.notesDir,
       dbPath: config.dbPath,
       embedder: config.embedder,
+      embedderModel: embInfo.model,
+      llmModel: llmReady ? llmModel : null,
+      features,
       dirsCreated: created,
     };
 
@@ -242,7 +250,15 @@ export const initCommand = new Command('init')
     } else {
       process.stderr.write(`Initialized brain at ${config.notesDir}\n`);
       process.stderr.write(`Database: ${config.dbPath}\n`);
-      process.stderr.write(`Embedder: ${config.embedder}\n`);
+      process.stderr.write(`Embedder: ${config.embedder} (${embInfo.model})\n`);
+      if (llmReady) {
+        process.stderr.write(`LLM: ollama (${llmModel})\n`);
+      } else {
+        process.stderr.write('LLM: not configured (extract, tidy unavailable)\n');
+      }
+      process.stderr.write(
+        `Features: search ${features.search ? '+' : '-'}  extract ${features.extract ? '+' : '-'}  tidy ${features.tidy ? '+' : '-'}\n`
+      );
       if (created.length > 0) {
         process.stderr.write(`Created directories: ${created.join(', ')}\n`);
       }
