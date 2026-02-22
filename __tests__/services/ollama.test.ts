@@ -46,6 +46,17 @@ describe('checkOllamaHealth', () => {
     expect(result.models).toEqual([]);
   });
 
+  it('returns empty model list when models key is absent', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({}),
+    });
+
+    const result = await checkOllamaHealth('http://localhost:11434');
+    expect(result.running).toBe(true);
+    expect(result.models).toEqual([]);
+  });
+
   it('uses default URL when none provided', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
@@ -95,5 +106,16 @@ describe('OllamaClient.generate error handling', () => {
 
     const client = createOllamaClient('http://localhost:11434', 'bad-model');
     await expect(client.generate('test')).rejects.toThrow(/not found/i);
+  });
+
+  it('wraps non-404 HTTP error with status code', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: async () => 'internal server error',
+    });
+
+    const client = createOllamaClient('http://localhost:11434');
+    await expect(client.generate('test')).rejects.toThrow(/500/);
   });
 });

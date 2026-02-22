@@ -51,6 +51,22 @@ describe('health checks', () => {
       expect(result.status).toBe('ok');
     });
 
+    it('returns ok when model matches by tag suffix', () => {
+      const result = checkLlm(
+        { running: true, models: ['qwen2.5:3b:latest'] },
+        'qwen2.5:3b'
+      );
+      expect(result.status).toBe('ok');
+    });
+
+    it('does not match model with unrelated prefix', () => {
+      const result = checkLlm(
+        { running: true, models: ['qwen2.5:3b-instruct'] },
+        'qwen2.5:3b'
+      );
+      expect(result.status).toBe('warning');
+    });
+
     it('returns warning when ollama is running but model missing', () => {
       const result = checkLlm(
         { running: true, models: ['other-model:latest'] },
