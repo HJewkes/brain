@@ -43,7 +43,9 @@ export const extractCommand = new Command('extract')
       }
 
       let totalFacts = 0;
-      let totalMemories = 0;
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let totalDeleted = 0;
       let processed = 0;
 
       for (const noteId of noteIds) {
@@ -59,14 +61,18 @@ export const extractCommand = new Command('extract')
         );
 
         totalFacts += result.facts.length;
-        totalMemories += result.memoriesCreated;
+        totalCreated += result.memoriesCreated;
+        totalUpdated += result.memoriesUpdated;
+        totalDeleted += result.memoriesDeleted;
         processed++;
       }
 
       const summary = {
         processed,
         factsExtracted: totalFacts,
-        memoriesCreated: totalMemories,
+        memoriesCreated: totalCreated,
+        memoriesUpdated: totalUpdated,
+        memoriesDeleted: totalDeleted,
         totalMemories: db.getMemoryCount(),
       };
 
@@ -74,7 +80,7 @@ export const extractCommand = new Command('extract')
         process.stdout.write(JSON.stringify(summary) + '\n');
       } else if (!opts.quiet) {
         process.stderr.write(
-          `Processed ${processed} note(s): ${totalFacts} facts extracted, ${totalMemories} memories created\n`
+          `Processed ${processed} note(s): ${totalFacts} facts, +${totalCreated} ~${totalUpdated} -${totalDeleted} memories\n`
         );
         process.stderr.write(`Total active memories: ${summary.totalMemories}\n`);
       }

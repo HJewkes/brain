@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { extractMemoriesFromNote } from '../../src/services/memory-extractor.js';
+import {
+  extractMemoriesFromNote,
+  parseReconciliationResponse,
+} from '../../src/services/memory-extractor.js';
 import type { OllamaClient } from '../../src/services/ollama.js';
 import { makeChunk } from '../helpers.js';
 
@@ -19,6 +22,28 @@ function makeMockLLM(responses: string[]): OllamaClient {
   };
 }
 
+function seedNote(db: BrainDB): void {
+  db.upsertNote({
+    id: 'note-1',
+    filePath: '/tmp/note-1.md',
+    title: 'Test Note',
+    type: 'note',
+    tier: 'slow',
+    category: null,
+    tags: null,
+    summary: null,
+    confidence: null,
+    status: 'current',
+    sources: null,
+    createdAt: null,
+    modifiedAt: null,
+    lastReviewed: null,
+    reviewInterval: null,
+    expires: null,
+    metadata: null,
+  });
+}
+
 describe('extractMemoriesFromNote', () => {
   let db: BrainDB;
   let tmpDir: string;
@@ -27,26 +52,7 @@ describe('extractMemoriesFromNote', () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'brain-mem-test-'));
     db = new BrainDB(join(tmpDir, 'test.db'));
     db.setEmbeddingModel('test-model', 3);
-
-    db.upsertNote({
-      id: 'note-1',
-      filePath: '/tmp/note-1.md',
-      title: 'Test Note',
-      type: 'note',
-      tier: 'slow',
-      category: null,
-      tags: null,
-      summary: null,
-      confidence: null,
-      status: 'current',
-      sources: null,
-      createdAt: null,
-      modifiedAt: null,
-      lastReviewed: null,
-      reviewInterval: null,
-      expires: null,
-      metadata: null,
-    });
+    seedNote(db);
   });
 
   afterEach(() => {
@@ -132,5 +138,125 @@ describe('extractMemoriesFromNote', () => {
     );
     expect(result.memoriesCreated).toBe(0);
     expect(result.facts).toHaveLength(0);
+  });
+
+  describe('reconciliation', () => {
+    it('reconciles new facts against existing memories', async () => {
+      const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'Brain uses SQLite for storage with vector search support.' });
+      db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
+
+      // First extraction: creates initial memories
+      db.addMemory({
+        id: 'existing-1',
+        memory: 'Brain uses SQLite for storage',
+        sourceNoteId: 'note-1',
+        sourceChunkId: 'chunk-1',
+        containerTag: 'default',
+        isLatest: true,
+        parentMemoryId: null,
+        rootMemoryId: null,
+        relationType: null,
+        validAt: '2026-01-01T00:00:00Z',
+        invalidAt: null,
+        forgetAfter: null,
+        isForgotten: false,
+        isInference: false,
+        createdAt: '2026-01-01T00:00:00Z',
+      });
+
+      // LLM returns: extraction response, then reconciliation response
+      const llm = makeMockLLM([
+        'Brain uses SQLite with vector search support',
+        '{"actions":[{"type":"UPDATE","id":"existing-1","fact":"Brain uses SQLite with vector search support"},{"type":"ADD","fact":"Vector search is done via sqlite-vec"}]}',
+      ]);
+
+      const result = await extractMemoriesFromNote(db, llm, 'note-1');
+
+      expect(result.memoriesUpdated).toBe(1);
+      expect(result.memoriesCreated).toBe(1);
+
+      // Old memory should be superseded
+      const old = db.getMemory('existing-1')!;
+      expect(old.isLatest).toBe(false);
+
+      // New version should exist with parent chain
+      const latest = db.getLatestMemories();
+      const updated = latest.find((m) => m.parentMemoryId === 'existing-1');
+      expect(updated).toBeDefined();
+      expect(updated!.memory).toBe('Brain uses SQLite with vector search support');
+      expect(updated!.rootMemoryId).toBe('existing-1');
+      expect(updated!.relationType).toBe('updates');
+    });
+
+    it('handles DELETE action from reconciliation', async () => {
+      const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'Updated content that no longer mentions the old fact.' });
+      db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
+
+      db.addMemory({
+        id: 'to-delete',
+        memory: 'Outdated information',
+        sourceNoteId: 'note-1',
+        sourceChunkId: null,
+        containerTag: 'default',
+        isLatest: true,
+        parentMemoryId: null,
+        rootMemoryId: null,
+        relationType: null,
+        validAt: '2026-01-01T00:00:00Z',
+        invalidAt: null,
+        forgetAfter: null,
+        isForgotten: false,
+        isInference: false,
+        createdAt: '2026-01-01T00:00:00Z',
+      });
+
+      const llm = makeMockLLM([
+        'Content has been updated with new information',
+        '{"actions":[{"type":"DELETE","id":"to-delete"},{"type":"ADD","fact":"Content has been updated with new information"}]}',
+      ]);
+
+      const result = await extractMemoriesFromNote(db, llm, 'note-1');
+
+      expect(result.memoriesDeleted).toBe(1);
+      expect(result.memoriesCreated).toBe(1);
+
+      const deleted = db.getMemory('to-delete')!;
+      expect(deleted.isLatest).toBe(false);
+
+      const history = db.getMemoryHistory('to-delete');
+      expect(history.some((h) => h.event === 'delete')).toBe(true);
+    });
+  });
+});
+
+describe('parseReconciliationResponse', () => {
+  it('parses valid JSON response', () => {
+    const response = '{"actions":[{"type":"ADD","fact":"New fact"},{"type":"NONE"}]}';
+    const actions = parseReconciliationResponse(response);
+    expect(actions).toHaveLength(2);
+    expect(actions[0]).toEqual({ type: 'ADD', fact: 'New fact' });
+    expect(actions[1]).toEqual({ type: 'NONE' });
+  });
+
+  it('extracts JSON from surrounding text', () => {
+    const response = 'Here is the result:\n{"actions":[{"type":"ADD","fact":"Extracted"}]}\nDone.';
+    const actions = parseReconciliationResponse(response);
+    expect(actions).toHaveLength(1);
+  });
+
+  it('returns empty array for invalid JSON', () => {
+    expect(parseReconciliationResponse('not json')).toEqual([]);
+  });
+
+  it('returns empty array for missing actions field', () => {
+    expect(parseReconciliationResponse('{"data":[]}')).toEqual([]);
+  });
+
+  it('filters out malformed actions', () => {
+    const response = '{"actions":[{"type":"ADD"},{"type":"ADD","fact":"Valid"},{"type":"UPDATE"},{"type":"DELETE","id":"x"}]}';
+    const actions = parseReconciliationResponse(response);
+    expect(actions).toHaveLength(2);
+    expect(actions[0]).toEqual({ type: 'ADD', fact: 'Valid' });
+    expect(actions[1]).toEqual({ type: 'DELETE', id: 'x' });
   });
 });
