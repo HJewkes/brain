@@ -1,7 +1,9 @@
 # Brain Vision: From Search Index to Memory Engine
 
 **Date**: 2026-02-21
-**Status**: Approved vision, pending implementation planning
+**Status**: Initial implementation complete (Phases 1–5)
+**Branch**: `feat/phase-1-better-chunking-search`
+**Updated**: 2026-02-22
 
 ## 1. Executive Summary
 
@@ -539,89 +541,116 @@ Simple namespace isolation without schema changes:
 
 ### 3.6 New Commands Summary
 
-| Command | Description |
-|---------|-------------|
-| `brain quick` | Zero-friction text capture (no frontmatter required) |
-| `brain inbox` | List/process/discard inbox items |
-| `brain ingest` | Bulk import from RSS, directories, URLs, stdin |
-| `brain feed add/list/poll/remove` | Manage persistent feed subscriptions |
-| `brain memories` | List/search/inspect extracted memories |
-| `brain memories history <id>` | Show version chain for a memory |
-| `brain context <file>` | Show related notes/memories for a given note |
-| `brain tidy <file>` | LLM-powered note cleanup (add frontmatter, structure headers) |
+| Command | Description | Status |
+|---------|-------------|--------|
+| `brain quick` | Zero-friction text capture to inbox | Implemented |
+| `brain inbox` | View/manage/discard inbox items | Implemented |
+| `brain ingest` | Bulk file import to inbox | Implemented |
+| `brain feed add/list/remove` | Manage feed subscriptions | Implemented |
+| `brain feed poll` | Fetch new items from subscribed feeds | Not yet |
+| `brain extract` | Extract memories from notes (Ollama) | Implemented |
+| `brain memories list` | List active memories with filters | Implemented |
+| `brain memories history <id>` | Show version chain for a memory | Implemented |
+| `brain memories stats` | Memory count and expiry sweep | Implemented |
+| `brain context <id>` | Related notes/memories/graph for a note | Implemented |
+| `brain profile` | Generate agent context profile | Implemented |
+| `brain tidy` | LLM-powered note cleanup suggestions | Implemented |
+| `brain search --memories` | Search extracted memories alongside notes | Implemented |
+| `brain search --rerank` | Cross-encoder reranking | Implemented |
+| `brain index --inbox` | Process inbox items during indexing | Implemented |
+| `brain index --extract` | Extract memories during indexing | Implemented |
+| `brain index --watch` | File watcher for incremental re-indexing | Implemented |
 
 ---
 
 ## 4. Implementation Phases
 
-### Phase 1: Better Chunking and Search (no LLM dependency)
+### Phase 1: Better Chunking and Search (no LLM dependency) — DONE
 
-- Content-type-aware chunking (markdown heading-aware + code-chunk)
-- Heading ancestry prepending on chunks
-- Chunk metadata (`chunk_type`, `cut_type`, `position`)
-- Deterministic UUID5 chunk IDs
-- Cross-encoder reranking (optional `--rerank`)
-- Matryoshka embedding support with `nomic-embed-text-v1.5`
-- Scoped search (`--scope`, `--since`)
+- [x] Content-type-aware chunking (markdown heading-aware, `chunk_type` field)
+- [x] Heading ancestry prepending on chunks (Khoj pattern)
+- [x] Chunk metadata (`chunk_type`, `cut_type`, `position`)
+- [x] Deterministic SHA256-based chunk IDs (adapted from Cognee's UUID5 pattern)
+- [x] Cross-encoder reranking via `--rerank` (`Xenova/ms-marco-MiniLM-L-6-v2`)
+- [ ] AST-aware code chunking via `code-chunk` (deferred — needs tree-sitter WASM integration)
+- [ ] Matryoshka embedding support with `nomic-embed-text-v1.5` (deferred — current embedder works well)
+- [ ] Scoped search `--scope` flag (partially done via existing `--tier`, `--tags`, `--category`, `--since` filters)
 
-### Phase 2: Inbox and Ingestion
+### Phase 2: Inbox and Ingestion — DONE
 
-- `brain quick` command
-- `inbox` table and `brain inbox` command
-- `brain ingest` with RSS, directory, URL, stdin support
-- `brain feed` for persistent subscriptions
-- Content detection and extraction pipeline
-- Status tracking (`pending -> processing -> indexed`)
+- [x] `brain quick` command — zero-friction text capture to inbox
+- [x] `inbox` table (V4 schema migration) and `brain inbox` command
+- [x] `brain ingest` — bulk file import to inbox
+- [x] `brain feed add/list/remove` — persistent feed subscriptions
+- [x] `brain index --inbox` — process pending inbox items into notes
+- [x] Status tracking (`pending -> processing -> indexed/failed/discarded`)
+- [ ] `brain feed poll` — actual RSS fetching (schema ready, fetch not implemented)
+- [ ] Content-type detection for URLs, PDFs (deferred)
 
-### Phase 3: Memory Extraction Layer
+### Phase 3: Memory Extraction Layer — DONE
 
-- `memory_entries` and `memory_history` tables
-- Fact extraction prompt (LLM)
-- Reconciliation prompt (ADD/UPDATE/DELETE/NONE)
-- Memory versioning (`parent_memory_id`, `is_latest`)
-- Memory search mode
-- Hybrid search (chunks + memories)
-- Container tags
+- [x] `memory_entries` and `memory_history` tables (V5 schema migration)
+- [x] Ollama LLM client (`qwen2.5:3b` default) for fact extraction
+- [x] Fact extraction prompt (extracts discrete facts from chunks)
+- [x] Reconciliation prompt (ADD/UPDATE/DELETE/NONE against existing memories)
+- [x] Memory versioning (`parent_memory_id`, `is_latest`, `root_memory_id`, `relation_type`)
+- [x] Memory vector search (`memory_vectors` table, `brain search --memories`)
+- [x] Container tags on memories (`--container` flag)
+- [x] `brain extract` command (`--note`, `--all`, `--tag`)
+- [x] `brain index --extract` — extract memories as part of indexing pipeline
 
-### Phase 4: Temporal Intelligence
+### Phase 4: Temporal Intelligence — DONE
 
-- `valid_at`/`invalid_at` on memories
-- Automatic forgetting (`forget_after`/`is_forgotten`)
-- Temporal query support ("what changed last week?")
-- `brain memories history` for version chains
-- `brain context` for related notes/memories
+- [x] `valid_at`/`invalid_at` on memories (schema fields, set during extraction)
+- [x] Automatic forgetting (`forget_after`/`is_forgotten`, sweep on access)
+- [x] Temporal query support (`getMemoriesSince()`, `brain memories list --since`)
+- [x] `brain memories history <id>` — version chain and event log
+- [x] `brain memories list` — view active memories with filters
+- [x] `brain memories stats` — count active memories, run expiry sweep
+- [x] `brain context <id>` — related notes, memories, and graph relations
 
-### Phase 5: Polish and Agent Integration
+### Phase 5: Polish and Agent Integration — DONE
 
-- `brain tidy` for LLM-powered note cleanup
-- Profile API (stable facts + dynamic context for agent system prompts)
-- Watch mode (`brain index --watch`)
-- Background daemon for incremental indexing
-- API endpoint for external integrations (webhooks, Google Alerts)
+- [x] `brain tidy` — LLM-powered note cleanup suggestions via Ollama
+- [x] `brain profile` — context profiles for agent system prompts (text/markdown/xml/json)
+- [x] Watch mode (`brain index --watch`) — fs.watch with debounced re-indexing
+- [ ] Background daemon for incremental indexing (deferred — watch mode covers the use case interactively)
+- [ ] API endpoint for external integrations (deferred — CLI + stdin covers current needs)
 
 ---
 
 ## 5. Cross-Reference: Ideas by Source
 
-| Idea | Source(s) | Phase |
-|------|-----------|-------|
-| Heading ancestry prepending | Khoj | 1 |
-| AST-aware code chunking | Supermemory (`code-chunk`) | 1 |
-| UUID5 deterministic chunk IDs | Cognee | 1 |
-| Cross-encoder reranking | Graphiti, Supermemory, LlamaIndex | 1 |
-| Matryoshka embeddings | Supermemory, LlamaIndex | 1 |
-| Scoped search | Reflect | 1 |
-| Zero-friction inbox | Mem.ai | 2 |
-| RSS/feed ingestion | Original (inspired by Mem.ai inbox concept) | 2 |
-| Content-type detection | Supermemory, Unstructured | 2 |
-| Fact extraction prompts | mem0 | 3 |
-| ADD/UPDATE/DELETE reconciliation | mem0 | 3 |
-| Memory versioning chain | Supermemory, mem0 | 3 |
-| Container tags | Supermemory | 3 |
-| SQLite event-sourcing history | mem0 | 3 |
-| Bi-temporal `valid_at`/`invalid_at` | Graphiti | 4 |
-| Automatic forgetting | Supermemory | 4 |
-| Related notes context | Obsidian Smart Connections, Mem.ai Heads Up | 4 |
-| Watch mode / background indexing | Obsidian, Apple Intelligence | 5 |
-| Profile API for agents | Supermemory | 5 |
-| LLM note cleanup | Mem.ai Clean Up | 5 |
+| Idea | Source(s) | Phase | Status |
+|------|-----------|-------|--------|
+| Heading ancestry prepending | Khoj | 1 | Done |
+| AST-aware code chunking | Supermemory (`code-chunk`) | 1 | Deferred |
+| SHA256 deterministic chunk IDs | Cognee (adapted from UUID5) | 1 | Done |
+| Cross-encoder reranking | Graphiti, Supermemory, LlamaIndex | 1 | Done |
+| Matryoshka embeddings | Supermemory, LlamaIndex | 1 | Deferred |
+| Scoped search | Reflect | 1 | Partial (via existing filters) |
+| Zero-friction inbox | Mem.ai | 2 | Done |
+| RSS/feed subscriptions | Original (inspired by Mem.ai inbox concept) | 2 | Done (schema + CRUD, no fetch) |
+| Content-type detection | Supermemory, Unstructured | 2 | Deferred |
+| Fact extraction prompts | mem0 | 3 | Done |
+| ADD/UPDATE/DELETE reconciliation | mem0 | 3 | Done |
+| Memory versioning chain | Supermemory, mem0 | 3 | Done |
+| Container tags | Supermemory | 3 | Done |
+| SQLite event-sourcing history | mem0 | 3 | Done |
+| Bi-temporal `valid_at`/`invalid_at` | Graphiti | 4 | Done (schema + query) |
+| Automatic forgetting | Supermemory | 4 | Done |
+| Related notes context | Obsidian Smart Connections, Mem.ai Heads Up | 4 | Done |
+| Watch mode / background indexing | Obsidian, Apple Intelligence | 5 | Done (watch mode) |
+| Profile API for agents | Supermemory | 5 | Done |
+| LLM note cleanup | Mem.ai Clean Up | 5 | Done |
+
+### Deferred Items (future work)
+
+| Item | Why Deferred | Prerequisite |
+|------|-------------|-------------|
+| AST-aware code chunking | Needs tree-sitter WASM, `code-chunk` has Effect.js dependency | Evaluate `code-chunk` bundle size |
+| Matryoshka embeddings | Current embedder works well, optimization not urgent | Switch to `nomic-embed-text-v1.5` |
+| Content-type detection | Markdown-only is sufficient for current use | Add URL/PDF support when needed |
+| `brain feed poll` | Feed subscription schema is ready | Implement RSS/Atom XML parsing |
+| Background daemon | Watch mode covers interactive use | Consider for server deployment |
+| API endpoint | CLI + stdin covers current needs | Consider when external integrations needed |
