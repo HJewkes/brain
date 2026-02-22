@@ -37,6 +37,12 @@ function truncateExcerpt(content: string): string {
   return content.slice(0, EXCERPT_MAX_LENGTH);
 }
 
+async function embedQuery(embedder: Embedder, query: string): Promise<Float32Array> {
+  const queryText = embedder.model.includes('nomic') ? `search_query: ${query}` : query;
+  const [embedding] = await embedder.embed([queryText]);
+  return new Float32Array(embedding);
+}
+
 function parseTags(tagsStr: string | null): string[] {
   if (!tagsStr) return [];
   return tagsStr
@@ -226,10 +232,7 @@ export async function search(
     : ftsResults;
 
   // Step 2: Vector search
-  const queryText = embedder.model.includes('nomic') ? `search_query: ${query}` : query;
-  const [queryEmbedding] = await embedder.embed([queryText]);
-  const queryVec = new Float32Array(queryEmbedding);
-
+  const queryVec = await embedQuery(embedder, query);
   const vectorResults = db.searchVector(queryVec, overfetchLimit);
   const filteredVector = allowedNoteIds
     ? vectorResults.filter((r) => allowedNoteIds.has(r.noteId))
@@ -308,10 +311,7 @@ export async function searchMemories(
 ): Promise<MemorySearchResult[]> {
   if (!query.trim()) return [];
 
-  const queryText = embedder.model.includes('nomic') ? `search_query: ${query}` : query;
-  const [queryEmbedding] = await embedder.embed([queryText]);
-  const queryVec = new Float32Array(queryEmbedding);
-
+  const queryVec = await embedQuery(embedder, query);
   const vectorResults = db.searchMemoryVectors(queryVec, limit * 3);
   if (vectorResults.length === 0) return [];
 

@@ -102,42 +102,14 @@ async function applyAdditions(
   embedder?: Embedder
 ): Promise<number> {
   const now = new Date().toISOString();
-  let created = 0;
-
   for (const fact of facts) {
-    const id = randomUUID();
-    const entry: MemoryEntry = {
-      id,
-      memory: fact.fact,
-      sourceNoteId: noteId,
+    await createMemory(db, fact.fact, noteId, containerTag, now, {
       sourceChunkId: fact.sourceChunkId,
-      containerTag,
-      isLatest: true,
-      parentMemoryId: null,
-      rootMemoryId: null,
-      relationType: null,
-      validAt: now,
-      invalidAt: null,
-      forgetAfter: null,
-      isForgotten: false,
-      isInference: false,
-      createdAt: now,
-    };
-
-    db.addMemory(entry);
-    await embedMemory(db, id, fact.fact, embedder);
-    db.addMemoryHistory({
-      memoryId: id,
-      event: 'add',
-      oldMemory: null,
-      newMemory: fact.fact,
       actor: 'extractor',
-      createdAt: now,
+      embedder,
     });
-    created++;
   }
-
-  return created;
+  return facts.length;
 }
 
 export async function reconcile(
@@ -192,7 +164,7 @@ async function applyActions(
 
   for (const action of actions) {
     if (action.type === 'ADD') {
-      await createMemoryFromAction(db, action.fact, noteId, containerTag, now, embedder);
+      await createMemory(db, action.fact, noteId, containerTag, now, { actor: 'reconciler', embedder });
       created++;
     } else if (action.type === 'UPDATE') {
       const existing = existingById.get(action.id);
@@ -210,20 +182,20 @@ async function applyActions(
   return { created, updated, deleted };
 }
 
-async function createMemoryFromAction(
+async function createMemory(
   db: BrainDB,
   fact: string,
   noteId: string,
   containerTag: string,
   now: string,
-  embedder?: Embedder
+  opts: { sourceChunkId?: string | null; actor: string; embedder?: Embedder }
 ): Promise<void> {
   const id = randomUUID();
   db.addMemory({
     id,
     memory: fact,
     sourceNoteId: noteId,
-    sourceChunkId: null,
+    sourceChunkId: opts.sourceChunkId ?? null,
     containerTag,
     isLatest: true,
     parentMemoryId: null,
@@ -236,13 +208,13 @@ async function createMemoryFromAction(
     isInference: false,
     createdAt: now,
   });
-  await embedMemory(db, id, fact, embedder);
+  await embedMemory(db, id, fact, opts.embedder);
   db.addMemoryHistory({
     memoryId: id,
     event: 'add',
     oldMemory: null,
     newMemory: fact,
-    actor: 'reconciler',
+    actor: opts.actor,
     createdAt: now,
   });
 }

@@ -198,31 +198,8 @@ export async function processInbox(
 
       writeFileSync(outPath, markdown, 'utf-8');
 
-      parsed.filePath = outPath;
-      const noteRecord = frontmatterToRecord(parsed);
-      noteRecord.filePath = outPath;
-      db.upsertNote(noteRecord);
-      db.upsertNoteFTS(
-        parsed.id,
-        parsed.frontmatter.title,
-        parsed.frontmatter.summary ?? '',
-        parsed.content
-      );
-
-      const chunks = rawChunksToChunks(parsed.id, parsed.chunks);
-      if (chunks.length > 0) {
-        const texts = chunks.map((c) => c.content);
-        const embeddings = await embedder.embed(texts);
-        const vectors = embeddings.map((e) => new Float32Array(e));
-        db.upsertChunks(parsed.id, chunks, vectors);
-      }
-
-      db.upsertFile({
-        path: outPath,
-        hash: createHash('sha256').update(markdown).digest('hex'),
-        mtime: Date.now(),
-        indexedAt: Date.now(),
-      });
+      const hash = createHash('sha256').update(markdown).digest('hex');
+      await indexSingleFile(db, embedder, outPath, markdown, hash, Date.now());
 
       db.updateInboxStatus(item.id, 'indexed');
       processed++;
