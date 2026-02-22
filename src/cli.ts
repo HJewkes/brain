@@ -11,6 +11,10 @@ import { graphCommand } from './commands/graph.js';
 import { templateCommand } from './commands/template.js';
 import { archiveCommand } from './commands/archive.js';
 import { configCommand } from './commands/config.js';
+import { quickCommand } from './commands/quick.js';
+import { inboxCommand } from './commands/inbox.js';
+import { ingestCommand } from './commands/ingest.js';
+import { feedCommand } from './commands/feed.js';
 
 const program = new Command()
   .name('brain')
@@ -29,6 +33,10 @@ program.addCommand(graphCommand);
 program.addCommand(templateCommand);
 program.addCommand(archiveCommand);
 program.addCommand(configCommand);
+program.addCommand(quickCommand);
+program.addCommand(inboxCommand);
+program.addCommand(ingestCommand);
+program.addCommand(feedCommand);
 
 program.parseAsync().catch((err: Error) => {
   process.stderr.write(`Error: ${err.message}\n`);

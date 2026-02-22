@@ -152,6 +152,34 @@ export interface GraphResult {
   edges: Relation[];
 }
 
+// === Inbox Types ===
+
+export type InboxSource = 'cli' | 'rss' | 'crawler' | 'alert' | 'api' | 'file';
+
+export type InboxStatus = 'pending' | 'processing' | 'indexed' | 'failed' | 'discarded';
+
+export interface InboxItem {
+  id: string;
+  content: string;
+  title: string | null;
+  source: InboxSource;
+  sourceUrl: string | null;
+  sourceMeta: string | null;
+  status: InboxStatus;
+  createdAt: string;
+  processedAt: string | null;
+}
+
+export interface FeedRecord {
+  id: string;
+  url: string;
+  name: string;
+  containerTag: string;
+  filterPrompt: string | null;
+  lastPolled: string | null;
+  createdAt: string;
+}
+
 // === Config Types ===
 
 export type EmbedderBackend = 'local' | 'ollama' | 'remote';

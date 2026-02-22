@@ -1,19 +1,20 @@
 import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { basename, join, relative } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { basename, dirname, join, relative } from 'node:path';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { scanForChanges } from '../services/file-scanner.js';
 import { parseMarkdown } from '../services/markdown-parser.js';
-import type { Chunk, NoteRecord, RawChunk } from '../types.js';
+import type { Chunk, InboxItem, NoteRecord, RawChunk } from '../types.js';
 
 export const indexCommand = new Command('index')
   .description('Index new and modified notes')
   .option('--force', 'force full re-index (clears all chunks/vectors)')
   .option('--quiet', 'suppress output')
   .option('--json', 'output result as JSON')
+  .option('--inbox', 'also process pending inbox items into notes')
   .action(async (opts) => {
     const config = loadConfig();
     const db = new BrainDB(config.dbPath);
@@ -88,12 +89,18 @@ export const indexCommand = new Command('index')
         deleted++;
       }
 
+      let inboxProcessed = 0;
+      if (opts.inbox) {
+        inboxProcessed = await processInbox(db, config.notesDir, embedder);
+      }
+
       generateIndex(db, config.notesDir);
 
       const summary = {
         indexed,
         deleted,
         unchanged: changes.unchanged,
+        inboxProcessed,
         total: db.getAllNotes().length,
       };
 
@@ -103,6 +110,9 @@ export const indexCommand = new Command('index')
         process.stderr.write(
           `Indexed ${indexed} file(s), deleted ${deleted}, unchanged ${changes.unchanged}\n`
         );
+        if (inboxProcessed > 0) {
+          process.stderr.write(`Inbox: processed ${inboxProcessed} item(s)\n`);
+        }
         process.stderr.write(`Total notes: ${summary.total}\n`);
       }
     } finally {
@@ -179,4 +189,101 @@ function generateIndex(db: BrainDB, notesDir: string): void {
   }
 
   writeFileSync(join(notesDir, '_index.md'), lines.join('\n'), 'utf-8');
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function inboxItemToMarkdown(item: InboxItem): string {
+  const now = new Date().toISOString().slice(0, 10);
+  const title = item.title ?? 'Inbox capture';
+  const id = slugify(title) || item.id.slice(0, 8);
+  const lines = [
+    '---',
+    `id: ${id}`,
+    `title: "${title}"`,
+    'type: note',
+    'tier: fast',
+    `status: draft`,
+    `created: ${now}`,
+    `modified: ${now}`,
+    '---',
+    '',
+    item.content,
+  ];
+  if (item.sourceUrl) {
+    lines.push('', `Source: ${item.sourceUrl}`);
+  }
+  return lines.join('\n');
+}
+
+async function processInbox(
+  db: BrainDB,
+  notesDir: string,
+  embedder: { embed(texts: string[]): Promise<number[][]>; readonly model: string }
+): Promise<number> {
+  const pending = db.getInboxItems('pending');
+  let processed = 0;
+
+  for (const item of pending) {
+    db.updateInboxStatus(item.id, 'processing');
+
+    try {
+      const markdown = inboxItemToMarkdown(item);
+      const parsed = parseMarkdown('inbox-item.md', markdown);
+
+      const now = new Date();
+      const yyyy = String(now.getFullYear());
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const outPath = join(notesDir, 'logs', yyyy, mm, `${yyyy}-${mm}-${dd}-${parsed.id}.md`);
+      const dir = dirname(outPath);
+
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+
+      writeFileSync(outPath, markdown, 'utf-8');
+
+      parsed.filePath = outPath;
+      const noteRecord = frontmatterToRecord(parsed);
+      noteRecord.filePath = outPath;
+      db.upsertNote(noteRecord);
+      db.upsertNoteFTS(
+        parsed.id,
+        parsed.frontmatter.title,
+        parsed.frontmatter.summary ?? '',
+        parsed.content
+      );
+
+      const chunks = rawChunksToChunks(parsed.id, parsed.chunks);
+      if (chunks.length > 0) {
+        const texts = chunks.map((c) => c.content);
+        const embeddings = await embedder.embed(texts);
+        const vectors = embeddings.map((e) => new Float32Array(e));
+        db.upsertChunks(parsed.id, chunks, vectors);
+      }
+
+      db.upsertFile({
+        path: outPath,
+        hash: createHash('sha256').update(markdown).digest('hex'),
+        mtime: Date.now(),
+        indexedAt: Date.now(),
+      });
+
+      db.updateInboxStatus(item.id, 'indexed');
+      processed++;
+    } catch (err) {
+      db.updateInboxStatus(item.id, 'failed');
+      process.stderr.write(
+        `Failed to process inbox item ${item.id}: ${err instanceof Error ? err.message : String(err)}\n`
+      );
+    }
+  }
+
+  return processed;
 }

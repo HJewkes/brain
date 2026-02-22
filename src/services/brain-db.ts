@@ -1,8 +1,19 @@
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-import type { NoteRecord, FileRecord, Chunk, Relation, ChunkType, CutType } from '../types.js';
+import type {
+  NoteRecord,
+  FileRecord,
+  Chunk,
+  Relation,
+  ChunkType,
+  CutType,
+  InboxItem,
+  InboxSource,
+  InboxStatus,
+  FeedRecord,
+} from '../types.js';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 interface FTSResult {
   noteId: string;
@@ -44,6 +55,11 @@ export class BrainDB {
       this.migrateToV3();
       this.db.pragma('user_version = 3');
       this.setMetaValue('schema_version', '3');
+    }
+    if (currentVersion >= 1 && currentVersion < 4) {
+      this.migrateToV4();
+      this.db.pragma('user_version = 4');
+      this.setMetaValue('schema_version', '4');
     }
 
     const dims = this.getMetaValue('embedding_dimensions');
@@ -133,7 +149,55 @@ export class BrainDB {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS inbox (
+        id            TEXT PRIMARY KEY,
+        content       TEXT NOT NULL,
+        title         TEXT,
+        source        TEXT NOT NULL DEFAULT 'cli',
+        source_url    TEXT,
+        source_meta   TEXT,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        created_at    TEXT NOT NULL,
+        processed_at  TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS feeds (
+        id            TEXT PRIMARY KEY,
+        url           TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        container_tag TEXT NOT NULL DEFAULT 'default',
+        filter_prompt TEXT,
+        last_polled   TEXT,
+        created_at    TEXT NOT NULL
+      );
     `;
+  }
+
+  private migrateToV4(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS inbox (
+        id            TEXT PRIMARY KEY,
+        content       TEXT NOT NULL,
+        title         TEXT,
+        source        TEXT NOT NULL DEFAULT 'cli',
+        source_url    TEXT,
+        source_meta   TEXT,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        created_at    TEXT NOT NULL,
+        processed_at  TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS feeds (
+        id            TEXT PRIMARY KEY,
+        url           TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        container_tag TEXT NOT NULL DEFAULT 'default',
+        filter_prompt TEXT,
+        last_polled   TEXT,
+        created_at    TEXT NOT NULL
+      );
+    `);
   }
 
   private migrateToV3(): void {
@@ -476,6 +540,97 @@ export class BrainDB {
     return row ? rowToNoteRecord(row) : null;
   }
 
+  // --- Inbox ---
+
+  addInboxItem(item: InboxItem): void {
+    this.db
+      .prepare(
+        `INSERT INTO inbox (id, content, title, source, source_url, source_meta, status, created_at, processed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        item.id,
+        item.content,
+        item.title,
+        item.source,
+        item.sourceUrl,
+        item.sourceMeta,
+        item.status,
+        item.createdAt,
+        item.processedAt
+      );
+  }
+
+  getInboxItems(status?: InboxStatus): InboxItem[] {
+    if (status) {
+      const rows = this.db
+        .prepare('SELECT * FROM inbox WHERE status = ? ORDER BY created_at DESC')
+        .all(status) as InboxRow[];
+      return rows.map(rowToInboxItem);
+    }
+    const rows = this.db
+      .prepare('SELECT * FROM inbox ORDER BY created_at DESC')
+      .all() as InboxRow[];
+    return rows.map(rowToInboxItem);
+  }
+
+  getInboxItem(id: string): InboxItem | null {
+    const row = this.db.prepare('SELECT * FROM inbox WHERE id = ?').get(id) as
+      | InboxRow
+      | undefined;
+    return row ? rowToInboxItem(row) : null;
+  }
+
+  updateInboxStatus(id: string, status: InboxStatus): void {
+    const processedAt = status === 'indexed' || status === 'failed' ? new Date().toISOString() : null;
+    this.db
+      .prepare('UPDATE inbox SET status = ?, processed_at = COALESCE(?, processed_at) WHERE id = ?')
+      .run(status, processedAt, id);
+  }
+
+  deleteInboxItem(id: string): void {
+    this.db.prepare('DELETE FROM inbox WHERE id = ?').run(id);
+  }
+
+  // --- Feeds ---
+
+  addFeed(feed: FeedRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO feeds (id, url, name, container_tag, filter_prompt, last_polled, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        feed.id,
+        feed.url,
+        feed.name,
+        feed.containerTag,
+        feed.filterPrompt,
+        feed.lastPolled,
+        feed.createdAt
+      );
+  }
+
+  getFeeds(): FeedRecord[] {
+    const rows = this.db.prepare('SELECT * FROM feeds ORDER BY name').all() as FeedRow[];
+    return rows.map(rowToFeedRecord);
+  }
+
+  getFeedById(id: string): FeedRecord | null {
+    const row = this.db.prepare('SELECT * FROM feeds WHERE id = ?').get(id) as
+      | FeedRow
+      | undefined;
+    return row ? rowToFeedRecord(row) : null;
+  }
+
+  removeFeed(id: string): void {
+    this.db.prepare('DELETE FROM feeds WHERE id = ?').run(id);
+  }
+
+  updateFeedLastPolled(id: string, lastPolled: string): void {
+    this.db.prepare('UPDATE feeds SET last_polled = ? WHERE id = ?').run(lastPolled, id);
+  }
+
   // --- FTS ---
 
   upsertNoteFTS(noteId: string, title: string, summary: string, content: string): void {
@@ -559,6 +714,28 @@ interface RelationRow {
   type: string;
 }
 
+interface InboxRow {
+  id: string;
+  content: string;
+  title: string | null;
+  source: string;
+  source_url: string | null;
+  source_meta: string | null;
+  status: string;
+  created_at: string;
+  processed_at: string | null;
+}
+
+interface FeedRow {
+  id: string;
+  url: string;
+  name: string;
+  container_tag: string;
+  filter_prompt: string | null;
+  last_polled: string | null;
+  created_at: string;
+}
+
 // --- Row Mappers ---
 
 function rowToNoteRecord(row: NoteRow): NoteRecord {
@@ -611,5 +788,31 @@ function rowToRelation(row: RelationRow): Relation {
     sourceId: row.source_id,
     targetId: row.target_id,
     type: row.type as Relation['type'],
+  };
+}
+
+function rowToInboxItem(row: InboxRow): InboxItem {
+  return {
+    id: row.id,
+    content: row.content,
+    title: row.title,
+    source: row.source as InboxSource,
+    sourceUrl: row.source_url,
+    sourceMeta: row.source_meta,
+    status: row.status as InboxStatus,
+    createdAt: row.created_at,
+    processedAt: row.processed_at,
+  };
+}
+
+function rowToFeedRecord(row: FeedRow): FeedRecord {
+  return {
+    id: row.id,
+    url: row.url,
+    name: row.name,
+    containerTag: row.container_tag,
+    filterPrompt: row.filter_prompt,
+    lastPolled: row.last_polled,
+    createdAt: row.created_at,
   };
 }
