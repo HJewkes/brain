@@ -1,6 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync, watch } from 'node:fs';
-import { basename } from 'node:path';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
@@ -12,6 +11,7 @@ import {
   indexFiles,
   processInbox,
   generateNoteIndex,
+  isSkippedFile,
 } from '../services/indexing.js';
 import type { Embedder } from '../types.js';
 
@@ -115,15 +115,12 @@ export const indexCommand = new Command('index')
 function startWatcher(db: BrainDB, embedder: Embedder, notesDir: string): void {
   process.stderr.write(`Watching ${notesDir} for changes...\n`);
 
-  const isSkipped = (filePath: string): boolean =>
-    filePath.includes('/_templates/') || basename(filePath) === '_index.md';
-
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const reindex = async () => {
     const knownFiles = db.getAllFiles();
     const changes = await scanForChanges(notesDir, knownFiles);
     const toProcess = [...changes.new, ...changes.modified].filter(
-      (f) => !isSkipped(f.path)
+      (f) => !isSkippedFile(f.path)
     );
 
     for (const file of toProcess) {
