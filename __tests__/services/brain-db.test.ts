@@ -256,6 +256,53 @@ describe('BrainDB', () => {
     });
   });
 
+  describe('batch methods', () => {
+    it('getNotesByIds returns batch of notes', () => {
+      db.upsertNote(makeNote({ id: 'bn-1', title: 'Note One' }));
+      db.upsertNote(makeNote({ id: 'bn-2', title: 'Note Two' }));
+      db.upsertNote(makeNote({ id: 'bn-3', title: 'Note Three' }));
+
+      const result = db.getNotesByIds(['bn-1', 'bn-3']);
+      expect(result.size).toBe(2);
+      expect(result.get('bn-1')?.title).toBe('Note One');
+      expect(result.get('bn-3')?.title).toBe('Note Three');
+      expect(result.has('bn-2')).toBe(false);
+    });
+
+    it('getNotesByIds returns empty map for empty input', () => {
+      expect(db.getNotesByIds([]).size).toBe(0);
+    });
+
+    it('getNotesByIds ignores non-existent ids', () => {
+      db.upsertNote(makeNote({ id: 'exists' }));
+      const result = db.getNotesByIds(['exists', 'nope']);
+      expect(result.size).toBe(1);
+    });
+
+    it('getRelationsBatch returns from/to for each id', () => {
+      db.upsertNote(makeNote({ id: 'rb-a' }));
+      db.upsertNote(makeNote({ id: 'rb-b' }));
+      db.upsertNote(makeNote({ id: 'rb-c' }));
+
+      db.upsertRelations('rb-a', [
+        { sourceId: 'rb-a', targetId: 'rb-b', type: 'related-to' },
+      ]);
+      db.upsertRelations('rb-b', [
+        { sourceId: 'rb-b', targetId: 'rb-c', type: 'informs' },
+      ]);
+
+      const batch = db.getRelationsBatch(['rb-a', 'rb-b']);
+      expect(batch.get('rb-a')?.from).toHaveLength(1);
+      expect(batch.get('rb-a')?.to).toHaveLength(0);
+      expect(batch.get('rb-b')?.from).toHaveLength(1);
+      expect(batch.get('rb-b')?.to).toHaveLength(1);
+    });
+
+    it('getRelationsBatch returns empty map for empty input', () => {
+      expect(db.getRelationsBatch([]).size).toBe(0);
+    });
+  });
+
   describe('FTS search', () => {
     it('returns note IDs ranked by BM25', () => {
       db.upsertNote(

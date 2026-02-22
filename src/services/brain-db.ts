@@ -543,6 +543,39 @@ export class BrainDB {
     return rows.map(rowToRelation);
   }
 
+  getNotesByIds(ids: string[]): Map<string, NoteRecord> {
+    if (ids.length === 0) return new Map();
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(`SELECT * FROM notes WHERE id IN (${placeholders})`)
+      .all(...ids) as NoteRow[];
+    const map = new Map<string, NoteRecord>();
+    for (const row of rows) {
+      map.set(row.id, rowToNoteRecord(row));
+    }
+    return map;
+  }
+
+  getRelationsBatch(ids: string[]): Map<string, { from: Relation[]; to: Relation[] }> {
+    if (ids.length === 0) return new Map();
+    const result = new Map<string, { from: Relation[]; to: Relation[] }>();
+    for (const id of ids) {
+      result.set(id, { from: [], to: [] });
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT source_id, target_id, type FROM relations WHERE source_id IN (${placeholders}) OR target_id IN (${placeholders})`
+      )
+      .all(...ids, ...ids) as RelationRow[];
+    for (const row of rows) {
+      const rel = rowToRelation(row);
+      result.get(rel.sourceId)?.from.push(rel);
+      result.get(rel.targetId)?.to.push(rel);
+    }
+    return result;
+  }
+
   // --- Search API ---
 
   searchVector(

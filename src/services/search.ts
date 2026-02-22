@@ -258,9 +258,12 @@ export async function search(
   const topResults = afterDropoff.slice(0, limit);
 
   // Step 4: Build SearchResult objects
+  const noteIds = topResults.map((r) => r.noteId);
+  const notesById = db.getNotesByIds(noteIds);
+
   const results: SearchResult[] = [];
   for (const item of topResults) {
-    const note = db.getNoteById(item.noteId);
+    const note = notesById.get(item.noteId);
     if (!note) continue;
 
     const excerptContent = item.chunkId
