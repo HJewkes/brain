@@ -69,6 +69,19 @@ function rowToMemoryHistory(row: MemoryHistoryRow): MemoryHistoryEntry {
 export class MemoryRepo {
   constructor(private db: Database.Database) {}
 
+  private queryLatestMemories(
+    baseWhere: string,
+    baseParams: unknown[],
+    containerTag?: string
+  ): MemoryEntry[] {
+    const where = containerTag ? `${baseWhere} AND container_tag = ?` : baseWhere;
+    const params = containerTag ? [...baseParams, containerTag] : baseParams;
+    const rows = this.db
+      .prepare(`SELECT * FROM memory_entries WHERE ${where} ORDER BY created_at DESC`)
+      .all(...params) as MemoryRow[];
+    return rows.map(rowToMemoryEntry);
+  }
+
   addMemory(entry: MemoryEntry): void {
     this.db
       .prepare(
@@ -111,23 +124,8 @@ export class MemoryRepo {
     return rows.map(rowToMemoryEntry);
   }
 
-  // TODO: collapse containerTag branching into single parameterized query
-  // (same pattern duplicated in getMemoriesSince)
   getLatestMemories(containerTag?: string): MemoryEntry[] {
-    if (containerTag) {
-      const rows = this.db
-        .prepare(
-          'SELECT * FROM memory_entries WHERE is_latest = 1 AND is_forgotten = 0 AND container_tag = ? ORDER BY created_at DESC'
-        )
-        .all(containerTag) as MemoryRow[];
-      return rows.map(rowToMemoryEntry);
-    }
-    const rows = this.db
-      .prepare(
-        'SELECT * FROM memory_entries WHERE is_latest = 1 AND is_forgotten = 0 ORDER BY created_at DESC'
-      )
-      .all() as MemoryRow[];
-    return rows.map(rowToMemoryEntry);
+    return this.queryLatestMemories('is_latest = 1 AND is_forgotten = 0', [], containerTag);
   }
 
   getMemoryVersionChain(rootId: string): MemoryEntry[] {
@@ -193,20 +191,7 @@ export class MemoryRepo {
   }
 
   getMemoriesSince(since: string, containerTag?: string): MemoryEntry[] {
-    if (containerTag) {
-      const rows = this.db
-        .prepare(
-          'SELECT * FROM memory_entries WHERE created_at >= ? AND container_tag = ? AND is_latest = 1 ORDER BY created_at DESC'
-        )
-        .all(since, containerTag) as MemoryRow[];
-      return rows.map(rowToMemoryEntry);
-    }
-    const rows = this.db
-      .prepare(
-        'SELECT * FROM memory_entries WHERE created_at >= ? AND is_latest = 1 ORDER BY created_at DESC'
-      )
-      .all(since) as MemoryRow[];
-    return rows.map(rowToMemoryEntry);
+    return this.queryLatestMemories('created_at >= ? AND is_latest = 1', [since], containerTag);
   }
 
   getMemoryCount(): number {
