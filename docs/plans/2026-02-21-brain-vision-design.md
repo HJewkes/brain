@@ -1,8 +1,8 @@
 # Brain Vision: From Search Index to Memory Engine
 
 **Date**: 2026-02-21
-**Status**: Initial implementation complete (Phases 1–5)
-**Branch**: `feat/phase-1-better-chunking-search`
+**Status**: Implementation complete (Phases 1–5), refactored with repository pattern
+**Branch**: `feat/memory-engine`
 **Updated**: 2026-02-22
 
 ## 1. Executive Summary

@@ -42,6 +42,9 @@ export class BrainDB {
   }
 
   // --- Schema Migration ---
+  // TODO: schemaV1() contains full schema (including v4/v5 tables) and migrateToV4/V5
+  // duplicate the same DDL. When adding v6, refactor so schemaV1() calls migration
+  // functions or extract shared DDL constants to avoid silent divergence.
 
   private migrate(): void {
     const currentVersion = this.db.pragma('user_version', { simple: true }) as number;

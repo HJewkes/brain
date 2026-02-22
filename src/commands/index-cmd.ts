@@ -26,6 +26,8 @@ export const indexCommand = new Command('index')
   .option('--extract-tag <tag>', 'container tag for extracted memories', 'default')
   .option('--watch', 'watch for file changes and re-index automatically')
   .action(async (opts) => {
+    // Bypasses withBrain/withDb because watch mode needs the DB open across
+    // the entire process lifetime — the callback pattern can't express that.
     const config = loadConfig();
     const db = new BrainDB(config.dbPath);
     const embedder = createEmbedder(config);

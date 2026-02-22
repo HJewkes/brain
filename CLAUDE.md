@@ -17,7 +17,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all tests (Vitest) |
+| `npm test` | Run all tests (Vitest, 345 tests) |
 | `npm run build` | Build with tsup (output: `dist/cli.js`) |
 | `npm run typecheck` | TypeScript type checking |
 | `npm run lint` | ESLint |
@@ -51,12 +51,36 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 
 ```
 src/
-  cli.ts              — Entry point, Commander program
-  types.ts            — All TypeScript interfaces
-  commands/           — 20 CLI commands
-  services/           — Core logic (brain-db, config, file-scanner, markdown-parser, search, graph, memory-extractor, ollama, reranker)
-  adapters/           — Embedder backends (local/ollama/remote) with factory
+  cli.ts                — Entry point, Commander program
+  types.ts              — All TypeScript interfaces and constants
+  utils.ts              — Shared utilities (slugify)
+  commands/             — 20 CLI commands
+  services/
+    brain-db.ts         — Database facade (delegates to repos)
+    brain-service.ts    — Resource management (withBrain/withDb helpers)
+    repos/
+      note-repo.ts      — Notes, files, chunks, relations, FTS, search queries
+      memory-repo.ts    — Memory entries, history, vectors
+      capture-repo.ts   — Inbox items, feed records
+    config.ts           — Configuration loading via env-paths
+    file-scanner.ts     — File change detection (hash-based)
+    markdown-parser.ts  — Frontmatter parsing + heading-aware chunking
+    indexing.ts         — Index pipeline (file scanning, chunking, embedding)
+    search.ts           — Hybrid search orchestration (BM25 + vector + memory)
+    graph.ts            — Note relation traversal (batch queries)
+    memory-extractor.ts — LLM fact extraction and reconciliation
+    ollama.ts           — Ollama LLM client (120s timeout)
+    reranker.ts         — Cross-encoder reranking pipeline
+  adapters/             — Embedder backends (local/ollama/remote) with factory
 ```
+
+### Database Layer
+
+Repository pattern: `BrainDB` is a facade that delegates to three domain repos (`NoteRepo`, `MemoryRepo`, `CaptureRepo`). Each repo owns the SQL, row types, and mappers for its tables. Cross-repo operations like `deleteNote` (cascades across memories, chunks, FTS, relations) live in the facade.
+
+Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts` which handle resource lifecycle (try/finally close).
+
+### Key Subsystems
 
 - **Storage**: SQLite via better-sqlite3 with FTS5 for text search and sqlite-vec for vector search
 - **Embeddings**: Local (@huggingface/transformers), Ollama, or remote backends
@@ -68,8 +92,10 @@ src/
 
 ## Testing
 
-- Unit tests: `__tests__/services/` and `__tests__/adapters/`
-- Integration tests: `__tests__/integration/` — exercises full CLI pipeline via execSync
+- Unit tests: `__tests__/services/` and `__tests__/services/repos/`
+- Adapter tests: `__tests__/adapters/`
+- Integration tests: `__tests__/integration/`
+- Eval tests: `__tests__/eval/` — chunk quality benchmarks
 - Framework: Vitest with globals enabled
 - Conventions: Arrange-Act-Assert, mock only external dependencies
 
@@ -79,3 +105,4 @@ src/
 - ESM-only (`"type": "module"` in package.json)
 - Native modules (better-sqlite3, sqlite-vec) are external in tsup build
 - Config stored via env-paths (`~/Library/Preferences/brain` on macOS)
+- Deferred review items tracked in `docs/review-deferred.md`

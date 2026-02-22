@@ -1,6 +1,6 @@
 # Brain Knowledge Base
 
-Interact with the brain — a searchable knowledge base for the Voltras ecosystem.
+Interact with the brain — a searchable knowledge base with memory extraction and temporal intelligence.
 
 **CLI**: `npx tsx src/cli.ts` from `/Users/hjewkes/Documents/projects/brain`
 **Data**: `~/brain/`
@@ -9,6 +9,7 @@ Interact with the brain — a searchable knowledge base for the Voltras ecosyste
 
 - **Before work**: Search for prior decisions, patterns, and research on your topic.
 - **After work**: Deposit findings, decisions, and patterns for future agents.
+- **For context**: Pull memories, related notes, and agent profiles.
 
 ## Search
 
@@ -23,23 +24,29 @@ brain search "<query>" [options]
   --confidence <level>      high|medium|low|speculative
   --since <date>            Notes modified after YYYY-MM-DD
   --expand                  Include graph-connected notes
+  --memories                Include extracted memory results
+  --rerank                  Apply cross-encoder reranking
+  --container <tag>         Scope to memory container
 ```
 
-## Add Notes
+## Capture
 
 ```bash
-brain add <file> [options]
-  --title <title>               Note title (required)
-  --type <type>                 note|decision|pattern|research|meeting|session-log|guide
-  --tier <tier>                 slow|fast
-  --tags <tags>                 Comma-separated tags
-  --summary <text>              One-line summary for search excerpts
-  --confidence <level>          high|medium|low|speculative
-  --status <status>             current|outdated|deprecated|draft
-  --category <cat>              Project category
-  --related <ids>               Comma-separated related note IDs
-  --review-interval <interval>  e.g. 30d, 60d, 90d, 180d
-  --created <date>              YYYY-MM-DD (defaults to today)
+brain quick "thought or link"       # Zero-friction inbox capture
+brain add <file> [options]          # Add note with frontmatter
+brain ingest --dir <path>           # Bulk import files
+```
+
+## Memory Commands
+
+```bash
+brain extract --all                 # Extract memories from all notes (requires Ollama)
+brain extract --note <id>           # Extract from specific note
+brain memories list --json          # List active memories
+brain memories history <id>         # Version chain for a memory
+brain memories stats                # Count + expiry sweep
+brain context <id> --json           # Note context (relations + memories)
+brain profile --format json         # Agent context profile
 ```
 
 ## Other Commands
@@ -51,6 +58,7 @@ brain add <file> [options]
 | `brain stale` | List notes past review interval |
 | `brain index` | Rebuild search index |
 | `brain template <type>` | Generate template for a note type |
+| `brain tidy` | LLM-powered note cleanup suggestions |
 
 ## Categories
 
@@ -68,12 +76,13 @@ When **searching**:
 - Use `--category` to scope queries to the relevant project
 - Use `--min-score 0.4` to filter noise on broad queries
 - Use `--expand` when you need the full context graph around a result
+- Use `--memories` to include extracted facts alongside note results
 
 ## Workflow Patterns
 
 **Context pull** — before planning or brainstorming:
 ```bash
-brain search "topic" --category mobile --min-score 0.4 --expand
+brain search "topic" --category mobile --min-score 0.4 --expand --memories
 ```
 
 **Research deposit** — after completing research:

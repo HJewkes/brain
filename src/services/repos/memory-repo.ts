@@ -111,6 +111,8 @@ export class MemoryRepo {
     return rows.map(rowToMemoryEntry);
   }
 
+  // TODO: collapse containerTag branching into single parameterized query
+  // (same pattern duplicated in getMemoriesSince)
   getLatestMemories(containerTag?: string): MemoryEntry[] {
     if (containerTag) {
       const rows = this.db
