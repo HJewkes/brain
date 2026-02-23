@@ -431,8 +431,8 @@ describe('NoteRepo', () => {
     let noteRepo: NoteRepo;
 
     beforeEach(() => {
-      noteRepo = (db as any).noteRepo as NoteRepo;
-      const rawDb = (db as any).db;
+      noteRepo = (db as unknown as { noteRepo: NoteRepo }).noteRepo;
+      const rawDb = (db as unknown as { db: import('better-sqlite3').Database }).db;
       for (const id of ['initiative', 'child1', 'child2', 'grandchild1']) {
         rawDb.prepare(
           `INSERT INTO notes (id, file_path, title, type, tier, status)
@@ -469,7 +469,7 @@ describe('NoteRepo', () => {
     let noteRepo: NoteRepo;
 
     beforeEach(() => {
-      noteRepo = (db as any).noteRepo as NoteRepo;
+      noteRepo = (db as unknown as { noteRepo: NoteRepo }).noteRepo;
     });
 
     it('records an access event', () => {

@@ -70,7 +70,7 @@ lineageCommand
       }
 
       process.stdout.write(
-        `Will delete ${preview.noteCount} note(s) and ${preview.memoryCount} memorie(s):\n`
+        `Will delete ${preview.noteCount} note(s) and ${preview.memoryCount} memory/memories:\n`
       );
       for (const id of preview.noteIds) {
         process.stdout.write(`  - ${id}\n`);
