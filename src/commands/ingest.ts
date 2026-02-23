@@ -8,10 +8,22 @@ import { VALID_INBOX_SOURCES } from '../types.js';
 
 export const ingestCommand = new Command('ingest')
   .description('Bulk-import files into the inbox')
-  .argument('<files...>', 'Files to ingest')
+  .argument('[files...]', 'Files to ingest')
   .option('--source <source>', 'Source label (file, crawler, api)', 'file')
   .option('--url <url>', 'Source URL for all items')
+  .option('--urls <file>', 'File containing URLs to import (one per line)')
   .action(async (files, opts) => {
+    if (opts.urls) {
+      await handleUrlsFile(opts.urls);
+      return;
+    }
+
+    if (!files || files.length === 0) {
+      process.stderr.write('Error: provide file arguments or use --urls <file>\n');
+      process.exitCode = 1;
+      return;
+    }
+
     const source = opts.source ?? 'file';
     if (!VALID_INBOX_SOURCES.includes(source as InboxSource)) {
       process.stderr.write(
@@ -58,3 +70,33 @@ export const ingestCommand = new Command('ingest')
       process.stdout.write(`Ingested ${ingested} item${ingested !== 1 ? 's' : ''} into inbox.\n`);
     });
   });
+
+async function handleUrlsFile(urlsPath: string): Promise<void> {
+  const urlFile = resolve(urlsPath);
+  const content = readFileSync(urlFile, 'utf-8');
+  const urls = content
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+
+  await withDb(({ db }) => {
+    let ingested = 0;
+    for (const url of urls) {
+      const item: InboxItem = {
+        id: randomUUID(),
+        content: `Pending URL fetch: ${url}`,
+        title: url,
+        source: 'crawler' as InboxSource,
+        sourceUrl: url,
+        sourceMeta: null,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        processedAt: null,
+      };
+      db.addInboxItem(item);
+      ingested++;
+    }
+    process.stdout.write(`Queued ${ingested} URL(s) for processing.\n`);
+    process.stdout.write('Run "brain index --inbox" to fetch and index them.\n');
+  });
+}
