@@ -36,7 +36,15 @@ export const VALID_NOTE_TIERS: NoteTier[] = ['slow', 'fast'];
 export const VALID_NOTE_CONFIDENCES: NoteConfidence[] = ['high', 'medium', 'low', 'speculative'];
 export const VALID_NOTE_STATUSES: NoteStatus[] = ['current', 'outdated', 'deprecated', 'draft'];
 
-export type RelationType = 'related-to' | 'supersedes' | 'informs' | 'parent';
+export type RelationType = 'related-to' | 'supersedes' | 'informs' | 'parent' | 'derived-from';
+
+export type NoteAccessEvent = 'search_hit' | 'relation_target' | 'context_view';
+
+export interface NoteAccessRecord {
+  noteId: string;
+  event: NoteAccessEvent;
+  createdAt: number;
+}
 
 export interface NoteSource {
   url: string;

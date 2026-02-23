@@ -33,9 +33,9 @@ describe('BrainDB', () => {
       expect(tables).toContain('db_meta');
     });
 
-    it('sets schema_version to 5 in db_meta', () => {
+    it('sets schema_version to 6 in db_meta', () => {
       const version = db.getMetaValue('schema_version');
-      expect(version).toBe('5');
+      expect(version).toBe('6');
     });
 
     it('sets and gets embedding model metadata', () => {
@@ -65,7 +65,7 @@ describe('BrainDB', () => {
 
   describe('schema v5 migration', () => {
     it('new databases get latest schema version', () => {
-      expect(db.getMetaValue('schema_version')).toBe('5');
+      expect(db.getMetaValue('schema_version')).toBe('6');
     });
 
     it('creates inbox table', () => {
@@ -174,6 +174,31 @@ describe('BrainDB', () => {
       expect(db.getMemory('mem-1')).toBeNull();
       expect(db.getMemoryHistory('mem-1')).toHaveLength(0);
       expect(db.searchMemoryVectors(new Float32Array(384), 10)).toHaveLength(0);
+    });
+  });
+
+  describe('schema V6 migration', () => {
+    it('creates note_access table', () => {
+      const tables = db.listTables();
+      expect(tables).toContain('note_access');
+    });
+
+    it('sets schema_version to 6', () => {
+      expect(db.getMetaValue('schema_version')).toBe('6');
+    });
+
+    it('stores derived-from relation type', () => {
+      db.upsertNote(makeNote({ id: 'parent-note', filePath: '/test/parent.md', title: 'Parent' }));
+      db.upsertNote(makeNote({ id: 'child-note', filePath: '/test/child.md', title: 'Child', type: 'research', tier: 'fast' }));
+
+      db.upsertRelations('child-note', [
+        { sourceId: 'child-note', targetId: 'parent-note', type: 'derived-from' },
+      ]);
+
+      const rels = db.getRelationsFrom('child-note');
+      expect(rels).toHaveLength(1);
+      expect(rels[0].type).toBe('derived-from');
+      expect(rels[0].targetId).toBe('parent-note');
     });
   });
 

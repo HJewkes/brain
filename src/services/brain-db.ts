@@ -17,7 +17,7 @@ import { CaptureRepo } from './repos/capture-repo.js';
 
 export { sanitizeFtsQuery } from './repos/note-repo.js';
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 export class BrainDB {
   private db: Database.Database;
@@ -65,6 +65,7 @@ export class BrainDB {
     this.applyMigration(currentVersion, 3, () => this.migrateToV3());
     this.applyMigration(currentVersion, 4, () => this.db.exec(this.captureDDL()));
     this.applyMigration(currentVersion, 5, () => this.db.exec(this.memoryDDL()));
+    this.applyMigration(currentVersion, 6, () => this.db.exec(this.noteAccessDDL()));
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -162,6 +163,17 @@ export class BrainDB {
     `;
   }
 
+  private noteAccessDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS note_access (
+        note_id    TEXT NOT NULL,
+        event      TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_note_access_note ON note_access(note_id);
+    `;
+  }
+
   private schemaV1(): string {
     return `
       CREATE TABLE IF NOT EXISTS files (
@@ -229,6 +241,7 @@ export class BrainDB {
 
       ${this.captureDDL()}
       ${this.memoryDDL()}
+      ${this.noteAccessDDL()}
     `;
   }
 
