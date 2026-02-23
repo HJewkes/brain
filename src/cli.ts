@@ -22,6 +22,7 @@ import { profileCommand } from './commands/profile.js';
 import { tidyCommand } from './commands/tidy.js';
 import { installHooksCommand } from './commands/install-hooks.js';
 import { doctorCommand } from './commands/doctor.js';
+import { lineageCommand } from './commands/lineage.js';
 
 const program = new Command()
   .name('brain')
@@ -51,6 +52,7 @@ program.addCommand(profileCommand);
 program.addCommand(tidyCommand);
 program.addCommand(installHooksCommand);
 program.addCommand(doctorCommand);
+program.addCommand(lineageCommand);
 
 program.parseAsync().catch((err: Error) => {
   process.stderr.write(`Error: ${err.message}\n`);
