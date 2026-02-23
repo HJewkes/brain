@@ -1,5 +1,7 @@
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
+import { mkdirSync, renameSync, existsSync } from 'node:fs';
+import { join, dirname, relative } from 'node:path';
 import type {
   NoteRecord,
   FileRecord,
@@ -15,6 +17,7 @@ import type {
 import { NoteRepo } from './repos/note-repo.js';
 import { MemoryRepo } from './repos/memory-repo.js';
 import { CaptureRepo } from './repos/capture-repo.js';
+import { addFrontmatterField } from './indexing.js';
 
 export { sanitizeFtsQuery } from './repos/note-repo.js';
 
@@ -22,6 +25,12 @@ export interface CascadePreview {
   noteIds: string[];
   noteCount: number;
   memoryCount: number;
+}
+
+export interface ArchiveResult {
+  archivedNote: string;
+  archivedPath: string;
+  orphanedChildren: string[];
 }
 
 const SCHEMA_VERSION = 6;
@@ -353,6 +362,45 @@ export class BrainDB {
     txn();
 
     return preview;
+  }
+
+  cascadeArchive(noteId: string, notesDir: string): ArchiveResult {
+    const note = this.getNoteById(noteId);
+    if (!note) throw new Error(`Note not found: ${noteId}`);
+
+    const archiveDir = join(notesDir, '.archive');
+    const relativePath = relative(notesDir, note.filePath);
+    const archivePath = join(archiveDir, relativePath);
+
+    // Move file to archive
+    mkdirSync(dirname(archivePath), { recursive: true });
+    if (existsSync(note.filePath)) {
+      renameSync(note.filePath, archivePath);
+    }
+
+    // Remove from search index (chunks, FTS, vectors) but keep note row
+    const txn = this.db.transaction(() => {
+      this.memoryRepo.deleteMemoriesForNote(noteId);
+      this.noteRepo.deleteChunksForNote(noteId);
+      this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(noteId);
+      this.db.prepare(
+        'UPDATE notes SET status = ?, file_path = ? WHERE id = ?'
+      ).run('archived', archivePath, noteId);
+    });
+    txn();
+
+    // Mark direct children as orphaned
+    const directChildren = this.noteRepo.getDescendants(noteId, 1);
+    const orphanedIds: string[] = [];
+    for (const child of directChildren) {
+      const childNote = this.getNoteById(child.id);
+      if (childNote && existsSync(childNote.filePath)) {
+        addFrontmatterField(childNote.filePath, 'orphaned_from', noteId);
+        orphanedIds.push(child.id);
+      }
+    }
+
+    return { archivedNote: noteId, archivedPath: archivePath, orphanedChildren: orphanedIds };
   }
 
   // --- Note Delegates ---

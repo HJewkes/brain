@@ -12,6 +12,14 @@ export function isSkippedFile(filePath: string): boolean {
   return filePath.includes('/_templates/') || basename(filePath) === '_index.md';
 }
 
+export function addFrontmatterField(filePath: string, field: string, value: string): void {
+  const content = readFileSync(filePath, 'utf-8');
+  const endOfFrontmatter = content.indexOf('\n---', 4);
+  if (endOfFrontmatter === -1) return;
+  const updated = content.slice(0, endOfFrontmatter) + `\n${field}: ${value}` + content.slice(endOfFrontmatter);
+  writeFileSync(filePath, updated, 'utf-8');
+}
+
 export interface IndexResult {
   indexed: number;
   deleted: number;
