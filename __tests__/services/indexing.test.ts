@@ -173,14 +173,31 @@ describe('inboxItemToMarkdown', () => {
     expect(md).toContain('Remember to refactor the auth module.');
   });
 
-  it('includes source URL when present', () => {
+  it('produces sources frontmatter when sourceUrl is present', () => {
     const item = makeInboxItem({
       content: 'Interesting article',
       sourceUrl: 'https://example.com/article',
     });
 
     const md = inboxItemToMarkdown(item);
-    expect(md).toContain('Source: https://example.com/article');
+
+    expect(md).toContain('sources:');
+    expect(md).toContain('url: "https://example.com/article"');
+    expect(md).toContain('type: "web"');
+    expect(md).not.toContain('Source: https://example.com/article');
+  });
+
+  it('omits sources frontmatter when no sourceUrl', () => {
+    const item = makeInboxItem({
+      content: 'Just a note',
+      title: 'Plain Item',
+      sourceUrl: null,
+    });
+
+    const md = inboxItemToMarkdown(item);
+
+    expect(md).not.toContain('sources:');
+    expect(md).not.toContain('Source:');
   });
 
   it('uses item id prefix when title is null', () => {

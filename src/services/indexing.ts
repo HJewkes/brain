@@ -74,13 +74,14 @@ export function inboxItemToMarkdown(item: InboxItem): string {
     `status: draft`,
     `created: ${now}`,
     `modified: ${now}`,
-    '---',
-    '',
-    item.content,
   ];
   if (item.sourceUrl) {
-    lines.push('', `Source: ${item.sourceUrl}`);
+    lines.push('sources:');
+    lines.push(`  - url: "${item.sourceUrl}"`);
+    lines.push(`    accessed: "${now}"`);
+    lines.push('    type: "web"');
   }
+  lines.push('---', '', item.content);
   return lines.join('\n');
 }
 
