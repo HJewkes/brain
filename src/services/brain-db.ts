@@ -333,6 +333,7 @@ export class BrainDB {
       this.noteRepo.deleteChunksForNote(id);
       this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(id);
       this.db.prepare('DELETE FROM relations WHERE source_id = ? OR target_id = ?').run(id, id);
+      this.db.prepare('DELETE FROM note_access WHERE note_id = ?').run(id);
       this.db.prepare('DELETE FROM notes WHERE id = ?').run(id);
     });
     txn();
@@ -350,12 +351,11 @@ export class BrainDB {
 
   cascadeDelete(noteId: string): CascadePreview {
     const preview = this.cascadeDeletePreview(noteId);
-    const descendants = this.noteRepo.getDescendants(noteId);
-    const sorted = [...descendants].sort((a, b) => b.depth - a.depth);
 
     const txn = this.db.transaction(() => {
-      for (const desc of sorted) {
-        this.deleteNote(desc.id);
+      // Delete descendants (skip root noteId), then delete root last
+      for (const id of preview.noteIds.filter((id) => id !== noteId).reverse()) {
+        this.deleteNote(id);
       }
       this.deleteNote(noteId);
     });

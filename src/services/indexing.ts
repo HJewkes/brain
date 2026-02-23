@@ -16,7 +16,15 @@ export function addFrontmatterField(filePath: string, field: string, value: stri
   const content = readFileSync(filePath, 'utf-8');
   const endOfFrontmatter = content.indexOf('\n---', 4);
   if (endOfFrontmatter === -1) return;
-  const updated = content.slice(0, endOfFrontmatter) + `\n${field}: ${value}` + content.slice(endOfFrontmatter);
+
+  const frontmatter = content.slice(0, endOfFrontmatter);
+  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
+  let updated: string;
+  if (fieldRegex.test(frontmatter)) {
+    updated = frontmatter.replace(fieldRegex, `${field}: ${value}`) + content.slice(endOfFrontmatter);
+  } else {
+    updated = frontmatter + `\n${field}: ${value}` + content.slice(endOfFrontmatter);
+  }
   writeFileSync(filePath, updated, 'utf-8');
 }
 

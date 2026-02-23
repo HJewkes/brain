@@ -72,6 +72,7 @@ export const ingestCommand = new Command('ingest')
   });
 
 async function handleUrlsFile(urlsPath: string): Promise<void> {
+  const { fetchAndExtract } = await import('../services/web-extract.js');
   const urlFile = resolve(urlsPath);
   const content = readFileSync(urlFile, 'utf-8');
   const urls = content
@@ -79,24 +80,35 @@ async function handleUrlsFile(urlsPath: string): Promise<void> {
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith('#'));
 
-  await withDb(({ db }) => {
+  await withDb(async ({ db }) => {
     let ingested = 0;
+    let failed = 0;
     for (const url of urls) {
-      const item: InboxItem = {
-        id: randomUUID(),
-        content: `Pending URL fetch: ${url}`,
-        title: url,
-        source: 'crawler' as InboxSource,
-        sourceUrl: url,
-        sourceMeta: null,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        processedAt: null,
-      };
-      db.addInboxItem(item);
-      ingested++;
+      try {
+        const result = await fetchAndExtract(url);
+        const title = result.metadata.title ?? url;
+        const item: InboxItem = {
+          id: randomUUID(),
+          content: result.markdown || `Could not extract content from ${url}`,
+          title,
+          source: 'crawler' as InboxSource,
+          sourceUrl: result.normalizedUrl,
+          sourceMeta: null,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          processedAt: null,
+        };
+        db.addInboxItem(item);
+        ingested++;
+        process.stdout.write(`Fetched: ${url}\n`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`Failed: ${url} — ${msg}\n`);
+        failed++;
+      }
     }
-    process.stdout.write(`Queued ${ingested} URL(s) for processing.\n`);
-    process.stdout.write('Run "brain index --inbox" to fetch and index them.\n');
+    process.stdout.write(`Ingested ${ingested} URL(s) into inbox.`);
+    if (failed > 0) process.stdout.write(` ${failed} failed.`);
+    process.stdout.write('\n');
   });
 }

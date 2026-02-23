@@ -105,6 +105,10 @@ export async function fetchAndExtract(
   options?: WebExtractOptions,
 ): Promise<WebExtractResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  const parsed = new URL(url);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error(`Unsupported protocol: ${parsed.protocol} (only http/https)`);
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), opts.timeout);
@@ -126,6 +130,9 @@ export async function fetchAndExtract(
     }
 
     const html = await response.text();
+    if (html.length > opts.maxSize) {
+      throw new Error(`Content too large: ${html.length} bytes (max ${opts.maxSize})`);
+    }
     return extractFromHtml(html, url);
   } finally {
     clearTimeout(timeoutId);
