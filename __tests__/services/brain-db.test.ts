@@ -202,6 +202,53 @@ describe('BrainDB', () => {
     });
   });
 
+  describe('cascadeDelete', () => {
+    beforeEach(() => {
+      for (const id of ['initiative', 'child1', 'child2', 'grandchild1']) {
+        db.upsertNote(makeNote({
+          id,
+          filePath: `/test/${id}.md`,
+          title: id,
+          type: 'research',
+          tier: 'fast',
+        }));
+      }
+      db.upsertRelations('child1', [
+        { sourceId: 'child1', targetId: 'initiative', type: 'derived-from' },
+      ]);
+      db.upsertRelations('child2', [
+        { sourceId: 'child2', targetId: 'initiative', type: 'derived-from' },
+      ]);
+      db.upsertRelations('grandchild1', [
+        { sourceId: 'grandchild1', targetId: 'child1', type: 'derived-from' },
+      ]);
+    });
+
+    it('returns preview of affected notes', () => {
+      const preview = db.cascadeDeletePreview('initiative');
+      expect(preview.noteIds).toContain('child1');
+      expect(preview.noteIds).toContain('child2');
+      expect(preview.noteIds).toContain('grandchild1');
+      expect(preview.noteIds).toContain('initiative');
+      expect(preview.noteCount).toBe(4);
+    });
+
+    it('deletes all descendants and the root', () => {
+      db.cascadeDelete('initiative');
+      expect(db.getNoteById('initiative')).toBeNull();
+      expect(db.getNoteById('child1')).toBeNull();
+      expect(db.getNoteById('child2')).toBeNull();
+      expect(db.getNoteById('grandchild1')).toBeNull();
+    });
+
+    it('deletes a leaf node without affecting siblings', () => {
+      db.cascadeDelete('grandchild1');
+      expect(db.getNoteById('grandchild1')).toBeNull();
+      expect(db.getNoteById('child1')).not.toBeNull();
+      expect(db.getNoteById('initiative')).not.toBeNull();
+    });
+  });
+
   describe('sanitizeFtsQuery', () => {
     it('wraps terms in quotes', () => {
       expect(sanitizeFtsQuery('hello world')).toBe('"hello" "world"');

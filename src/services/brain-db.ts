@@ -10,12 +10,19 @@ import type {
   FeedRecord,
   MemoryEntry,
   MemoryHistoryEntry,
+  NoteAccessEvent,
 } from '../types.js';
 import { NoteRepo } from './repos/note-repo.js';
 import { MemoryRepo } from './repos/memory-repo.js';
 import { CaptureRepo } from './repos/capture-repo.js';
 
 export { sanitizeFtsQuery } from './repos/note-repo.js';
+
+export interface CascadePreview {
+  noteIds: string[];
+  noteCount: number;
+  memoryCount: number;
+}
 
 const SCHEMA_VERSION = 6;
 
@@ -322,6 +329,32 @@ export class BrainDB {
     txn();
   }
 
+  cascadeDeletePreview(noteId: string): CascadePreview {
+    const descendants = this.noteRepo.getDescendants(noteId);
+    const allIds = [noteId, ...descendants.map((d) => d.id)];
+    let memoryCount = 0;
+    for (const id of allIds) {
+      memoryCount += this.memoryRepo.getMemoriesForNote(id).length;
+    }
+    return { noteIds: allIds, noteCount: allIds.length, memoryCount };
+  }
+
+  cascadeDelete(noteId: string): CascadePreview {
+    const preview = this.cascadeDeletePreview(noteId);
+    const descendants = this.noteRepo.getDescendants(noteId);
+    const sorted = [...descendants].sort((a, b) => b.depth - a.depth);
+
+    const txn = this.db.transaction(() => {
+      for (const desc of sorted) {
+        this.deleteNote(desc.id);
+      }
+      this.deleteNote(noteId);
+    });
+    txn();
+
+    return preview;
+  }
+
   // --- Note Delegates ---
 
   upsertNote(record: NoteRecord): NoteRecord { return this.noteRepo.upsertNote(record); }
@@ -354,6 +387,13 @@ export class BrainDB {
   getRelationsFrom(noteId: string): Relation[] { return this.noteRepo.getRelationsFrom(noteId); }
   getRelationsTo(noteId: string): Relation[] { return this.noteRepo.getRelationsTo(noteId); }
   getRelationsBatch(ids: string[]): Map<string, { from: Relation[]; to: Relation[] }> { return this.noteRepo.getRelationsBatch(ids); }
+  getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> { return this.noteRepo.getDescendants(noteId, maxDepth); }
+
+  // --- Access Delegates ---
+
+  recordAccess(noteId: string, event: NoteAccessEvent): void { this.noteRepo.recordAccess(noteId, event); }
+  getAccessCount(noteId: string): number { return this.noteRepo.getAccessCount(noteId); }
+  getAccessCounts(noteIds: string[]): Map<string, number> { return this.noteRepo.getAccessCounts(noteIds); }
 
   // --- FTS Delegates ---
 
