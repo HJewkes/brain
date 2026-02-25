@@ -44,43 +44,28 @@ describe('health checks', () => {
 
   describe('checkLlm', () => {
     it('returns ok when ollama has the model', () => {
-      const result = checkLlm(
-        { running: true, models: ['qwen2.5:3b'] },
-        'qwen2.5:3b'
-      );
+      const result = checkLlm({ running: true, models: ['qwen2.5:3b'] }, 'qwen2.5:3b');
       expect(result.status).toBe('ok');
     });
 
     it('returns ok when model matches by tag suffix', () => {
-      const result = checkLlm(
-        { running: true, models: ['qwen2.5:3b:latest'] },
-        'qwen2.5:3b'
-      );
+      const result = checkLlm({ running: true, models: ['qwen2.5:3b:latest'] }, 'qwen2.5:3b');
       expect(result.status).toBe('ok');
     });
 
     it('does not match model with unrelated prefix', () => {
-      const result = checkLlm(
-        { running: true, models: ['qwen2.5:3b-instruct'] },
-        'qwen2.5:3b'
-      );
+      const result = checkLlm({ running: true, models: ['qwen2.5:3b-instruct'] }, 'qwen2.5:3b');
       expect(result.status).toBe('warning');
     });
 
     it('returns warning when ollama is running but model missing', () => {
-      const result = checkLlm(
-        { running: true, models: ['other-model:latest'] },
-        'qwen2.5:3b'
-      );
+      const result = checkLlm({ running: true, models: ['other-model:latest'] }, 'qwen2.5:3b');
       expect(result.status).toBe('warning');
       expect(result.message).toContain('not found');
     });
 
     it('returns warning when ollama is not running', () => {
-      const result = checkLlm(
-        { running: false, models: [] },
-        'qwen2.5:3b'
-      );
+      const result = checkLlm({ running: false, models: [] }, 'qwen2.5:3b');
       expect(result.status).toBe('warning');
       expect(result.message).toContain('not running');
     });
@@ -114,10 +99,12 @@ describe('health checks', () => {
     });
 
     it('returns warning with stale notes', () => {
-      db.upsertNote(makeNote({
-        lastReviewed: '2020-01-01',
-        reviewInterval: '30d',
-      }));
+      db.upsertNote(
+        makeNote({
+          lastReviewed: '2020-01-01',
+          reviewInterval: '30d',
+        })
+      );
       const result = checkStaleNotes(db);
       expect(result.status).toBe('warning');
       expect(result.message).toContain('1');

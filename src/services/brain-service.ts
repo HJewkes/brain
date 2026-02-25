@@ -16,9 +16,7 @@ export interface DbService {
   close(): void;
 }
 
-export async function withBrain<T>(
-  fn: (svc: BrainService) => T | Promise<T>
-): Promise<T> {
+export async function withBrain<T>(fn: (svc: BrainService) => T | Promise<T>): Promise<T> {
   const config = loadConfig();
   const db = new BrainDB(config.dbPath);
   const embedder = createEmbedder(config);
@@ -37,9 +35,7 @@ export async function withBrain<T>(
   }
 }
 
-export async function withDb<T>(
-  fn: (svc: DbService) => T | Promise<T>
-): Promise<T> {
+export async function withDb<T>(fn: (svc: DbService) => T | Promise<T>): Promise<T> {
   const config = loadConfig();
   const db = new BrainDB(config.dbPath);
   const svc: DbService = {

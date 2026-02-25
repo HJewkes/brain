@@ -53,7 +53,9 @@ function printChildren(children: TreeChild[], prefix: string): void {
     const isLast = i === children.length - 1;
     const connector = isLast ? '\u2514\u2500\u2500 ' : '\u251C\u2500\u2500 ';
     const child = children[i];
-    process.stdout.write(`${prefix}${connector}${child.relationType}: ${child.nodeId} (${child.nodeType})\n`);
+    process.stdout.write(
+      `${prefix}${connector}${child.relationType}: ${child.nodeId} (${child.nodeType})\n`
+    );
     const childPrefix = prefix + (isLast ? '    ' : '\u2502   ');
     printChildren(child.children, childPrefix);
   }

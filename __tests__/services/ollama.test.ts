@@ -14,10 +14,7 @@ describe('checkOllamaHealth', () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        models: [
-          { name: 'qwen2.5:3b' },
-          { name: 'nomic-embed-text:latest' },
-        ],
+        models: [{ name: 'qwen2.5:3b' }, { name: 'nomic-embed-text:latest' }],
       }),
     });
 
@@ -27,9 +24,7 @@ describe('checkOllamaHealth', () => {
   });
 
   it('returns running=false when fetch throws', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new TypeError('fetch failed')
-    );
+    (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new TypeError('fetch failed'));
 
     const result = await checkOllamaHealth('http://localhost:11434');
     expect(result.running).toBe(false);

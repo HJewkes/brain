@@ -1,23 +1,12 @@
 import { Command } from '@commander-js/extra-typings';
-import {
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  unlinkSync,
-  statSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { execSync } from 'node:child_process';
 import { loadConfig } from '../services/config.js';
 
 const PLIST_LABEL = 'com.brain.index';
-const PLIST_PATH = join(
-  homedir(),
-  'Library',
-  'LaunchAgents',
-  `${PLIST_LABEL}.plist`
-);
+const PLIST_PATH = join(homedir(), 'Library', 'LaunchAgents', `${PLIST_LABEL}.plist`);
 const SYSTEMD_DIR = join(homedir(), '.config', 'systemd', 'user');
 const SYSTEMD_SERVICE = 'brain-index.service';
 const SYSTEMD_TIMER = 'brain-index.timer';
@@ -108,9 +97,7 @@ function installLaunchd(intervalMinutes: number, notesDir: string): void {
     return;
   }
   process.stderr.write(`Installed launchd agent: ${PLIST_PATH}\n`);
-  process.stderr.write(
-    `Brain will index every ${intervalMinutes} minutes.\n`
-  );
+  process.stderr.write(`Brain will index every ${intervalMinutes} minutes.\n`);
 }
 
 function installSystemd(intervalMinutes: number): void {
@@ -127,14 +114,14 @@ function installSystemd(intervalMinutes: number): void {
     execSync('systemctl --user daemon-reload');
     execSync(`systemctl --user enable --now ${SYSTEMD_TIMER}`);
   } catch {
-    process.stderr.write('Error: systemctl commands failed. Check systemd configuration manually.\n');
+    process.stderr.write(
+      'Error: systemctl commands failed. Check systemd configuration manually.\n'
+    );
     process.exitCode = 1;
     return;
   }
   process.stderr.write(`Installed systemd timer: ${timerPath}\n`);
-  process.stderr.write(
-    `Brain will index every ${intervalMinutes} minutes.\n`
-  );
+  process.stderr.write(`Brain will index every ${intervalMinutes} minutes.\n`);
 }
 
 function uninstallLaunchd(): void {
@@ -206,11 +193,7 @@ function getStatus(notesDir: string): {
 
 export const installHooksCommand = new Command('install-hooks')
   .description('Set up scheduled processing (launchd/systemd)')
-  .option(
-    '--interval <minutes>',
-    'processing interval in minutes',
-    '360'
-  )
+  .option('--interval <minutes>', 'processing interval in minutes', '360')
   .option('--uninstall', 'remove scheduled processing')
   .option('--status', 'show current hook status')
   .option('--json', 'output as JSON')

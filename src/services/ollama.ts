@@ -60,10 +60,7 @@ export interface OllamaClient {
   readonly model: string;
 }
 
-export function createOllamaClient(
-  ollamaUrl?: string,
-  model?: string
-): OllamaClient {
+export function createOllamaClient(ollamaUrl?: string, model?: string): OllamaClient {
   const baseUrl = ollamaUrl ?? DEFAULT_URL;
   const modelName = model ?? DEFAULT_MODEL;
 

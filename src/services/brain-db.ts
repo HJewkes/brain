@@ -383,9 +383,9 @@ export class BrainDB {
       this.memoryRepo.deleteMemoriesForNote(noteId);
       this.noteRepo.deleteChunksForNote(noteId);
       this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(noteId);
-      this.db.prepare(
-        'UPDATE notes SET status = ?, file_path = ? WHERE id = ?'
-      ).run('archived', archivePath, noteId);
+      this.db
+        .prepare('UPDATE notes SET status = ?, file_path = ? WHERE id = ?')
+        .run('archived', archivePath, noteId);
     });
     txn();
 
@@ -405,83 +405,205 @@ export class BrainDB {
 
   // --- Note Delegates ---
 
-  upsertNote(record: NoteRecord): NoteRecord { return this.noteRepo.upsertNote(record); }
-  getNoteById(id: string): NoteRecord | null { return this.noteRepo.getNoteById(id); }
-  getNotesByIds(ids: string[]): Map<string, NoteRecord> { return this.noteRepo.getNotesByIds(ids); }
-  getAllNotes(): NoteRecord[] { return this.noteRepo.getAllNotes(); }
-  getNoteCount(): number { return this.noteRepo.getNoteCount(); }
-  getNoteByFilePath(filePath: string): NoteRecord | null { return this.noteRepo.getNoteByFilePath(filePath); }
+  upsertNote(record: NoteRecord): NoteRecord {
+    return this.noteRepo.upsertNote(record);
+  }
+  getNoteById(id: string): NoteRecord | null {
+    return this.noteRepo.getNoteById(id);
+  }
+  getNotesByIds(ids: string[]): Map<string, NoteRecord> {
+    return this.noteRepo.getNotesByIds(ids);
+  }
+  getAllNotes(): NoteRecord[] {
+    return this.noteRepo.getAllNotes();
+  }
+  getNoteCount(): number {
+    return this.noteRepo.getNoteCount();
+  }
+  getNoteByFilePath(filePath: string): NoteRecord | null {
+    return this.noteRepo.getNoteByFilePath(filePath);
+  }
 
   // --- File Delegates ---
 
-  upsertFile(record: FileRecord): void { this.noteRepo.upsertFile(record); }
-  getFile(path: string): FileRecord | null { return this.noteRepo.getFile(path); }
-  getAllFiles(): Map<string, FileRecord> { return this.noteRepo.getAllFiles(); }
-  deleteFile(path: string): void { this.noteRepo.deleteFile(path); }
+  upsertFile(record: FileRecord): void {
+    this.noteRepo.upsertFile(record);
+  }
+  getFile(path: string): FileRecord | null {
+    return this.noteRepo.getFile(path);
+  }
+  getAllFiles(): Map<string, FileRecord> {
+    return this.noteRepo.getAllFiles();
+  }
+  deleteFile(path: string): void {
+    this.noteRepo.deleteFile(path);
+  }
 
   // --- Chunk Delegates ---
 
-  upsertChunks(noteId: string, chunks: Chunk[], embeddings: Float32Array[]): void { this.noteRepo.upsertChunks(noteId, chunks, embeddings); }
-  getChunksForNote(noteId: string): Chunk[] { return this.noteRepo.getChunksForNote(noteId); }
-  getChunkCount(): number { return this.noteRepo.getChunkCount(); }
-  deleteChunksForNote(noteId: string): void { this.noteRepo.deleteChunksForNote(noteId); }
-  getChunkContent(chunkId: string): string { return this.noteRepo.getChunkContent(chunkId); }
-  getFirstChunkForNote(noteId: string): { content: string; heading: string | null } | null { return this.noteRepo.getFirstChunkForNote(noteId); }
-  getChunkHeading(chunkId: string | null, noteId: string): string | null { return this.noteRepo.getChunkHeading(chunkId, noteId); }
+  upsertChunks(noteId: string, chunks: Chunk[], embeddings: Float32Array[]): void {
+    this.noteRepo.upsertChunks(noteId, chunks, embeddings);
+  }
+  getChunksForNote(noteId: string): Chunk[] {
+    return this.noteRepo.getChunksForNote(noteId);
+  }
+  getChunkCount(): number {
+    return this.noteRepo.getChunkCount();
+  }
+  deleteChunksForNote(noteId: string): void {
+    this.noteRepo.deleteChunksForNote(noteId);
+  }
+  getChunkContent(chunkId: string): string {
+    return this.noteRepo.getChunkContent(chunkId);
+  }
+  getFirstChunkForNote(noteId: string): { content: string; heading: string | null } | null {
+    return this.noteRepo.getFirstChunkForNote(noteId);
+  }
+  getChunkHeading(chunkId: string | null, noteId: string): string | null {
+    return this.noteRepo.getChunkHeading(chunkId, noteId);
+  }
 
   // --- Relation Delegates ---
 
-  upsertRelations(noteId: string, relations: Relation[]): void { this.noteRepo.upsertRelations(noteId, relations); }
-  getRelationsFrom(noteId: string): Relation[] { return this.noteRepo.getRelationsFrom(noteId); }
-  getRelationsTo(noteId: string): Relation[] { return this.noteRepo.getRelationsTo(noteId); }
-  getRelationsBatch(ids: string[]): Map<string, { from: Relation[]; to: Relation[] }> { return this.noteRepo.getRelationsBatch(ids); }
-  getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> { return this.noteRepo.getDescendants(noteId, maxDepth); }
+  upsertRelations(noteId: string, relations: Relation[]): void {
+    this.noteRepo.upsertRelations(noteId, relations);
+  }
+  getRelationsFrom(noteId: string): Relation[] {
+    return this.noteRepo.getRelationsFrom(noteId);
+  }
+  getRelationsTo(noteId: string): Relation[] {
+    return this.noteRepo.getRelationsTo(noteId);
+  }
+  getRelationsBatch(ids: string[]): Map<string, { from: Relation[]; to: Relation[] }> {
+    return this.noteRepo.getRelationsBatch(ids);
+  }
+  getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> {
+    return this.noteRepo.getDescendants(noteId, maxDepth);
+  }
 
   // --- Access Delegates ---
 
-  recordAccess(noteId: string, event: NoteAccessEvent): void { this.noteRepo.recordAccess(noteId, event); }
-  getAccessCount(noteId: string): number { return this.noteRepo.getAccessCount(noteId); }
-  getAccessCounts(noteIds: string[]): Map<string, number> { return this.noteRepo.getAccessCounts(noteIds); }
+  recordAccess(noteId: string, event: NoteAccessEvent): void {
+    this.noteRepo.recordAccess(noteId, event);
+  }
+  getAccessCount(noteId: string): number {
+    return this.noteRepo.getAccessCount(noteId);
+  }
+  getAccessCounts(noteIds: string[]): Map<string, number> {
+    return this.noteRepo.getAccessCounts(noteIds);
+  }
 
   // --- FTS Delegates ---
 
-  upsertNoteFTS(noteId: string, title: string, summary: string, content: string): void { this.noteRepo.upsertNoteFTS(noteId, title, summary, content); }
-  searchFTS(query: string, limit: number): Array<{ noteId: string; rank: number }> { return this.noteRepo.searchFTS(query, limit); }
+  upsertNoteFTS(noteId: string, title: string, summary: string, content: string): void {
+    this.noteRepo.upsertNoteFTS(noteId, title, summary, content);
+  }
+  searchFTS(query: string, limit: number): Array<{ noteId: string; rank: number }> {
+    return this.noteRepo.searchFTS(query, limit);
+  }
 
   // --- Search Delegates ---
 
-  searchVector(embedding: Float32Array, limit: number): Array<{ chunkId: string; noteId: string; distance: number }> { return this.noteRepo.searchVector(embedding, limit); }
-  getFilteredNoteIds(filters: { tier?: string; category?: string; confidence?: string; since?: string; tags?: string[] }): Set<string> | null { return this.noteRepo.getFilteredNoteIds(filters); }
+  searchVector(
+    embedding: Float32Array,
+    limit: number
+  ): Array<{ chunkId: string; noteId: string; distance: number }> {
+    return this.noteRepo.searchVector(embedding, limit);
+  }
+  getFilteredNoteIds(filters: {
+    tier?: string;
+    category?: string;
+    confidence?: string;
+    since?: string;
+    tags?: string[];
+  }): Set<string> | null {
+    return this.noteRepo.getFilteredNoteIds(filters);
+  }
 
   // --- Memory Delegates ---
 
-  addMemory(entry: MemoryEntry): void { this.memoryRepo.addMemory(entry); }
-  getMemory(id: string): MemoryEntry | null { return this.memoryRepo.getMemory(id); }
-  getMemoriesForNote(noteId: string): MemoryEntry[] { return this.memoryRepo.getMemoriesForNote(noteId); }
-  getLatestMemories(containerTag?: string): MemoryEntry[] { return this.memoryRepo.getLatestMemories(containerTag); }
-  getMemoryVersionChain(rootId: string): MemoryEntry[] { return this.memoryRepo.getMemoryVersionChain(rootId); }
-  markMemorySuperseded(id: string): void { this.memoryRepo.markMemorySuperseded(id); }
-  deleteMemoriesForNote(noteId: string): void { this.memoryRepo.deleteMemoriesForNote(noteId); }
-  forgetExpiredMemories(): number { return this.memoryRepo.forgetExpiredMemories(); }
-  getMemoriesSince(since: string, containerTag?: string): MemoryEntry[] { return this.memoryRepo.getMemoriesSince(since, containerTag); }
-  getMemoryCount(): number { return this.memoryRepo.getMemoryCount(); }
-  getMemoriesByIds(ids: string[]): Map<string, MemoryEntry> { return this.memoryRepo.getMemoriesByIds(ids); }
-  addMemoryHistory(entry: Omit<MemoryHistoryEntry, 'id'>): void { this.memoryRepo.addMemoryHistory(entry); }
-  getMemoryHistory(memoryId: string): MemoryHistoryEntry[] { return this.memoryRepo.getMemoryHistory(memoryId); }
-  deleteMemoryVector(memoryId: string): void { this.memoryRepo.deleteMemoryVector(memoryId); }
-  upsertMemoryVector(memoryId: string, embedding: Float32Array): void { this.memoryRepo.upsertMemoryVector(memoryId, embedding); }
-  searchMemoryVectors(embedding: Float32Array, limit: number): Array<{ memoryId: string; distance: number }> { return this.memoryRepo.searchMemoryVectors(embedding, limit); }
+  addMemory(entry: MemoryEntry): void {
+    this.memoryRepo.addMemory(entry);
+  }
+  getMemory(id: string): MemoryEntry | null {
+    return this.memoryRepo.getMemory(id);
+  }
+  getMemoriesForNote(noteId: string): MemoryEntry[] {
+    return this.memoryRepo.getMemoriesForNote(noteId);
+  }
+  getLatestMemories(containerTag?: string): MemoryEntry[] {
+    return this.memoryRepo.getLatestMemories(containerTag);
+  }
+  getMemoryVersionChain(rootId: string): MemoryEntry[] {
+    return this.memoryRepo.getMemoryVersionChain(rootId);
+  }
+  markMemorySuperseded(id: string): void {
+    this.memoryRepo.markMemorySuperseded(id);
+  }
+  deleteMemoriesForNote(noteId: string): void {
+    this.memoryRepo.deleteMemoriesForNote(noteId);
+  }
+  forgetExpiredMemories(): number {
+    return this.memoryRepo.forgetExpiredMemories();
+  }
+  getMemoriesSince(since: string, containerTag?: string): MemoryEntry[] {
+    return this.memoryRepo.getMemoriesSince(since, containerTag);
+  }
+  getMemoryCount(): number {
+    return this.memoryRepo.getMemoryCount();
+  }
+  getMemoriesByIds(ids: string[]): Map<string, MemoryEntry> {
+    return this.memoryRepo.getMemoriesByIds(ids);
+  }
+  addMemoryHistory(entry: Omit<MemoryHistoryEntry, 'id'>): void {
+    this.memoryRepo.addMemoryHistory(entry);
+  }
+  getMemoryHistory(memoryId: string): MemoryHistoryEntry[] {
+    return this.memoryRepo.getMemoryHistory(memoryId);
+  }
+  deleteMemoryVector(memoryId: string): void {
+    this.memoryRepo.deleteMemoryVector(memoryId);
+  }
+  upsertMemoryVector(memoryId: string, embedding: Float32Array): void {
+    this.memoryRepo.upsertMemoryVector(memoryId, embedding);
+  }
+  searchMemoryVectors(
+    embedding: Float32Array,
+    limit: number
+  ): Array<{ memoryId: string; distance: number }> {
+    return this.memoryRepo.searchMemoryVectors(embedding, limit);
+  }
 
   // --- Capture Delegates ---
 
-  addInboxItem(item: InboxItem): void { this.captureRepo.addInboxItem(item); }
-  getInboxItems(status?: InboxStatus): InboxItem[] { return this.captureRepo.getInboxItems(status); }
-  getInboxItem(id: string): InboxItem | null { return this.captureRepo.getInboxItem(id); }
-  updateInboxStatus(id: string, status: InboxStatus): void { this.captureRepo.updateInboxStatus(id, status); }
-  deleteInboxItem(id: string): void { this.captureRepo.deleteInboxItem(id); }
-  addFeed(feed: FeedRecord): void { this.captureRepo.addFeed(feed); }
-  getFeeds(): FeedRecord[] { return this.captureRepo.getFeeds(); }
-  getFeedById(id: string): FeedRecord | null { return this.captureRepo.getFeedById(id); }
-  removeFeed(id: string): void { this.captureRepo.removeFeed(id); }
-  updateFeedLastPolled(id: string, lastPolled: string): void { this.captureRepo.updateFeedLastPolled(id, lastPolled); }
+  addInboxItem(item: InboxItem): void {
+    this.captureRepo.addInboxItem(item);
+  }
+  getInboxItems(status?: InboxStatus): InboxItem[] {
+    return this.captureRepo.getInboxItems(status);
+  }
+  getInboxItem(id: string): InboxItem | null {
+    return this.captureRepo.getInboxItem(id);
+  }
+  updateInboxStatus(id: string, status: InboxStatus): void {
+    this.captureRepo.updateInboxStatus(id, status);
+  }
+  deleteInboxItem(id: string): void {
+    this.captureRepo.deleteInboxItem(id);
+  }
+  addFeed(feed: FeedRecord): void {
+    this.captureRepo.addFeed(feed);
+  }
+  getFeeds(): FeedRecord[] {
+    return this.captureRepo.getFeeds();
+  }
+  getFeedById(id: string): FeedRecord | null {
+    return this.captureRepo.getFeedById(id);
+  }
+  removeFeed(id: string): void {
+    this.captureRepo.removeFeed(id);
+  }
+  updateFeedLastPolled(id: string, lastPolled: string): void {
+    this.captureRepo.updateFeedLastPolled(id, lastPolled);
+  }
 }

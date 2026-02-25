@@ -60,19 +60,11 @@ export const searchCommand = new Command('search')
       const allResults = [...results, ...expanded];
 
       const memoryResults = opts.memories
-        ? await searchMemories(
-            db,
-            embedder,
-            query,
-            parseInt(opts.limit, 10),
-            opts.container
-          )
+        ? await searchMemories(db, embedder, query, parseInt(opts.limit, 10), opts.container)
         : [];
 
       if (opts.json) {
-        const output = opts.memories
-          ? { notes: allResults, memories: memoryResults }
-          : allResults;
+        const output = opts.memories ? { notes: allResults, memories: memoryResults } : allResults;
         process.stdout.write(JSON.stringify(output) + '\n');
       } else {
         if (allResults.length === 0 && memoryResults.length === 0) {

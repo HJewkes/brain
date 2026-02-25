@@ -25,8 +25,17 @@ export interface WebExtractOptions {
 }
 
 const TRACKING_PARAMS = new Set([
-  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-  'fbclid', 'gclid', 'ref', 'source', 'mc_cid', 'mc_eid',
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'fbclid',
+  'gclid',
+  'ref',
+  'source',
+  'mc_cid',
+  'mc_eid',
 ]);
 
 export function normalizeUrl(rawUrl: string): string {
@@ -102,7 +111,7 @@ const DEFAULT_OPTIONS: Required<WebExtractOptions> = {
 
 export async function fetchAndExtract(
   url: string,
-  options?: WebExtractOptions,
+  options?: WebExtractOptions
 ): Promise<WebExtractResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const parsed = new URL(url);

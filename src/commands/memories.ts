@@ -46,7 +46,9 @@ export const memoriesCommand = new Command('memories')
             process.stdout.write('\n');
           }
 
-          process.stdout.write(`Total: ${limited.length}${memories.length > limit ? ` (showing ${limit} of ${memories.length})` : ''}\n`);
+          process.stdout.write(
+            `Total: ${limited.length}${memories.length > limit ? ` (showing ${limit} of ${memories.length})` : ''}\n`
+          );
         });
       })
   )
@@ -74,7 +76,11 @@ export const memoriesCommand = new Command('memories')
           if (chain.length > 0) {
             process.stdout.write('Version chain:\n');
             for (const m of chain) {
-              const status = m.isLatest ? '(current)' : m.isForgotten ? '(forgotten)' : '(superseded)';
+              const status = m.isLatest
+                ? '(current)'
+                : m.isForgotten
+                  ? '(forgotten)'
+                  : '(superseded)';
               process.stdout.write(`  ${status} ${m.memory}\n`);
               process.stdout.write(`    id: ${m.id} | ${m.createdAt}\n`);
             }

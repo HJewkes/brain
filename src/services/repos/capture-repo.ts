@@ -91,14 +91,13 @@ export class CaptureRepo {
   }
 
   getInboxItem(id: string): InboxItem | null {
-    const row = this.db.prepare('SELECT * FROM inbox WHERE id = ?').get(id) as
-      | InboxRow
-      | undefined;
+    const row = this.db.prepare('SELECT * FROM inbox WHERE id = ?').get(id) as InboxRow | undefined;
     return row ? rowToInboxItem(row) : null;
   }
 
   updateInboxStatus(id: string, status: InboxStatus): void {
-    const processedAt = status === 'indexed' || status === 'failed' ? new Date().toISOString() : null;
+    const processedAt =
+      status === 'indexed' || status === 'failed' ? new Date().toISOString() : null;
     this.db
       .prepare('UPDATE inbox SET status = ?, processed_at = COALESCE(?, processed_at) WHERE id = ?')
       .run(status, processedAt, id);
@@ -133,9 +132,7 @@ export class CaptureRepo {
   }
 
   getFeedById(id: string): FeedRecord | null {
-    const row = this.db.prepare('SELECT * FROM feeds WHERE id = ?').get(id) as
-      | FeedRow
-      | undefined;
+    const row = this.db.prepare('SELECT * FROM feeds WHERE id = ?').get(id) as FeedRow | undefined;
     return row ? rowToFeedRecord(row) : null;
   }
 

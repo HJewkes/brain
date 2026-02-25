@@ -40,28 +40,26 @@ export const feedCommand = new Command('feed')
       })
   )
   .addCommand(
-    new Command('list')
-      .description('List all subscribed feeds')
-      .action(async () => {
-        await withDb(({ db }) => {
-          const feeds = db.getFeeds();
-          if (feeds.length === 0) {
-            process.stdout.write('No feeds configured.\n');
-            return;
-          }
+    new Command('list').description('List all subscribed feeds').action(async () => {
+      await withDb(({ db }) => {
+        const feeds = db.getFeeds();
+        if (feeds.length === 0) {
+          process.stdout.write('No feeds configured.\n');
+          return;
+        }
 
-          for (const feed of feeds) {
-            const polled = feed.lastPolled ? `last polled: ${feed.lastPolled}` : 'never polled';
-            process.stdout.write(`${feed.name} [${feed.containerTag}]\n`);
-            process.stdout.write(`  ${feed.url}\n`);
-            process.stdout.write(`  ${polled} | id: ${feed.id}\n`);
-            if (feed.filterPrompt) {
-              process.stdout.write(`  filter: ${feed.filterPrompt}\n`);
-            }
-            process.stdout.write('\n');
+        for (const feed of feeds) {
+          const polled = feed.lastPolled ? `last polled: ${feed.lastPolled}` : 'never polled';
+          process.stdout.write(`${feed.name} [${feed.containerTag}]\n`);
+          process.stdout.write(`  ${feed.url}\n`);
+          process.stdout.write(`  ${polled} | id: ${feed.id}\n`);
+          if (feed.filterPrompt) {
+            process.stdout.write(`  filter: ${feed.filterPrompt}\n`);
           }
-        });
-      })
+          process.stdout.write('\n');
+        }
+      });
+    })
   )
   .addCommand(
     new Command('remove')

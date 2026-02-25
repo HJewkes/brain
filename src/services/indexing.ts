@@ -21,7 +21,8 @@ export function addFrontmatterField(filePath: string, field: string, value: stri
   const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
   let updated: string;
   if (fieldRegex.test(frontmatter)) {
-    updated = frontmatter.replace(fieldRegex, `${field}: ${value}`) + content.slice(endOfFrontmatter);
+    updated =
+      frontmatter.replace(fieldRegex, `${field}: ${value}`) + content.slice(endOfFrontmatter);
   } else {
     updated = frontmatter + `\n${field}: ${value}` + content.slice(endOfFrontmatter);
   }

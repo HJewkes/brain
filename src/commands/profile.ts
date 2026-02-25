@@ -40,7 +40,9 @@ export const profileCommand = new Command('profile')
         lines.push(`  <stats notes="${noteCount}" memories="${memoryCount}" />`);
         lines.push('  <memories>');
         for (const m of limited) {
-          lines.push(`    <memory container="${m.containerTag}" source="${m.sourceNoteId}">${m.memory}</memory>`);
+          lines.push(
+            `    <memory container="${m.containerTag}" source="${m.sourceNoteId}">${m.memory}</memory>`
+          );
         }
         lines.push('  </memories>');
         lines.push('</context>');

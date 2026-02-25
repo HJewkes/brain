@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { generateLaunchdPlist, generateSystemdService, generateSystemdTimer } from '../../src/commands/install-hooks.js';
+import {
+  generateLaunchdPlist,
+  generateSystemdService,
+  generateSystemdTimer,
+} from '../../src/commands/install-hooks.js';
 
 describe('install-hooks generators', () => {
   describe('generateLaunchdPlist', () => {

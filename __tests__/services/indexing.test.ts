@@ -220,7 +220,11 @@ describe('indexSingleFile', () => {
 
   afterEach(() => {
     db.close();
-    try { unlinkSync(dbPath); } catch { /* ignore */ }
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      /* ignore */
+    }
   });
 
   it('indexes a file and creates note, FTS, chunks, and file record', async () => {
@@ -243,7 +247,12 @@ describe('indexSingleFile', () => {
     ].join('\n');
 
     const noteId = await indexSingleFile(
-      db, embedder, '/notes/idx-test.md', content, 'hash123', Date.now()
+      db,
+      embedder,
+      '/notes/idx-test.md',
+      content,
+      'hash123',
+      Date.now()
     );
 
     expect(noteId).toBe('idx-test');
@@ -277,7 +286,12 @@ describe('indexSingleFile', () => {
     ].join('\n');
 
     const noteId = await indexSingleFile(
-      db, embedder, '/notes/no-sections.md', content, 'hash456', Date.now()
+      db,
+      embedder,
+      '/notes/no-sections.md',
+      content,
+      'hash456',
+      Date.now()
     );
 
     expect(noteId).toBe('no-sections');

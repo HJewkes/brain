@@ -109,8 +109,22 @@ describe('NoteRepo', () => {
       db.upsertNote(note);
 
       const chunks: Chunk[] = [
-        makeChunk({ id: 'chunked:intro:0', noteId: 'chunked', heading: 'Intro', content: 'Hello world', tokenCount: 2, position: 0 }),
-        makeChunk({ id: 'chunked:body:1', noteId: 'chunked', heading: 'Body', content: 'More content', tokenCount: 3, position: 1 }),
+        makeChunk({
+          id: 'chunked:intro:0',
+          noteId: 'chunked',
+          heading: 'Intro',
+          content: 'Hello world',
+          tokenCount: 2,
+          position: 0,
+        }),
+        makeChunk({
+          id: 'chunked:body:1',
+          noteId: 'chunked',
+          heading: 'Body',
+          content: 'More content',
+          tokenCount: 3,
+          position: 1,
+        }),
       ];
       const embeddings = [new Float32Array(384), new Float32Array(384)];
 
@@ -212,12 +226,8 @@ describe('NoteRepo', () => {
       db.upsertNote(makeNote({ id: 'rb-b' }));
       db.upsertNote(makeNote({ id: 'rb-c' }));
 
-      db.upsertRelations('rb-a', [
-        { sourceId: 'rb-a', targetId: 'rb-b', type: 'related-to' },
-      ]);
-      db.upsertRelations('rb-b', [
-        { sourceId: 'rb-b', targetId: 'rb-c', type: 'informs' },
-      ]);
+      db.upsertRelations('rb-a', [{ sourceId: 'rb-a', targetId: 'rb-b', type: 'related-to' }]);
+      db.upsertRelations('rb-b', [{ sourceId: 'rb-b', targetId: 'rb-c', type: 'informs' }]);
 
       const batch = db.getRelationsBatch(['rb-a', 'rb-b']);
       expect(batch.get('rb-a')?.from).toHaveLength(1);
@@ -326,7 +336,13 @@ describe('NoteRepo', () => {
       db.upsertNote(note);
 
       const chunks: Chunk[] = [
-        makeChunk({ id: 'vec-note:s:0', noteId: 'vec-note', heading: 'Test', content: 'Hello world', tokenCount: 2 }),
+        makeChunk({
+          id: 'vec-note:s:0',
+          noteId: 'vec-note',
+          heading: 'Test',
+          content: 'Hello world',
+          tokenCount: 2,
+        }),
       ];
       const vec = new Float32Array(384);
       vec[0] = 1.0;
@@ -390,7 +406,12 @@ describe('NoteRepo', () => {
       const note = makeNote({ id: 'cc-test' });
       db.upsertNote(note);
       const chunks: Chunk[] = [
-        makeChunk({ id: 'cc-test:s:0', noteId: 'cc-test', content: 'Chunk content here', tokenCount: 3 }),
+        makeChunk({
+          id: 'cc-test:s:0',
+          noteId: 'cc-test',
+          content: 'Chunk content here',
+          tokenCount: 3,
+        }),
       ];
       db.upsertChunks('cc-test', chunks, [new Float32Array(384)]);
 
@@ -403,8 +424,22 @@ describe('NoteRepo', () => {
       const note = makeNote({ id: 'fc-test' });
       db.upsertNote(note);
       const chunks: Chunk[] = [
-        makeChunk({ id: 'fc-test:intro:0', noteId: 'fc-test', heading: 'Intro', content: 'First chunk', tokenCount: 2, position: 0 }),
-        makeChunk({ id: 'fc-test:body:1', noteId: 'fc-test', heading: 'Body', content: 'Second chunk', tokenCount: 2, position: 1 }),
+        makeChunk({
+          id: 'fc-test:intro:0',
+          noteId: 'fc-test',
+          heading: 'Intro',
+          content: 'First chunk',
+          tokenCount: 2,
+          position: 0,
+        }),
+        makeChunk({
+          id: 'fc-test:body:1',
+          noteId: 'fc-test',
+          heading: 'Body',
+          content: 'Second chunk',
+          tokenCount: 2,
+          position: 1,
+        }),
       ];
       db.upsertChunks('fc-test', chunks, [new Float32Array(384), new Float32Array(384)]);
 
@@ -419,7 +454,13 @@ describe('NoteRepo', () => {
       const note = makeNote({ id: 'ch-test' });
       db.upsertNote(note);
       const chunks: Chunk[] = [
-        makeChunk({ id: 'ch-test:s:0', noteId: 'ch-test', heading: 'My Heading', content: 'data', tokenCount: 1 }),
+        makeChunk({
+          id: 'ch-test:s:0',
+          noteId: 'ch-test',
+          heading: 'My Heading',
+          content: 'data',
+          tokenCount: 1,
+        }),
       ];
       db.upsertChunks('ch-test', chunks, [new Float32Array(384)]);
 
@@ -434,10 +475,12 @@ describe('NoteRepo', () => {
       noteRepo = (db as unknown as { noteRepo: NoteRepo }).noteRepo;
       const rawDb = (db as unknown as { db: import('better-sqlite3').Database }).db;
       for (const id of ['initiative', 'child1', 'child2', 'grandchild1']) {
-        rawDb.prepare(
-          `INSERT INTO notes (id, file_path, title, type, tier, status)
+        rawDb
+          .prepare(
+            `INSERT INTO notes (id, file_path, title, type, tier, status)
            VALUES (?, ?, ?, 'note', 'fast', 'current')`
-        ).run(id, `/test/${id}.md`, id);
+          )
+          .run(id, `/test/${id}.md`, id);
       }
       const insert = rawDb.prepare(
         `INSERT INTO relations (source_id, target_id, type, created_at) VALUES (?, ?, ?, ?)`

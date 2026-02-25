@@ -1,8 +1,9 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 
-export const lineageCommand = new Command('lineage')
-  .description('View and manage note lineage (derived-from trees)');
+export const lineageCommand = new Command('lineage').description(
+  'View and manage note lineage (derived-from trees)'
+);
 
 lineageCommand
   .command('tree')

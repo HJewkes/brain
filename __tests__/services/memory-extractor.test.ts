@@ -61,7 +61,11 @@ describe('extractMemoriesFromNote', () => {
   });
 
   it('extracts facts from note chunks and stores as memories', async () => {
-    const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'TypeScript uses structural typing for type compatibility.' });
+    const chunk = makeChunk({
+      id: 'chunk-1',
+      noteId: 'note-1',
+      content: 'TypeScript uses structural typing for type compatibility.',
+    });
     db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
 
     const llm = makeMockLLM([
@@ -92,7 +96,11 @@ describe('extractMemoriesFromNote', () => {
   });
 
   it('handles empty LLM response', async () => {
-    const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'This is a longer chunk with enough content to process.' });
+    const chunk = makeChunk({
+      id: 'chunk-1',
+      noteId: 'note-1',
+      content: 'This is a longer chunk with enough content to process.',
+    });
     db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
 
     const llm = makeMockLLM(['']);
@@ -102,7 +110,11 @@ describe('extractMemoriesFromNote', () => {
   });
 
   it('records history for each created memory', async () => {
-    const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'Vitest is faster than Jest for ESM projects.' });
+    const chunk = makeChunk({
+      id: 'chunk-1',
+      noteId: 'note-1',
+      content: 'Vitest is faster than Jest for ESM projects.',
+    });
     db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
 
     const llm = makeMockLLM(['Vitest is faster than Jest for ESM projects']);
@@ -118,7 +130,11 @@ describe('extractMemoriesFromNote', () => {
   });
 
   it('applies container tag', async () => {
-    const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'Project-specific knowledge about the brain CLI tool.' });
+    const chunk = makeChunk({
+      id: 'chunk-1',
+      noteId: 'note-1',
+      content: 'Project-specific knowledge about the brain CLI tool.',
+    });
     db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
 
     const llm = makeMockLLM(['Brain CLI is a knowledge management tool']);
@@ -131,18 +147,18 @@ describe('extractMemoriesFromNote', () => {
   });
 
   it('returns empty result for note with no chunks', async () => {
-    const result = await extractMemoriesFromNote(
-      db,
-      makeMockLLM([]),
-      'note-1'
-    );
+    const result = await extractMemoriesFromNote(db, makeMockLLM([]), 'note-1');
     expect(result.memoriesCreated).toBe(0);
     expect(result.facts).toHaveLength(0);
   });
 
   describe('reconciliation', () => {
     it('reconciles new facts against existing memories', async () => {
-      const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'Brain uses SQLite for storage with vector search support.' });
+      const chunk = makeChunk({
+        id: 'chunk-1',
+        noteId: 'note-1',
+        content: 'Brain uses SQLite for storage with vector search support.',
+      });
       db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
 
       // First extraction: creates initial memories
@@ -189,7 +205,11 @@ describe('extractMemoriesFromNote', () => {
     });
 
     it('handles DELETE action from reconciliation', async () => {
-      const chunk = makeChunk({ id: 'chunk-1', noteId: 'note-1', content: 'Updated content that no longer mentions the old fact.' });
+      const chunk = makeChunk({
+        id: 'chunk-1',
+        noteId: 'note-1',
+        content: 'Updated content that no longer mentions the old fact.',
+      });
       db.upsertChunks('note-1', [chunk], [new Float32Array([1, 2, 3])]);
 
       db.addMemory({
@@ -253,7 +273,8 @@ describe('parseReconciliationResponse', () => {
   });
 
   it('filters out malformed actions', () => {
-    const response = '{"actions":[{"type":"ADD"},{"type":"ADD","fact":"Valid"},{"type":"UPDATE"},{"type":"DELETE","id":"x"}]}';
+    const response =
+      '{"actions":[{"type":"ADD"},{"type":"ADD","fact":"Valid"},{"type":"UPDATE"},{"type":"DELETE","id":"x"}]}';
     const actions = parseReconciliationResponse(response);
     expect(actions).toHaveLength(2);
     expect(actions[0]).toEqual({ type: 'ADD', fact: 'Valid' });

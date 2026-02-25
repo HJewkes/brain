@@ -268,7 +268,9 @@ export class NoteRepo {
 
   getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> {
     const depthLimit = maxDepth ?? 100;
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       WITH RECURSIVE descendants(id, depth) AS (
         SELECT source_id, 1 FROM relations
         WHERE target_id = ? AND type = 'derived-from'
@@ -278,32 +280,36 @@ export class NoteRepo {
         WHERE r.type = 'derived-from' AND d.depth < ?
       )
       SELECT id, depth FROM descendants
-    `).all(noteId, depthLimit) as Array<{ id: string; depth: number }>;
+    `
+      )
+      .all(noteId, depthLimit) as Array<{ id: string; depth: number }>;
     return rows;
   }
 
   // --- Access Tracking ---
 
   recordAccess(noteId: string, event: NoteAccessEvent): void {
-    this.db.prepare(
-      'INSERT INTO note_access (note_id, event, created_at) VALUES (?, ?, ?)'
-    ).run(noteId, event, Date.now());
+    this.db
+      .prepare('INSERT INTO note_access (note_id, event, created_at) VALUES (?, ?, ?)')
+      .run(noteId, event, Date.now());
   }
 
   getAccessCount(noteId: string): number {
-    const row = this.db.prepare(
-      'SELECT COUNT(*) as count FROM note_access WHERE note_id = ?'
-    ).get(noteId) as { count: number };
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM note_access WHERE note_id = ?')
+      .get(noteId) as { count: number };
     return row.count;
   }
 
   getAccessCounts(noteIds: string[]): Map<string, number> {
     if (noteIds.length === 0) return new Map();
     const placeholders = noteIds.map(() => '?').join(',');
-    const rows = this.db.prepare(
-      `SELECT note_id, COUNT(*) as count FROM note_access
+    const rows = this.db
+      .prepare(
+        `SELECT note_id, COUNT(*) as count FROM note_access
        WHERE note_id IN (${placeholders}) GROUP BY note_id`
-    ).all(...noteIds) as Array<{ note_id: string; count: number }>;
+      )
+      .all(...noteIds) as Array<{ note_id: string; count: number }>;
     const map = new Map<string, number>();
     for (const row of rows) {
       map.set(row.note_id, row.count);
@@ -387,7 +393,9 @@ export class NoteRepo {
       params.push(filters.since);
     }
     if (filters.tags?.length) {
-      conditions.push(`(${filters.tags.map(() => "',' || tags || ',' LIKE '%,' || ? || ',%'").join(' AND ')})`);
+      conditions.push(
+        `(${filters.tags.map(() => "',' || tags || ',' LIKE '%,' || ? || ',%'").join(' AND ')})`
+      );
       for (const tag of filters.tags) params.push(tag);
     }
     if (conditions.length === 0) return null;

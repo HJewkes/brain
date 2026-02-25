@@ -95,13 +95,15 @@ describe('MemoryRepo', () => {
     it('tracks version chain', () => {
       db.addMemory(makeMemory({ id: 'root' }));
       db.markMemorySuperseded('root');
-      db.addMemory(makeMemory({
-        id: 'v2',
-        memory: 'Updated fact',
-        parentMemoryId: 'root',
-        rootMemoryId: 'root',
-        relationType: 'updates',
-      }));
+      db.addMemory(
+        makeMemory({
+          id: 'v2',
+          memory: 'Updated fact',
+          parentMemoryId: 'root',
+          rootMemoryId: 'root',
+          relationType: 'updates',
+        })
+      );
       const chain = db.getMemoryVersionChain('root');
       expect(chain).toHaveLength(2);
       expect(chain[0].id).toBe('root');

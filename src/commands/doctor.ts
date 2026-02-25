@@ -6,9 +6,12 @@ import type { HealthCheckResult, HealthReport } from '../types.js';
 
 function statusIcon(status: HealthCheckResult['status']): string {
   switch (status) {
-    case 'ok': return 'ok';
-    case 'warning': return 'WARNING';
-    case 'error': return 'ERROR';
+    case 'ok':
+      return 'ok';
+    case 'warning':
+      return 'WARNING';
+    case 'error':
+      return 'ERROR';
   }
 }
 
@@ -49,12 +52,7 @@ export const doctorCommand = new Command('doctor')
   .option('--json', 'output as JSON')
   .action(async (opts) => {
     await withDb(async ({ db, config }) => {
-      const report = await runAllChecks(
-        db,
-        config.embedder,
-        config.ollamaUrl,
-        config.ollamaModel
-      );
+      const report = await runAllChecks(db, config.embedder, config.ollamaUrl, config.ollamaModel);
 
       if (opts.json) {
         process.stdout.write(JSON.stringify(report) + '\n');

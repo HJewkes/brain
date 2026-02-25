@@ -3,33 +3,33 @@ import { normalizeUrl, extractFromHtml, extractMetadata } from '../../src/servic
 
 describe('normalizeUrl', () => {
   it('strips utm parameters', () => {
-    expect(normalizeUrl('https://example.com/page?utm_source=twitter&utm_medium=social'))
-      .toBe('https://example.com/page');
+    expect(normalizeUrl('https://example.com/page?utm_source=twitter&utm_medium=social')).toBe(
+      'https://example.com/page'
+    );
   });
 
   it('strips tracking parameters', () => {
-    expect(normalizeUrl('https://example.com/page?fbclid=abc&ref=homepage'))
-      .toBe('https://example.com/page');
+    expect(normalizeUrl('https://example.com/page?fbclid=abc&ref=homepage')).toBe(
+      'https://example.com/page'
+    );
   });
 
   it('preserves meaningful query parameters', () => {
-    expect(normalizeUrl('https://example.com/search?q=test&page=2'))
-      .toBe('https://example.com/search?page=2&q=test');
+    expect(normalizeUrl('https://example.com/search?q=test&page=2')).toBe(
+      'https://example.com/search?page=2&q=test'
+    );
   });
 
   it('lowercases hostname', () => {
-    expect(normalizeUrl('https://EXAMPLE.COM/Path'))
-      .toBe('https://example.com/Path');
+    expect(normalizeUrl('https://EXAMPLE.COM/Path')).toBe('https://example.com/Path');
   });
 
   it('removes trailing slash', () => {
-    expect(normalizeUrl('https://example.com/path/'))
-      .toBe('https://example.com/path');
+    expect(normalizeUrl('https://example.com/path/')).toBe('https://example.com/path');
   });
 
   it('preserves root path trailing slash', () => {
-    expect(normalizeUrl('https://example.com/'))
-      .toBe('https://example.com/');
+    expect(normalizeUrl('https://example.com/')).toBe('https://example.com/');
   });
 });
 

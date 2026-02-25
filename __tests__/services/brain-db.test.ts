@@ -191,7 +191,15 @@ describe('BrainDB', () => {
 
     it('stores derived-from relation type', () => {
       db.upsertNote(makeNote({ id: 'parent-note', filePath: '/test/parent.md', title: 'Parent' }));
-      db.upsertNote(makeNote({ id: 'child-note', filePath: '/test/child.md', title: 'Child', type: 'research', tier: 'fast' }));
+      db.upsertNote(
+        makeNote({
+          id: 'child-note',
+          filePath: '/test/child.md',
+          title: 'Child',
+          type: 'research',
+          tier: 'fast',
+        })
+      );
 
       db.upsertRelations('child-note', [
         { sourceId: 'child-note', targetId: 'parent-note', type: 'derived-from' },
@@ -207,13 +215,15 @@ describe('BrainDB', () => {
   describe('cascadeDelete', () => {
     beforeEach(() => {
       for (const id of ['initiative', 'child1', 'child2', 'grandchild1']) {
-        db.upsertNote(makeNote({
-          id,
-          filePath: `/test/${id}.md`,
-          title: id,
-          type: 'research',
-          tier: 'fast',
-        }));
+        db.upsertNote(
+          makeNote({
+            id,
+            filePath: `/test/${id}.md`,
+            title: id,
+            type: 'research',
+            tier: 'fast',
+          })
+        );
       }
       db.upsertRelations('child1', [
         { sourceId: 'child1', targetId: 'initiative', type: 'derived-from' },
@@ -277,18 +287,39 @@ describe('BrainDB', () => {
       mkdirSync(tmpDir, { recursive: true });
       const initPath = join(tmpDir, 'research', 'initiative.md');
       mkdirSync(dirname(initPath), { recursive: true });
-      writeFileSync(initPath, '---\nid: initiative\ntitle: "Init"\ntype: research\ntier: fast\n---\nContent');
+      writeFileSync(
+        initPath,
+        '---\nid: initiative\ntitle: "Init"\ntype: research\ntier: fast\n---\nContent'
+      );
 
       const childPath = join(tmpDir, 'research', 'child1.md');
-      writeFileSync(childPath, '---\nid: child1\ntitle: "Child"\ntype: research\ntier: fast\n---\nChild content');
+      writeFileSync(
+        childPath,
+        '---\nid: child1\ntitle: "Child"\ntype: research\ntier: fast\n---\nChild content'
+      );
 
-      for (const [id, fp] of [['initiative', initPath], ['child1', childPath]] as const) {
+      for (const [id, fp] of [
+        ['initiative', initPath],
+        ['child1', childPath],
+      ] as const) {
         db.upsertNote({
-          id, filePath: fp, title: id, type: 'research', tier: 'fast',
-          category: null, tags: null, summary: null, confidence: null,
-          status: 'current', sources: null, createdAt: '2026-01-01',
-          modifiedAt: '2026-01-01', lastReviewed: null,
-          reviewInterval: null, expires: null, metadata: null,
+          id,
+          filePath: fp,
+          title: id,
+          type: 'research',
+          tier: 'fast',
+          category: null,
+          tags: null,
+          summary: null,
+          confidence: null,
+          status: 'current',
+          sources: null,
+          createdAt: '2026-01-01',
+          modifiedAt: '2026-01-01',
+          lastReviewed: null,
+          reviewInterval: null,
+          expires: null,
+          metadata: null,
         });
       }
       db.upsertRelations('child1', [

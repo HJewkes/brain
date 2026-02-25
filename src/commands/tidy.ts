@@ -45,11 +45,13 @@ export const tidyCommand = new Command('tidy')
       } else {
         const limit = parseInt(opts.limit, 10);
         const allNotes = db.getAllNotes();
-        notes.push(...allNotes.slice(0, limit).map((n) => ({
-          id: n.id,
-          filePath: n.filePath,
-          title: n.title,
-        })));
+        notes.push(
+          ...allNotes.slice(0, limit).map((n) => ({
+            id: n.id,
+            filePath: n.filePath,
+            title: n.title,
+          }))
+        );
       }
 
       const results: Array<{ noteId: string; title: string; suggestions: string }> = [];
