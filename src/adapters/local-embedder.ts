@@ -8,6 +8,7 @@ export class LocalEmbedder implements Embedder {
 
   async embed(texts: string[]): Promise<number[][]> {
     if (!this.extractor) {
+      // @ts-expect-error TS2590: @huggingface/transformers union type too complex when @types/jsdom is present
       this.extractor = await pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', {
         dtype: 'q8',
       });
