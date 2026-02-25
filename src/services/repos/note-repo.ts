@@ -1,12 +1,5 @@
 import Database from 'better-sqlite3';
-import type {
-  NoteRecord,
-  FileRecord,
-  Chunk,
-  Relation,
-  ChunkType,
-  CutType,
-} from '../../types.js';
+import type { NoteRecord, FileRecord, Chunk, Relation, ChunkType, CutType } from '../../types.js';
 
 interface FTSResult {
   noteId: string;
@@ -339,7 +332,9 @@ export class NoteRepo {
       params.push(filters.since);
     }
     if (filters.tags?.length) {
-      conditions.push(`(${filters.tags.map(() => "',' || tags || ',' LIKE '%,' || ? || ',%'").join(' AND ')})`);
+      conditions.push(
+        `(${filters.tags.map(() => "',' || tags || ',' LIKE '%,' || ? || ',%'").join(' AND ')})`
+      );
       for (const tag of filters.tags) params.push(tag);
     }
     if (conditions.length === 0) return null;

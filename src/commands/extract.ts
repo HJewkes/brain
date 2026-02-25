@@ -19,10 +19,7 @@ export const extractCommand = new Command('extract')
     }
 
     await withBrain(async ({ db, embedder, config }) => {
-      const llm = createOllamaClient(
-        config.ollamaUrl,
-        opts.model ?? config.ollamaModel
-      );
+      const llm = createOllamaClient(config.ollamaUrl, opts.model ?? config.ollamaModel);
 
       db.setEmbeddingModel(embedder.model, embedder.dimensions);
       const noteIds: string[] = [];
@@ -51,13 +48,7 @@ export const extractCommand = new Command('extract')
           process.stderr.write(`Extracting from ${noteId}...\n`);
         }
 
-        const result = await extractMemoriesFromNote(
-          db,
-          llm,
-          noteId,
-          opts.tag,
-          embedder
-        );
+        const result = await extractMemoriesFromNote(db, llm, noteId, opts.tag, embedder);
 
         totalFacts += result.facts.length;
         totalCreated += result.memoriesCreated;

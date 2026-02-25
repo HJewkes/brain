@@ -68,7 +68,13 @@ export async function extractMemoriesFromNote(
 
   if (existingMemories.length === 0) {
     const created = await applyAdditions(db, allFacts, noteId, containerTag, embedder);
-    return { noteId, facts: allFacts, memoriesCreated: created, memoriesUpdated: 0, memoriesDeleted: 0 };
+    return {
+      noteId,
+      facts: allFacts,
+      memoriesCreated: created,
+      memoriesUpdated: 0,
+      memoriesDeleted: 0,
+    };
   }
 
   const actions = await reconcile(llm, allFacts, existingMemories);
@@ -118,9 +124,7 @@ export async function reconcile(
   existingMemories: MemoryEntry[]
 ): Promise<ReconcileAction[]> {
   const factsBlock = newFacts.map((f, i) => `${i + 1}. ${f.fact}`).join('\n');
-  const memoriesBlock = existingMemories
-    .map((m) => `[${m.id}] ${m.memory}`)
-    .join('\n');
+  const memoriesBlock = existingMemories.map((m) => `[${m.id}] ${m.memory}`).join('\n');
 
   const prompt = `NEW FACTS:\n${factsBlock}\n\nEXISTING MEMORIES:\n${memoriesBlock}`;
 
@@ -164,7 +168,10 @@ async function applyActions(
 
   for (const action of actions) {
     if (action.type === 'ADD') {
-      await createMemory(db, action.fact, noteId, containerTag, now, { actor: 'reconciler', embedder });
+      await createMemory(db, action.fact, noteId, containerTag, now, {
+        actor: 'reconciler',
+        embedder,
+      });
       created++;
     } else if (action.type === 'UPDATE') {
       const existing = existingById.get(action.id);
@@ -272,10 +279,7 @@ function deleteMemoryAction(db: BrainDB, existing: MemoryEntry, now: string): vo
   });
 }
 
-async function extractFactsFromChunk(
-  llm: OllamaClient,
-  chunk: Chunk
-): Promise<ExtractedFact[]> {
+async function extractFactsFromChunk(llm: OllamaClient, chunk: Chunk): Promise<ExtractedFact[]> {
   const text = chunk.content;
   if (text.trim().length < 20) return [];
 

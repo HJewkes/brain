@@ -29,10 +29,7 @@ export const tidyCommand = new Command('tidy')
     }
 
     await withDb(async ({ db, config }) => {
-      const llm = createOllamaClient(
-        config.ollamaUrl,
-        opts.model ?? config.ollamaModel
-      );
+      const llm = createOllamaClient(config.ollamaUrl, opts.model ?? config.ollamaModel);
 
       const notes: Array<{ id: string; filePath: string; title: string }> = [];
 
@@ -47,11 +44,13 @@ export const tidyCommand = new Command('tidy')
       } else {
         const limit = parseInt(opts.limit, 10);
         const allNotes = db.getAllNotes();
-        notes.push(...allNotes.slice(0, limit).map((n) => ({
-          id: n.id,
-          filePath: n.filePath,
-          title: n.title,
-        })));
+        notes.push(
+          ...allNotes.slice(0, limit).map((n) => ({
+            id: n.id,
+            filePath: n.filePath,
+            title: n.title,
+          }))
+        );
       }
 
       const results: Array<{ noteId: string; title: string; suggestions: string }> = [];

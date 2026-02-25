@@ -106,9 +106,7 @@ function startWatcher(db: BrainDB, embedder: Embedder, notesDir: string): void {
   const reindex = async () => {
     const knownFiles = db.getAllFiles();
     const changes = await scanForChanges(notesDir, knownFiles);
-    const toProcess = [...changes.new, ...changes.modified].filter(
-      (f) => !isSkipped(f.path)
-    );
+    const toProcess = [...changes.new, ...changes.modified].filter((f) => !isSkipped(f.path));
 
     for (const file of toProcess) {
       const content = readFileSync(file.path, 'utf-8');
@@ -126,9 +124,7 @@ function startWatcher(db: BrainDB, embedder: Embedder, notesDir: string): void {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       reindex().catch((err) => {
-        process.stderr.write(
-          `Watch error: ${err instanceof Error ? err.message : String(err)}\n`
-        );
+        process.stderr.write(`Watch error: ${err instanceof Error ? err.message : String(err)}\n`);
       });
     }, 500);
   });
@@ -148,13 +144,7 @@ async function extractFromNotes(
 
   for (const noteId of noteIds) {
     try {
-      const result = await extractMemoriesFromNote(
-        db,
-        llm,
-        noteId,
-        containerTag,
-        embedder
-      );
+      const result = await extractMemoriesFromNote(db, llm, noteId, containerTag, embedder);
       total += result.memoriesCreated + result.memoriesUpdated;
     } catch (err) {
       if (!quiet) {

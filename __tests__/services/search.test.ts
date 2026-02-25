@@ -613,11 +613,36 @@ describe('searchMemories', () => {
     db.ensureVectorTable(384);
 
     const memories = [
-      makeMemoryEntry({ id: 'mem-ts', memory: 'TypeScript uses structural typing', sourceNoteId: 'note-1', containerTag: 'dev' }),
-      makeMemoryEntry({ id: 'mem-react', memory: 'React hooks must follow rules of hooks', sourceNoteId: 'note-1', containerTag: 'dev' }),
-      makeMemoryEntry({ id: 'mem-css', memory: 'CSS grid provides two-dimensional layouts', sourceNoteId: 'note-1', containerTag: 'design' }),
-      makeMemoryEntry({ id: 'mem-old', memory: 'Old superseded fact', sourceNoteId: 'note-1', isLatest: false }),
-      makeMemoryEntry({ id: 'mem-forgotten', memory: 'Forgotten memory', sourceNoteId: 'note-1', isForgotten: true }),
+      makeMemoryEntry({
+        id: 'mem-ts',
+        memory: 'TypeScript uses structural typing',
+        sourceNoteId: 'note-1',
+        containerTag: 'dev',
+      }),
+      makeMemoryEntry({
+        id: 'mem-react',
+        memory: 'React hooks must follow rules of hooks',
+        sourceNoteId: 'note-1',
+        containerTag: 'dev',
+      }),
+      makeMemoryEntry({
+        id: 'mem-css',
+        memory: 'CSS grid provides two-dimensional layouts',
+        sourceNoteId: 'note-1',
+        containerTag: 'design',
+      }),
+      makeMemoryEntry({
+        id: 'mem-old',
+        memory: 'Old superseded fact',
+        sourceNoteId: 'note-1',
+        isLatest: false,
+      }),
+      makeMemoryEntry({
+        id: 'mem-forgotten',
+        memory: 'Forgotten memory',
+        sourceNoteId: 'note-1',
+        isForgotten: true,
+      }),
     ];
 
     for (const mem of memories) {
@@ -629,7 +654,11 @@ describe('searchMemories', () => {
 
   afterEach(() => {
     db.close();
-    try { unlinkSync(dbPath); } catch { /* ignore */ }
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      /* ignore */
+    }
   });
 
   it('returns scored memory results', async () => {

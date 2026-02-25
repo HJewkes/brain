@@ -106,7 +106,9 @@ export class MemoryRepo {
 
   getMemoriesForNote(noteId: string): MemoryEntry[] {
     const rows = this.db
-      .prepare('SELECT * FROM memory_entries WHERE source_note_id = ? AND is_latest = 1 ORDER BY created_at')
+      .prepare(
+        'SELECT * FROM memory_entries WHERE source_note_id = ? AND is_latest = 1 ORDER BY created_at'
+      )
       .all(noteId) as MemoryRow[];
     return rows.map(rowToMemoryEntry);
   }
@@ -173,9 +175,7 @@ export class MemoryRepo {
 
     if (expired.length === 0) return 0;
 
-    const update = this.db.prepare(
-      'UPDATE memory_entries SET is_forgotten = 1 WHERE id = ?'
-    );
+    const update = this.db.prepare('UPDATE memory_entries SET is_forgotten = 1 WHERE id = ?');
     const insertHistory = this.db.prepare(
       `INSERT INTO memory_history (memory_id, event, old_memory, new_memory, actor, created_at)
        VALUES (?, 'forget', ?, NULL, 'system', ?)`
@@ -211,7 +211,9 @@ export class MemoryRepo {
 
   getMemoryCount(): number {
     const row = this.db
-      .prepare('SELECT COUNT(*) as count FROM memory_entries WHERE is_latest = 1 AND is_forgotten = 0')
+      .prepare(
+        'SELECT COUNT(*) as count FROM memory_entries WHERE is_latest = 1 AND is_forgotten = 0'
+      )
       .get() as { count: number };
     return row.count;
   }

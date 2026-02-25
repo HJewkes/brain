@@ -257,7 +257,8 @@ export async function search(
   scored.sort((a, b) => b.score - a.score);
   const filtered =
     options.minScore != null ? scored.filter((s) => s.score >= options.minScore!) : scored;
-  const afterDropoff = options.dropoff != null ? applyDropoffFilter(filtered, options.dropoff) : filtered;
+  const afterDropoff =
+    options.dropoff != null ? applyDropoffFilter(filtered, options.dropoff) : filtered;
   const topResults = afterDropoff.slice(0, limit);
 
   // Step 4: Build SearchResult objects
@@ -271,10 +272,7 @@ export async function search(
   return results;
 }
 
-function buildSearchResults(
-  db: BrainDB,
-  topResults: ScoredResult[]
-): SearchResult[] {
+function buildSearchResults(db: BrainDB, topResults: ScoredResult[]): SearchResult[] {
   const noteIds = topResults.map((r) => r.noteId);
   const notesById = db.getNotesByIds(noteIds);
   const results: SearchResult[] = [];
