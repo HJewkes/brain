@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
-import { createOllamaClient } from '../services/ollama.js';
+import { requireOllama } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 
 export const extractCommand = new Command('extract')
@@ -19,7 +19,8 @@ export const extractCommand = new Command('extract')
     }
 
     await withBrain(async ({ db, embedder, config }) => {
-      const llm = createOllamaClient(config.ollamaUrl, opts.model ?? config.ollamaModel);
+      const llm = await requireOllama(config.ollamaUrl, opts.model ?? config.ollamaModel);
+      if (!llm) return;
 
       db.setEmbeddingModel(embedder.model, embedder.dimensions);
       const noteIds: string[] = [];

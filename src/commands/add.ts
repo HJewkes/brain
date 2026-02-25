@@ -1,7 +1,10 @@
 import { Command } from '@commander-js/extra-typings';
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { loadConfig } from '../services/config.js';
+import { withBrain } from '../services/brain-service.js';
+import { indexSingleFile } from '../services/indexing.js';
 import { parseMarkdown } from '../services/markdown-parser.js';
 import type { NoteType, NoteTier } from '../types.js';
 import {
@@ -85,6 +88,83 @@ function resolveOutputPath(notesDir: string, tier: NoteTier, type: NoteType, id:
   return join(notesDir, typeDir, `${id}.md`);
 }
 
+async function handleUrlAdd(opts: {
+  url?: string;
+  title?: string;
+  type?: string;
+  tier?: string;
+  tags?: string;
+  summary?: string;
+  confidence?: string;
+  status?: string;
+  category?: string;
+  related?: string;
+  reviewInterval?: string;
+  created?: string;
+}): Promise<void> {
+  const { fetchAndExtract } = await import('../services/web-extract.js');
+  const result = await fetchAndExtract(opts.url!);
+
+  if (!result.markdown.trim()) {
+    process.stderr.write('Could not extract content from URL.\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  const title = opts.title ?? result.metadata.title ?? 'Web capture';
+  const type = (opts.type ?? 'research') as NoteType;
+  const tier = (opts.tier ?? 'fast') as NoteTier;
+  const now = new Date().toISOString().slice(0, 10);
+  const id = slugify(title);
+
+  const frontmatterLines = [
+    '---',
+    `id: ${id}`,
+    `title: "${title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`,
+    `type: ${type}`,
+    `tier: ${tier}`,
+  ];
+  if (opts.tags) {
+    const tagList = opts.tags.split(',').map((t: string) => t.trim());
+    frontmatterLines.push(`tags: [${tagList.join(', ')}]`);
+  }
+  if (opts.summary) frontmatterLines.push(`summary: "${opts.summary}"`);
+  if (opts.confidence) frontmatterLines.push(`confidence: ${opts.confidence}`);
+  if (opts.status) frontmatterLines.push(`status: ${opts.status ?? 'draft'}`);
+  if (opts.category) frontmatterLines.push(`category: ${opts.category}`);
+  if (opts.reviewInterval) frontmatterLines.push(`review-interval: ${opts.reviewInterval}`);
+
+  frontmatterLines.push('sources:');
+  frontmatterLines.push(`  - url: "${result.normalizedUrl}"`);
+  frontmatterLines.push(`    accessed: "${now}"`);
+  frontmatterLines.push('    type: "web"');
+
+  if (opts.related) {
+    const relatedList = opts.related.split(',').map((r: string) => r.trim());
+    frontmatterLines.push('related:');
+    for (const r of relatedList) {
+      frontmatterLines.push(`  - ${r}`);
+    }
+  }
+
+  frontmatterLines.push(`created: ${opts.created ?? now}`);
+  frontmatterLines.push(`modified: ${now}`);
+  frontmatterLines.push('---');
+
+  const markdown = frontmatterLines.join('\n') + '\n\n' + result.markdown;
+
+  await withBrain(async ({ db, embedder, config }) => {
+    const outPath = resolveOutputPath(config.notesDir, tier, type, id);
+    const dir = dirname(outPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(outPath, markdown, 'utf-8');
+
+    const hash = createHash('sha256').update(markdown).digest('hex');
+    await indexSingleFile(db, embedder, outPath, markdown, hash, Date.now());
+    process.stdout.write(`Created: ${outPath}\n`);
+  });
+}
+
 function validateEnum<T extends string>(
   value: string | undefined,
   valid: readonly T[],
@@ -114,6 +194,7 @@ export const addCommand = new Command('add')
   .option('--related <ids>', 'Comma-separated related note IDs')
   .option('--review-interval <interval>', 'Review interval (e.g. 90d, 30d, 180d)')
   .option('--created <date>', 'Created date (YYYY-MM-DD), defaults to today')
+  .option('--url <url>', 'Fetch URL and create note from extracted content')
   .action(async (file, opts) => {
     if (opts.type && !VALID_NOTE_TYPES.includes(opts.type as NoteType)) {
       process.stderr.write(
@@ -146,6 +227,11 @@ export const addCommand = new Command('add')
         `Error: invalid review-interval "${opts.reviewInterval}". Use format like 30d, 4w, 3m\n`
       );
       process.exitCode = 1;
+      return;
+    }
+
+    if (opts.url) {
+      await handleUrlAdd(opts);
       return;
     }
 

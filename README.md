@@ -37,6 +37,8 @@ brain extract --all           # Extract memories (requires Ollama)
 | `brain context <id>` | Show context for a note (relations + memories) |
 | `brain profile` | Generate agent context profile |
 | `brain tidy` | LLM-powered note cleanup suggestions |
+| `brain doctor` | System health checks (`--fix` for auto-repair) |
+| `brain install-hooks` | Set up launchd/systemd scheduled processing |
 | `brain status` | Database stats |
 | `brain stale` | Notes needing review |
 | `brain graph <id>` | Show note relations |
@@ -72,7 +74,7 @@ src/
   cli.ts                — Entry point, Commander program
   types.ts              — All TypeScript interfaces
   utils.ts              — Shared utilities
-  commands/             — CLI commands (20 commands)
+  commands/             — CLI commands (22 commands)
   services/
     brain-db.ts         — Database facade (delegates to repos)
     brain-service.ts    — Resource management (withBrain/withDb)
@@ -87,7 +89,8 @@ src/
     graph.ts            — Note relation traversal
     indexing.ts         — Index pipeline
     memory-extractor.ts — LLM fact extraction and reconciliation
-    ollama.ts           — Ollama LLM client
+    ollama.ts           — Ollama client and health checks
+    health.ts           — System health check service
     reranker.ts         — Cross-encoder reranking
   adapters/             — Embedder backends (local/ollama/remote)
 ```
@@ -98,7 +101,7 @@ src/
 
 ```bash
 npm install
-npm test              # Vitest (345 tests)
+npm test              # Vitest (380 tests)
 npm run build         # tsup → dist/cli.js
 npm run typecheck     # tsc --noEmit
 npm run lint          # ESLint

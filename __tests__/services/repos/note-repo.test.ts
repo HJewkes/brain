@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
+import { NoteRepo } from '../../../src/services/repos/note-repo.js';
 import { unlinkSync } from 'node:fs';
 import type { FileRecord, Chunk } from '../../../src/types.js';
 import { tmpDbPath, makeNote, makeChunk } from '../../helpers.js';
@@ -464,6 +465,88 @@ describe('NoteRepo', () => {
       db.upsertChunks('ch-test', chunks, [new Float32Array(384)]);
 
       expect(db.getChunkHeading('ch-test:s:0', 'ch-test')).toBe('My Heading');
+    });
+  });
+
+  describe('getDescendants', () => {
+    let noteRepo: NoteRepo;
+
+    beforeEach(() => {
+      noteRepo = (db as unknown as { noteRepo: NoteRepo }).noteRepo;
+      const rawDb = (db as unknown as { db: import('better-sqlite3').Database }).db;
+      for (const id of ['initiative', 'child1', 'child2', 'grandchild1']) {
+        rawDb
+          .prepare(
+            `INSERT INTO notes (id, file_path, title, type, tier, status)
+           VALUES (?, ?, ?, 'note', 'fast', 'current')`
+          )
+          .run(id, `/test/${id}.md`, id);
+      }
+      const insert = rawDb.prepare(
+        `INSERT INTO relations (source_id, target_id, type, created_at) VALUES (?, ?, ?, ?)`
+      );
+      insert.run('child1', 'initiative', 'derived-from', Date.now());
+      insert.run('child2', 'initiative', 'derived-from', Date.now());
+      insert.run('grandchild1', 'child1', 'derived-from', Date.now());
+    });
+
+    it('returns all descendants of a note', () => {
+      const descendants = noteRepo.getDescendants('initiative');
+      const ids = descendants.map((d) => d.id).sort();
+      expect(ids).toEqual(['child1', 'child2', 'grandchild1']);
+    });
+
+    it('returns empty for leaf nodes', () => {
+      const descendants = noteRepo.getDescendants('grandchild1');
+      expect(descendants).toEqual([]);
+    });
+
+    it('returns direct children only at depth 1', () => {
+      const descendants = noteRepo.getDescendants('initiative', 1);
+      const ids = descendants.map((d) => d.id).sort();
+      expect(ids).toEqual(['child1', 'child2']);
+    });
+  });
+
+  describe('note access tracking', () => {
+    let noteRepo: NoteRepo;
+
+    beforeEach(() => {
+      noteRepo = (db as unknown as { noteRepo: NoteRepo }).noteRepo;
+    });
+
+    it('records an access event', () => {
+      noteRepo.recordAccess('test-note', 'search_hit');
+      const count = noteRepo.getAccessCount('test-note');
+      expect(count).toBe(1);
+    });
+
+    it('counts multiple events', () => {
+      noteRepo.recordAccess('test-note', 'search_hit');
+      noteRepo.recordAccess('test-note', 'context_view');
+      noteRepo.recordAccess('test-note', 'search_hit');
+      const count = noteRepo.getAccessCount('test-note');
+      expect(count).toBe(3);
+    });
+
+    it('returns 0 for unaccessed notes', () => {
+      const count = noteRepo.getAccessCount('nonexistent');
+      expect(count).toBe(0);
+    });
+
+    it('returns counts for multiple notes via getAccessCounts', () => {
+      noteRepo.recordAccess('note-a', 'search_hit');
+      noteRepo.recordAccess('note-a', 'search_hit');
+      noteRepo.recordAccess('note-b', 'context_view');
+      const counts = noteRepo.getAccessCounts(['note-a', 'note-b', 'note-c']);
+      expect(counts.get('note-a')).toBe(2);
+      expect(counts.get('note-b')).toBe(1);
+      expect(counts.has('note-c')).toBe(false);
+    });
+
+    it('returns empty map for empty input', () => {
+      const counts = noteRepo.getAccessCounts([]);
+      expect(counts.size).toBe(0);
     });
   });
 });

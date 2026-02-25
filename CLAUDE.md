@@ -17,7 +17,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all tests (Vitest, 345 tests) |
+| `npm test` | Run all tests (Vitest, 380 tests) |
 | `npm run build` | Build with tsup (output: `dist/cli.js`) |
 | `npm run typecheck` | TypeScript type checking |
 | `npm run lint` | ESLint |
@@ -40,6 +40,8 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 | `context` | Show context for a note (relations + memories) |
 | `profile` | Generate agent context profile from memories |
 | `tidy` | LLM-powered note cleanup suggestions |
+| `doctor` | Check system health (`--fix` for auto-repair) |
+| `install-hooks` | Set up launchd/systemd scheduled processing |
 | `status` | Show index status |
 | `stale` | Find notes needing review |
 | `graph` | Explore note relations |
@@ -54,7 +56,7 @@ src/
   cli.ts                — Entry point, Commander program
   types.ts              — All TypeScript interfaces and constants
   utils.ts              — Shared utilities (slugify)
-  commands/             — 20 CLI commands
+  commands/             — 22 CLI commands
   services/
     brain-db.ts         — Database facade (delegates to repos)
     brain-service.ts    — Resource management (withBrain/withDb helpers)
@@ -69,7 +71,8 @@ src/
     search.ts           — Hybrid search orchestration (BM25 + vector + memory)
     graph.ts            — Note relation traversal (batch queries)
     memory-extractor.ts — LLM fact extraction and reconciliation
-    ollama.ts           — Ollama LLM client (120s timeout)
+    ollama.ts           — Ollama client, health checks, hasModel/requireOllama helpers
+    health.ts           — System health checks (database, embedder, LLM, inbox, stale notes)
     reranker.ts         — Cross-encoder reranking pipeline
   adapters/             — Embedder backends (local/ollama/remote) with factory
 ```

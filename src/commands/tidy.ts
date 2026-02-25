@@ -1,7 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync } from 'node:fs';
 import { withDb } from '../services/brain-service.js';
-import { createOllamaClient } from '../services/ollama.js';
+import { requireOllama } from '../services/ollama.js';
 
 const TIDY_SYSTEM = `You are a note quality reviewer. Given a note, provide brief, actionable suggestions to improve it.
 
@@ -29,7 +29,8 @@ export const tidyCommand = new Command('tidy')
     }
 
     await withDb(async ({ db, config }) => {
-      const llm = createOllamaClient(config.ollamaUrl, opts.model ?? config.ollamaModel);
+      const llm = await requireOllama(config.ollamaUrl, opts.model ?? config.ollamaModel);
+      if (!llm) return;
 
       const notes: Array<{ id: string; filePath: string; title: string }> = [];
 

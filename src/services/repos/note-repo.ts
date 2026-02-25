@@ -1,5 +1,13 @@
 import Database from 'better-sqlite3';
-import type { NoteRecord, FileRecord, Chunk, Relation, ChunkType, CutType } from '../../types.js';
+import type {
+  NoteRecord,
+  FileRecord,
+  Chunk,
+  Relation,
+  ChunkType,
+  CutType,
+  NoteAccessEvent,
+} from '../../types.js';
 
 interface FTSResult {
   noteId: string;
@@ -254,6 +262,59 @@ export class NoteRepo {
       result.get(rel.targetId)?.to.push(rel);
     }
     return result;
+  }
+
+  // --- Lineage ---
+
+  getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> {
+    const depthLimit = maxDepth ?? 100;
+    const rows = this.db
+      .prepare(
+        `
+      WITH RECURSIVE descendants(id, depth) AS (
+        SELECT source_id, 1 FROM relations
+        WHERE target_id = ? AND type = 'derived-from'
+        UNION ALL
+        SELECT r.source_id, d.depth + 1 FROM relations r
+        JOIN descendants d ON r.target_id = d.id
+        WHERE r.type = 'derived-from' AND d.depth < ?
+      )
+      SELECT id, depth FROM descendants
+    `
+      )
+      .all(noteId, depthLimit) as Array<{ id: string; depth: number }>;
+    return rows;
+  }
+
+  // --- Access Tracking ---
+
+  recordAccess(noteId: string, event: NoteAccessEvent): void {
+    this.db
+      .prepare('INSERT INTO note_access (note_id, event, created_at) VALUES (?, ?, ?)')
+      .run(noteId, event, Date.now());
+  }
+
+  getAccessCount(noteId: string): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM note_access WHERE note_id = ?')
+      .get(noteId) as { count: number };
+    return row.count;
+  }
+
+  getAccessCounts(noteIds: string[]): Map<string, number> {
+    if (noteIds.length === 0) return new Map();
+    const placeholders = noteIds.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT note_id, COUNT(*) as count FROM note_access
+       WHERE note_id IN (${placeholders}) GROUP BY note_id`
+      )
+      .all(...noteIds) as Array<{ note_id: string; count: number }>;
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      map.set(row.note_id, row.count);
+    }
+    return map;
   }
 
   // --- FTS ---

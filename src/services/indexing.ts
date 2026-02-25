@@ -8,6 +8,27 @@ import { scanForChanges } from './file-scanner.js';
 import { slugify } from '../utils.js';
 export { slugify };
 
+export function isSkippedFile(filePath: string): boolean {
+  return filePath.includes('/_templates/') || basename(filePath) === '_index.md';
+}
+
+export function addFrontmatterField(filePath: string, field: string, value: string): void {
+  const content = readFileSync(filePath, 'utf-8');
+  const endOfFrontmatter = content.indexOf('\n---', 4);
+  if (endOfFrontmatter === -1) return;
+
+  const frontmatter = content.slice(0, endOfFrontmatter);
+  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
+  let updated: string;
+  if (fieldRegex.test(frontmatter)) {
+    updated =
+      frontmatter.replace(fieldRegex, `${field}: ${value}`) + content.slice(endOfFrontmatter);
+  } else {
+    updated = frontmatter + `\n${field}: ${value}` + content.slice(endOfFrontmatter);
+  }
+  writeFileSync(filePath, updated, 'utf-8');
+}
+
 export interface IndexResult {
   indexed: number;
   deleted: number;
@@ -70,13 +91,14 @@ export function inboxItemToMarkdown(item: InboxItem): string {
     `status: draft`,
     `created: ${now}`,
     `modified: ${now}`,
-    '---',
-    '',
-    item.content,
   ];
   if (item.sourceUrl) {
-    lines.push('', `Source: ${item.sourceUrl}`);
+    lines.push('sources:');
+    lines.push(`  - url: "${item.sourceUrl}"`);
+    lines.push(`    accessed: "${now}"`);
+    lines.push('    type: "web"');
   }
+  lines.push('---', '', item.content);
   return lines.join('\n');
 }
 
@@ -143,14 +165,11 @@ export async function indexFiles(
   const knownFiles = opts.force ? new Map() : db.getAllFiles();
   const changes = await scanForChanges(notesDir, knownFiles);
 
-  const isSkipped = (filePath: string): boolean =>
-    filePath.includes('/_templates/') || basename(filePath) === '_index.md';
-
   let indexed = 0;
   let deleted = 0;
   const indexedNoteIds: string[] = [];
 
-  const toProcess = [...changes.new, ...changes.modified].filter((f) => !isSkipped(f.path));
+  const toProcess = [...changes.new, ...changes.modified].filter((f) => !isSkippedFile(f.path));
   for (const file of toProcess) {
     const content = readFileSync(file.path, 'utf-8');
     const noteId = await indexSingleFile(db, embedder, file.path, content, file.hash, file.mtime);
@@ -158,7 +177,7 @@ export async function indexFiles(
     indexed++;
   }
 
-  for (const filePath of changes.deleted.filter((p) => !isSkipped(p))) {
+  for (const filePath of changes.deleted.filter((p) => !isSkippedFile(p))) {
     const note = db.getNoteByFilePath(filePath);
     if (note) {
       db.deleteNote(note.id);

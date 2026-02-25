@@ -41,6 +41,8 @@ Use `--json` flag on all commands when processing output programmatically.
 | `brain stale --json` | Notes needing review | `brain stale --tier slow --json` |
 | `brain index` | Re-index all notes | Only run when user asks -- this is slow |
 | `brain graph <note-id> --json` | Show note relations | `brain graph my-note --json` |
+| `brain doctor --json` | System health checks | Shows DB, embedder, LLM, inbox, stale status |
+| `brain doctor --fix` | Auto-repair issues | Pulls missing models, resets failed inbox |
 | `brain config get` | Show config | `brain config get` |
 
 ## Search Filters

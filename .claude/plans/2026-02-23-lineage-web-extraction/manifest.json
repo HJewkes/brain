@@ -1,0 +1,125 @@
+{
+  "planId": "2026-02-23-lineage-web-extraction",
+  "createdAt": "2026-02-23T00:00:00Z",
+  "goal": "Add lineage/provenance system (derived-from relations, cascade ops, access tracking) and web content extraction pipeline to Brain",
+  "tasks": [
+    {
+      "id": "task-01",
+      "name": "Types + Schema V6 migration",
+      "briefing": "briefings/task-01.md",
+      "wave": 1,
+      "dependsOn": [],
+      "fileOwnership": [
+        "src/types.ts",
+        "src/services/brain-db.ts",
+        "__tests__/services/brain-db.test.ts"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-02",
+      "name": "Fix inbox source preservation",
+      "briefing": "briefings/task-02.md",
+      "wave": 1,
+      "dependsOn": [],
+      "fileOwnership": [
+        "src/services/indexing.ts",
+        "__tests__/services/indexing.test.ts"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-03",
+      "name": "NoteRepo lineage + access helpers",
+      "briefing": "briefings/task-03.md",
+      "wave": 1,
+      "dependsOn": [],
+      "fileOwnership": [
+        "src/services/repos/note-repo.ts",
+        "__tests__/services/repos/note-repo.test.ts"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-04",
+      "name": "CascadeDelete on BrainDB",
+      "briefing": "briefings/task-04.md",
+      "wave": 2,
+      "dependsOn": ["task-01", "task-03"],
+      "fileOwnership": [
+        "src/services/brain-db.ts",
+        "__tests__/services/brain-db.test.ts"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-05",
+      "name": "CascadeArchive on BrainDB",
+      "briefing": "briefings/task-05.md",
+      "wave": 2,
+      "dependsOn": ["task-01", "task-03"],
+      "fileOwnership": [
+        "src/services/brain-db.ts",
+        "src/services/indexing.ts",
+        "__tests__/services/brain-db.test.ts"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-06",
+      "name": "brain lineage CLI command",
+      "briefing": "briefings/task-06.md",
+      "wave": 3,
+      "dependsOn": ["task-04", "task-05"],
+      "fileOwnership": [
+        "src/commands/lineage.ts",
+        "src/cli.ts",
+        "__tests__/commands/lineage.test.ts"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-07",
+      "name": "Access tracking in search + promotion",
+      "briefing": "briefings/task-07.md",
+      "wave": 3,
+      "dependsOn": ["task-03"],
+      "fileOwnership": [
+        "src/services/search.ts",
+        "__tests__/services/search.test.ts"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-08",
+      "name": "Web extraction service",
+      "briefing": "briefings/task-08.md",
+      "wave": 2,
+      "dependsOn": [],
+      "fileOwnership": [
+        "src/services/web-extract.ts",
+        "__tests__/services/web-extract.test.ts",
+        "package.json"
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "task-09",
+      "name": "brain add --url + ingest --urls",
+      "briefing": "briefings/task-09.md",
+      "wave": 3,
+      "dependsOn": ["task-08"],
+      "fileOwnership": [
+        "src/commands/add.ts",
+        "src/commands/ingest.ts",
+        "__tests__/commands/add.test.ts"
+      ],
+      "status": "completed"
+    }
+  ],
+  "waves": [
+    { "id": 1, "tasks": ["task-01", "task-02", "task-03"], "gate": "npm test passes + npm run typecheck clean" },
+    { "id": 2, "tasks": ["task-04", "task-05", "task-08"], "gate": "npm test passes + npm run typecheck clean" },
+    { "id": 3, "tasks": ["task-06", "task-07", "task-09"], "gate": "npm test passes + npm run typecheck clean + npm run lint clean" }
+  ]
+}

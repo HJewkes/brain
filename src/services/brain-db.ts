@@ -1,5 +1,7 @@
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
+import { mkdirSync, renameSync, existsSync } from 'node:fs';
+import { join, dirname, relative } from 'node:path';
 import type {
   NoteRecord,
   FileRecord,
@@ -10,14 +12,28 @@ import type {
   FeedRecord,
   MemoryEntry,
   MemoryHistoryEntry,
+  NoteAccessEvent,
 } from '../types.js';
 import { NoteRepo } from './repos/note-repo.js';
 import { MemoryRepo } from './repos/memory-repo.js';
 import { CaptureRepo } from './repos/capture-repo.js';
+import { addFrontmatterField } from './indexing.js';
 
 export { sanitizeFtsQuery } from './repos/note-repo.js';
 
-const SCHEMA_VERSION = 5;
+export interface CascadePreview {
+  noteIds: string[];
+  noteCount: number;
+  memoryCount: number;
+}
+
+export interface ArchiveResult {
+  archivedNote: string;
+  archivedPath: string;
+  orphanedChildren: string[];
+}
+
+const SCHEMA_VERSION = 6;
 
 export class BrainDB {
   private db: Database.Database;
@@ -42,9 +58,14 @@ export class BrainDB {
   }
 
   // --- Schema Migration ---
-  // TODO: schemaV1() contains full schema (including v4/v5 tables) and migrateToV4/V5
-  // duplicate the same DDL. When adding v6, refactor so schemaV1() calls migration
-  // functions or extract shared DDL constants to avoid silent divergence.
+
+  private applyMigration(current: number, target: number, fn: () => void): void {
+    if (current >= 1 && current < target) {
+      fn();
+      this.db.pragma(`user_version = ${target}`);
+      this.setMetaValue('schema_version', String(target));
+    }
+  }
 
   private migrate(): void {
     const currentVersion = this.db.pragma('user_version', { simple: true }) as number;
@@ -54,26 +75,13 @@ export class BrainDB {
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`);
       this.setMetaValue('schema_version', String(SCHEMA_VERSION));
     }
-    if (currentVersion >= 1 && currentVersion < 2) {
-      this.db.exec('CREATE INDEX IF NOT EXISTS idx_chunks_note_id ON chunks(note_id)');
-      this.db.pragma('user_version = 2');
-      this.setMetaValue('schema_version', '2');
-    }
-    if (currentVersion >= 1 && currentVersion < 3) {
-      this.migrateToV3();
-      this.db.pragma('user_version = 3');
-      this.setMetaValue('schema_version', '3');
-    }
-    if (currentVersion >= 1 && currentVersion < 4) {
-      this.migrateToV4();
-      this.db.pragma('user_version = 4');
-      this.setMetaValue('schema_version', '4');
-    }
-    if (currentVersion >= 1 && currentVersion < 5) {
-      this.migrateToV5();
-      this.db.pragma('user_version = 5');
-      this.setMetaValue('schema_version', '5');
-    }
+    this.applyMigration(currentVersion, 2, () =>
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_chunks_note_id ON chunks(note_id)')
+    );
+    this.applyMigration(currentVersion, 3, () => this.migrateToV3());
+    this.applyMigration(currentVersion, 4, () => this.db.exec(this.captureDDL()));
+    this.applyMigration(currentVersion, 5, () => this.db.exec(this.memoryDDL()));
+    this.applyMigration(currentVersion, 6, () => this.db.exec(this.noteAccessDDL()));
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -103,6 +111,83 @@ export class BrainDB {
       )
     `);
     this.vectorDimensions = dimensions;
+  }
+
+  private captureDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS inbox (
+        id            TEXT PRIMARY KEY,
+        content       TEXT NOT NULL,
+        title         TEXT,
+        source        TEXT NOT NULL DEFAULT 'cli',
+        source_url    TEXT,
+        source_meta   TEXT,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        created_at    TEXT NOT NULL,
+        processed_at  TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS feeds (
+        id            TEXT PRIMARY KEY,
+        url           TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        container_tag TEXT NOT NULL DEFAULT 'default',
+        filter_prompt TEXT,
+        last_polled   TEXT,
+        created_at    TEXT NOT NULL
+      );
+    `;
+  }
+
+  private memoryDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS memory_entries (
+        id                TEXT PRIMARY KEY,
+        memory            TEXT NOT NULL,
+        source_note_id    TEXT NOT NULL,
+        source_chunk_id   TEXT,
+        container_tag     TEXT NOT NULL DEFAULT 'default',
+        is_latest         INTEGER NOT NULL DEFAULT 1,
+        parent_memory_id  TEXT,
+        root_memory_id    TEXT,
+        relation_type     TEXT,
+        valid_at          TEXT,
+        invalid_at        TEXT,
+        forget_after      TEXT,
+        is_forgotten      INTEGER NOT NULL DEFAULT 0,
+        is_inference      INTEGER NOT NULL DEFAULT 0,
+        created_at        TEXT NOT NULL,
+        FOREIGN KEY (source_note_id) REFERENCES notes(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
+      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
+      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
+
+      CREATE TABLE IF NOT EXISTS memory_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id   TEXT NOT NULL,
+        event       TEXT NOT NULL,
+        old_memory  TEXT,
+        new_memory  TEXT,
+        actor       TEXT NOT NULL DEFAULT 'system',
+        created_at  TEXT NOT NULL,
+        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
+    `;
+  }
+
+  private noteAccessDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS note_access (
+        note_id    TEXT NOT NULL,
+        event      TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_note_access_note ON note_access(note_id);
+    `;
   }
 
   private schemaV1(): string {
@@ -170,130 +255,10 @@ export class BrainDB {
         value TEXT NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS inbox (
-        id            TEXT PRIMARY KEY,
-        content       TEXT NOT NULL,
-        title         TEXT,
-        source        TEXT NOT NULL DEFAULT 'cli',
-        source_url    TEXT,
-        source_meta   TEXT,
-        status        TEXT NOT NULL DEFAULT 'pending',
-        created_at    TEXT NOT NULL,
-        processed_at  TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS feeds (
-        id            TEXT PRIMARY KEY,
-        url           TEXT NOT NULL UNIQUE,
-        name          TEXT NOT NULL,
-        container_tag TEXT NOT NULL DEFAULT 'default',
-        filter_prompt TEXT,
-        last_polled   TEXT,
-        created_at    TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS memory_entries (
-        id                TEXT PRIMARY KEY,
-        memory            TEXT NOT NULL,
-        source_note_id    TEXT NOT NULL,
-        source_chunk_id   TEXT,
-        container_tag     TEXT NOT NULL DEFAULT 'default',
-        is_latest         INTEGER NOT NULL DEFAULT 1,
-        parent_memory_id  TEXT,
-        root_memory_id    TEXT,
-        relation_type     TEXT,
-        valid_at          TEXT,
-        invalid_at        TEXT,
-        forget_after      TEXT,
-        is_forgotten      INTEGER NOT NULL DEFAULT 0,
-        is_inference      INTEGER NOT NULL DEFAULT 0,
-        created_at        TEXT NOT NULL,
-        FOREIGN KEY (source_note_id) REFERENCES notes(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
-      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
-      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
-
-      CREATE TABLE IF NOT EXISTS memory_history (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        memory_id   TEXT NOT NULL,
-        event       TEXT NOT NULL,
-        old_memory  TEXT,
-        new_memory  TEXT,
-        actor       TEXT NOT NULL DEFAULT 'system',
-        created_at  TEXT NOT NULL,
-        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
+      ${this.captureDDL()}
+      ${this.memoryDDL()}
+      ${this.noteAccessDDL()}
     `;
-  }
-
-  private migrateToV4(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS inbox (
-        id            TEXT PRIMARY KEY,
-        content       TEXT NOT NULL,
-        title         TEXT,
-        source        TEXT NOT NULL DEFAULT 'cli',
-        source_url    TEXT,
-        source_meta   TEXT,
-        status        TEXT NOT NULL DEFAULT 'pending',
-        created_at    TEXT NOT NULL,
-        processed_at  TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS feeds (
-        id            TEXT PRIMARY KEY,
-        url           TEXT NOT NULL UNIQUE,
-        name          TEXT NOT NULL,
-        container_tag TEXT NOT NULL DEFAULT 'default',
-        filter_prompt TEXT,
-        last_polled   TEXT,
-        created_at    TEXT NOT NULL
-      );
-    `);
-  }
-
-  private migrateToV5(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS memory_entries (
-        id                TEXT PRIMARY KEY,
-        memory            TEXT NOT NULL,
-        source_note_id    TEXT NOT NULL,
-        source_chunk_id   TEXT,
-        container_tag     TEXT NOT NULL DEFAULT 'default',
-        is_latest         INTEGER NOT NULL DEFAULT 1,
-        parent_memory_id  TEXT,
-        root_memory_id    TEXT,
-        relation_type     TEXT,
-        valid_at          TEXT,
-        invalid_at        TEXT,
-        forget_after      TEXT,
-        is_forgotten      INTEGER NOT NULL DEFAULT 0,
-        is_inference      INTEGER NOT NULL DEFAULT 0,
-        created_at        TEXT NOT NULL,
-        FOREIGN KEY (source_note_id) REFERENCES notes(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
-      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
-      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
-
-      CREATE TABLE IF NOT EXISTS memory_history (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        memory_id   TEXT NOT NULL,
-        event       TEXT NOT NULL,
-        old_memory  TEXT,
-        new_memory  TEXT,
-        actor       TEXT NOT NULL DEFAULT 'system',
-        created_at  TEXT NOT NULL,
-        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
-    `);
   }
 
   private migrateToV3(): void {
@@ -368,9 +333,74 @@ export class BrainDB {
       this.noteRepo.deleteChunksForNote(id);
       this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(id);
       this.db.prepare('DELETE FROM relations WHERE source_id = ? OR target_id = ?').run(id, id);
+      this.db.prepare('DELETE FROM note_access WHERE note_id = ?').run(id);
       this.db.prepare('DELETE FROM notes WHERE id = ?').run(id);
     });
     txn();
+  }
+
+  cascadeDeletePreview(noteId: string): CascadePreview {
+    const descendants = this.noteRepo.getDescendants(noteId);
+    const allIds = [noteId, ...descendants.map((d) => d.id)];
+    let memoryCount = 0;
+    for (const id of allIds) {
+      memoryCount += this.memoryRepo.getMemoriesForNote(id).length;
+    }
+    return { noteIds: allIds, noteCount: allIds.length, memoryCount };
+  }
+
+  cascadeDelete(noteId: string): CascadePreview {
+    const preview = this.cascadeDeletePreview(noteId);
+
+    const txn = this.db.transaction(() => {
+      // Delete descendants (skip root noteId), then delete root last
+      for (const id of preview.noteIds.filter((id) => id !== noteId).reverse()) {
+        this.deleteNote(id);
+      }
+      this.deleteNote(noteId);
+    });
+    txn();
+
+    return preview;
+  }
+
+  cascadeArchive(noteId: string, notesDir: string): ArchiveResult {
+    const note = this.getNoteById(noteId);
+    if (!note) throw new Error(`Note not found: ${noteId}`);
+
+    const archiveDir = join(notesDir, '.archive');
+    const relativePath = relative(notesDir, note.filePath);
+    const archivePath = join(archiveDir, relativePath);
+
+    // Move file to archive
+    mkdirSync(dirname(archivePath), { recursive: true });
+    if (existsSync(note.filePath)) {
+      renameSync(note.filePath, archivePath);
+    }
+
+    // Remove from search index (chunks, FTS, vectors) but keep note row
+    const txn = this.db.transaction(() => {
+      this.memoryRepo.deleteMemoriesForNote(noteId);
+      this.noteRepo.deleteChunksForNote(noteId);
+      this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(noteId);
+      this.db
+        .prepare('UPDATE notes SET status = ?, file_path = ? WHERE id = ?')
+        .run('archived', archivePath, noteId);
+    });
+    txn();
+
+    // Mark direct children as orphaned
+    const directChildren = this.noteRepo.getDescendants(noteId, 1);
+    const orphanedIds: string[] = [];
+    for (const child of directChildren) {
+      const childNote = this.getNoteById(child.id);
+      if (childNote && existsSync(childNote.filePath)) {
+        addFrontmatterField(childNote.filePath, 'orphaned_from', noteId);
+        orphanedIds.push(child.id);
+      }
+    }
+
+    return { archivedNote: noteId, archivedPath: archivePath, orphanedChildren: orphanedIds };
   }
 
   // --- Note Delegates ---
@@ -446,6 +476,21 @@ export class BrainDB {
   }
   getRelationsBatch(ids: string[]): Map<string, { from: Relation[]; to: Relation[] }> {
     return this.noteRepo.getRelationsBatch(ids);
+  }
+  getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> {
+    return this.noteRepo.getDescendants(noteId, maxDepth);
+  }
+
+  // --- Access Delegates ---
+
+  recordAccess(noteId: string, event: NoteAccessEvent): void {
+    this.noteRepo.recordAccess(noteId, event);
+  }
+  getAccessCount(noteId: string): number {
+    return this.noteRepo.getAccessCount(noteId);
+  }
+  getAccessCounts(noteIds: string[]): Map<string, number> {
+    return this.noteRepo.getAccessCounts(noteIds);
   }
 
   // --- FTS Delegates ---

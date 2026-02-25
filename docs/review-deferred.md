@@ -2,15 +2,6 @@
 
 Items found during deep reviews of `feat/memory-engine`. Organized by severity. Fixed items removed; remaining items have code TODOs where applicable.
 
-## Major
-
-### Schema DDL duplication between `schemaV1()` and migration functions
-`brain-db.ts` — `schemaV1()` creates all tables (including V4-V5 additions). `migrateToV4()` and `migrateToV5()` contain the same DDL. A column change in one place but not the other creates a silent divergence.
-
-**Status:** TODO added in `brain-db.ts`. Address when adding V6 migration.
-
----
-
 ## Minor — Services
 
 ### No retry logic for Ollama (`ollama.ts`)
@@ -33,11 +24,6 @@ H4-H6 headings are treated as body text. Intentional but undocumented.
 
 ### `ChunkType` has variants never produced by the parser (`types.ts`)
 `'heading'`, `'code'`, `'list'`, `'blockquote'` are defined but never assigned.
-
-### Query branch duplication in `memory-repo.ts`
-`getLatestMemories` and `getMemoriesSince` both branch on `containerTag` with near-identical queries.
-
-**Status:** TODO added in `memory-repo.ts`.
 
 ### Chunk/embedding length mismatch not guarded (`note-repo.ts`)
 `upsertChunks` assumes `chunks.length === embeddings.length` without asserting.
@@ -103,3 +89,5 @@ Every extraction test seeds exactly one chunk.
 - ~~Orphaned memory vectors on DELETE reconciliation~~ — added `deleteMemoryVector`
 - ~~`updateInboxStatus('failed')` not tested~~ — covered in capture-repo tests
 - ~~`getMemoriesForNote` isLatest filter not verified~~ — covered in memory-repo tests
+- ~~Schema DDL duplication between schemaV1() and migrations~~ — extracted captureDDL/memoryDDL
+- ~~Query branch duplication in memory-repo.ts~~ — extracted queryLatestMemories helper

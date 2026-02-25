@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { search, searchMemories } from '../../src/services/search.js';
+import { search, searchMemories, checkAndPromote } from '../../src/services/search.js';
 import { unlinkSync } from 'node:fs';
 import type { Chunk, NoteRecord } from '../../src/types.js';
 import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
@@ -595,6 +595,72 @@ describe('search service', () => {
 
       await search(ctx.db, otherEmbedder, 'test query', { limit: 3 });
       expect(embeddedTexts[0]).toBe('test query');
+    });
+  });
+
+  describe('access tracking', () => {
+    it('records search_hit events for returned results', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 5,
+      });
+
+      expect(results.length).toBeGreaterThan(0);
+      const count = ctx.db.getAccessCount(results[0].noteId);
+      expect(count).toBeGreaterThanOrEqual(1);
+    });
+
+    it('records one event per result', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 5,
+      });
+
+      for (const result of results) {
+        const count = ctx.db.getAccessCount(result.noteId);
+        expect(count).toBe(1);
+      }
+    });
+
+    it('accumulates across multiple searches', async () => {
+      await search(ctx.db, ctx.embedder, 'TypeScript patterns', { limit: 5 });
+      await search(ctx.db, ctx.embedder, 'TypeScript patterns', { limit: 5 });
+
+      const count = ctx.db.getAccessCount('ts-patterns');
+      expect(count).toBe(2);
+    });
+  });
+
+  describe('checkAndPromote', () => {
+    it('promotes a fast-tier note after reaching threshold', () => {
+      for (let i = 0; i < 10; i++) {
+        ctx.db.recordAccess('react-hooks', 'search_hit');
+      }
+      const promoted = checkAndPromote(ctx.db, 'react-hooks', 10);
+      expect(promoted).toBe(true);
+      const note = ctx.db.getNoteById('react-hooks');
+      expect(note?.tier).toBe('slow');
+    });
+
+    it('does not promote when below threshold', () => {
+      for (let i = 0; i < 5; i++) {
+        ctx.db.recordAccess('react-hooks', 'search_hit');
+      }
+      const promoted = checkAndPromote(ctx.db, 'react-hooks', 10);
+      expect(promoted).toBe(false);
+      const note = ctx.db.getNoteById('react-hooks');
+      expect(note?.tier).toBe('fast');
+    });
+
+    it('does not promote slow-tier notes', () => {
+      for (let i = 0; i < 20; i++) {
+        ctx.db.recordAccess('ts-patterns', 'search_hit');
+      }
+      const promoted = checkAndPromote(ctx.db, 'ts-patterns', 10);
+      expect(promoted).toBe(false);
+    });
+
+    it('returns false for nonexistent notes', () => {
+      const promoted = checkAndPromote(ctx.db, 'nonexistent', 1);
+      expect(promoted).toBe(false);
     });
   });
 });

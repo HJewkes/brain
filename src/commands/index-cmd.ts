@@ -1,10 +1,9 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync, watch } from 'node:fs';
-import { basename } from 'node:path';
 import { loadConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
-import { createOllamaClient } from '../services/ollama.js';
+import { checkOllamaHealth, hasModel, createOllamaClient } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 import { scanForChanges } from '../services/file-scanner.js';
 import {
@@ -12,6 +11,7 @@ import {
   indexFiles,
   processInbox,
   generateNoteIndex,
+  isSkippedFile,
 } from '../services/indexing.js';
 import type { Embedder } from '../types.js';
 
@@ -44,15 +44,31 @@ export const indexCommand = new Command('index')
 
       let memoriesExtracted = 0;
       if (opts.extract && result.indexedNoteIds.length > 0) {
-        memoriesExtracted = await extractFromNotes(
-          db,
-          embedder,
-          result.indexedNoteIds,
-          config.ollamaUrl,
-          opts.extractModel ?? config.ollamaModel,
-          opts.extractTag ?? 'default',
-          opts.quiet
-        );
+        const health = await checkOllamaHealth(config.ollamaUrl);
+        const extractModel = opts.extractModel ?? config.ollamaModel ?? 'qwen2.5:3b';
+        if (!health.running) {
+          if (!opts.quiet) {
+            process.stderr.write(
+              'Skipping memory extraction: Ollama not running. Run `brain doctor` to check.\n'
+            );
+          }
+        } else if (!hasModel(health, extractModel)) {
+          if (!opts.quiet) {
+            process.stderr.write(
+              `Skipping memory extraction: model "${extractModel}" not found. Run \`ollama pull ${extractModel}\`.\n`
+            );
+          }
+        } else {
+          memoriesExtracted = await extractFromNotes(
+            db,
+            embedder,
+            result.indexedNoteIds,
+            config.ollamaUrl,
+            opts.extractModel ?? config.ollamaModel,
+            opts.extractTag ?? 'default',
+            opts.quiet
+          );
+        }
       }
 
       generateNoteIndex(db, config.notesDir);
@@ -99,14 +115,11 @@ export const indexCommand = new Command('index')
 function startWatcher(db: BrainDB, embedder: Embedder, notesDir: string): void {
   process.stderr.write(`Watching ${notesDir} for changes...\n`);
 
-  const isSkipped = (filePath: string): boolean =>
-    filePath.includes('/_templates/') || basename(filePath) === '_index.md';
-
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const reindex = async () => {
     const knownFiles = db.getAllFiles();
     const changes = await scanForChanges(notesDir, knownFiles);
-    const toProcess = [...changes.new, ...changes.modified].filter((f) => !isSkipped(f.path));
+    const toProcess = [...changes.new, ...changes.modified].filter((f) => !isSkippedFile(f.path));
 
     for (const file of toProcess) {
       const content = readFileSync(file.path, 'utf-8');

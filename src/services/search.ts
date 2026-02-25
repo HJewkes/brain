@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import type { BrainDB } from './brain-db.js';
+import { addFrontmatterField } from './indexing.js';
 import { rerank } from './reranker.js';
 import type {
   Embedder,
@@ -264,7 +266,12 @@ export async function search(
   // Step 4: Build SearchResult objects
   const results = buildSearchResults(db, topResults);
 
-  // Step 5: Optional cross-encoder reranking
+  // Step 5: Record access events for returned results
+  for (const result of results) {
+    db.recordAccess(result.noteId, 'search_hit');
+  }
+
+  // Step 6: Optional cross-encoder reranking
   if (options.rerank && results.length > 1) {
     return rerank(query, results, limit);
   }
@@ -336,4 +343,27 @@ export async function searchMemories(
 
   results.sort((a, b) => b.score - a.score);
   return results.slice(0, limit);
+}
+
+const DEFAULT_PROMOTION_THRESHOLD = 10;
+
+export function checkAndPromote(
+  db: BrainDB,
+  noteId: string,
+  threshold: number = DEFAULT_PROMOTION_THRESHOLD
+): boolean {
+  const note = db.getNoteById(noteId);
+  if (!note || note.tier !== 'fast') return false;
+
+  const count = db.getAccessCount(noteId);
+  if (count < threshold) return false;
+
+  const promoted = { ...note, tier: 'slow' as const, reviewInterval: null };
+  db.upsertNote(promoted);
+
+  if (existsSync(note.filePath)) {
+    addFrontmatterField(note.filePath, 'tier', 'slow');
+  }
+
+  return true;
 }
