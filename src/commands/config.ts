@@ -63,7 +63,7 @@ const getSubcommand = new Command('get')
     const config = loadConfig();
 
     if (!key) {
-      console.log(JSON.stringify(config, null, 2));
+      process.stdout.write(JSON.stringify(config, null, 2) + '\n');
       return;
     }
 
@@ -71,15 +71,15 @@ const getSubcommand = new Command('get')
     const value = getNestedValue(config as unknown as Record<string, unknown>, camelKey);
 
     if (value === undefined) {
-      console.error(`Error: unknown config key "${key}"`);
+      process.stderr.write(`Error: unknown config key "${key}"\n`);
       process.exitCode = 1;
       return;
     }
 
     if (typeof value === 'object') {
-      console.log(JSON.stringify(value, null, 2));
+      process.stdout.write(JSON.stringify(value, null, 2) + '\n');
     } else {
-      console.log(String(value));
+      process.stdout.write(String(value) + '\n');
     }
   });
 
@@ -94,14 +94,14 @@ const setSubcommand = new Command('set')
 
     const existing = getNestedValue(config, camelKey);
     if (existing === undefined) {
-      console.error(`Error: unknown config key "${key}"`);
+      process.stderr.write(`Error: unknown config key "${key}"\n`);
       process.exitCode = 1;
       return;
     }
 
     if (existing !== null && typeof value !== typeof existing) {
-      console.error(
-        `Error: type mismatch for "${key}". Expected ${typeof existing}, got ${typeof value}`
+      process.stderr.write(
+        `Error: type mismatch for "${key}". Expected ${typeof existing}, got ${typeof value}\n`
       );
       process.exitCode = 1;
       return;
@@ -111,9 +111,9 @@ const setSubcommand = new Command('set')
 
     try {
       saveConfig(updated as unknown as Partial<BrainConfig>);
-      console.log(`Set ${key} = ${String(value)}`);
+      process.stdout.write(`Set ${key} = ${String(value)}\n`);
     } catch (err) {
-      console.error(`Error: ${(err as Error).message}`);
+      process.stderr.write(`Error: ${(err as Error).message}\n`);
       process.exitCode = 1;
     }
   });

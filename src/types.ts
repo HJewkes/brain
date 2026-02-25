@@ -71,21 +71,35 @@ export interface NoteFrontmatter {
 
 // === Chunk Types ===
 
-export type ChunkType = 'section' | 'observation';
+export type ChunkType = 'section' | 'heading' | 'paragraph' | 'code' | 'list' | 'blockquote';
+
+export type CutType =
+  | 'heading_boundary'
+  | 'paragraph_end'
+  | 'semantic_split'
+  | 'token_limit'
+  | 'code_fence';
 
 export interface RawChunk {
   heading: string | null;
+  headingAncestry: string | null;
   text: string;
   tokenCount: number;
+  chunkType: ChunkType;
+  cutType: CutType;
+  position: number;
 }
 
 export interface Chunk {
   id: string;
   noteId: string;
   heading: string | null;
+  headingAncestry: string | null;
   content: string;
   tokenCount: number;
   chunkType: ChunkType;
+  cutType: CutType;
+  position: number;
 }
 
 // === Search Types ===
@@ -113,6 +127,8 @@ export interface SearchOptions {
   expand?: boolean;
   fusionStrategy?: FusionStrategy;
   minScore?: number;
+  rerank?: boolean;
+  dropoff?: number;
 }
 
 // === Graph Types ===
@@ -137,6 +153,84 @@ export interface GraphResult {
   edges: Relation[];
 }
 
+// === Inbox Types ===
+
+export type InboxSource = 'cli' | 'rss' | 'crawler' | 'alert' | 'api' | 'file';
+
+export const VALID_INBOX_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file'];
+
+export type InboxStatus = 'pending' | 'processing' | 'indexed' | 'failed' | 'discarded';
+
+export interface InboxItem {
+  id: string;
+  content: string;
+  title: string | null;
+  source: InboxSource;
+  sourceUrl: string | null;
+  sourceMeta: string | null;
+  status: InboxStatus;
+  createdAt: string;
+  processedAt: string | null;
+}
+
+export interface FeedRecord {
+  id: string;
+  url: string;
+  name: string;
+  containerTag: string;
+  filterPrompt: string | null;
+  lastPolled: string | null;
+  createdAt: string;
+}
+
+// === Memory Types ===
+
+export type MemoryRelationType = 'updates' | 'extends' | 'derives';
+
+export type MemoryEvent = 'add' | 'update' | 'delete' | 'forget';
+
+export interface MemoryEntry {
+  id: string;
+  memory: string;
+  sourceNoteId: string;
+  sourceChunkId: string | null;
+  containerTag: string;
+  isLatest: boolean;
+  parentMemoryId: string | null;
+  rootMemoryId: string | null;
+  relationType: MemoryRelationType | null;
+  validAt: string | null;
+  invalidAt: string | null;
+  forgetAfter: string | null;
+  isForgotten: boolean;
+  isInference: boolean;
+  createdAt: string;
+}
+
+export interface MemoryHistoryEntry {
+  id: number;
+  memoryId: string;
+  event: MemoryEvent;
+  oldMemory: string | null;
+  newMemory: string | null;
+  actor: string;
+  createdAt: string;
+}
+
+export interface MemorySearchResult {
+  score: number;
+  memory: string;
+  memoryId: string;
+  sourceNoteId: string;
+  containerTag: string;
+  createdAt: string;
+}
+
+export interface ExtractedFact {
+  fact: string;
+  sourceChunkId: string | null;
+}
+
 // === Config Types ===
 
 export type EmbedderBackend = 'local' | 'ollama' | 'remote';
@@ -146,6 +240,7 @@ export interface BrainConfig {
   dbPath: string;
   embedder: EmbedderBackend;
   ollamaUrl?: string;
+  ollamaModel?: string;
   fusionWeights: {
     bm25: number;
     vector: number;

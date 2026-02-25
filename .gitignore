@@ -1,5 +1,8 @@
 node_modules/
 dist/
 docs/
+!docs/plans/
 *.db
 .env
+coverage/
+.claude/plans/

@@ -13,27 +13,21 @@ export function getDirectRelations(db: BrainDB, noteId: string): Relation[] {
 export function traverseGraph(db: BrainDB, rootId: string, depth: number): GraphResult {
   const effectiveDepth = Math.min(depth, MAX_DEPTH);
 
-  const rootNote = db.getNoteById(rootId);
-  const root: GraphNode = {
-    id: rootId,
-    title: rootNote?.title ?? rootId,
-    type: rootNote?.type ?? 'note',
-    tier: rootNote?.tier ?? 'slow',
-    depth: 0,
-  };
-
   const visited = new Map<string, number>();
   visited.set(rootId, 0);
 
   const allEdges: Relation[] = [];
-  const frontier = [rootId];
+  let frontier = [rootId];
 
   for (let d = 0; d < effectiveDepth; d++) {
+    const relationsBatch = db.getRelationsBatch(frontier);
     const nextFrontier: string[] = [];
 
     for (const nodeId of frontier) {
-      const outgoing = db.getRelationsFrom(nodeId);
-      for (const rel of outgoing) {
+      const rels = relationsBatch.get(nodeId);
+      if (!rels) continue;
+
+      for (const rel of rels.from) {
         allEdges.push(rel);
         if (!visited.has(rel.targetId)) {
           visited.set(rel.targetId, d + 1);
@@ -41,8 +35,7 @@ export function traverseGraph(db: BrainDB, rootId: string, depth: number): Graph
         }
       }
 
-      const incoming = db.getRelationsTo(nodeId);
-      for (const rel of incoming) {
+      for (const rel of rels.to) {
         if (!BIDIRECTIONAL_TYPES.has(rel.type)) continue;
         allEdges.push(rel);
         if (!visited.has(rel.sourceId)) {
@@ -52,13 +45,23 @@ export function traverseGraph(db: BrainDB, rootId: string, depth: number): Graph
       }
     }
 
-    frontier.length = 0;
-    frontier.push(...nextFrontier);
+    frontier = nextFrontier;
   }
+
+  const allIds = [...visited.keys()];
+  const notesById = db.getNotesByIds(allIds);
+
+  const root: GraphNode = {
+    id: rootId,
+    title: notesById.get(rootId)?.title ?? rootId,
+    type: notesById.get(rootId)?.type ?? 'note',
+    tier: notesById.get(rootId)?.tier ?? 'slow',
+    depth: 0,
+  };
 
   const nodes: GraphNode[] = [];
   for (const [id, nodeDepth] of visited) {
-    const note = id === rootId ? rootNote : db.getNoteById(id);
+    const note = notesById.get(id);
     nodes.push({
       id,
       title: note?.title ?? id,

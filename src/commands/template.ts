@@ -214,7 +214,9 @@ export const templateCommand = new Command('template')
   .argument('<type>', 'Note type (note, decision, meeting, research, pattern, session-log, guide)')
   .action((type) => {
     if (!VALID_TYPES.has(type as NoteType)) {
-      console.error(`Error: unknown type "${type}". Valid types: ${[...VALID_TYPES].join(', ')}`);
+      process.stderr.write(
+        `Error: unknown type "${type}". Valid types: ${[...VALID_TYPES].join(', ')}\n`
+      );
       process.exitCode = 1;
       return;
     }

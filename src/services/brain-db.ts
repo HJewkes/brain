@@ -1,17 +1,30 @@
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-import type { NoteRecord, FileRecord, Chunk, Relation } from '../types.js';
+import type {
+  NoteRecord,
+  FileRecord,
+  Chunk,
+  Relation,
+  InboxItem,
+  InboxStatus,
+  FeedRecord,
+  MemoryEntry,
+  MemoryHistoryEntry,
+} from '../types.js';
+import { NoteRepo } from './repos/note-repo.js';
+import { MemoryRepo } from './repos/memory-repo.js';
+import { CaptureRepo } from './repos/capture-repo.js';
 
-const SCHEMA_VERSION = 2;
+export { sanitizeFtsQuery } from './repos/note-repo.js';
 
-interface FTSResult {
-  noteId: string;
-  rank: number;
-}
+const SCHEMA_VERSION = 5;
 
 export class BrainDB {
   private db: Database.Database;
   private vectorDimensions: number | null = null;
+  private noteRepo: NoteRepo;
+  private memoryRepo: MemoryRepo;
+  private captureRepo: CaptureRepo;
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
@@ -19,6 +32,9 @@ export class BrainDB {
     this.db.pragma('foreign_keys = ON');
     sqliteVec.load(this.db);
     this.migrate();
+    this.noteRepo = new NoteRepo(this.db, (dims) => this.ensureVectorTable(dims));
+    this.memoryRepo = new MemoryRepo(this.db);
+    this.captureRepo = new CaptureRepo(this.db);
   }
 
   close(): void {
@@ -26,6 +42,9 @@ export class BrainDB {
   }
 
   // --- Schema Migration ---
+  // TODO: schemaV1() contains full schema (including v4/v5 tables) and migrateToV4/V5
+  // duplicate the same DDL. When adding v6, refactor so schemaV1() calls migration
+  // functions or extract shared DDL constants to avoid silent divergence.
 
   private migrate(): void {
     const currentVersion = this.db.pragma('user_version', { simple: true }) as number;
@@ -40,6 +59,21 @@ export class BrainDB {
       this.db.pragma('user_version = 2');
       this.setMetaValue('schema_version', '2');
     }
+    if (currentVersion >= 1 && currentVersion < 3) {
+      this.migrateToV3();
+      this.db.pragma('user_version = 3');
+      this.setMetaValue('schema_version', '3');
+    }
+    if (currentVersion >= 1 && currentVersion < 4) {
+      this.migrateToV4();
+      this.db.pragma('user_version = 4');
+      this.setMetaValue('schema_version', '4');
+    }
+    if (currentVersion >= 1 && currentVersion < 5) {
+      this.migrateToV5();
+      this.db.pragma('user_version = 5');
+      this.setMetaValue('schema_version', '5');
+    }
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -53,11 +87,18 @@ export class BrainDB {
     const existing = this.getMetaValue('embedding_dimensions');
     if (existing && Number(existing) !== dimensions) {
       this.db.exec('DROP TABLE IF EXISTS chunk_vectors');
+      this.db.exec('DROP TABLE IF EXISTS memory_vectors');
     }
 
     this.db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(
         chunk_id TEXT PRIMARY KEY,
+        embedding float[${dimensions}]
+      )
+    `);
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS memory_vectors USING vec0(
+        memory_id TEXT PRIMARY KEY,
         embedding float[${dimensions}]
       )
     `);
@@ -110,12 +151,15 @@ export class BrainDB {
       );
 
       CREATE TABLE IF NOT EXISTS chunks (
-        id          TEXT PRIMARY KEY,
-        note_id     TEXT NOT NULL,
-        heading     TEXT,
-        content     TEXT NOT NULL,
-        token_count INTEGER,
-        chunk_type  TEXT DEFAULT 'section',
+        id                TEXT PRIMARY KEY,
+        note_id           TEXT NOT NULL,
+        heading           TEXT,
+        heading_ancestry  TEXT,
+        content           TEXT NOT NULL,
+        token_count       INTEGER,
+        chunk_type        TEXT DEFAULT 'section',
+        cut_type          TEXT DEFAULT 'heading_boundary',
+        position          INTEGER DEFAULT 0,
         FOREIGN KEY (note_id) REFERENCES notes(id)
       );
 
@@ -125,7 +169,146 @@ export class BrainDB {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS inbox (
+        id            TEXT PRIMARY KEY,
+        content       TEXT NOT NULL,
+        title         TEXT,
+        source        TEXT NOT NULL DEFAULT 'cli',
+        source_url    TEXT,
+        source_meta   TEXT,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        created_at    TEXT NOT NULL,
+        processed_at  TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS feeds (
+        id            TEXT PRIMARY KEY,
+        url           TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        container_tag TEXT NOT NULL DEFAULT 'default',
+        filter_prompt TEXT,
+        last_polled   TEXT,
+        created_at    TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS memory_entries (
+        id                TEXT PRIMARY KEY,
+        memory            TEXT NOT NULL,
+        source_note_id    TEXT NOT NULL,
+        source_chunk_id   TEXT,
+        container_tag     TEXT NOT NULL DEFAULT 'default',
+        is_latest         INTEGER NOT NULL DEFAULT 1,
+        parent_memory_id  TEXT,
+        root_memory_id    TEXT,
+        relation_type     TEXT,
+        valid_at          TEXT,
+        invalid_at        TEXT,
+        forget_after      TEXT,
+        is_forgotten      INTEGER NOT NULL DEFAULT 0,
+        is_inference      INTEGER NOT NULL DEFAULT 0,
+        created_at        TEXT NOT NULL,
+        FOREIGN KEY (source_note_id) REFERENCES notes(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
+      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
+      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
+
+      CREATE TABLE IF NOT EXISTS memory_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id   TEXT NOT NULL,
+        event       TEXT NOT NULL,
+        old_memory  TEXT,
+        new_memory  TEXT,
+        actor       TEXT NOT NULL DEFAULT 'system',
+        created_at  TEXT NOT NULL,
+        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
     `;
+  }
+
+  private migrateToV4(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS inbox (
+        id            TEXT PRIMARY KEY,
+        content       TEXT NOT NULL,
+        title         TEXT,
+        source        TEXT NOT NULL DEFAULT 'cli',
+        source_url    TEXT,
+        source_meta   TEXT,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        created_at    TEXT NOT NULL,
+        processed_at  TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS feeds (
+        id            TEXT PRIMARY KEY,
+        url           TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        container_tag TEXT NOT NULL DEFAULT 'default',
+        filter_prompt TEXT,
+        last_polled   TEXT,
+        created_at    TEXT NOT NULL
+      );
+    `);
+  }
+
+  private migrateToV5(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS memory_entries (
+        id                TEXT PRIMARY KEY,
+        memory            TEXT NOT NULL,
+        source_note_id    TEXT NOT NULL,
+        source_chunk_id   TEXT,
+        container_tag     TEXT NOT NULL DEFAULT 'default',
+        is_latest         INTEGER NOT NULL DEFAULT 1,
+        parent_memory_id  TEXT,
+        root_memory_id    TEXT,
+        relation_type     TEXT,
+        valid_at          TEXT,
+        invalid_at        TEXT,
+        forget_after      TEXT,
+        is_forgotten      INTEGER NOT NULL DEFAULT 0,
+        is_inference      INTEGER NOT NULL DEFAULT 0,
+        created_at        TEXT NOT NULL,
+        FOREIGN KEY (source_note_id) REFERENCES notes(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
+      CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
+      CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
+
+      CREATE TABLE IF NOT EXISTS memory_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id   TEXT NOT NULL,
+        event       TEXT NOT NULL,
+        old_memory  TEXT,
+        new_memory  TEXT,
+        actor       TEXT NOT NULL DEFAULT 'system',
+        created_at  TEXT NOT NULL,
+        FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_history_memory ON memory_history(memory_id);
+    `);
+  }
+
+  private migrateToV3(): void {
+    const columns = this.db.pragma('table_info(chunks)') as { name: string }[];
+    const columnNames = new Set(columns.map((c) => c.name));
+
+    if (!columnNames.has('heading_ancestry')) {
+      this.db.exec('ALTER TABLE chunks ADD COLUMN heading_ancestry TEXT');
+    }
+    if (!columnNames.has('cut_type')) {
+      this.db.exec("ALTER TABLE chunks ADD COLUMN cut_type TEXT DEFAULT 'heading_boundary'");
+    }
+    if (!columnNames.has('position')) {
+      this.db.exec('ALTER TABLE chunks ADD COLUMN position INTEGER DEFAULT 0');
+    }
   }
 
   // --- Meta ---
@@ -177,51 +360,12 @@ export class BrainDB {
     return rows.map((r) => r.name);
   }
 
-  // --- Note CRUD ---
-
-  upsertNote(record: NoteRecord): NoteRecord {
-    this.db
-      .prepare(
-        `INSERT OR REPLACE INTO notes
-          (id, file_path, title, type, tier, category, tags, summary, confidence, status, sources, created_at, modified_at, last_reviewed, review_interval, expires, metadata)
-        VALUES
-          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        record.id,
-        record.filePath,
-        record.title,
-        record.type,
-        record.tier,
-        record.category,
-        record.tags,
-        record.summary,
-        record.confidence,
-        record.status,
-        record.sources,
-        record.createdAt,
-        record.modifiedAt,
-        record.lastReviewed,
-        record.reviewInterval,
-        record.expires,
-        record.metadata
-      );
-    return record;
-  }
-
-  getNoteById(id: string): NoteRecord | null {
-    const row = this.db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow | undefined;
-    return row ? rowToNoteRecord(row) : null;
-  }
-
-  getAllNotes(): NoteRecord[] {
-    const rows = this.db.prepare('SELECT * FROM notes').all() as NoteRow[];
-    return rows.map(rowToNoteRecord);
-  }
+  // --- Cross-repo Orchestration ---
 
   deleteNote(id: string): void {
     const txn = this.db.transaction(() => {
-      this.deleteChunksForNote(id);
+      this.memoryRepo.deleteMemoriesForNote(id);
+      this.noteRepo.deleteChunksForNote(id);
       this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(id);
       this.db.prepare('DELETE FROM relations WHERE source_id = ? OR target_id = ?').run(id, id);
       this.db.prepare('DELETE FROM notes WHERE id = ?').run(id);
@@ -229,157 +373,98 @@ export class BrainDB {
     txn();
   }
 
-  // --- File Tracking ---
+  // --- Note Delegates ---
+
+  upsertNote(record: NoteRecord): NoteRecord {
+    return this.noteRepo.upsertNote(record);
+  }
+  getNoteById(id: string): NoteRecord | null {
+    return this.noteRepo.getNoteById(id);
+  }
+  getNotesByIds(ids: string[]): Map<string, NoteRecord> {
+    return this.noteRepo.getNotesByIds(ids);
+  }
+  getAllNotes(): NoteRecord[] {
+    return this.noteRepo.getAllNotes();
+  }
+  getNoteCount(): number {
+    return this.noteRepo.getNoteCount();
+  }
+  getNoteByFilePath(filePath: string): NoteRecord | null {
+    return this.noteRepo.getNoteByFilePath(filePath);
+  }
+
+  // --- File Delegates ---
 
   upsertFile(record: FileRecord): void {
-    this.db
-      .prepare(
-        `INSERT OR REPLACE INTO files (path, hash, mtime, indexed_at)
-         VALUES (?, ?, ?, ?)`
-      )
-      .run(record.path, record.hash, record.mtime, record.indexedAt);
+    this.noteRepo.upsertFile(record);
   }
-
   getFile(path: string): FileRecord | null {
-    const row = this.db.prepare('SELECT * FROM files WHERE path = ?').get(path) as
-      | FileRow
-      | undefined;
-    return row ? rowToFileRecord(row) : null;
+    return this.noteRepo.getFile(path);
   }
-
   getAllFiles(): Map<string, FileRecord> {
-    const rows = this.db.prepare('SELECT * FROM files').all() as FileRow[];
-    const map = new Map<string, FileRecord>();
-    for (const row of rows) {
-      const rec = rowToFileRecord(row);
-      map.set(rec.path, rec);
-    }
-    return map;
+    return this.noteRepo.getAllFiles();
   }
-
   deleteFile(path: string): void {
-    this.db.prepare('DELETE FROM files WHERE path = ?').run(path);
+    this.noteRepo.deleteFile(path);
   }
 
-  // --- Chunk + Vector Operations ---
+  // --- Chunk Delegates ---
 
   upsertChunks(noteId: string, chunks: Chunk[], embeddings: Float32Array[]): void {
-    if (embeddings.length > 0) {
-      this.ensureVectorTable(embeddings[0].length);
-    }
-    this.deleteChunksForNote(noteId);
-
-    const insertChunk = this.db.prepare(
-      `INSERT INTO chunks (id, note_id, heading, content, token_count, chunk_type)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    );
-    const insertVector = this.db.prepare(
-      `INSERT INTO chunk_vectors (chunk_id, embedding)
-       VALUES (?, ?)`
-    );
-
-    const txn = this.db.transaction(() => {
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        insertChunk.run(
-          chunk.id,
-          noteId,
-          chunk.heading,
-          chunk.content,
-          chunk.tokenCount,
-          chunk.chunkType
-        );
-        insertVector.run(chunk.id, Buffer.from(embeddings[i].buffer));
-      }
-    });
-    txn();
+    this.noteRepo.upsertChunks(noteId, chunks, embeddings);
   }
-
   getChunksForNote(noteId: string): Chunk[] {
-    const rows = this.db
-      .prepare('SELECT * FROM chunks WHERE note_id = ? ORDER BY rowid')
-      .all(noteId) as ChunkRow[];
-    return rows.map(rowToChunk);
+    return this.noteRepo.getChunksForNote(noteId);
   }
-
   getChunkCount(): number {
-    const row = this.db.prepare('SELECT COUNT(*) as count FROM chunks').get() as { count: number };
-    return row.count;
+    return this.noteRepo.getChunkCount();
   }
-
   deleteChunksForNote(noteId: string): void {
-    const chunkIds = this.db.prepare('SELECT id FROM chunks WHERE note_id = ?').all(noteId) as {
-      id: string;
-    }[];
-
-    if (chunkIds.length > 0) {
-      const deleteVec = this.db.prepare('DELETE FROM chunk_vectors WHERE chunk_id = ?');
-      const txn = this.db.transaction(() => {
-        for (const { id } of chunkIds) {
-          deleteVec.run(id);
-        }
-      });
-      txn();
-    }
-
-    this.db.prepare('DELETE FROM chunks WHERE note_id = ?').run(noteId);
+    this.noteRepo.deleteChunksForNote(noteId);
+  }
+  getChunkContent(chunkId: string): string {
+    return this.noteRepo.getChunkContent(chunkId);
+  }
+  getFirstChunkForNote(noteId: string): { content: string; heading: string | null } | null {
+    return this.noteRepo.getFirstChunkForNote(noteId);
+  }
+  getChunkHeading(chunkId: string | null, noteId: string): string | null {
+    return this.noteRepo.getChunkHeading(chunkId, noteId);
   }
 
-  // --- Relations ---
+  // --- Relation Delegates ---
 
   upsertRelations(noteId: string, relations: Relation[]): void {
-    const txn = this.db.transaction(() => {
-      this.db.prepare('DELETE FROM relations WHERE source_id = ?').run(noteId);
-      const insert = this.db.prepare(
-        `INSERT INTO relations (source_id, target_id, type, created_at)
-         VALUES (?, ?, ?, ?)`
-      );
-      for (const rel of relations) {
-        insert.run(rel.sourceId, rel.targetId, rel.type, Date.now());
-      }
-    });
-    txn();
+    this.noteRepo.upsertRelations(noteId, relations);
   }
-
   getRelationsFrom(noteId: string): Relation[] {
-    const rows = this.db
-      .prepare('SELECT source_id, target_id, type FROM relations WHERE source_id = ?')
-      .all(noteId) as RelationRow[];
-    return rows.map(rowToRelation);
+    return this.noteRepo.getRelationsFrom(noteId);
   }
-
   getRelationsTo(noteId: string): Relation[] {
-    const rows = this.db
-      .prepare('SELECT source_id, target_id, type FROM relations WHERE target_id = ?')
-      .all(noteId) as RelationRow[];
-    return rows.map(rowToRelation);
+    return this.noteRepo.getRelationsTo(noteId);
+  }
+  getRelationsBatch(ids: string[]): Map<string, { from: Relation[]; to: Relation[] }> {
+    return this.noteRepo.getRelationsBatch(ids);
   }
 
-  // --- Search API ---
+  // --- FTS Delegates ---
+
+  upsertNoteFTS(noteId: string, title: string, summary: string, content: string): void {
+    this.noteRepo.upsertNoteFTS(noteId, title, summary, content);
+  }
+  searchFTS(query: string, limit: number): Array<{ noteId: string; rank: number }> {
+    return this.noteRepo.searchFTS(query, limit);
+  }
+
+  // --- Search Delegates ---
 
   searchVector(
     embedding: Float32Array,
     limit: number
   ): Array<{ chunkId: string; noteId: string; distance: number }> {
-    try {
-      return this.db
-        .prepare(
-          `SELECT cv.chunk_id as chunkId, c.note_id as noteId, cv.distance
-         FROM chunk_vectors cv
-         JOIN chunks c ON c.id = cv.chunk_id
-         WHERE embedding MATCH ? AND k = ?
-         ORDER BY distance`
-        )
-        .all(Buffer.from(embedding.buffer), limit) as Array<{
-        chunkId: string;
-        noteId: string;
-        distance: number;
-      }>;
-    } catch {
-      return [];
-    }
+    return this.noteRepo.searchVector(embedding, limit);
   }
-
   getFilteredNoteIds(filters: {
     tier?: string;
     category?: string;
@@ -387,197 +472,93 @@ export class BrainDB {
     since?: string;
     tags?: string[];
   }): Set<string> | null {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    if (filters.tier) {
-      conditions.push('tier = ?');
-      params.push(filters.tier);
-    }
-    if (filters.category) {
-      conditions.push('category = ?');
-      params.push(filters.category);
-    }
-    if (filters.confidence) {
-      conditions.push('confidence = ?');
-      params.push(filters.confidence);
-    }
-    if (filters.since) {
-      conditions.push('modified_at >= ?');
-      params.push(filters.since);
-    }
-    if (filters.tags?.length) {
-      conditions.push(`(${filters.tags.map(() => 'tags LIKE ?').join(' AND ')})`);
-      for (const tag of filters.tags) params.push(`%${tag}%`);
-    }
-    if (conditions.length === 0) return null;
-    const rows = this.db
-      .prepare(`SELECT id FROM notes WHERE ${conditions.join(' AND ')}`)
-      .all(...params) as { id: string }[];
-    return new Set(rows.map((r) => r.id));
+    return this.noteRepo.getFilteredNoteIds(filters);
   }
 
-  getChunkContent(chunkId: string): string {
-    const row = this.db.prepare('SELECT content FROM chunks WHERE id = ?').get(chunkId) as
-      | { content: string }
-      | undefined;
-    return row?.content ?? '';
+  // --- Memory Delegates ---
+
+  addMemory(entry: MemoryEntry): void {
+    this.memoryRepo.addMemory(entry);
+  }
+  getMemory(id: string): MemoryEntry | null {
+    return this.memoryRepo.getMemory(id);
+  }
+  getMemoriesForNote(noteId: string): MemoryEntry[] {
+    return this.memoryRepo.getMemoriesForNote(noteId);
+  }
+  getLatestMemories(containerTag?: string): MemoryEntry[] {
+    return this.memoryRepo.getLatestMemories(containerTag);
+  }
+  getMemoryVersionChain(rootId: string): MemoryEntry[] {
+    return this.memoryRepo.getMemoryVersionChain(rootId);
+  }
+  markMemorySuperseded(id: string): void {
+    this.memoryRepo.markMemorySuperseded(id);
+  }
+  deleteMemoriesForNote(noteId: string): void {
+    this.memoryRepo.deleteMemoriesForNote(noteId);
+  }
+  forgetExpiredMemories(): number {
+    return this.memoryRepo.forgetExpiredMemories();
+  }
+  getMemoriesSince(since: string, containerTag?: string): MemoryEntry[] {
+    return this.memoryRepo.getMemoriesSince(since, containerTag);
+  }
+  getMemoryCount(): number {
+    return this.memoryRepo.getMemoryCount();
+  }
+  getMemoriesByIds(ids: string[]): Map<string, MemoryEntry> {
+    return this.memoryRepo.getMemoriesByIds(ids);
+  }
+  addMemoryHistory(entry: Omit<MemoryHistoryEntry, 'id'>): void {
+    this.memoryRepo.addMemoryHistory(entry);
+  }
+  getMemoryHistory(memoryId: string): MemoryHistoryEntry[] {
+    return this.memoryRepo.getMemoryHistory(memoryId);
+  }
+  deleteMemoryVector(memoryId: string): void {
+    this.memoryRepo.deleteMemoryVector(memoryId);
+  }
+  upsertMemoryVector(memoryId: string, embedding: Float32Array): void {
+    this.memoryRepo.upsertMemoryVector(memoryId, embedding);
+  }
+  searchMemoryVectors(
+    embedding: Float32Array,
+    limit: number
+  ): Array<{ memoryId: string; distance: number }> {
+    return this.memoryRepo.searchMemoryVectors(embedding, limit);
   }
 
-  getFirstChunkForNote(noteId: string): { content: string; heading: string | null } | null {
-    const row = this.db
-      .prepare('SELECT content, heading FROM chunks WHERE note_id = ? ORDER BY rowid LIMIT 1')
-      .get(noteId) as { content: string; heading: string | null } | undefined;
-    return row ?? null;
+  // --- Capture Delegates ---
+
+  addInboxItem(item: InboxItem): void {
+    this.captureRepo.addInboxItem(item);
   }
-
-  getChunkHeading(chunkId: string | null, noteId: string): string | null {
-    if (chunkId) {
-      const row = this.db.prepare('SELECT heading FROM chunks WHERE id = ?').get(chunkId) as
-        | { heading: string | null }
-        | undefined;
-      if (row?.heading) return row.heading;
-    }
-    const row = this.db
-      .prepare('SELECT heading FROM chunks WHERE note_id = ? ORDER BY rowid LIMIT 1')
-      .get(noteId) as { heading: string | null } | undefined;
-    return row?.heading ?? null;
+  getInboxItems(status?: InboxStatus): InboxItem[] {
+    return this.captureRepo.getInboxItems(status);
   }
-
-  getNoteByFilePath(filePath: string): NoteRecord | null {
-    const row = this.db.prepare('SELECT * FROM notes WHERE file_path = ?').get(filePath) as
-      | NoteRow
-      | undefined;
-    return row ? rowToNoteRecord(row) : null;
+  getInboxItem(id: string): InboxItem | null {
+    return this.captureRepo.getInboxItem(id);
   }
-
-  // --- FTS ---
-
-  upsertNoteFTS(noteId: string, title: string, summary: string, content: string): void {
-    this.db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(noteId);
-    this.db
-      .prepare('INSERT INTO notes_fts (note_id, title, summary, content) VALUES (?, ?, ?, ?)')
-      .run(noteId, title, summary, content);
+  updateInboxStatus(id: string, status: InboxStatus): void {
+    this.captureRepo.updateInboxStatus(id, status);
   }
-
-  searchFTS(query: string, limit: number): FTSResult[] {
-    if (!query.trim()) return [];
-    const sanitized = sanitizeFtsQuery(query);
-    if (!sanitized) return [];
-    const rows = this.db
-      .prepare(
-        `SELECT note_id as noteId, rank
-         FROM notes_fts
-         WHERE notes_fts MATCH ?
-         ORDER BY rank
-         LIMIT ?`
-      )
-      .all(sanitized, limit) as FTSResult[];
-    return rows;
+  deleteInboxItem(id: string): void {
+    this.captureRepo.deleteInboxItem(id);
   }
-}
-
-// --- FTS Helpers ---
-
-export function sanitizeFtsQuery(query: string): string {
-  return query
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((term) => `"${term.replace(/"/g, '""')}"`)
-    .join(' ');
-}
-
-// --- Row Types (snake_case from SQLite) ---
-
-interface NoteRow {
-  id: string;
-  file_path: string;
-  title: string;
-  type: string;
-  tier: string;
-  category: string | null;
-  tags: string | null;
-  summary: string | null;
-  confidence: string | null;
-  status: string;
-  sources: string | null;
-  created_at: string | null;
-  modified_at: string | null;
-  last_reviewed: string | null;
-  review_interval: string | null;
-  expires: string | null;
-  metadata: string | null;
-}
-
-interface FileRow {
-  path: string;
-  hash: string;
-  mtime: number;
-  indexed_at: number;
-}
-
-interface ChunkRow {
-  id: string;
-  note_id: string;
-  heading: string | null;
-  content: string;
-  token_count: number;
-  chunk_type: string;
-}
-
-interface RelationRow {
-  source_id: string;
-  target_id: string;
-  type: string;
-}
-
-// --- Row Mappers ---
-
-function rowToNoteRecord(row: NoteRow): NoteRecord {
-  return {
-    id: row.id,
-    filePath: row.file_path,
-    title: row.title,
-    type: row.type as NoteRecord['type'],
-    tier: row.tier as NoteRecord['tier'],
-    category: row.category,
-    tags: row.tags,
-    summary: row.summary,
-    confidence: row.confidence as NoteRecord['confidence'],
-    status: (row.status ?? 'current') as NoteRecord['status'],
-    sources: row.sources,
-    createdAt: row.created_at,
-    modifiedAt: row.modified_at,
-    lastReviewed: row.last_reviewed,
-    reviewInterval: row.review_interval,
-    expires: row.expires,
-    metadata: row.metadata,
-  };
-}
-
-function rowToFileRecord(row: FileRow): FileRecord {
-  return {
-    path: row.path,
-    hash: row.hash,
-    mtime: row.mtime,
-    indexedAt: row.indexed_at,
-  };
-}
-
-function rowToChunk(row: ChunkRow): Chunk {
-  return {
-    id: row.id,
-    noteId: row.note_id,
-    heading: row.heading,
-    content: row.content,
-    tokenCount: row.token_count,
-    chunkType: row.chunk_type as Chunk['chunkType'],
-  };
-}
-
-function rowToRelation(row: RelationRow): Relation {
-  return {
-    sourceId: row.source_id,
-    targetId: row.target_id,
-    type: row.type as Relation['type'],
-  };
+  addFeed(feed: FeedRecord): void {
+    this.captureRepo.addFeed(feed);
+  }
+  getFeeds(): FeedRecord[] {
+    return this.captureRepo.getFeeds();
+  }
+  getFeedById(id: string): FeedRecord | null {
+    return this.captureRepo.getFeedById(id);
+  }
+  removeFeed(id: string): void {
+    this.captureRepo.removeFeed(id);
+  }
+  updateFeedLastPolled(id: string, lastPolled: string): void {
+    this.captureRepo.updateFeedLastPolled(id, lastPolled);
+  }
 }

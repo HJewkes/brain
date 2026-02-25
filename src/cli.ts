@@ -11,6 +11,15 @@ import { graphCommand } from './commands/graph.js';
 import { templateCommand } from './commands/template.js';
 import { archiveCommand } from './commands/archive.js';
 import { configCommand } from './commands/config.js';
+import { quickCommand } from './commands/quick.js';
+import { inboxCommand } from './commands/inbox.js';
+import { ingestCommand } from './commands/ingest.js';
+import { feedCommand } from './commands/feed.js';
+import { extractCommand } from './commands/extract.js';
+import { memoriesCommand } from './commands/memories.js';
+import { contextCommand } from './commands/context.js';
+import { profileCommand } from './commands/profile.js';
+import { tidyCommand } from './commands/tidy.js';
 
 const program = new Command()
   .name('brain')
@@ -29,6 +38,15 @@ program.addCommand(graphCommand);
 program.addCommand(templateCommand);
 program.addCommand(archiveCommand);
 program.addCommand(configCommand);
+program.addCommand(quickCommand);
+program.addCommand(inboxCommand);
+program.addCommand(ingestCommand);
+program.addCommand(feedCommand);
+program.addCommand(extractCommand);
+program.addCommand(memoriesCommand);
+program.addCommand(contextCommand);
+program.addCommand(profileCommand);
+program.addCommand(tidyCommand);
 
 program.parseAsync().catch((err: Error) => {
   process.stderr.write(`Error: ${err.message}\n`);

@@ -1,7 +1,9 @@
 import type { BrainDB } from './brain-db.js';
+import { rerank } from './reranker.js';
 import type {
   Embedder,
   FusionStrategy,
+  MemorySearchResult,
   SearchOptions,
   SearchResult,
   NoteTier,
@@ -26,9 +28,19 @@ interface ScoreEntry {
   chunkId: string | null;
 }
 
+function distanceToCosineSim(distance: number): number {
+  return 1 - (distance * distance) / 2;
+}
+
 function truncateExcerpt(content: string): string {
   if (content.length <= EXCERPT_MAX_LENGTH) return content;
   return content.slice(0, EXCERPT_MAX_LENGTH);
+}
+
+async function embedQuery(embedder: Embedder, query: string): Promise<Float32Array> {
+  const queryText = embedder.model.includes('nomic') ? `search_query: ${query}` : query;
+  const [embedding] = await embedder.embed([queryText]);
+  return new Float32Array(embedding);
 }
 
 function parseTags(tagsStr: string | null): string[] {
@@ -49,6 +61,35 @@ interface VectorHit {
   distance: number;
 }
 type ScoredResult = { noteId: string; score: number; chunkId: string | null };
+
+/**
+ * Find the largest relative score gap between consecutive results and cut there,
+ * but only if that gap exceeds the threshold.
+ * Threshold is a fraction (e.g. 0.15 = need at least a 15% relative drop to cut).
+ * Always keeps at least the first result.
+ */
+function applyDropoffFilter(results: ScoredResult[], threshold: number): ScoredResult[] {
+  if (results.length <= 1) return results;
+
+  let maxDrop = 0;
+  let cutIndex = -1;
+
+  for (let i = 1; i < results.length; i++) {
+    const prev = results[i - 1].score;
+    if (prev <= 0) continue;
+    const drop = (prev - results[i].score) / prev;
+    if (drop > maxDrop) {
+      maxDrop = drop;
+      cutIndex = i;
+    }
+  }
+
+  if (cutIndex > 0 && maxDrop >= threshold) {
+    return results.slice(0, cutIndex);
+  }
+
+  return results;
+}
 
 function fuseByRRF(
   ftsResults: FTSHit[],
@@ -154,8 +195,7 @@ function fuseByScore(
     }
 
     if (entry.vectorDistance !== null) {
-      // For unit-normalized embeddings: cosine_sim = 1 - (euclidean_dist² / 2)
-      const cosineSim = 1 - (entry.vectorDistance * entry.vectorDistance) / 2;
+      const cosineSim = distanceToCosineSim(entry.vectorDistance);
       score += weights.vector * Math.max(0, cosineSim);
     }
 
@@ -192,10 +232,7 @@ export async function search(
     : ftsResults;
 
   // Step 2: Vector search
-  const queryText = embedder.model.includes('nomic') ? `search_query: ${query}` : query;
-  const [queryEmbedding] = await embedder.embed([queryText]);
-  const queryVec = new Float32Array(queryEmbedding);
-
+  const queryVec = await embedQuery(embedder, query);
   const vectorResults = db.searchVector(queryVec, overfetchLimit);
   const filteredVector = allowedNoteIds
     ? vectorResults.filter((r) => allowedNoteIds.has(r.noteId))
@@ -220,12 +257,28 @@ export async function search(
   scored.sort((a, b) => b.score - a.score);
   const filtered =
     options.minScore != null ? scored.filter((s) => s.score >= options.minScore!) : scored;
-  const topResults = filtered.slice(0, limit);
+  const afterDropoff =
+    options.dropoff != null ? applyDropoffFilter(filtered, options.dropoff) : filtered;
+  const topResults = afterDropoff.slice(0, limit);
 
   // Step 4: Build SearchResult objects
+  const results = buildSearchResults(db, topResults);
+
+  // Step 5: Optional cross-encoder reranking
+  if (options.rerank && results.length > 1) {
+    return rerank(query, results, limit);
+  }
+
+  return results;
+}
+
+function buildSearchResults(db: BrainDB, topResults: ScoredResult[]): SearchResult[] {
+  const noteIds = topResults.map((r) => r.noteId);
+  const notesById = db.getNotesByIds(noteIds);
   const results: SearchResult[] = [];
+
   for (const item of topResults) {
-    const note = db.getNoteById(item.noteId);
+    const note = notesById.get(item.noteId);
     if (!note) continue;
 
     const excerptContent = item.chunkId
@@ -245,4 +298,42 @@ export async function search(
   }
 
   return results;
+}
+
+export async function searchMemories(
+  db: BrainDB,
+  embedder: Embedder,
+  query: string,
+  limit: number = 10,
+  containerTag?: string
+): Promise<MemorySearchResult[]> {
+  if (!query.trim()) return [];
+
+  const queryVec = await embedQuery(embedder, query);
+  const vectorResults = db.searchMemoryVectors(queryVec, limit * 3);
+  if (vectorResults.length === 0) return [];
+
+  const memoryIds = vectorResults.map((vr) => vr.memoryId);
+  const memoriesById = db.getMemoriesByIds(memoryIds);
+
+  const results: MemorySearchResult[] = [];
+  for (const vr of vectorResults) {
+    const memory = memoriesById.get(vr.memoryId);
+    if (!memory) continue;
+    if (!memory.isLatest || memory.isForgotten) continue;
+    if (containerTag && memory.containerTag !== containerTag) continue;
+
+    const cosineSim = distanceToCosineSim(vr.distance);
+    results.push({
+      score: Math.max(0, cosineSim),
+      memory: memory.memory,
+      memoryId: memory.id,
+      sourceNoteId: memory.sourceNoteId,
+      containerTag: memory.containerTag,
+      createdAt: memory.createdAt,
+    });
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit);
 }

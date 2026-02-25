@@ -1,17 +1,13 @@
 import { Command } from '@commander-js/extra-typings';
 import { renameSync, mkdirSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
-import { loadConfig } from '../services/config.js';
-import { BrainDB } from '../services/brain-db.js';
+import { withDb } from '../services/brain-service.js';
 
 export const archiveCommand = new Command('archive')
   .description('Move expired fast-tier notes to archive')
   .option('--dry-run', 'List files that would be archived without moving them')
-  .action((opts) => {
-    const config = loadConfig();
-    const db = new BrainDB(config.dbPath);
-
-    try {
+  .action(async (opts) => {
+    await withDb(({ db, config }) => {
       const notes = db.getAllNotes();
       const now = Date.now();
 
@@ -22,7 +18,7 @@ export const archiveCommand = new Command('archive')
       });
 
       if (expired.length === 0) {
-        console.log('No expired notes to archive.');
+        process.stdout.write('No expired notes to archive.\n');
         return;
       }
 
@@ -34,7 +30,7 @@ export const archiveCommand = new Command('archive')
         const archivePath = join(archiveDir, filename);
 
         if (opts.dryRun) {
-          console.log(`Would archive: ${note.filePath} → ${archivePath}`);
+          process.stdout.write(`Would archive: ${note.filePath} → ${archivePath}\n`);
           continue;
         }
 
@@ -50,8 +46,6 @@ export const archiveCommand = new Command('archive')
       }
 
       const verb = opts.dryRun ? 'Would archive' : 'Archived';
-      console.log(`${verb} ${expired.length} note${expired.length === 1 ? '' : 's'}.`);
-    } finally {
-      db.close();
-    }
+      process.stdout.write(`${verb} ${expired.length} note${expired.length === 1 ? '' : 's'}.\n`);
+    });
   });

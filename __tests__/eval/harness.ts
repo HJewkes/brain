@@ -41,9 +41,12 @@ function rawChunksToChunks(
     id: `${noteId}::chunk-${i}`,
     noteId,
     heading: rc.heading,
+    headingAncestry: null,
     content: rc.text,
     tokenCount: rc.tokenCount,
     chunkType: 'section' as const,
+    cutType: 'heading_boundary' as const,
+    position: i,
   }));
 }
 
@@ -65,6 +68,7 @@ function rechunkBody(body: string, maxTokens: number): RawChunk[] {
 
   const chunks: RawChunk[] = [];
   const MIN_CHUNK_LENGTH = 20;
+  let position = 0;
 
   for (const section of sections) {
     const text = section.lines.join('\n').trim();
@@ -72,7 +76,15 @@ function rechunkBody(body: string, maxTokens: number): RawChunk[] {
 
     const tokens = estimateTokens(text);
     if (tokens <= maxTokens) {
-      chunks.push({ heading: section.heading, text, tokenCount: tokens });
+      chunks.push({
+        heading: section.heading,
+        headingAncestry: null,
+        text,
+        tokenCount: tokens,
+        chunkType: 'section',
+        cutType: 'heading_boundary',
+        position: position++,
+      });
     } else {
       const paragraphs = text.split(/\n\n+/);
       let buffer = '';
@@ -81,7 +93,15 @@ function rechunkBody(body: string, maxTokens: number): RawChunk[] {
         const candidate = buffer.length > 0 ? buffer + '\n\n' + para : para;
         if (estimateTokens(candidate) > maxTokens && buffer.length > 0) {
           const tokenCount = estimateTokens(buffer);
-          chunks.push({ heading: section.heading, text: buffer.trim(), tokenCount });
+          chunks.push({
+            heading: section.heading,
+            headingAncestry: null,
+            text: buffer.trim(),
+            tokenCount,
+            chunkType: 'paragraph',
+            cutType: 'paragraph_end',
+            position: position++,
+          });
           buffer = para;
         } else {
           buffer = candidate;
@@ -90,7 +110,15 @@ function rechunkBody(body: string, maxTokens: number): RawChunk[] {
 
       if (buffer.trim().length >= MIN_CHUNK_LENGTH) {
         const tokenCount = estimateTokens(buffer);
-        chunks.push({ heading: section.heading, text: buffer.trim(), tokenCount });
+        chunks.push({
+          heading: section.heading,
+          headingAncestry: null,
+          text: buffer.trim(),
+          tokenCount,
+          chunkType: 'paragraph',
+          cutType: 'paragraph_end',
+          position: position++,
+        });
       }
     }
   }
