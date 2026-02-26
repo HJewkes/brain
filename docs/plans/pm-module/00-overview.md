@@ -111,7 +111,7 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 
 ### Stream 0: Brain Core Extensions (see doc 01)
 1. `content_dir` column on notes table + migration
-2. `DirectoryNoteHooks` in ModuleContext interface
+2. `registerDirectorySchemas` in ModuleContext interface
 3. Directory lifecycle management (create, archive, delete)
 4. FTS integration for directory-backed note files
 5. Extended `note_relations` with module/module_instance columns

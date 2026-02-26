@@ -67,7 +67,7 @@ export interface ModuleContext {
   registerRelationTypes(types: string[]): void;   // e.g., ['depends_on', 'impacts', 'blocks']
 
   /** Register activity types this module writes to the activities table */
-  registerActivityTypes(types: string[]): void;    // e.g., ['execution', 'state_change', 'review']
+  registerActivityTypes(types: string[]): void;    // e.g., ['execution', 'state_change', 'verification']
 
   /** Register search filter providers */
   registerFilters(filters: FilterProvider[]): void;
@@ -475,7 +475,7 @@ CREATE TABLE IF NOT EXISTS activities (
   note_ids TEXT,            -- JSON array of related note IDs
   module TEXT,
   module_instance TEXT,
-  activity_type TEXT,       -- 'execution', 'state_change', 'review', 'capture', etc.
+  activity_type TEXT,       -- 'execution', 'state_change', 'verification', 'capture', etc.
   actor_type TEXT,          -- 'agent', 'human', 'system'
   actor_id TEXT,
   session_id TEXT,
@@ -524,6 +524,8 @@ When brain indexes a note with `module: pm`:
 ### Overview
 
 Directory-backed notes extend brain's note primitive with an optional **managed directory** for workspace artifacts. This is a brain core feature, not module-specific — any module can use it.
+
+The `modules/` directory lives within the notes directory and follows the same git workflow as notes. Task artifacts (summary.md, references/) are committed by the user after review.
 
 Some notes need more than a title, metadata, and markdown body. A PM task needs a completion summary, reference files, and potentially output logs. A research note might have downloaded PDFs and data extracts. Rather than cramming everything into the note body or creating a parallel file management system, brain manages the directory as part of the note lifecycle.
 
@@ -613,6 +615,8 @@ When brain indexes a note with a `content_dir`:
       summary.md mentions authentication, even if the note body doesn't
 ```
 
+After task completion, the orchestrator calls `brain index <note-id>` to update FTS for any new directory content (e.g., summary.md).
+
 ### Lifecycle Management
 
 Brain manages the directory lifecycle in coordination with note operations:
@@ -624,6 +628,8 @@ Brain manages the directory lifecycle in coordination with note operations:
 | Archive note | Call module's `onLifecycle('archive')` — module decides (PM: keep) |
 | Delete note | Call module's `onLifecycle('delete')` — module decides (PM: remove) |
 | Move/rename note | Update `content_dir` column; move directory if needed |
+
+`brain doctor` detects "note references missing content directory" — cases where a note has `content_dir` set but the directory does not exist on disk.
 
 ### Path Resolution
 
@@ -899,47 +905,9 @@ Stored in brain's config.json under the module namespace:
 
 ---
 
-## Implementation Phases
+## Implementation Roadmap
 
-### Phase 1: Core Module Infrastructure
-- `ModuleRegistry` class
-- `ModuleContext` interface
-- Module discovery and loading (built-in only)
-- `register()` lifecycle
-- Module config in brain config.json
-- Tests for registry, loading, lifecycle
-
-### Phase 2: Namespace & Types
-- `module` and `module_instance` columns on notes table
-- Migration for new columns
-- Module-aware frontmatter validation (JSON Schema)
-- Soft protection warnings on `brain note edit`
-- Tests for namespace isolation
-
-### Phase 3: Command Registration
-- Dynamic command registration in cli.ts
-- `brain <module> <command>` routing
-- `--json` output enforcement
-- Tests for command discovery
-
-### Phase 4: Query Scoping
-- Visibility tier enforcement in search pipeline
-- Active context management (`brain context`, `brain pm use`)
-- Module filter injection in search.ts
-- Tests for visibility tiers
-
-### Phase 5: Storage Primitives
-- Extend `note_relations` with `module` and `module_instance` columns
-- Create `activities` table (brain core schema)
-- Relation type and activity type registration in ModuleContext
-- Cascade behavior (ON DELETE CASCADE for relations, audit preservation for activities)
-- Tests for primitives and cascading
-
-### Phase 6: Memory Integration
-- Module extraction strategies
-- Custom container tags
-- Module-aware reconciliation
-- Tests for extraction
+See [00-overview.md](00-overview.md) for the consolidated implementation roadmap.
 
 ---
 
