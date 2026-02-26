@@ -1,7 +1,7 @@
 # Task Management Framework — Design Overview
 
 **Date:** 2026-02-25 (updated 2026-02-26)
-**Status:** Draft — Design Phase
+**Status:** Streams 0+1 implemented — ready for Stream 2
 **Origin:** Consolidated from brain PM module design + project orchestration prototype
 
 ---
@@ -40,7 +40,7 @@ The system consolidates two parallel efforts: (1) a brain PM module design with 
 │  ┌─────────────────────▼──────────────────────────┐ │
 │  │  Brain Core                                     │ │
 │  │  Notes + directory-backed notes, search, memory,│ │
-│  │  SQLite, knowledge graph, note_relations,       │ │
+│  │  SQLite, knowledge graph, relations,            │ │
 │  │  activities                                      │ │
 │  └────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
@@ -85,7 +85,7 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 | Namespace isolation | Module + instance frontmatter metadata | Prevents type collisions, enables query scoping |
 | Visibility tiers | Public / contextual / private | Balances discoverability with noise reduction |
 | Data protection | Soft (warnings) first, hard (enforcement) later | Better UX, covers 95% of cases |
-| Storage extensibility | Three brain-level primitives: notes.metadata, extended note_relations, activities | Zero module-specific tables; modules compose brain primitives; reusable across all modules |
+| Storage extensibility | Three brain-level primitives: notes.metadata, extended relations, activities | Zero module-specific tables; modules compose brain primitives; reusable across all modules |
 | State machine | 6 states with virtual computed states | Matches real execution patterns; virtual states (BLOCKED, STALE) add intelligence without complexity |
 | Ready state | Virtual (+READY), never stored | Avoids cascading writes; dependency engine computes eligibility at query time |
 | Dependency engine | Frontmatter as source of truth, SQL index for queries | Human-readable + fast computation |
@@ -109,26 +109,32 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 
 ## Implementation Roadmap
 
-### Stream 0: Brain Core Extensions (see doc 01)
-1. `content_dir` column on notes table + migration
-2. `registerDirectorySchemas` in ModuleContext interface
-3. Directory lifecycle management (create, archive, delete)
-4. FTS integration for directory-backed note files
-5. Extended `note_relations` with module/module_instance columns
-6. `activities` table (brain-level workflow event log)
-7. NoteType widening (`CoreNoteType | (string & {})`)
-8. metadata JSON population in indexer
+### Stream 0: Brain Core Extensions ✅ (branch: `feat/module-system`)
+1. ✅ `content_dir` column on notes table + migration (v6→v7)
+2. ✅ `registerDirectorySchemas` in ModuleContext interface (via `DirectorySchema` on `ModuleNoteType`)
+3. ✅ Directory lifecycle management (create, archive, delete) — `src/services/content-dir.ts`
+4. ✅ FTS integration for directory-backed note files — appends indexable content in `indexSingleFile`
+5. ✅ Extended `relations` table with module/module_instance columns (note: actual table is `relations`, not `note_relations`)
+6. ✅ `activities` table + `ActivityRepo` CRUD — `src/services/repos/activity-repo.ts`
+7. ✅ NoteType widening (`CoreNoteType | (string & {})`) + RelationType widening
+8. ✅ metadata JSON population in indexer (when `module` present in frontmatter)
 
-### Stream 1: Brain Module System (Foundation)
-1. Core schema migration (module, module_instance columns; populate metadata JSON)
-2. ModuleRegistry + ModuleContext interfaces
-3. Module discovery, loading, and error handling
-4. NoteType widening and module-aware coercion
-5. Namespace columns, query scoping, visibility tiers
-6. Frontmatter schema validation
-7. Command registration (Commander.js dynamic subcommands)
-8. Module database migrations
-9. Memory extraction integration
+### Stream 1: Brain Module System ✅ (branch: `feat/module-system`)
+1. ✅ Core schema migration (module, module_instance columns; populate metadata JSON)
+2. ✅ ModuleRegistry + ModuleContext interfaces — `src/modules/registry.ts`, `src/modules/types.ts`
+3. ✅ Module discovery, loading, and error handling — `src/modules/loader.ts`
+4. ✅ NoteType widening and module-aware coercion — parser passes unknown types through when `module` present
+5. ✅ Namespace columns, query scoping, visibility tiers — `getModuleNoteIds`, private note filtering in search
+6. ✅ Frontmatter schema validation — `src/modules/validation.ts`
+7. ✅ Command registration (Commander.js dynamic subcommands) — CLI loads module commands in `main()`
+8. ✅ Module database migrations — `runModuleMigrations` in loader
+9. ✅ Memory extraction integration — extraction strategy hook in `memory-extractor.ts`
+
+**Verification:** 501 tests (72 new), zero type errors, zero lint warnings.
+
+**Known gap:** No integration tests yet. Unit tests cover individual pieces but don't prove the full module registration → indexing → search loop works end-to-end. Recommended before starting Stream 2.
+
+**Table name correction:** Design docs reference `note_relations` but the actual table is `relations`. Docs 01, 02, and reviews should be updated.
 
 ### Stream 2: PM Module (Core)
 1. PM module skeleton (register, types, migrations)
@@ -168,11 +174,16 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 15. Session summaries and cross-session continuity
 
 ### Dependencies
-- Stream 0 must complete before Stream 1
-- Stream 1 items 1-4 are prerequisites for Stream 2 to begin
+- ~~Stream 0 must complete before Stream 1~~ ✅ Both complete
+- ~~Stream 1 items 1-4 are prerequisites for Stream 2 to begin~~ ✅ All Stream 1 complete
 - Stream 2 items 1-8 are prerequisites for Stream 3 to begin
 - Within each stream, items are roughly sequential but some can overlap
 - Stream 3 items 3-7 (doc 03 patterns) can be developed in parallel once basic orchestration works
+
+### Next Steps
+1. **Integration tests** for Streams 0+1 (smoke test module, migration round-trip, content dir + FTS search)
+2. **Fix `note_relations` → `relations`** in docs 01, 02, and review docs
+3. **Stream 2 task 1**: PM module skeleton
 
 ---
 
