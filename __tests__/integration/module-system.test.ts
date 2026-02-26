@@ -12,7 +12,7 @@ import { search } from '../../src/services/search.js';
 import { loadModules, runModuleMigrations } from '../../src/modules/loader.js';
 import { validateNoteFrontmatter } from '../../src/modules/validation.js';
 import { readIndexableContent, archiveContentDir, deleteContentDir } from '../../src/services/content-dir.js';
-import { tmpDbPath, createMockEmbedder } from '../helpers.js';
+import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
 import { widgetModule } from '../fixtures/widget-module.js';
 import type { ModuleRegistry } from '../../src/modules/registry.js';
 
@@ -165,14 +165,9 @@ describe('V1: Module Registration and Indexing', () => {
   it('extraction strategy respected', () => {
     const strategy = registry.getExtractionStrategy('widget');
     expect(strategy).toBeDefined();
-    expect(strategy!.shouldExtract({
-      id: 'test', filePath: '/test.md', title: 'Test', type: 'widget',
-      tier: 'slow', category: null, tags: null, summary: null,
-      confidence: null, status: 'current', sources: null,
-      createdAt: null, modifiedAt: null, lastReviewed: null,
-      reviewInterval: null, expires: null, metadata: null,
-      module: 'widget', moduleInstance: null, contentDir: null,
-    })).toBe(false);
+    expect(strategy!.shouldExtract(
+      makeNote({ module: 'widget', type: 'widget' })
+    )).toBe(false);
   });
 
   it('module migration runs', () => {
@@ -183,6 +178,67 @@ describe('V1: Module Registration and Indexing', () => {
     expect(rerun).toEqual([]);
   });
 });
+
+/** Minimal v6 DDL — everything BrainDB expects before the v7 migration. */
+function createV6Database(dbPath: string): Database.Database {
+  const raw = new Database(dbPath);
+  raw.exec(`
+    CREATE TABLE files (
+      path TEXT PRIMARY KEY, hash TEXT NOT NULL, mtime INTEGER NOT NULL, indexed_at INTEGER NOT NULL
+    );
+    CREATE TABLE notes (
+      id TEXT PRIMARY KEY, file_path TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+      type TEXT NOT NULL, tier TEXT NOT NULL, category TEXT, tags TEXT, summary TEXT,
+      confidence TEXT, status TEXT DEFAULT 'current', sources TEXT,
+      created_at TEXT, modified_at TEXT, last_reviewed TEXT, review_interval TEXT,
+      expires TEXT, metadata TEXT
+    );
+    CREATE TABLE relations (
+      source_id TEXT NOT NULL, target_id TEXT NOT NULL, type TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (source_id, target_id, type)
+    );
+    CREATE VIRTUAL TABLE notes_fts USING fts5(
+      note_id UNINDEXED, title, summary, content, tokenize='unicode61'
+    );
+    CREATE TABLE chunks (
+      id TEXT PRIMARY KEY, note_id TEXT NOT NULL, heading TEXT,
+      heading_ancestry TEXT, content TEXT NOT NULL, token_count INTEGER,
+      chunk_type TEXT DEFAULT 'section', cut_type TEXT DEFAULT 'heading_boundary',
+      position INTEGER DEFAULT 0
+    );
+    CREATE INDEX idx_chunks_note_id ON chunks(note_id);
+    CREATE TABLE db_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE inbox (
+      id TEXT PRIMARY KEY, content TEXT NOT NULL, title TEXT,
+      source TEXT NOT NULL DEFAULT 'cli', source_url TEXT, source_meta TEXT,
+      status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, processed_at TEXT
+    );
+    CREATE TABLE feeds (
+      id TEXT PRIMARY KEY, url TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      container_tag TEXT NOT NULL DEFAULT 'default', filter_prompt TEXT,
+      last_polled TEXT, created_at TEXT NOT NULL
+    );
+    CREATE TABLE memory_entries (
+      id TEXT PRIMARY KEY, memory TEXT NOT NULL, source_note_id TEXT NOT NULL,
+      source_chunk_id TEXT, container_tag TEXT NOT NULL DEFAULT 'default',
+      is_latest INTEGER NOT NULL DEFAULT 1, parent_memory_id TEXT, root_memory_id TEXT,
+      relation_type TEXT, valid_at TEXT, invalid_at TEXT, forget_after TEXT,
+      is_forgotten INTEGER NOT NULL DEFAULT 0, is_inference INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE memory_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, memory_id TEXT NOT NULL, event TEXT NOT NULL,
+      old_memory TEXT, new_memory TEXT, actor TEXT NOT NULL DEFAULT 'system', created_at TEXT NOT NULL
+    );
+    CREATE TABLE note_access (
+      note_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL
+    );
+  `);
+  raw.pragma('user_version = 6');
+  raw.prepare('INSERT INTO db_meta (key, value) VALUES (?, ?)').run('schema_version', '6');
+  return raw;
+}
 
 // --- V2: Schema Migration Round-Trip ---
 
@@ -244,62 +300,7 @@ describe('V2: Schema Migration Round-Trip', () => {
 
   it('v6 DB migrates cleanly', () => {
     const dbPath = tmpDbPath();
-    const raw = new Database(dbPath);
-    raw.exec(`
-      CREATE TABLE files (
-        path TEXT PRIMARY KEY, hash TEXT NOT NULL, mtime INTEGER NOT NULL, indexed_at INTEGER NOT NULL
-      );
-      CREATE TABLE notes (
-        id TEXT PRIMARY KEY, file_path TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
-        type TEXT NOT NULL, tier TEXT NOT NULL, category TEXT, tags TEXT, summary TEXT,
-        confidence TEXT, status TEXT DEFAULT 'current', sources TEXT,
-        created_at TEXT, modified_at TEXT, last_reviewed TEXT, review_interval TEXT,
-        expires TEXT, metadata TEXT
-      );
-      CREATE TABLE relations (
-        source_id TEXT NOT NULL, target_id TEXT NOT NULL, type TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        PRIMARY KEY (source_id, target_id, type)
-      );
-      CREATE VIRTUAL TABLE notes_fts USING fts5(
-        note_id UNINDEXED, title, summary, content, tokenize='unicode61'
-      );
-      CREATE TABLE chunks (
-        id TEXT PRIMARY KEY, note_id TEXT NOT NULL, heading TEXT,
-        heading_ancestry TEXT, content TEXT NOT NULL, token_count INTEGER,
-        chunk_type TEXT DEFAULT 'section', cut_type TEXT DEFAULT 'heading_boundary',
-        position INTEGER DEFAULT 0
-      );
-      CREATE INDEX idx_chunks_note_id ON chunks(note_id);
-      CREATE TABLE db_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE inbox (
-        id TEXT PRIMARY KEY, content TEXT NOT NULL, title TEXT,
-        source TEXT NOT NULL DEFAULT 'cli', source_url TEXT, source_meta TEXT,
-        status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, processed_at TEXT
-      );
-      CREATE TABLE feeds (
-        id TEXT PRIMARY KEY, url TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-        container_tag TEXT NOT NULL DEFAULT 'default', filter_prompt TEXT,
-        last_polled TEXT, created_at TEXT NOT NULL
-      );
-      CREATE TABLE memory_entries (
-        id TEXT PRIMARY KEY, memory TEXT NOT NULL, source_note_id TEXT NOT NULL,
-        source_chunk_id TEXT, container_tag TEXT NOT NULL DEFAULT 'default',
-        is_latest INTEGER NOT NULL DEFAULT 1, parent_memory_id TEXT, root_memory_id TEXT,
-        relation_type TEXT, valid_at TEXT, invalid_at TEXT, forget_after TEXT,
-        is_forgotten INTEGER NOT NULL DEFAULT 0, is_inference INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE memory_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, memory_id TEXT NOT NULL, event TEXT NOT NULL,
-        old_memory TEXT, new_memory TEXT, actor TEXT NOT NULL DEFAULT 'system', created_at TEXT NOT NULL
-      );
-      CREATE TABLE note_access (
-        note_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL
-      );
-    `);
-    raw.pragma('user_version = 6');
-    raw.prepare('INSERT INTO db_meta (key, value) VALUES (?, ?)').run('schema_version', '6');
+    const raw = createV6Database(dbPath);
 
     raw.prepare(`INSERT INTO notes (id, file_path, title, type, tier, status) VALUES (?, ?, ?, ?, ?, ?)`).run(
       'note-1', '/notes/note-1.md', 'Test Note 1', 'note', 'slow', 'current'
@@ -345,62 +346,7 @@ describe('V2: Schema Migration Round-Trip', () => {
 
   it('existing data survives migration', () => {
     const dbPath = tmpDbPath();
-    const raw = new Database(dbPath);
-    raw.exec(`
-      CREATE TABLE files (
-        path TEXT PRIMARY KEY, hash TEXT NOT NULL, mtime INTEGER NOT NULL, indexed_at INTEGER NOT NULL
-      );
-      CREATE TABLE notes (
-        id TEXT PRIMARY KEY, file_path TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
-        type TEXT NOT NULL, tier TEXT NOT NULL, category TEXT, tags TEXT, summary TEXT,
-        confidence TEXT, status TEXT DEFAULT 'current', sources TEXT,
-        created_at TEXT, modified_at TEXT, last_reviewed TEXT, review_interval TEXT,
-        expires TEXT, metadata TEXT
-      );
-      CREATE TABLE relations (
-        source_id TEXT NOT NULL, target_id TEXT NOT NULL, type TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        PRIMARY KEY (source_id, target_id, type)
-      );
-      CREATE VIRTUAL TABLE notes_fts USING fts5(
-        note_id UNINDEXED, title, summary, content, tokenize='unicode61'
-      );
-      CREATE TABLE chunks (
-        id TEXT PRIMARY KEY, note_id TEXT NOT NULL, heading TEXT,
-        heading_ancestry TEXT, content TEXT NOT NULL, token_count INTEGER,
-        chunk_type TEXT DEFAULT 'section', cut_type TEXT DEFAULT 'heading_boundary',
-        position INTEGER DEFAULT 0
-      );
-      CREATE INDEX idx_chunks_note_id ON chunks(note_id);
-      CREATE TABLE db_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE inbox (
-        id TEXT PRIMARY KEY, content TEXT NOT NULL, title TEXT,
-        source TEXT NOT NULL DEFAULT 'cli', source_url TEXT, source_meta TEXT,
-        status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, processed_at TEXT
-      );
-      CREATE TABLE feeds (
-        id TEXT PRIMARY KEY, url TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-        container_tag TEXT NOT NULL DEFAULT 'default', filter_prompt TEXT,
-        last_polled TEXT, created_at TEXT NOT NULL
-      );
-      CREATE TABLE memory_entries (
-        id TEXT PRIMARY KEY, memory TEXT NOT NULL, source_note_id TEXT NOT NULL,
-        source_chunk_id TEXT, container_tag TEXT NOT NULL DEFAULT 'default',
-        is_latest INTEGER NOT NULL DEFAULT 1, parent_memory_id TEXT, root_memory_id TEXT,
-        relation_type TEXT, valid_at TEXT, invalid_at TEXT, forget_after TEXT,
-        is_forgotten INTEGER NOT NULL DEFAULT 0, is_inference INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE memory_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, memory_id TEXT NOT NULL, event TEXT NOT NULL,
-        old_memory TEXT, new_memory TEXT, actor TEXT NOT NULL DEFAULT 'system', created_at TEXT NOT NULL
-      );
-      CREATE TABLE note_access (
-        note_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL
-      );
-    `);
-    raw.pragma('user_version = 6');
-    raw.prepare('INSERT INTO db_meta (key, value) VALUES (?, ?)').run('schema_version', '6');
+    const raw = createV6Database(dbPath);
     raw.prepare(`INSERT INTO notes (id, file_path, title, type, tier, status, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
       'surv-1', '/notes/surv-1.md', 'Survivor One', 'decision', 'slow', 'current', 'architecture', 'db,migration'
     );
