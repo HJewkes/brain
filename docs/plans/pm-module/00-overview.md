@@ -181,9 +181,119 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 - Stream 3 items 3-7 (doc 03 patterns) can be developed in parallel once basic orchestration works
 
 ### Next Steps
-1. **Integration tests** for Streams 0+1 (smoke test module, migration round-trip, content dir + FTS search)
+1. **Integration tests** for Streams 0+1 (see Verification Strategy below)
 2. **Fix `note_relations` → `relations`** in docs 01, 02, and review docs
 3. **Stream 2 task 1**: PM module skeleton
+
+---
+
+## Verification Strategy
+
+Each stream boundary requires integration tests that prove the seams work before building the next layer on top. Unit tests cover individual functions; these tests prove the *composition*.
+
+### After Streams 0+1 (Module System) — **gate for Stream 2**
+
+The core question: can a module register itself, index notes with custom types, search them, validate them, and have visibility/extraction hooks fire correctly?
+
+**V1. Smoke Test Module** (`__tests__/integration/smoke-module.test.ts`)
+A minimal "widget" module that registers every extension point:
+- Note type (`widget`) with a JSON Schema (required `priority` field)
+- Relation type (`depends-on`)
+- Filter with `contextual` visibility
+- Extraction strategy (skip extraction for widgets)
+- A no-op migration
+
+Test sequence:
+1. `loadModules({ modules: [widgetModule] })` → registry populated
+2. Create BrainDB, index a markdown file with `module: widget`, `type: gadget` frontmatter
+3. Assert: type preserved (not coerced to `'note'`), metadata JSON populated, module/moduleInstance columns set
+4. Search for the note content → found in results
+5. `validateNoteFrontmatter` against the widget schema → catches missing `priority`
+6. Extraction strategy hook → `shouldExtract` returns false, extraction skipped
+7. Private visibility filtering → private module notes excluded from general search
+
+**V2. Migration Round-Trip** (`__tests__/integration/migration-v7.test.ts`)
+- Fresh DB: create BrainDB, verify v7 schema has all new columns, tables, indexes
+- Upgrade DB: build a v6 DB with raw SQL (copy `schemaV1` without v7 additions), insert some notes, open with new BrainDB, verify migration runs, existing notes untouched, new columns are null
+
+**V3. Content Directory + FTS** (`__tests__/integration/content-dir-search.test.ts`)
+- Create a note with `content-dir` pointing at a temp directory
+- Put a `.md` file in that directory with distinctive text ("xylophone-quantum-42")
+- Index the note
+- Search for the distinctive text → note returned as a hit
+- Archive the content dir → moved to `.archive/`
+- Delete the content dir → removed
+
+### After Stream 2 (PM Module) — **gate for Stream 3**
+
+The core question: does the PM module work as a real brain module end-to-end, from CLI commands through the dependency engine to search integration?
+
+**V4. PM Module Smoke Test** (`__tests__/integration/pm-smoke.test.ts`)
+- Load the PM module via `loadModules`
+- Create a project note (frontmatter: `module: pm`, `type: project`)
+- Create a workstream note under the project
+- Create two task notes: task-B `depends_on` task-A
+- Assert: all notes indexed with correct module/type, relations stored with module scope
+- Query `getModuleNoteIds({ module: 'pm', type: 'task' })` → both tasks returned
+- Query `getRelationsFiltered({ module: 'pm', type: 'depends_on' })` → dependency found
+
+**V5. State Machine + Dependency Engine** (`__tests__/integration/pm-state-machine.test.ts`)
+- Create task-A (status: OPEN) and task-B (depends_on: task-A, status: OPEN)
+- Assert: task-B is BLOCKED (virtual state), task-A is eligible
+- Transition task-A → IN_PROGRESS → DONE
+- Assert: task-B is now eligible (unblocked)
+- Cycle detection: task-C depends_on task-D depends_on task-C → error
+
+**V6. CLI Commands** (`__tests__/integration/pm-cli.test.ts`)
+- Use Commander's `.parseAsync(['node', 'brain', 'pm', ...])` to test commands programmatically
+- `brain pm project create` → project note written to disk
+- `brain pm task list --project X` → lists tasks from DB
+- `brain pm dispatch --task T --json` → outputs context bundle JSON
+- `brain pm waves --project X` → outputs dependency-free groups
+
+**V7. Directory-Backed Tasks** (`__tests__/integration/pm-content-dir.test.ts`)
+- Create a task with `content_dir`
+- Write `summary.md` and `references/spec.md` to the content directory
+- Index → FTS includes content from both files
+- Search for text unique to `spec.md` → task found
+- `brain pm dispatch --task T` → context bundle includes directory contents
+
+### After Stream 3 (Orchestration) — **gate for production**
+
+The core question: does the full stack — skill → CLI → brain → agents — work as an integrated system?
+
+**V8. Orchestrator Dry Run** (`__tests__/integration/orchestrator-dry-run.test.ts`)
+- Create a project with workstreams and tasks in various states
+- Call the wave computation logic → verify correct grouping
+- Call the task routing logic → verify correct agent type/model assignment
+- Call dispatch context assembly → verify JSON bundle is complete
+- No actual agent spawning — this tests the decision logic
+
+**V9. Session Lifecycle** (`__tests__/integration/orchestrator-session.test.ts`)
+- Simulate session start → verify session activity recorded
+- Simulate task claim → verify claim token created
+- Simulate task complete → verify activity recorded, state transitioned
+- Simulate session resume → verify cross-session state recovery
+
+**V10. End-to-End Scenario** (manual or scripted)
+This one is harder to automate because it involves real Claude Code agent dispatch. Best done as a scripted walkthrough:
+1. `brain pm project create --name "Test Project"` with 3 tasks
+2. `/orchestrator` → verifies it reads the project, identifies eligible tasks
+3. Agent dispatched to one task → completes, result verified
+4. `/orchestrator` (next session) → recognizes completion, offers next task
+5. `brain pm audit summary` → shows telemetry
+
+This can start as a manual checklist and graduate to a scripted integration test once the pieces are stable.
+
+### Verification Summary
+
+| Gate | Tests | What it Proves |
+|------|-------|---------------|
+| Streams 0+1 → 2 | V1-V3 | Module system composes correctly |
+| Stream 2 → 3 | V4-V7 | PM module works end-to-end as a real module |
+| Stream 3 → prod | V8-V10 | Full orchestration stack works |
+
+Each gate is a hard prerequisite — don't start the next stream until the gate tests pass.
 
 ---
 
