@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document designs a **module system for brain** that allows first-class extensions to register custom note types, CLI commands, database schemas, search filters, and memory extraction strategies — while maintaining namespace isolation, query scoping, and data protection.
+This document designs a **module system for brain** that allows first-class extensions to register custom note types, CLI commands, relation types, activity types, search filters, and memory extraction strategies — while maintaining namespace isolation, query scoping, and data protection. Modules store all data through three brain-level primitives (notes+metadata, relations, activities) rather than creating module-specific database tables.
 
 The module system is the foundation that the PM (project management) module builds on. It's designed to be general-purpose: any domain-specific extension (CRM, reading lists, habit tracking) could use the same primitives.
 
@@ -60,8 +60,14 @@ export interface ModuleContext {
   /** Register note types this module owns */
   registerNoteTypes(types: ModuleNoteType[]): void;
 
-  /** Register database migrations for module-specific tables */
+  /** Register database migrations (rarely needed — most modules use the three primitives) */
   registerMigrations(migrations: ModuleMigration[]): void;
+
+  /** Register relation types this module uses in note_relations */
+  registerRelationTypes(types: string[]): void;   // e.g., ['depends_on', 'impacts', 'blocks']
+
+  /** Register activity types this module writes to the activities table */
+  registerActivityTypes(types: string[]): void;    // e.g., ['execution', 'state_change', 'review']
 
   /** Register search filter providers */
   registerFilters(filters: FilterProvider[]): void;
@@ -107,10 +113,10 @@ Modules are discovered from two sources:
 
 **Loading order:**
 1. Brain core initializes (DB, config, embedder)
-2. Core migrations run
+2. Core migrations run (including note_relations extension, activities table)
 3. Module registry created
-4. Each module's `register()` called in dependency order
-5. Module migrations run
+4. Each module's `register()` called in dependency order (registers types, relation types, activity types, commands)
+5. Module migrations run (if any — most modules don't need them)
 6. CLI commands assembled
 7. `program.parseAsync()`
 
@@ -211,8 +217,9 @@ The `metadata` column is the extensible storage layer. Core fields (`title`, `ty
 
 This means:
 - **Brain core** never needs schema changes for module fields
-- **Simple modules** can store and query all their data via `json_extract(metadata, '$.field')`
-- **Performance-sensitive modules** (like PM's dependency engine) can additionally build computed index tables or views that extract from `metadata` into typed columns
+- **All modules** store and query their entity data via `json_extract(metadata, '$.field')`
+- **Graph edges** between notes use brain's `note_relations` table (extended with module scope)
+- **Workflow events** use brain's `activities` table
 - **Any module** can add arbitrary fields without a migration
 
 See the "Storage Extensibility" section below for the full design.
@@ -388,19 +395,85 @@ This graceful degradation means you can manually create/edit markdown files and 
 
 ### The Problem
 
-Brain's notes table has fixed typed columns (`title`, `type`, `tier`, `status`, etc.). If modules store their data in these columns, every new module field requires a core schema migration. The type system is extensible, but the storage isn't.
+Brain's notes table has fixed typed columns (`title`, `type`, `tier`, `status`, etc.). If modules store their data in these columns, every new module field requires a core schema migration. If modules create their own tables, brain ends up with module-specific schemas that duplicate data, complicate upgrades, and prevent cross-module queries from working naturally.
 
-### The Solution: Core Columns + Metadata JSON
+### The Solution: Three Brain-Level Primitives
 
-The notes table has three tiers of storage:
+Instead of modules creating custom tables, brain provides three storage primitives that cover all module needs:
 
-| Tier | Storage | Who Uses It | Performance |
-|------|---------|-------------|-------------|
-| **Core columns** | Typed SQL columns (`title`, `type`, `tier`, `status`, `module`, `module_instance`) | Brain core (search, FTS, graph, filtering) | Fast — native SQL indexes |
-| **Metadata blob** | `metadata TEXT` (JSON) | Modules — all module-specific fields | Moderate — `json_extract()` queries |
-| **Computed indexes** | Module-owned tables/views (e.g., `pm_dependency_edges`) | Modules with hot-path queries | Fast — proper indexes on extracted fields |
+| Primitive | What it stores | Query mechanism | Example |
+|-----------|---------------|-----------------|---------|
+| **Notes + metadata** | All entity data (tasks, decisions, prompts, captures) | `json_extract(metadata, '$.field')` | Task status, priority, assignee |
+| **Relations** | All graph edges between notes | SQL joins on `note_relations` | depends_on, impacts, blocks |
+| **Activities** | All workflow events and audit trail | Filter by module + activity_type | Task executions, state changes, reviews |
 
-### How Indexing Works
+Modules create **zero custom tables**. They register relation types and activity types, then read/write using brain's primitives.
+
+#### Primitive 1: Notes + metadata JSON
+
+Core fields (`title`, `type`, `tier`, `status`) remain as typed columns for brain's internal queries. Everything else — module-specific fields like `depends_on`, `priority`, `mode`, `claim_token` — lives in `metadata` as a JSON object, queryable via `json_extract()`.
+
+```sql
+-- All entity data lives in notes.metadata
+SELECT id, json_extract(metadata, '$.display_id') as display_id,
+       json_extract(metadata, '$.status') as pm_status,
+       json_extract(metadata, '$.priority') as priority
+FROM notes WHERE module = 'pm' AND type = 'task';
+```
+
+#### Primitive 2: Extended note_relations
+
+Brain already has a `note_relations` table for its knowledge graph. Extend it to support module-typed, instance-scoped edges:
+
+```sql
+-- Extend existing note_relations
+ALTER TABLE note_relations ADD COLUMN module TEXT;
+ALTER TABLE note_relations ADD COLUMN module_instance TEXT;
+
+-- Example relation types by module:
+-- PM: depends_on, blocks, impacts, supersedes
+-- Knowledge: relates_to, contradicts, supports, cites
+-- Any module registers its own relation types
+```
+
+This replaces what would have been `pm_dependency_edges`. The dependency engine queries brain's native relation system filtered by `module = 'pm'` and `relation_type = 'depends_on'`.
+
+#### Primitive 3: Activities (brain-level table)
+
+A generic activity/event log for workflow tracking:
+
+```sql
+CREATE TABLE IF NOT EXISTS activities (
+  id TEXT PRIMARY KEY,
+  note_ids TEXT,            -- JSON array of related note IDs
+  module TEXT,
+  module_instance TEXT,
+  activity_type TEXT,       -- 'execution', 'state_change', 'review', 'capture', etc.
+  actor_type TEXT,          -- 'agent', 'human', 'system'
+  actor_id TEXT,
+  session_id TEXT,
+  metadata TEXT,            -- JSON blob for activity-specific data
+  outcome TEXT,
+  started_at TEXT,
+  completed_at TEXT
+);
+
+CREATE INDEX idx_activities_module ON activities(module, module_instance);
+CREATE INDEX idx_activities_type ON activities(module, activity_type);
+CREATE INDEX idx_activities_session ON activities(session_id);
+```
+
+Any module can write activities. PM writes execution telemetry as activities with `activity_type: 'execution'` and token/model/cost data in `metadata`. A learning module writes study sessions. A CRM writes interaction logs.
+
+### Why No Module-Specific Tables
+
+Modules operate entirely through brain's three primitives (notes+metadata, relations, activities). This means:
+- **No schema migrations** when adding a module — brain's core schema already has everything
+- **Cross-module queries** work naturally — search finds all notes regardless of module, relations span modules, activities provide a unified audit trail
+- **No data duplication** — task data lives in one place (the note's metadata), not mirrored across tables
+- **Brain upgrades** don't break modules — modules don't own database objects that could conflict
+
+### How Indexing Works with Modules
 
 When brain indexes a note with `module: pm`:
 
@@ -410,40 +483,12 @@ When brain indexes a note with `module: pm`:
 3. ALL frontmatter → metadata JSON blob (including core fields, for completeness)
 4. Module's onIndex hook fires:
    - PM reads json_extract(metadata, '$.depends_on')
-   - PM updates pm_dependency_edges table
-   - PM updates pm_tasks view/materialized cache
+   - PM writes module-scoped relation entries to note_relations
+     (for depends_on, impacts, blocks edges parsed from frontmatter)
+   - Task data stays in notes.metadata — no separate table to update
 5. FTS index updated (title + searchable fields from metadata)
 6. Vector embeddings computed (if body content changed)
 ```
-
-### Module Storage Options
-
-A module can choose its storage strategy based on query needs:
-
-**Option A: Metadata-only** (simple modules)
-```sql
--- Reading list module: just needs basic queries
-SELECT json_extract(metadata, '$.author'), json_extract(metadata, '$.rating')
-FROM notes WHERE module = 'reading-list' AND type = 'book';
-```
-
-**Option B: Metadata + SQL view** (moderate query needs)
-```sql
--- PM tasks: view over metadata for convenience, no separate table
-CREATE VIEW pm_tasks_view AS
-SELECT id, json_extract(metadata, '$.display_id') as display_id,
-       json_extract(metadata, '$.status') as pm_status, ...
-FROM notes WHERE module = 'pm' AND type = 'task';
-```
-
-**Option C: Metadata + materialized tables** (hot-path queries)
-```sql
--- PM dependency edges: real table for graph joins
--- Rebuilt on brain index from frontmatter metadata
-CREATE TABLE pm_dependency_edges (...);
-```
-
-This graduated approach means simple modules need zero SQL tables (just metadata), while complex modules like PM can optimize their critical queries with proper indexes — without any changes to brain core.
 
 ---
 
@@ -535,7 +580,7 @@ All module commands support `--json` output, following brain's existing pattern.
 
 ### Module Migration System
 
-Modules can declare SQL migrations that run after core migrations:
+Most modules won't need migrations since the three primitives (notes+metadata, relations, activities) cover most storage needs. The migration system exists for brain core schema changes (like adding the activities table or extending note_relations) and for the rare module that genuinely needs custom storage beyond the primitives.
 
 ```typescript
 export interface ModuleMigration {
@@ -557,50 +602,54 @@ Module migration state is tracked in `db_meta`:
 INSERT INTO db_meta (key, value) VALUES ('module_schema_pm', '3');
 ```
 
-### Module Tables
+### Module Data Storage
 
-Modules can create their own tables. Convention: prefix with module name.
+Modules store all data through brain's three primitives. No module-specific tables are needed.
+
+**Entity data** lives in notes with module-specific fields in the `metadata` JSON column. Decisions are notes with `type: decision`, queried via `json_extract()`. Prompt caching can use in-memory caches or brain-level cache mechanisms.
+
+**Graph edges** live in `note_relations` with module and relation_type filtering:
 
 ```sql
--- PM module tables
-CREATE TABLE IF NOT EXISTS pm_dependency_edges (
-  source_id TEXT NOT NULL,
-  target_id TEXT NOT NULL,
-  relation TEXT NOT NULL DEFAULT 'depends_on',
-  project TEXT NOT NULL,
-  PRIMARY KEY (source_id, target_id),
-  FOREIGN KEY (source_id) REFERENCES notes(id) ON DELETE CASCADE,
-  FOREIGN KEY (target_id) REFERENCES notes(id) ON DELETE CASCADE
-);
+-- PM dependency edge (stored in brain's note_relations)
+-- source_id: the task that depends
+-- target_id: the task it depends ON
+-- relation_type: 'depends_on'
+-- module: 'pm'
+-- module_instance: 'openclaw'
 
-CREATE TABLE IF NOT EXISTS pm_decisions (
-  id TEXT PRIMARY KEY,
-  project TEXT NOT NULL,
-  decision TEXT NOT NULL,
-  rationale TEXT,
-  impacts TEXT,  -- JSON array of affected task/prompt IDs
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  source_task_id TEXT,
-  FOREIGN KEY (source_task_id) REFERENCES notes(id)
-);
-
-CREATE TABLE IF NOT EXISTS pm_prompt_cache (
-  task_id TEXT PRIMARY KEY,
-  rendered_prompt TEXT NOT NULL,
-  rendered_at TEXT NOT NULL,
-  context_hash TEXT NOT NULL,  -- detect staleness
-  FOREIGN KEY (task_id) REFERENCES notes(id) ON DELETE CASCADE
-);
+-- Eligible task query uses note_relations directly:
+SELECT n.id, json_extract(n.metadata, '$.display_id') as display_id,
+       json_extract(n.metadata, '$.title') as title
+FROM notes n
+WHERE n.module = 'pm' AND n.module_instance = ?
+  AND json_extract(n.metadata, '$.type') = 'task'
+  AND json_extract(n.metadata, '$.status') = 'pending'
+  AND NOT EXISTS (
+    SELECT 1 FROM note_relations r
+    JOIN notes dep ON dep.id = r.target_id
+    WHERE r.source_id = n.id
+      AND r.relation_type = 'depends_on'
+      AND r.module = 'pm'
+      AND json_extract(dep.metadata, '$.status') != 'done'
+  )
 ```
+
+**Workflow events** live in the `activities` table, filtered by module and activity_type.
 
 ### Cascade Behavior
 
-When brain deletes a note, module tables with foreign keys automatically cascade (via `ON DELETE CASCADE`). For more complex cleanup, modules can register cascade hooks:
+When brain deletes a note:
+
+- **Relations:** Brain's native `ON DELETE CASCADE` on `note_relations` handles edge cleanup automatically. No module-specific cascade logic needed.
+- **Activities:** Activity records referencing deleted notes keep their records (audit trail preservation). The `note_ids` entries become orphaned, which is acceptable for historical data.
+- **Metadata:** Deleted with the note row itself.
+
+For any additional cleanup beyond this, modules can still register cascade hooks:
 
 ```typescript
 ctx.onNoteDelete((noteId: string) => {
-  // Clean up PM-specific state for this note
-  db.exec('DELETE FROM pm_dependency_edges WHERE source_note_id = ? OR target_note_id = ?', noteId, noteId);
+  // Module-specific cleanup if needed beyond automatic cascading
 });
 ```
 
@@ -716,11 +765,12 @@ Stored in brain's config.json under the module namespace:
 - Module filter injection in search.ts
 - Tests for visibility tiers
 
-### Phase 5: Database Extensions
-- Module migration system
-- Module-prefixed table convention
-- Cascade hooks
-- Tests for migrations and cascading
+### Phase 5: Storage Primitives
+- Extend `note_relations` with `module` and `module_instance` columns
+- Create `activities` table (brain core schema)
+- Relation type and activity type registration in ModuleContext
+- Cascade behavior (ON DELETE CASCADE for relations, audit preservation for activities)
+- Tests for primitives and cascading
 
 ### Phase 6: Memory Integration
 - Module extraction strategies
@@ -738,7 +788,7 @@ Stored in brain's config.json under the module namespace:
 
 3. **Hot reload** — Should modules be reloadable without restarting brain? Not for v1. The CLI model (run command, exit) makes this unnecessary.
 
-4. **Module isolation level** — Should each module get its own SQLite database? No — shared DB with table prefixing is simpler, enables cross-module queries, and avoids the distributed systems problems of multi-DB.
+4. **Module isolation level** — Should each module get its own SQLite database? No — shared DB with three brain-level primitives (notes+metadata, relations, activities) is simpler, enables cross-module queries naturally, and avoids the distributed systems problems of multi-DB. Modules don't create their own tables.
 
 5. **Version compatibility** — How does a module handle brain core version changes? Add `minBrainVersion` to BrainModule interface, checked at load time.
 
@@ -757,6 +807,30 @@ ALTER TABLE notes ADD COLUMN module_instance TEXT;
 
 CREATE INDEX idx_notes_module ON notes(module);
 CREATE INDEX idx_notes_module_instance ON notes(module, module_instance);
+
+-- Extend note_relations for module-scoped edges
+ALTER TABLE note_relations ADD COLUMN module TEXT;
+ALTER TABLE note_relations ADD COLUMN module_instance TEXT;
+
+-- Activities table for workflow event tracking
+CREATE TABLE IF NOT EXISTS activities (
+  id TEXT PRIMARY KEY,
+  note_ids TEXT,
+  module TEXT,
+  module_instance TEXT,
+  activity_type TEXT,
+  actor_type TEXT,
+  actor_id TEXT,
+  session_id TEXT,
+  metadata TEXT,
+  outcome TEXT,
+  started_at TEXT,
+  completed_at TEXT
+);
+
+CREATE INDEX idx_activities_module ON activities(module, module_instance);
+CREATE INDEX idx_activities_type ON activities(module, activity_type);
+CREATE INDEX idx_activities_session ON activities(session_id);
 
 -- Track module system version
 INSERT INTO db_meta (key, value) VALUES ('module_system_version', '1');

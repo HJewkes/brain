@@ -11,6 +11,12 @@
 
 The PM (project management) module is the first brain module. It provides structured project management as a brain extension: projects, workstreams, tasks, decisions, and prompts — all stored as brain notes with module-enforced schemas, connected by a dependency graph, and queryable through both brain search and PM-specific commands.
 
+**Storage model:** PM uses three brain-level primitives — no PM-specific tables.
+
+1. **Notes + metadata JSON** — All PM entities (tasks, decisions, projects, workstreams, prompts, captures) are brain notes with `module: pm`. Their PM-specific fields live in `notes.metadata` as JSON. Queried via `json_extract()`.
+2. **Extended note_relations** — Brain's existing relation table, extended with `module` and `module_instance` columns. PM registers relation types: `depends_on`, `blocks`, `impacts`, `supersedes`. The dependency engine queries `note_relations WHERE module = 'pm' AND relation_type = 'depends_on'`.
+3. **Activities** — A brain-level activity log table. PM writes execution telemetry, state changes, and reviews as activities with `module: 'pm'`. Token/model/cost data lives in the activity's `metadata` JSON.
+
 This document covers the data model, state machine, dependency engine, decision propagation, CLI interface, and the prompt system.
 
 ---
@@ -287,51 +293,48 @@ When a limit is hit, `brain pm next` surfaces the limit and suggests completing 
 
 Dependencies stored in two places:
 1. **Frontmatter** — `depends_on` and `blocks` arrays on task notes (human-readable source of truth)
-2. **SQL table** — `pm_dependency_edges` (computed index for fast graph operations)
+2. **note_relations** — Brain's relation table with `module = 'pm'` scoping (computed index for fast graph operations)
 
-The SQL table is rebuilt on `brain index` — the frontmatter is authoritative.
+The `note_relations` rows are rebuilt on `brain index` — the frontmatter is authoritative.
 
-```sql
-CREATE TABLE pm_dependency_edges (
-  source_id TEXT NOT NULL,       -- task that depends on target
-  target_id TEXT NOT NULL,       -- task that must complete first
-  project TEXT NOT NULL,
-  relation TEXT NOT NULL DEFAULT 'depends_on',
-  PRIMARY KEY (source_id, target_id),
-  FOREIGN KEY (source_id) REFERENCES notes(id) ON DELETE CASCADE,
-  FOREIGN KEY (target_id) REFERENCES notes(id) ON DELETE CASCADE
-);
+PM stores dependencies as brain relations:
+- `source_id`: the task note that depends on another
+- `target_id`: the note it depends ON
+- `relation_type`: `depends_on` (also `blocks`, `impacts` for other edge types)
+- `module`: `pm`
+- `module_instance`: the project instance (e.g., `openclaw`)
 
-CREATE INDEX idx_pm_deps_target ON pm_dependency_edges(target_id);
-CREATE INDEX idx_pm_deps_project ON pm_dependency_edges(project);
-```
+Brain's `onNoteDelete` cascade automatically cleans up relations when notes are deleted.
 
 ### Eligible Task Computation
 
 The "next eligible task" query (adapted from research on build system DAGs):
 
 ```sql
--- Tasks whose dependencies are ALL done
-SELECT n.id, n.title, n.priority, n.mode
+-- Eligible tasks: pending with all dependencies done (+READY computation)
+SELECT n.id,
+       json_extract(n.metadata, '$.display_id') as display_id,
+       json_extract(n.metadata, '$.title') as title,
+       json_extract(n.metadata, '$.priority') as priority,
+       json_extract(n.metadata, '$.mode') as mode
 FROM notes n
-WHERE n.module = 'pm'
-  AND n.module_instance = ?          -- current project
-  AND n.type = 'task'
-  AND json_extract(n.frontmatter, '$.status') = 'pending'
+WHERE n.module = 'pm' AND n.module_instance = ?
+  AND json_extract(n.metadata, '$.type') = 'task'
+  AND json_extract(n.metadata, '$.status') = 'pending'
   AND NOT EXISTS (
-    SELECT 1 FROM pm_dependency_edges d
-    JOIN notes dep ON dep.id = d.target_id
-    WHERE d.source_id = n.id
-      AND json_extract(dep.frontmatter, '$.status') != 'done'
+    SELECT 1 FROM note_relations r
+    JOIN notes dep ON dep.id = r.target_id
+    WHERE r.source_id = n.id
+      AND r.relation_type = 'depends_on'
+      AND r.module = 'pm'
+      AND json_extract(dep.metadata, '$.status') != 'done'
   )
 ORDER BY
-  CASE json_extract(n.frontmatter, '$.priority')
-    WHEN 'critical' THEN 0
-    WHEN 'high' THEN 1
-    WHEN 'medium' THEN 2
-    WHEN 'low' THEN 3
+  CASE json_extract(n.metadata, '$.priority')
+    WHEN 'critical' THEN 0 WHEN 'high' THEN 1
+    WHEN 'medium' THEN 2 WHEN 'low' THEN 3
   END,
-  n.id;
+  json_extract(n.metadata, '$.display_id');
 ```
 
 ### Cycle Detection
@@ -345,20 +348,23 @@ When a task completes:
 
 ```typescript
 async function onTaskComplete(taskId: string, db: BrainDB): Promise<TaskImpact> {
-  // 1. Find tasks blocked by this one
+  // 1. Find tasks blocked by this one (via note_relations)
   const unblocked = db.query(`
-    SELECT source_id FROM pm_dependency_edges
-    WHERE target_id = ? AND source_id NOT IN (
-      SELECT source_id FROM pm_dependency_edges d
-      JOIN notes dep ON dep.id = d.target_id
-      WHERE d.target_id != ? AND json_extract(dep.frontmatter, '$.status') != 'done'
-    )
+    SELECT r.source_id FROM note_relations r
+    WHERE r.target_id = ? AND r.relation_type = 'depends_on' AND r.module = 'pm'
+      AND r.source_id NOT IN (
+        SELECT r2.source_id FROM note_relations r2
+        JOIN notes dep ON dep.id = r2.target_id
+        WHERE r2.relation_type = 'depends_on' AND r2.module = 'pm'
+          AND r2.target_id != ?
+          AND json_extract(dep.metadata, '$.status') != 'done'
+      )
   `, [taskId, taskId]);
 
   // 2. Newly eligible tasks are now +READY (virtual state, no status change needed)
   // They remain 'pending' but will appear in brain pm next / brain pm task list --eligible
 
-  // 3. Check for decision impacts
+  // 3. Check for decision impacts (via note_relations with relation_type = 'impacts')
   const decisions = await getDecisionsFromTask(taskId);
   const impactedTasks = decisions.flatMap(d => d.impacts);
 
@@ -395,34 +401,34 @@ Each prompt rendering records a content hash and timestamp. When a new decision 
 
 ```typescript
 async function checkPromptFreshness(taskId: string): Promise<boolean> {
-  const cache = db.get('SELECT * FROM pm_prompt_cache WHERE task_id = ?', taskId);
-  if (!cache) return false; // no cached render, always fresh
+  // Last-dispatch metadata is stored on the task note's metadata
+  const task = db.get('SELECT metadata FROM notes WHERE id = ?', taskId);
+  const lastHash = json_extract(task.metadata, '$.last_dispatch_hash');
+  if (!lastHash) return false; // never dispatched, always fresh
 
   const decisions = await getDecisionsImpactingTask(taskId);
   const latestDecision = decisions.sort((a, b) => b.created - a.created)[0];
+  const lastDispatchAt = json_extract(task.metadata, '$.last_dispatch_at');
 
-  return !latestDecision || latestDecision.created < cache.rendered_at;
+  return !latestDecision || latestDecision.created < lastDispatchAt;
 }
 ```
+
+Prompt cache is handled in-memory by the dispatch command: compute a content hash, compare with `last_dispatch_hash` and `last_dispatch_at` stored in the task note's metadata. No separate cache table needed.
 
 When `brain pm dispatch` detects a stale prompt, it:
 1. Re-renders the prompt with updated decision context
 2. Highlights what changed since last render
-3. Updates the cache
+3. Updates `last_dispatch_hash` and `last_dispatch_at` on the task note's metadata
 
-### Decision Impact Junction Table
+### Decision Impact Relations
 
-```sql
-CREATE TABLE IF NOT EXISTS pm_decision_impacts (
-  decision_id TEXT NOT NULL,
-  task_note_id TEXT NOT NULL,
-  PRIMARY KEY (decision_id, task_note_id),
-  FOREIGN KEY (decision_id) REFERENCES notes(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_note_id) REFERENCES notes(id) ON DELETE CASCADE
-);
-```
+Decision impacts are stored as `note_relations` with `relation_type: 'impacts'`:
 
-`brain pm decision add "..." --impacts OC-08.05,OC-08.06` populates both the `impacts` text field on the decision note (human-readable) and the `pm_decision_impacts` junction table (queryable).
+When `brain pm decision add "..." --impacts OC-08.05,OC-08.06` is called:
+- Creates a decision note with `type: decision` in notes.metadata
+- Creates `note_relations` entries: decision → each impacted task with `relation_type: 'impacts'`
+- `brain pm dispatch` queries these relations to assemble decision context into the prompt
 
 ### Prompt Assembly Algorithm
 
@@ -430,11 +436,11 @@ When `brain pm dispatch <id> --json` renders a prompt:
 
 1. Load the task's prompt note (type: prompt, current version)
 2. Load completed dependency summaries: for each `depends_on` task that is `done`, fetch its completion log
-3. Load relevant decisions: query `pm_decision_impacts` for decisions impacting this task
+3. Load relevant decisions: query `note_relations WHERE relation_type = 'impacts' AND target_id = task_id AND module = 'pm'` for decisions impacting this task
 4. Load project constraints from project note metadata
 5. Assemble into the agent prompt template (instructions first, context second)
 6. Compute `context_hash = SHA256(prompt_content + sorted_decision_ids + sorted_dependency_ids)`
-7. Compare with `pm_prompt_cache` — if hash matches, prompt hasn't changed since last dispatch
+7. Compare with `last_dispatch_hash` on the task note's metadata — if hash matches, prompt hasn't changed since last dispatch
 
 This ensures agents always receive current context, and stale prompts are detectable.
 
@@ -500,7 +506,7 @@ brain pm task delete <display-id> [--force]
 
 **`brain pm task done` vs `brain pm complete`:**
 - `brain pm task done <id> --log "..."` — simple status update, sets status to `done`, no telemetry.
-- `brain pm complete <id> ...` — orchestration-aware completion: records telemetry to `pm_executions`, captures decisions, returns impact analysis (newly unblocked tasks). Used by the orchestrator skill.
+- `brain pm complete <id> ...` — orchestration-aware completion: creates an activity record with execution telemetry, captures decisions, returns impact analysis (newly unblocked tasks). Used by the orchestrator skill.
 
 ### Orchestration Commands
 
@@ -526,7 +532,7 @@ brain pm complete <display-id> [options]
   --duration <seconds>     # Wall-clock duration
   --files-modified <n>     # Files changed count
   --decisions <text>       # Inline decision capture
-  # All telemetry flags are optional — they populate pm_executions if provided,
+  # All telemetry flags are optional — they populate the activity's metadata if provided,
   # but can also be backfilled by `brain pm audit enrich` from transcript parsing.
 
 brain pm briefing                     # full session start briefing
@@ -741,72 +747,60 @@ A task can be `mode: agent, category: research` (agent does the research) or `mo
 
 Every task execution (agent or human) produces a telemetry record. This enables cost tracking, performance auditing, and execution history.
 
-### Execution Record Schema
+### Execution Telemetry as Activities
 
-```sql
-CREATE TABLE pm_executions (
-  id TEXT PRIMARY KEY,                    -- UUID
-  task_id TEXT NOT NULL,                  -- FK to notes.id
-  display_id TEXT NOT NULL,               -- e.g., "OC-08.05"
-  attempt INTEGER NOT NULL DEFAULT 1,     -- retry number
+PM execution telemetry is stored as brain **activities** — a core primitive available to all modules.
 
-  -- Executor identity
-  executor_type TEXT NOT NULL,            -- 'agent' | 'human' | 'assisted'
-  agent_id TEXT,                          -- Claude Code sub-agent ID (null for human)
-  parent_session TEXT,                    -- orchestrator session ID
-  transcript_path TEXT,                   -- path to agent transcript JSONL (populated from SubagentStop hook's agent_transcript_path)
+Each task execution creates an activity:
 
-  -- Model & tokens
-  model TEXT,                             -- 'claude-opus-4-6', 'claude-sonnet-4-6', etc.
-  input_tokens INTEGER,
-  output_tokens INTEGER,
-  cache_read_tokens INTEGER,
-  cache_creation_tokens INTEGER,
-  total_tokens INTEGER,
-  tool_uses INTEGER,                      -- number of tool invocations
-  estimated_cost_usd REAL,                -- computed from tokens + model pricing
-
-  -- Task classification (denormalized for fast aggregation)
-  project TEXT NOT NULL,
-  workstream TEXT,
-  mode TEXT,                              -- human | assisted | agent | review
-  category TEXT,                          -- research | implementation | etc.
-
-  -- Timing
-  claimed_at TEXT,
-  started_at TEXT,
-  completed_at TEXT,
-  duration_seconds INTEGER,
-
-  -- Outcome
-  outcome TEXT NOT NULL DEFAULT 'completed', -- completed | partial | failed | timeout | cancelled
-  validation_passed INTEGER,              -- 1 = true, 0 = false, NULL = not checked
-  decisions_captured INTEGER DEFAULT 0,
-  files_modified INTEGER,
-  error_message TEXT,
-
-  FOREIGN KEY (task_id) REFERENCES notes(id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_pm_exec_project ON pm_executions(project);
-CREATE INDEX idx_pm_exec_task ON pm_executions(task_id);
-CREATE INDEX idx_pm_exec_model ON pm_executions(model);
-CREATE INDEX idx_pm_exec_category ON pm_executions(category);
+```json
+{
+  "id": "exec-uuid",
+  "note_ids": ["task-note-id"],
+  "module": "pm",
+  "module_instance": "openclaw",
+  "activity_type": "execution",
+  "actor_type": "agent",
+  "actor_id": "agent-abc123",
+  "session_id": "session-xyz",
+  "metadata": {
+    "display_id": "OC-08.05",
+    "attempt": 1,
+    "model": "claude-sonnet-4-6",
+    "category": "research",
+    "mode": "agent",
+    "input_tokens": null,
+    "output_tokens": null,
+    "cache_read_tokens": null,
+    "total_tokens": null,
+    "tool_uses": null,
+    "estimated_cost_usd": null,
+    "transcript_path": "~/.claude/projects/.../agent-abc123.jsonl",
+    "files_modified": 0,
+    "validation_passed": true,
+    "decisions_captured": 1
+  },
+  "outcome": "completed",
+  "started_at": "2026-02-26T10:00:00Z",
+  "completed_at": "2026-02-26T10:05:00Z"
+}
 ```
+
+Token fields are nullable (Phase 1). `brain pm audit enrich` parses transcript files to backfill them (Phase 2).
 
 ### Data Collection
 
 Token and timing data is collected in two phases:
 
-**Phase 1 (on complete):** `brain pm complete` records what the orchestrator knows at completion time: model, agent_id, session_id, timestamps, outcome. Token fields are nullable — the Task tool does NOT return token counts.
+**Phase 1 (on complete):** `brain pm complete` creates an activity with what the orchestrator knows at completion time: model, agent_id, session_id, timestamps, outcome. Token fields in the activity's metadata are nullable — the Task tool does NOT return token counts.
 
 **Phase 2 (enrichment):** `brain pm audit enrich` parses agent transcript JSONL files to backfill token counts and compute costs:
 
 ```bash
 brain pm audit enrich [--project <prefix>] [--task <display-id>]
-  # Parses agent transcript JSONL files referenced by pm_executions.transcript_path
-  # Backfills: input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_tokens, tool_uses, estimated_cost_usd
-  # Skipped if tokens already populated (idempotent)
+  # Finds activities with activity_type='execution' and null token fields
+  # Parses agent transcript JSONL files referenced by metadata.transcript_path
+  # Backfills: input_tokens, output_tokens, cache_read_tokens, total_tokens, estimated_cost_usd
 ```
 
 **Orchestrator tracking** — The orchestrator records `claimed_at`, `started_at`, `completed_at` timestamps as it manages the task lifecycle.
@@ -861,11 +855,44 @@ brain pm complete OC-08.05 \
 
 Token fields are omitted at completion time — they are backfilled by `brain pm audit enrich` from transcript parsing. In practice, the orchestrator wraps this call and passes the metadata it knows at completion time.
 
+Internally, `brain pm complete` creates an activity record:
+
+```typescript
+// brain pm complete creates an activity record
+await createActivity({
+  noteIds: [taskNoteId],
+  module: 'pm',
+  moduleInstance: project,
+  activityType: 'execution',
+  actorType: executorType,
+  actorId: agentId,
+  sessionId,
+  metadata: { model, category, displayId, attempt, transcriptPath, ... },
+  outcome,
+  startedAt,
+  completedAt: new Date().toISOString(),
+});
+```
+
 ---
 
 ## Audit Commands
 
 ### Cost Auditing
+
+All audit commands query `activities WHERE module = 'pm' AND activity_type = 'execution'`:
+
+```sql
+-- Cost by category
+SELECT json_extract(a.metadata, '$.category') as category,
+       COUNT(*) as tasks,
+       SUM(json_extract(a.metadata, '$.estimated_cost_usd')) as cost
+FROM activities a
+WHERE a.module = 'pm' AND a.module_instance = ?
+  AND a.activity_type = 'execution'
+  AND a.outcome = 'completed'
+GROUP BY category;
+```
 
 ```bash
 brain pm audit cost --project OC
@@ -991,16 +1018,18 @@ This prevents the "capturing without processing" anti-pattern identified across 
 
 ## Implementation Phases
 
-### Phase 1: Core Data Model
-- Project, workstream, task, decision note types
-- Frontmatter schemas
+### Phase 1: Core Data Model & Brain Primitives
+- Project, workstream, task, decision note types with metadata JSON
+- Extend `note_relations` with `module` and `module_instance` columns (brain-level migration)
+- Create the `activities` table (brain-level migration)
+- PM registers relation types (`depends_on`, `blocks`, `impacts`, `supersedes`) and activity types (`execution`)
 - Module registration with brain
 - Basic CRUD commands
 - Tests
 
 ### Phase 2: Dependency Engine
-- `pm_dependency_edges` table
-- Eligible task computation
+- Dependency edges stored in `note_relations` with `module = 'pm'`
+- Eligible task computation via `json_extract()` on notes.metadata
 - Impact analysis on completion
 - Cycle detection
 - Tests
@@ -1097,10 +1126,10 @@ Run with `npm test` (`vitest run`). Coverage via `@vitest/coverage-v8`.
 - Module commands appear in `brain pm --help`
 
 **Database integrity:**
-- `brain index` with PM notes populates `pm_tasks`
-- `brain index` after frontmatter change updates `pm_tasks`
-- Delete a note → `pm_tasks` row cascades (`ON DELETE CASCADE`)
-- `pm_decision_impacts` foreign keys enforced
+- `brain index` with PM notes populates notes.metadata correctly
+- PM dependency edges stored in note_relations with correct module scoping
+- Activities created on task completion with correct metadata
+- Delete a note → note_relations cascade, activities retain historical record
 
 ### Test Fixtures
 

@@ -173,7 +173,7 @@ brain pm next --json
        --log "summary" \
        --model claude-sonnet-4-6 \
        --agent-id <agent_id> --session $BRAIN_PM_SESSION
-   - Captures execution record to pm_executions (Phase 1 — no token data yet)
+   - Creates activity record with execution telemetry (Phase 1 — no token data yet)
    - Token enrichment via: brain pm audit enrich (Phase 2 — parses transcript)
    - Captures any decisions made
    - Surfaces newly unblocked tasks
@@ -377,7 +377,7 @@ The orchestrator selects models based on task characteristics:
 | `documentation` (docs, guides) | Sonnet | Good prose, cheaper |
 | `migration` (data transforms, refactors) | Opus | Needs precision |
 
-The task's `category` and `mode` fields inform the model choice. The orchestrator can override based on context. The selected model is recorded in `pm_executions` for cost auditing.
+The task's `category` and `mode` fields inform the model choice. The orchestrator can override based on context. The selected model is recorded in the execution activity for cost auditing.
 
 ---
 
@@ -391,7 +391,7 @@ The task's `category` and `mode` fields inform the model choice. The orchestrato
    brain pm complete <id> --token <claim_token> --outcome failed \
      --model <model> --agent-id <agent_id> --session $BRAIN_PM_SESSION \
      --log "Agent failed: <error summary>"
-   → Records execution attempt with outcome='failed' in pm_executions
+   → Creates activity record with outcome='failed'
    → Releases claim token, transitions in-progress → pending (dependency engine re-computes +READY)
    → Token enrichment via: brain pm audit enrich
 3. Options:
@@ -399,8 +399,8 @@ The task's `category` and `mode` fields inform the model choice. The orchestrato
    b. Retry with adjusted prompt (bad output) — new claim cycle
    c. Escalate to human (persistent failure) — status → blocked
    d. Skip and move on (non-critical task) — status → cancelled
-4. Max retries: 2 (configurable). Each attempt is a separate pm_executions row
-   with incrementing attempt number.
+4. Max retries: 2 (configurable). Each attempt is a separate activity record
+   with incrementing attempt number in metadata.
 ```
 
 ### Session Interruption

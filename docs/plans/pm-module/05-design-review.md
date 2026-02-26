@@ -2,6 +2,9 @@
 
 **Date:** 2026-02-25
 **Reviewer:** Claude (Sonnet)
+
+> **Resolution Note:** Issues raised in this review have been resolved in 06-review-resolutions.md. References to `pm_tasks` and PM-specific tables have been superseded by the three brain-level primitives design. See docs 01 and 02 for the current architecture.
+
 **Documents reviewed:**
 - 01-brain-module-system.md
 - 02-pm-module-design.md

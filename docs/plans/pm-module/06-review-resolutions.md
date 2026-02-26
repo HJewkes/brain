@@ -14,69 +14,47 @@ This document resolves the critical and important issues raised during self-revi
 
 **Problem:** Doc 02's dependency engine SQL uses `json_extract(n.frontmatter, '$.status')`, but brain's actual schema stores frontmatter fields as individual typed columns (`type`, `tier`, `status`, `title`, etc.) — there is no JSON blob column.
 
-**Resolution: PM-owned computed index table.**
+**Resolution: Three brain-level storage primitives (no PM-specific tables).**
 
-The PM module creates its own denormalized table that mirrors the task-relevant fields from notes + PM-specific fields. This table is rebuilt on `brain index` (or `brain pm reindex`).
+Rather than PM-owned tables, the design uses three reusable brain-level primitives:
 
-```sql
-CREATE TABLE IF NOT EXISTS pm_tasks (
-  note_id TEXT PRIMARY KEY,           -- FK to notes.id
-  display_id TEXT NOT NULL UNIQUE,    -- e.g., "OC-08.05"
-  project TEXT NOT NULL,              -- project prefix
-  workstream TEXT,                    -- workstream number
-  task_number TEXT,                   -- task number within workstream
-  title TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending', -- ready is virtual (+READY), never stored
-  mode TEXT,                          -- human | assisted | agent | review
-  category TEXT,                      -- research | implementation | configuration | etc.
-  priority TEXT DEFAULT 'medium',
-  assignee TEXT,
-  hill_position TEXT,
-  prompt_note TEXT,                    -- note_id of linked prompt note
-  estimated_time TEXT,
-  blocked_reason TEXT,
-  claimed_by TEXT,
-  claim_token TEXT,
-  claimed_at TEXT,
-  agent_id TEXT,
-  parent_session TEXT,
-  created_at TEXT,
-  started_at TEXT,
-  completed_at TEXT,
-  FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
-);
+1. **`notes.metadata` JSON** — Brain already has an unused `metadata TEXT` column. PM stores all entity data (tasks, projects, workstreams, decisions) as notes with structured metadata JSON. Indexing populates `metadata` from frontmatter.
 
-CREATE INDEX idx_pm_tasks_project ON pm_tasks(project);
-CREATE INDEX idx_pm_tasks_status ON pm_tasks(project, status);
-CREATE INDEX idx_pm_tasks_display ON pm_tasks(display_id);
-```
+2. **Extended `note_relations`** — Brain's existing relation table gains `module` and `module_instance` columns. PM registers relation types (`depends_on`, `blocks`, `impacts`, `supersedes`) and uses standard graph queries.
 
-The dependency engine SQL now queries `pm_tasks` directly:
+3. **`activities` table** — New brain-level event log for workflow events. Supports `note_ids` (JSON array for multi-note relations), typed by module. PM uses this for execution telemetry.
+
+The dependency engine queries `notes.metadata` + `note_relations`:
 
 ```sql
--- Eligible tasks: pending (not claimed/in-progress) with all dependencies done
+-- Eligible tasks: pending with all dependencies done
 -- This IS the +READY computation — ready is a virtual state, not stored
-SELECT t.note_id, t.display_id, t.title, t.priority, t.mode
-FROM pm_tasks t
-WHERE t.project = ?
-  AND t.status = 'pending'
+SELECT n.id,
+       json_extract(n.metadata, '$.display_id') as display_id,
+       json_extract(n.metadata, '$.title') as title,
+       json_extract(n.metadata, '$.priority') as priority,
+       json_extract(n.metadata, '$.mode') as mode
+FROM notes n
+WHERE n.module = 'pm' AND n.module_instance = ?
+  AND json_extract(n.metadata, '$.type') = 'task'
+  AND json_extract(n.metadata, '$.status') = 'pending'
   AND NOT EXISTS (
-    SELECT 1 FROM pm_dependency_edges d
-    JOIN pm_tasks dep ON dep.note_id = d.target_id
-    WHERE d.source_id = t.note_id
-      AND dep.status != 'done'
+    SELECT 1 FROM note_relations r
+    JOIN notes dep ON dep.id = r.target_id
+    WHERE r.source_id = n.id
+      AND r.relation_type = 'depends_on'
+      AND r.module = 'pm'
+      AND json_extract(dep.metadata, '$.status') != 'done'
   )
 ORDER BY
-  CASE t.priority
+  CASE json_extract(n.metadata, '$.priority')
     WHEN 'critical' THEN 0 WHEN 'high' THEN 1
     WHEN 'medium' THEN 2 WHEN 'low' THEN 3
   END,
-  t.display_id;
+  json_extract(n.metadata, '$.display_id');
 ```
 
-**Sync strategy:** When brain indexes a note with `module: pm` and `type: task`, the PM module's index hook extracts PM-relevant fields from the parsed frontmatter and upserts into `pm_tasks`. Same pattern for `pm_projects`, `pm_workstreams`, `pm_decisions`.
-
-This keeps brain's core notes table untouched while giving PM fast queryable access to its own data.
+**Write path:** PM commands write to BOTH markdown frontmatter and `notes.metadata` in the same operation. `brain index` re-derives from markdown, which is safe because frontmatter was already updated. See doc 01 §Storage Extensibility and doc 02 §Dependency Engine for full details.
 
 ---
 
@@ -197,7 +175,7 @@ Key elements:
 - `brain pm complete <id> --token <t>` validates and records telemetry
 - `brain pm task release <id>` manually reverts claimed → pending
 - 10-minute timeout auto-reverts stale claims
-- Execution telemetry captured in `pm_executions` table on every completion
+- Execution telemetry captured as activity records on every completion
 
 ### I3: `BrainConfig` has no `modules` field
 
@@ -256,10 +234,9 @@ No relationship to `status` state machine. It's a progress signal for humans, no
 
 **Include in v1:**
 - Module system foundation (registry, types, commands, migrations)
-- Storage extensibility (`metadata` JSON column, three-tier storage)
+- Storage extensibility (three brain-level primitives: notes.metadata, extended note_relations, activities)
 - PM CRUD (project, workstream, task, decision)
 - `brain pm capture` / `brain pm process` (GTD inbox)
-- `pm_tasks` computed index table (or view over metadata)
 - Dependency engine (eligible computation, impact analysis)
 - State machine (pending → claimed → in-progress → done/blocked/cancelled; ready is virtual +READY)
 - Claim mechanism with tokens and timeout

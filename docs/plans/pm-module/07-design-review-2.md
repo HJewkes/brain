@@ -6,6 +6,10 @@
 
 ---
 
+> **Resolution Note:** This review was conducted before the storage architecture was finalized. References to `pm_tasks`, `pm_dependency_edges`, `pm_executions`, and other PM-specific tables throughout this document have been superseded by the three brain-level primitives design (notes.metadata, extended note_relations, activities). See docs 01 and 02 for the current architecture. Issues IC-01 through IC-13, GAP-01 through GAP-13, and OQ-01 through OQ-06 have all been resolved in the main design documents.
+
+---
+
 ## Executive Summary
 
 Three parallel reviews examined the design for internal consistency, functional gaps, and research needs. The findings cluster into **5 themes**:

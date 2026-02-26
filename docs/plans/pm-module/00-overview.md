@@ -55,7 +55,7 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 | 03 | [Orchestration Layer](03-orchestration-layer.md) | Claude Code orchestrator skill, session lifecycle, task dispatch by mode, parallel execution, error handling, cross-session continuity |
 | 04 | [Workflows & Skills](04-workflows-and-skills.md) | End-to-end workflows, skill chain (brainstorm→plan→execute), assisted walkthroughs, decision capture, retrospectives |
 | 05 | [Design Review](05-design-review.md) | Self-review: consistency, gaps, feasibility, recommendations |
-| 06 | [Design Review Resolutions](06-review-resolutions.md) | Resolution of review issues: virtual ready state, pm_tasks schema, storage extensibility, claim mechanism |
+| 06 | [Design Review Resolutions](06-review-resolutions.md) | Resolution of review issues: virtual ready state, storage primitives, claim mechanism |
 | 07 | [Design Review #2](07-design-review-2.md) | Full consistency, gap, and research analysis with implementation risk assessment |
 
 ## Research Documents
@@ -76,7 +76,7 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 | Namespace isolation | Module + instance frontmatter metadata | Prevents type collisions, enables query scoping |
 | Visibility tiers | Public / contextual / private | Balances discoverability with noise reduction |
 | Data protection | Soft (warnings) first, hard (enforcement) later | Better UX, covers 95% of cases |
-| Storage extensibility | Three-tier: core columns + metadata JSON + computed index tables | Modules extend without migrations; optimize hot paths with materialized tables |
+| Storage extensibility | Three brain-level primitives: notes.metadata, extended note_relations, activities | Zero module-specific tables; modules compose brain primitives; reusable across all modules |
 | State machine | 6 states with virtual computed states | Matches real execution patterns; virtual states (BLOCKED, STALE) add intelligence without complexity |
 | Ready state | Virtual (+READY), never stored | Avoids cascading writes; dependency engine computes eligibility at query time |
 | Dependency engine | Frontmatter as source of truth, SQL index for queries | Human-readable + fast computation |
@@ -105,7 +105,7 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 
 ### Stream 2: PM Module (Core)
 1. PM module skeleton (register, types, migrations)
-2. pm_tasks, pm_dependency_edges, pm_decisions, pm_decision_impacts tables
+2. Register PM relation types (depends_on, blocks, impacts) and activity types (execution, state_change)
 3. Project/workstream/task/decision CRUD commands
 4. Capture/process (GTD inbox)
 5. State machine with transitions and edge cases
@@ -115,7 +115,7 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 9. Orchestration commands (next, dispatch, complete, briefing)
 10. Decision propagation (impacts, prompt assembly)
 11. Structured error format
-12. Execution telemetry (pm_executions, two-phase collection)
+12. Execution telemetry (activities, two-phase collection)
 13. Audit commands (cost, performance, enrich from transcripts)
 14. Import from OpenClaw plans
 
