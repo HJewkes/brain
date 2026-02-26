@@ -345,11 +345,11 @@ This maximizes efficiency — the human only does what requires human presence.
 1. Agent completes WEB-03.01 (deployment research)
 2. Output includes: "Recommend containerized deployment with persistent volumes"
 3. Orchestrator: "The agent recommends containerized + persistent volumes.
-   This affects tasks WEB-03.04, WEB-04.01, WEB-10.02.
+   This affects tasks WEB-03.04, WEB-04.01, WEB-05.02.
    Record as a decision?"
 4. Human: "Yes"
 5. brain pm decision add "Containerized deployment with persistent volumes" \
-     --task WEB-03.01 --impacts WEB-03.04,WEB-04.01,WEB-10.02
+     --task WEB-03.01 --impacts WEB-03.04,WEB-04.01,WEB-05.02
 6. When WEB-03.04 is dispatched later, the prompt includes:
    "Decision DEC-003: Using containerized deployment with persistent volumes"
 ```

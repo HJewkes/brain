@@ -71,9 +71,9 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 
 | Document | Scope |
 |----------|-------|
-| [Tools & Patterns](../research/tools-and-patterns.md) | CLI task managers, AI orchestration frameworks, project management data models, plugin systems, dependency graph engines |
-| [Methodologies](../research/methodologies.md) | GTD, Shape Up, PARA, Kanban, Agile adaptations, Zettelkasten, ADRs |
-| [Orchestration Patterns](../research/orchestration-patterns.md) | Claude Code's Task/Team tools, ReAct/plan-and-execute patterns, context management, state machines, human-in-the-loop, decision propagation |
+| [Tools & Patterns](research/tools-and-patterns.md) | CLI task managers, AI orchestration frameworks, project management data models, plugin systems, dependency graph engines |
+| [Methodologies](research/methodologies.md) | GTD, Shape Up, PARA, Kanban, Agile adaptations, Zettelkasten, ADRs |
+| [Orchestration Patterns](research/orchestration-patterns.md) | Claude Code's Task/Team tools, ReAct/plan-and-execute patterns, context management, state machines, human-in-the-loop, decision propagation |
 
 ---
 
@@ -172,7 +172,7 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 - Stream 1 items 1-4 are prerequisites for Stream 2 to begin
 - Stream 2 items 1-8 are prerequisites for Stream 3 to begin
 - Within each stream, items are roughly sequential but some can overlap
-- Stream 3 items 3-7 (doc 10 patterns) can be developed in parallel once basic orchestration works
+- Stream 3 items 3-7 (doc 03 patterns) can be developed in parallel once basic orchestration works
 
 ---
 

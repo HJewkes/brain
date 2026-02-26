@@ -503,6 +503,10 @@ brain pm task done WEB-08.05 --log "Implemented all CLI commands, tests passing"
 brain pm task block WEB-08.05 --reason "Waiting on API access"
 brain pm task unblock WEB-08.05
 
+brain pm task claim <display-id>            # → returns claim_token UUID (pending → claimed)
+brain pm task start <display-id> --token <t> # → claimed → in-progress (validates token)
+brain pm task release <display-id>           # → claimed → pending (explicit release)
+
 brain pm task delete <display-id> [--force]
   # Removes task and cleans up dependency edges
   # Fails if other tasks depend on this one unless --force
@@ -572,6 +576,20 @@ brain pm decision show DEC-003
 brain pm decision supersede DEC-003 --with "Switch to GraphQL" --reason "..."
 brain pm decision update <id> --superseded-by <new-id>
   # Mark a decision as superseded
+```
+
+### Prompt Commands
+
+```bash
+brain pm prompt write <display-id> --content "..."
+  # Creates a prompt note linked to task. If prompt exists, creates new version
+  # (previous version gets prompt_status: superseded, new gets prompt_status: current)
+
+brain pm prompt show <display-id>            # show current prompt for a task
+brain pm prompt list                          # all prompts in active project
+brain pm prompt list --status stub            # tasks with no prompt (stubs needing content)
+brain pm prompt list --status superseded      # previous prompt versions
+brain pm prompt history <display-id>          # version history for a task's prompt
 ```
 
 ### Import/Migration
@@ -1092,7 +1110,7 @@ This prevents the "capturing without processing" anti-pattern identified across 
 
 3. **Task templates** — Should common task patterns (research → design → review → implement → verify) be templatable? Yes, but defer to Phase 7.
 
-4. **Prompt versioning** — How do we track prompt iterations? The `prompt_status` field (stub, v1, v2, current) plus git history may be sufficient.
+4. **Prompt versioning** — How do we track prompt iterations? The `prompt_status` field (stub, current, superseded) plus git history may be sufficient.
 
 ---
 
