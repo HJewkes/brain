@@ -11,6 +11,7 @@ import type {
   NoteTier,
   NoteConfidence,
 } from '../types.js';
+import type { ModuleRegistry } from '../modules/registry.js';
 
 const RRF_K = 60;
 const EXCERPT_MAX_LENGTH = 200;
@@ -212,20 +213,39 @@ export async function search(
   embedder: Embedder,
   query: string,
   options: SearchOptions,
-  fusionWeights: { bm25: number; vector: number } = { bm25: 0.3, vector: 0.7 }
+  fusionWeights: { bm25: number; vector: number } = { bm25: 0.3, vector: 0.7 },
+  moduleRegistry?: ModuleRegistry
 ): Promise<SearchResult[]> {
   if (!query.trim()) return [];
 
   const limit = options.limit;
   const overfetchLimit = limit * OVERFETCH_MULTIPLIER;
 
-  const allowedNoteIds = db.getFilteredNoteIds({
+  let allowedNoteIds = db.getFilteredNoteIds({
     tier: options.tier,
     category: options.category,
     confidence: options.confidence,
     since: options.since,
     tags: options.tags,
   });
+
+  // Module visibility: exclude private module notes from general search
+  if (moduleRegistry) {
+    const privateModuleNoteIds = getPrivateModuleNoteIds(db, moduleRegistry);
+    if (privateModuleNoteIds.size > 0) {
+      if (allowedNoteIds) {
+        for (const id of privateModuleNoteIds) {
+          allowedNoteIds.delete(id);
+        }
+      } else {
+        const allNoteIds = new Set(db.getAllNotes().map((n) => n.id));
+        for (const id of privateModuleNoteIds) {
+          allNoteIds.delete(id);
+        }
+        allowedNoteIds = allNoteIds;
+      }
+    }
+  }
 
   // Step 1: BM25 search via FTS5
   const ftsResults = db.searchFTS(query, overfetchLimit);
@@ -366,4 +386,17 @@ export function checkAndPromote(
   }
 
   return true;
+}
+
+function getPrivateModuleNoteIds(db: BrainDB, registry: ModuleRegistry): Set<string> {
+  const privateIds = new Set<string>();
+  for (const { module: moduleName, filter } of registry.getFilters()) {
+    if (filter.visibility === 'private') {
+      const noteIds = db.getModuleNoteIds({ module: moduleName });
+      for (const id of noteIds) {
+        privateIds.add(id);
+      }
+    }
+  }
+  return privateIds;
 }
