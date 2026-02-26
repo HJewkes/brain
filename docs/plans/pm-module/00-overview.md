@@ -52,16 +52,20 @@ The system consolidates two parallel efforts: (1) a brain PM module design with 
 
 | # | Document | Scope |
 |---|----------|-------|
-| 01 | [Brain Module System](01-brain-module-system.md) | Module registry, namespace isolation, visibility tiers, schema enforcement, command registration, database extensions, memory integration |
-| 02 | [PM Module Design](02-pm-module-design.md) | Data model (project/workstream/task/decision), state machine, dependency engine, decision propagation, CLI commands, context bundling |
-| 03 | [Orchestration Layer](03-orchestration-layer.md) | Claude Code orchestrator skill, session lifecycle, task dispatch by mode, parallel execution, error handling, cross-session continuity |
-| 04 | [Workflows & Skills](04-workflows-and-skills.md) | End-to-end workflows, skill chain (brainstorm→plan→execute), assisted walkthroughs, decision capture, retrospectives |
-| 05 | [Design Review](05-design-review.md) | Self-review: consistency, gaps, feasibility, recommendations |
-| 06 | [Design Review Resolutions](06-review-resolutions.md) | Resolution of review issues: virtual ready state, storage primitives, claim mechanism |
-| 07 | [Design Review #2](07-design-review-2.md) | Full consistency, gap, and research analysis with implementation risk assessment |
-| 08 | [Consolidation Overview](08-consolidation-overview.md) | How the two systems merge, what comes from where, updated implementation streams |
-| 09 | [Directory-Backed Notes](09-directory-backed-notes.md) | Brain core extension: managed directories for workspace artifacts (summary.md, references/) |
-| 10 | [Orchestration Enhancements](10-orchestration-enhancements.md) | Adaptive automation, task routing, wave execution, worktree safety, JIT context, verification agents |
+| 01 | [Brain Module System](01-brain-module-system.md) | Module registry, namespace isolation, visibility tiers, schema enforcement, directory-backed notes, command registration, database extensions, memory integration |
+| 02 | [PM Module Design](02-pm-module-design.md) | Data model (project/workstream/task/decision), state machine, dependency engine, decision propagation, CLI commands (incl. context, verify, waves), context bundling |
+| 03 | [Orchestration Layer](03-orchestration-layer.md) | Orchestrator skill, adaptive automation, task routing, wave execution, worktree safety, session lifecycle, dispatch, JIT context, verification agents, telemetry |
+| 04 | [Workflows & Skills](04-workflows-and-skills.md) | End-to-end workflows, skill chain (brainstorm → plan → execute), assisted walkthroughs, decision capture, retrospectives |
+
+## Review Documents (Appendix)
+
+Design reasoning trail from the iterative review process. Resolutions are incorporated into the main docs above.
+
+| Document | Scope |
+|----------|-------|
+| [Design Review](reviews/05-design-review.md) | Self-review: consistency, gaps, feasibility, recommendations |
+| [Review Resolutions](reviews/06-review-resolutions.md) | Resolution of review issues: virtual ready state, storage primitives, claim mechanism |
+| [Design Review #2](reviews/07-design-review-2.md) | Full consistency, gap, and research analysis with implementation risk assessment |
 
 ## Research Documents
 
@@ -105,7 +109,7 @@ The system consolidates two parallel efforts: (1) a brain PM module design with 
 
 ## Implementation Roadmap
 
-### Stream 0: Brain Core Extensions (New — doc 09)
+### Stream 0: Brain Core Extensions (see doc 01)
 1. `content_dir` column on notes table + migration
 2. `DirectoryNoteHooks` in ModuleContext interface
 3. Directory lifecycle management (create, archive, delete)
@@ -136,9 +140,9 @@ The system consolidates two parallel efforts: (1) a brain PM module design with 
 7. Claim mechanism with tokens and timeout
 8. Prompt lifecycle (prompt notes, dispatch assembly, staleness detection)
 9. Decision propagation (impacts, prompt assembly)
-10. `brain pm context` command for JIT context delivery (doc 10)
-11. `brain pm verify` command for verification plans (doc 10)
-12. `brain pm waves` command for dependency-free grouping (doc 10)
+10. `brain pm context` command for JIT context delivery (see doc 03)
+11. `brain pm verify` command for verification plans (see doc 03)
+12. `brain pm waves` command for dependency-free grouping (see doc 03)
 13. Orchestration commands (next, dispatch, complete, briefing)
 14. Capture/process (GTD inbox)
 15. Structured error format
@@ -146,18 +150,18 @@ The system consolidates two parallel efforts: (1) a brain PM module design with 
 17. Audit commands (cost, performance, enrich from transcripts)
 18. Import tools
 
-### Stream 3: Orchestration Layer (Integration — docs 03, 10)
+### Stream 3: Orchestration Layer (Integration — doc 03)
 1. Orchestrator skill (SKILL.md) with session lifecycle
 2. SessionStart + SubagentStop hooks for telemetry
-3. Task routing engine (category + mode to agent type, model, isolation) (doc 10)
-4. Wave computation and dispatch planning (doc 10)
-5. Worktree budget management (allocation, tracking, recycling) (doc 10)
-6. Worktree validation hook (PreToolUse) (doc 10)
-7. Adaptive automation (assisted vs autonomous dispatch) (doc 10)
+3. Task routing engine (category + mode to agent type, model, isolation) (see doc 03)
+4. Wave computation and dispatch planning (see doc 03)
+5. Worktree budget management (allocation, tracking, recycling) (see doc 03)
+6. Worktree validation hook (PreToolUse) (see doc 03)
+7. Adaptive automation (assisted vs autonomous dispatch) (see doc 03)
 8. Parallel agent dispatch with claim tokens
-9. Status push protocol in dispatch prompt templates (doc 10)
-10. Verification agent dispatch (SubagentStop trigger) (doc 10)
-11. JIT context push for in-flight agents (doc 10)
+9. Status push protocol in dispatch prompt templates (see doc 03)
+10. Verification agent dispatch (SubagentStop trigger) (see doc 03)
+11. JIT context push for in-flight agents (see doc 03)
 12. Assisted walkthrough mode
 13. Skill chain (brainstorming → writing-plans → PM)
 14. Decision capture integration
@@ -178,26 +182,26 @@ Once built, starting a new project looks like:
 
 ```bash
 # Brainstorm and design
-/brainstorm "Build a home automation system"
+/brainstorm "Build a web application with auth and real-time features"
 # → design doc written to brain
 # → writing-plans creates project in PM
 
 # Execute
 /orchestrator
-# → "Project HA initialized. 4 workstreams, 28 tasks.
-#    Phase 0 has 8 eligible tasks. 3 are agent-executable.
+# → "Project WEB initialized. 4 workstreams, 28 tasks.
+#    Phase 1 has 8 eligible tasks. 3 are agent-executable.
 #    Want me to fire off the agents while we work on setup?"
 
 # Pick up next session
 /orchestrator
 # → "Welcome back. 3 agent tasks completed overnight.
 #    2 review tasks pending. 1 human task ready.
-#    Recommendation: review the network research first."
+#    Recommendation: review the auth research first."
 ```
 
 ```bash
 # Check project spend
-brain pm audit summary --project HA --json
+brain pm audit summary --project WEB --json
 # → "Total: $12.40 across 28 tasks. Research: $3.20 (Sonnet), Implementation: $8.10 (Opus), Validation: $1.10 (Haiku)"
 ```
 

@@ -117,30 +117,30 @@ Session Start
 ├─ SessionStart hook writes $BRAIN_PM_SESSION via CLAUDE_ENV_FILE
 │
 ├─ brain pm briefing --json
-│  "Welcome back. Project OC, Phase 1.
-│   Since last session: OC-00.01, OC-00.02 completed.
+│  "Welcome back. Project WEB, Phase 1.
+│   Since last session: WEB-00.01, WEB-00.02 completed.
 │   Last session cost: $3.42 (2 Opus tasks, 1 Sonnet research).
-│   Ready now: OC-00.04, OC-01.01, OC-02.01.
-│   Recommendation: Start with OC-01.01 (agent/research, unblocks 3)
-│   and OC-00.04 (human, quick account creation)."
+│   Ready now: WEB-00.04, WEB-01.01, WEB-02.01.
+│   Recommendation: Start with WEB-01.01 (agent/research, unblocks 3)
+│   and WEB-00.04 (human, quick service account creation)."
 │
-├─ Human: "Fire off the agents, I'll do the account creation"
+├─ Human: "Fire off the agents, I'll do the service account setup"
 │
 ├─ Orchestrator claims & dispatches (parallel):
-│  ├─ brain pm task claim OC-01.01 → token-A
-│  ├─ brain pm task claim OC-01.02 → token-B
-│  ├─ OC-01.01 → background agent (Sonnet, research)
-│  ├─ OC-01.02 → background agent (Sonnet, research)
-│  └─ Walks human through OC-00.04 (Tailscale account)
+│  ├─ brain pm task claim WEB-01.01 → token-A
+│  ├─ brain pm task claim WEB-01.02 → token-B
+│  ├─ WEB-01.01 → background agent (Sonnet, research)
+│  ├─ WEB-01.02 → background agent (Sonnet, research)
+│  └─ Walks human through WEB-00.04 (VPN setup)
 │
-├─ Human completes OC-00.04
-│  ├─ brain pm complete OC-00.04 --log "Account created"
-│  ├─ brain pm next: "OC-00.05 is now eligible (install Tailscale)"
-│  └─ Orchestrator: "Want to do OC-00.05 while agents run?"
+├─ Human completes WEB-00.04
+│  ├─ brain pm complete WEB-00.04 --log "Service account created"
+│  ├─ brain pm next: "WEB-00.05 is now eligible (configure VPN client)"
+│  └─ Orchestrator: "Want to do WEB-00.05 while agents run?"
 │
-├─ Background agent OC-01.01 completes
+├─ Background agent WEB-01.01 completes
 │  ├─ Orchestrator records telemetry: 45k tokens, $0.72, 38s
-│  ├─ Orchestrator: "UniFi research done ($0.72). Quick look or continue?"
+│  ├─ Orchestrator: "Technology research done ($0.72). Quick look or continue?"
 │  ├─ If "continue": queued for review
 │  └─ If "quick look": present summary, approve or request revision
 │
@@ -175,20 +175,20 @@ NOT during:
 ```typescript
 // 1. Claim the task (prevents double-dispatch)
 const claim = JSON.parse(
-  await bash('brain pm task claim OC-08.05 --json')
+  await bash('brain pm task claim WEB-08.05 --json')
 );
-// → { claimToken: "uuid-xxx", taskId: "OC-08.05", status: "claimed" }
+// → { claimToken: "uuid-xxx", taskId: "WEB-08.05", status: "claimed" }
 
 // 2. Get dispatch context
 const dispatch = JSON.parse(
-  await bash('brain pm dispatch OC-08.05 --json')
+  await bash('brain pm dispatch WEB-08.05 --json')
 );
 
 // 3. Read session ID from environment (set by SessionStart hook via CLAUDE_ENV_FILE)
 const sessionId = process.env.BRAIN_PM_SESSION;
 
 // 4. Start the task (claimed → in-progress)
-await bash(`brain pm task start OC-08.05 --token ${claim.claimToken}`);
+await bash(`brain pm task start WEB-08.05 --token ${claim.claimToken}`);
 
 // 5. Spawn sub-agent
 const agentResult = await Task({
@@ -301,33 +301,33 @@ async function processAgentFailure(taskId: string, error: string) {
 ### Walkthrough Pattern
 
 ```
-Orchestrator: "Let's set up your Anthropic spending cap.
-              Step 1: Open console.anthropic.com/settings/billing"
+Orchestrator: "Let's configure your API rate limits.
+              Step 1: Open the API provider's dashboard settings"
 
-Human: "Done, I see the billing page"
+Human: "Done, I see the settings page"
 
-Orchestrator: "Great. Step 2: Click 'Usage limits'.  
-              You should see a monthly and daily cap field."
+Orchestrator: "Great. Step 2: Click 'Rate Limits'.  
+              You should see request and token limit fields."
               
 Human: "I see it"
 
-Orchestrator: "Set the daily cap to $20.  
-              This matches our budget design.  
-              [Decision: $20/day hard cap on Anthropic API]"
+Orchestrator: "Set the daily request limit to 1000.  
+              This matches our capacity plan.  
+              [Decision: 1000 req/day API rate limit]"
               
-Human: "Set to $20"
+Human: "Set to 1000"
 
 Orchestrator: "Perfect. Let me verify..."
               → runs validation if possible
-              → brain pm complete OC-00.02 --log "Spending cap set to $20/day"
-              → brain pm decision add "$20/day Anthropic API cap" --task OC-00.02
+              → brain pm complete WEB-00.02 --log "Rate limit set to 1000 req/day"
+              → brain pm decision add "1000 req/day API rate limit" --task WEB-00.02
 ```
 
 ### Automation Within Assisted Tasks
 
 The orchestrator actively automates sub-steps:
 
-- **Command steps**: Run directly (`brew install tailscale`)
+- **Command steps**: Run directly (`brew install wireguard-tools`)
 - **File creation steps**: Write files (`brain pm prompt write ...`)
 - **Verification steps**: Run checks and report results
 - **Browser steps**: Explain and wait for human confirmation
@@ -342,22 +342,22 @@ This maximizes efficiency — the human only does what requires human presence.
 ### During Execution
 
 ```
-1. Agent completes OC-03.01 (Docker research)
-2. Output includes: "Recommend native install with Docker volume mounts"
-3. Orchestrator: "The agent recommends native + Docker volumes.
-   This affects tasks OC-03.04, OC-04.01, OC-10.02.
+1. Agent completes WEB-03.01 (deployment research)
+2. Output includes: "Recommend containerized deployment with persistent volumes"
+3. Orchestrator: "The agent recommends containerized + persistent volumes.
+   This affects tasks WEB-03.04, WEB-04.01, WEB-10.02.
    Record as a decision?"
 4. Human: "Yes"
-5. brain pm decision add "Native install + Docker volume mounts" \
-     --task OC-03.01 --impacts OC-03.04,OC-04.01,OC-10.02
-6. When OC-03.04 is dispatched later, the prompt includes:
-   "Decision DEC-003: Using native install + Docker volume mounts"
+5. brain pm decision add "Containerized deployment with persistent volumes" \
+     --task WEB-03.01 --impacts WEB-03.04,WEB-04.01,WEB-10.02
+6. When WEB-03.04 is dispatched later, the prompt includes:
+   "Decision DEC-003: Using containerized deployment with persistent volumes"
 ```
 
 ### Retroactive Decision Discovery
 
 ```bash
-brain pm decision audit --project OC
+brain pm decision audit --project WEB
 # Analyzes completed tasks for undocumented decisions
 # Uses brain memory extraction to find decision-like statements
 # Proposes ADRs for human approval
@@ -375,7 +375,7 @@ Project completed or phase milestone reached.
 ```
 1. brain pm status --json  # final state
 2. brain pm decision list  # all decisions made
-3. brain pm audit summary --project OC --json  # full cost/performance data
+3. brain pm audit summary --project WEB --json  # full cost/performance data
 4. Generate retrospective:
    - Timeline: when tasks completed, how long each took
    - Decision log: what was decided and why
@@ -387,7 +387,7 @@ Project completed or phase milestone reached.
    - What worked / what to improve
 5. Write retrospective as brain note
 6. Brain memory extraction captures learnings
-7. Archive project: brain pm project update OC --status completed
+7. Archive project: brain pm project update WEB --status completed
 ```
 
 ---
@@ -458,4 +458,4 @@ Project completed or phase milestone reached.
 - Design: 03-orchestration-layer.md (session lifecycle, dispatch modes)
 - Design: 02-pm-module-design.md (CLI commands, state machine)
 - Existing skills: brainstorming, writing-plans, self-improve, brain
-- OpenClaw orchestrator.md (proven session flow)
+- Prior orchestration patterns (proven session flow)

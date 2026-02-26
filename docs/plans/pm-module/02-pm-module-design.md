@@ -39,16 +39,16 @@ All entities are brain notes with `module: pm` frontmatter. The hierarchy is exp
 
 Following Linear's pattern (research: clean, human-readable, unique):
 
-- **Project prefix:** 2-5 uppercase chars, e.g., `OC` (OpenClaw), `TM` (Task Management)
+- **Project prefix:** 2-5 uppercase chars, e.g., `WEB` (WebApp), `TM` (Task Management)
 - **Workstream number:** 2-digit, e.g., `00`, `08`
 - **Task number:** Sequential within workstream, e.g., `01`, `12`
-- **Display ID:** `OC-08.05` (project-workstream.task)
+- **Display ID:** `WEB-08.05` (project-workstream.task)
 - **Internal ID:** UUID (brain note ID, used for storage and cross-references)
-- **Fully qualified:** `pm:openclaw:OC-08.05` (for cross-module references)
+- **Fully qualified:** `pm:webproject:WEB-08.05` (for cross-module references)
 
 ```bash
 brain pm task list                    # uses display IDs
-brain pm task show OC-08.05          # human-friendly
+brain pm task show WEB-08.05         # human-friendly
 brain pm task show --id <uuid>       # escape hatch
 ```
 
@@ -58,15 +58,15 @@ brain pm task show --id <uuid>       # escape hatch
 ---
 type: project
 module: pm
-title: "OpenClaw Setup"
-prefix: OC
+title: "WebApp Redesign"
+prefix: WEB
 status: active              # active | paused | completed | archived
 phase: 1                    # current phase (project-defined)
 phases:
-  0: "Pre-Installation Prep"
-  1: "Dev Laptop"
-  2: "Server Standup"
-  3: "Maturation"
+  0: "Discovery"
+  1: "Core Features"
+  2: "Integration"
+  3: "Polish"
 appetite: "2 weeks"         # Shape Up: time budget, not estimate
 created: 2026-02-25
 tags: [ai, infrastructure]
@@ -84,13 +84,13 @@ Project description and goals in markdown body.
 ---
 type: workstream
 module: pm
-module_instance: openclaw
-project: OC
+module_instance: webproject
+project: WEB
 number: "08"
-title: "Brain Integration"
+title: "API Integration"
 status: active              # active | completed | blocked
 phase: 1
-tags: [brain, integration]
+tags: [api, integration]
 ---
 
 Workstream overview, context, and notes in body.
@@ -104,8 +104,8 @@ Workstream overview, context, and notes in body.
 ---
 type: task
 module: pm
-module_instance: openclaw
-project: OC
+module_instance: webproject
+project: WEB
 workstream: "08"
 number: "05"
 title: "Build Task Tracking MVP"
@@ -115,11 +115,11 @@ category: implementation    # research | implementation | configuration | design
 priority: high              # critical | high | medium | low
 assignee: null              # human name or "agent"
 depends_on:
-  - OC-08.04
-  - OC-07.04
+  - WEB-08.04
+  - WEB-07.04
 blocks:
-  - OC-08.06
-prompt_note: OC-08.05       # linked prompt note (type: prompt), NOT a file path
+  - WEB-08.06
+prompt_note: WEB-08.05      # linked prompt note (type: prompt), NOT a file path
 estimated_time: "2h"
 tags: [implementation, brain]
 created: 2026-02-25
@@ -140,25 +140,27 @@ Task description, context, acceptance criteria in body.
 **Visibility:** contextual
 **Searchable fields:** title, body, tags
 
+Tasks are directory-backed notes. On creation, brain manages a content directory at `{notesDir}/modules/pm/{PROJECT}-{WS}/{TASK}/` containing `summary.md` (post-completion) and `references/` (supplementary material). See doc 01, Directory-Backed Notes.
+
 ### Note Type: Decision
 
 ```yaml
 ---
 type: decision
 module: pm
-module_instance: openclaw
-project: OC
+module_instance: webproject
+project: WEB
 id: DEC-003
-title: "Native install + Docker volume mounts"
+title: "REST API with versioned endpoints"
 status: accepted            # proposed | accepted | superseded | rejected
-source_task: OC-03.01       # which task produced this decision
-rationale: "Balances stability with portability"
+source_task: WEB-03.01      # which task produced this decision
+rationale: "Balances flexibility with backward compatibility"
 impacts:
-  - OC-03.04                # tasks affected by this decision
-  - OC-04.01
-  - OC-10.02
+  - WEB-03.04               # tasks affected by this decision
+  - WEB-04.01
+  - WEB-10.02
 supersedes: null             # DEC-ID if this replaces an earlier decision
-tags: [architecture, docker]
+tags: [architecture, api]
 created: 2026-02-25
 ---
 
@@ -173,14 +175,14 @@ Full decision context and reasoning in body.
 ---
 type: prompt
 module: pm
-module_instance: openclaw
-project: OC
-task: OC-08.05
+module_instance: webproject
+project: WEB
+task: WEB-08.05
 title: "Build Task Tracking MVP"
 prompt_status: current       # stub | current | superseded
 mode: agent
 scope:
-  - OC-08.05
+  - WEB-08.05
 ---
 
 Full prompt content in body (the execution instructions for the agent or human).
@@ -193,8 +195,8 @@ Full prompt content in body (the execution instructions for the agent or human).
 Prompts are **brain notes** with `type: prompt`, linked to tasks by convention (same display ID prefix).
 
 - A task's prompt is a brain note, NOT a filesystem path. The `prompt_file` field in task frontmatter is **removed** — use the linked prompt note instead.
-- `brain pm prompt write OC-08.05 --content "..."` creates a prompt note linked to task OC-08.05
-- `brain pm dispatch OC-08.05` reads the prompt note, assembles context (dependency summaries, decisions), and renders the final agent prompt
+- `brain pm prompt write WEB-08.05 --content "..."` creates a prompt note linked to task WEB-08.05
+- `brain pm dispatch WEB-08.05` reads the prompt note, assembles context (dependency summaries, decisions), and renders the final agent prompt
 - Prompt versioning: `brain pm prompt write` on an existing prompt creates a new version. Previous versions are preserved with `prompt_status: superseded`. The latest is `prompt_status: current`.
 - `brain pm prompt list --status stub` finds tasks with no prompt note (stubs needing content)
 
@@ -246,10 +248,10 @@ Prompts are **brain notes** with `type: prompt`, linked to tasks by convention (
 Claims prevent race conditions when multiple orchestrator sessions or parallel agents might grab the same task:
 
 ```bash
-brain pm task claim OC-08.05              # → returns claim_token UUID
-brain pm task start OC-08.05 --token <t>  # → claimed → in-progress (validates token)
-brain pm complete OC-08.05 --token <t>    # → in-progress → done (validates token)
-brain pm task release OC-08.05            # → claimed → pending (explicit release)
+brain pm task claim WEB-08.05              # → returns claim_token UUID
+brain pm task start WEB-08.05 --token <t>  # → claimed → in-progress (validates token)
+brain pm complete WEB-08.05 --token <t>    # → in-progress → done (validates token)
+brain pm task release WEB-08.05            # → claimed → pending (explicit release)
 ```
 
 Stale claim detection: `brain pm task list --status claimed --stale` returns tasks claimed >10 minutes ago with no transition. The orchestrator auto-reverts these to `pending` on session start.
@@ -302,7 +304,7 @@ PM stores dependencies as brain relations:
 - `target_id`: the note it depends ON
 - `relation_type`: `depends_on` (also `blocks`, `impacts` for other edge types)
 - `module`: `pm`
-- `module_instance`: the project instance (e.g., `openclaw`)
+- `module_instance`: the project instance (e.g., `webproject`)
 
 Brain's `onNoteDelete` cascade automatically cleans up relations when notes are deleted.
 
@@ -388,8 +390,8 @@ async function onTaskComplete(taskId: string, db: BrainDB): Promise<TaskImpact> 
 ```bash
 # During task execution
 brain pm decision add "Use PostgreSQL for persistence" \
-  --task OC-03.01 \
-  --impacts OC-03.04,OC-04.01 \
+  --task WEB-03.01 \
+  --impacts WEB-03.04,WEB-04.01 \
   --tags architecture,database
 
 # Or the orchestrator captures it automatically from agent output
@@ -425,7 +427,7 @@ When `brain pm dispatch` detects a stale prompt, it:
 
 Decision impacts are stored as `note_relations` with `relation_type: 'impacts'`:
 
-When `brain pm decision add "..." --impacts OC-08.05,OC-08.06` is called:
+When `brain pm decision add "..." --impacts WEB-08.05,WEB-08.06` is called:
 - Creates a decision note with `type: decision` in notes.metadata
 - Creates `note_relations` entries: decision → each impacted task with `relation_type: 'impacts'`
 - `brain pm dispatch` queries these relations to assemble decision context into the prompt
@@ -451,9 +453,9 @@ This ensures agents always receive current context, and stale prompts are detect
 ### Project Commands
 
 ```bash
-brain pm init "OpenClaw" --prefix OC --phases "Prep,Dev Laptop,Server,Maturation"
+brain pm init "WebApp Redesign" --prefix WEB --phases "Discovery,Core Features,Integration,Polish"
 brain pm list                         # list all projects
-brain pm use openclaw                 # set active project context
+brain pm use webproject                # set active project context
 brain pm status                       # current project state (the session briefing)
 brain pm status --json                # machine-readable for orchestrator
 
@@ -461,6 +463,7 @@ brain pm project update <prefix> [options]
   --status <value>     # active | paused | completed
   --phase <n>          # current phase number
   --appetite <text>    # time budget
+  --automation <assisted|autonomous>
 
 brain pm project delete <prefix> [--force]
   # Requires all tasks done/cancelled unless --force
@@ -469,13 +472,14 @@ brain pm project delete <prefix> [--force]
 ### Workstream Commands
 
 ```bash
-brain pm workstream add "Brain Integration" --number 08 --phase 1
+brain pm workstream add "API Integration" --number 08 --phase 1
 brain pm workstream list              # list workstreams in active project
 brain pm workstream show 08           # workstream detail
 
 brain pm workstream update <number> [options]
   --status <value>     # active | paused | completed
   --phase <n>          # phase number
+  --automation <assisted|autonomous>
 
 brain pm workstream delete <number> [--force]
   # Requires all tasks done/cancelled unless --force
@@ -486,17 +490,18 @@ brain pm workstream delete <number> [--force]
 ```bash
 brain pm task add "Build Task Tracking MVP" \
   --workstream 08 --mode agent --priority high \
-  --depends-on OC-08.04,OC-07.04
+  --depends-on WEB-08.04,WEB-07.04
 
 brain pm task list                    # all tasks in active project
 brain pm task list --eligible          # tasks computed as +READY
 brain pm task list --workstream 08    # filter by workstream
 brain pm task list --mode agent       # only agent-executable tasks
-brain pm task show OC-08.05           # full task detail
-brain pm task update OC-08.05 --status in-progress
-brain pm task done OC-08.05 --log "Implemented all CLI commands, tests passing"
-brain pm task block OC-08.05 --reason "Waiting on API access"
-brain pm task unblock OC-08.05
+brain pm task show WEB-08.05          # full task detail
+brain pm task update WEB-08.05 --status in-progress
+brain pm task update WEB-08.05 --worktree <path>  # record worktree assignment
+brain pm task done WEB-08.05 --log "Implemented all CLI commands, tests passing"
+brain pm task block WEB-08.05 --reason "Waiting on API access"
+brain pm task unblock WEB-08.05
 
 brain pm task delete <display-id> [--force]
   # Removes task and cleans up dependency edges
@@ -515,8 +520,8 @@ brain pm next                         # recommend next task (considers priority,
 brain pm next --mode agent            # next agent-executable task
 brain pm next --mode assisted         # next human-assisted task
 
-brain pm dispatch OC-08.05            # render full execution prompt for this task
-brain pm dispatch OC-08.05 --json     # structured output for Claude Code
+brain pm dispatch WEB-08.05            # render full execution prompt for this task
+brain pm dispatch WEB-08.05 --json    # structured output for Claude Code
 
 brain pm complete <display-id> [options]
   --token <uuid>           # Claim token (required for agent tasks)
@@ -537,16 +542,34 @@ brain pm complete <display-id> [options]
 
 brain pm briefing                     # full session start briefing
 brain pm briefing --json              # structured for orchestrator prompt
+
+# Wave computation (dependency-free parallel groups)
+brain pm waves --json                    # all eligible tasks grouped into waves
+brain pm waves --project WEB --json      # specific project
+
+# Just-in-time context (on-demand context retrieval)
+brain pm context <display-id> --json                # full task context
+brain pm context <display-id> --decisions --json     # decisions impacting this task
+brain pm context <display-id> --deps --json          # dependency completion summaries
+brain pm context <display-id> --since <ISO-8601>     # changes since timestamp
+```
+
+### Verification Commands
+
+```bash
+brain pm verify <display-id> --json                  # verification plan for a completed task
+brain pm verify <display-id> --record --outcome <passed|failed> --log "..."
+brain pm verify <display-id> --summary               # validate summary.md quality
 ```
 
 ### Decision Commands
 
 ```bash
-brain pm decision add "Use native install" --task OC-03.01 --impacts OC-03.04,OC-04.01
+brain pm decision add "Use REST over GraphQL" --task WEB-03.01 --impacts WEB-03.04,WEB-04.01
 brain pm decision list                # all decisions in active project
-brain pm decision list --task OC-03.01  # decisions from a specific task
+brain pm decision list --task WEB-03.01  # decisions from a specific task
 brain pm decision show DEC-003
-brain pm decision supersede DEC-003 --with "Switch to Docker-only" --reason "..."
+brain pm decision supersede DEC-003 --with "Switch to GraphQL" --reason "..."
 brain pm decision update <id> --superseded-by <new-id>
   # Mark a decision as superseded
 ```
@@ -554,8 +577,8 @@ brain pm decision update <id> --superseded-by <new-id>
 ### Import/Migration
 
 ```bash
-brain pm import --from-openclaw ~/openclaw/plans
-  # Reads status.md, dependencies.json, workstream overviews, prompt files
+brain pm import --from-json ~/project/tasks.json
+  # Reads structured task data (status, dependencies, prompts)
   # Creates project, workstream, task, prompt notes
   # Preserves dependency graph
   # Maps existing task IDs to new display IDs
@@ -572,9 +595,9 @@ All commands return structured errors with `--json`:
 {
   "error": true,
   "code": "INVALID_TRANSITION",
-  "message": "Cannot complete task OC-08.05: current status is 'pending', expected 'in-progress'",
+  "message": "Cannot complete task WEB-08.05: current status is 'pending', expected 'in-progress'",
   "details": {
-    "taskId": "OC-08.05",
+    "taskId": "WEB-08.05",
     "currentStatus": "pending",
     "expectedStatus": "in-progress"
   }
@@ -602,10 +625,10 @@ Standard error codes:
 ```json
 {
   "project": {
-    "name": "OpenClaw Setup",
-    "prefix": "OC",
+    "name": "WebApp Redesign",
+    "prefix": "WEB",
     "phase": 1,
-    "phaseName": "Dev Laptop"
+    "phaseName": "Core Features"
   },
   "progress": {
     "total": 72,
@@ -618,15 +641,15 @@ Standard error codes:
   "workstreams": [
     {
       "number": "00",
-      "name": "Accounts & Credentials",
+      "name": "User Authentication",
       "status": "active",
       "progress": { "done": 5, "total": 9 }
     }
   ],
   "eligible": [
     {
-      "id": "OC-01.04",
-      "title": "Apply VLAN configuration",
+      "id": "WEB-01.04",
+      "title": "Configure OAuth providers",
       "mode": "assisted",
       "priority": "medium",
       "workstream": "01"
@@ -634,41 +657,41 @@ Standard error codes:
   ],
   "blocked": [
     {
-      "id": "OC-07.01",
+      "id": "WEB-07.01",
       "title": "Verify read-only behavior",
-      "blockedBy": ["OC-05.04"],
+      "blockedBy": ["WEB-05.04"],
       "reason": null
     }
   ],
   "recentDecisions": [
     {
       "id": "DEC-003",
-      "title": "Native install + Docker volume mounts",
-      "task": "OC-03.01",
+      "title": "REST API with versioned endpoints",
+      "task": "WEB-03.01",
       "created": "2026-02-25"
     }
   ]
 }
 ```
 
-### `brain pm dispatch OC-08.05 --json`
+### `brain pm dispatch WEB-08.05 --json`
 
 ```json
 {
   "task": {
-    "displayId": "OC-08.05",
+    "displayId": "WEB-08.05",
     "title": "Build Task Tracking MVP",
     "mode": "agent",
-    "workstream": "Brain Integration"
+    "workstream": "API Integration"
   },
-  "prompt": "# Task OC-08.05: Build Task Tracking MVP\n\n...",
+  "prompt": "# Task WEB-08.05: Build Task Tracking MVP\n\n...",
   "context": {
     "decisions": [
-      { "id": "DEC-001", "summary": "Brain v0.3.0 assessed, 22 CLI commands, no task tracking" }
+      { "id": "DEC-001", "summary": "REST API chosen, versioned endpoints required" }
     ],
     "completedDependencies": [
-      { "id": "OC-08.04", "summary": "Task tracking design approved" },
-      { "id": "OC-07.04", "summary": "Execute permissions enabled" }
+      { "id": "WEB-08.04", "summary": "Task tracking design approved" },
+      { "id": "WEB-07.04", "summary": "Execute permissions enabled" }
     ],
     "relatedNotes": [
       "logs/task-tracking-design.md"
@@ -680,7 +703,7 @@ Standard error codes:
     "New tests cover core task operations",
     "Build succeeds"
   ],
-  "outputLocation": "workstreams/08-brain-integration/logs/"
+  "outputLocation": "workstreams/08-api-integration/logs/"
 }
 ```
 
@@ -715,10 +738,10 @@ hill_position: exploring    # exploring | executing | done
 This is more informative than task count progress bars. `brain pm status` can show:
 
 ```
-Workstream 08 — Brain Integration
-  ▲ exploring: OC-08.04 (design task tracking)
-  ▼ executing: OC-08.03 (configure CLI access)
-  ✓ done: OC-08.01, OC-08.02
+Workstream 08 — API Integration
+  ▲ exploring: WEB-08.04 (design task tracking)
+  ▼ executing: WEB-08.03 (configure CLI access)
+  ✓ done: WEB-08.01, WEB-08.02
 ```
 
 ---
@@ -758,13 +781,13 @@ Each task execution creates an activity:
   "id": "exec-uuid",
   "note_ids": ["task-note-id"],
   "module": "pm",
-  "module_instance": "openclaw",
+  "module_instance": "webproject",
   "activity_type": "execution",
   "actor_type": "agent",
   "actor_id": "agent-abc123",
   "session_id": "session-xyz",
   "metadata": {
-    "display_id": "OC-08.05",
+    "display_id": "WEB-08.05",
     "attempt": 1,
     "model": "claude-sonnet-4-6",
     "category": "research",
@@ -842,7 +865,7 @@ function estimateCost(exec: Execution): number {
 ### Recording an Execution
 
 ```bash
-brain pm complete OC-08.05 \
+brain pm complete WEB-08.05 \
   --token <claim_token> \
   --log "Implemented all CLI commands, tests passing" \
   --agent-id a4b6e491c93ded012 \
@@ -895,29 +918,29 @@ GROUP BY category;
 ```
 
 ```bash
-brain pm audit cost --project OC
+brain pm audit cost --project WEB
 # Output: total estimated cost by phase and workstream
 
-brain pm audit cost --project OC --by category
+brain pm audit cost --project WEB --by category
 # Output: cost breakdown by task category (research, implementation, etc.)
 
-brain pm audit cost --project OC --by model
+brain pm audit cost --project WEB --by model
 # Output: cost breakdown by model (opus, sonnet, haiku)
 
 brain pm audit cost --since 2026-02-25
 # Output: daily cost tracking (for budget monitoring)
 
-brain pm audit cost --project OC --json
+brain pm audit cost --project WEB --json
 # Output: structured cost report for export
 ```
 
 ### Performance Auditing
 
 ```bash
-brain pm audit performance --project OC
+brain pm audit performance --project WEB
 # Output: avg duration by category, token usage, failure rates
 
-brain pm audit performance --project OC --by mode
+brain pm audit performance --project WEB --by mode
 # Output: agent vs human vs assisted efficiency comparison
 
 brain pm audit performance --model opus
@@ -927,10 +950,10 @@ brain pm audit performance --model opus
 ### Execution History
 
 ```bash
-brain pm audit executions --task OC-08.05
+brain pm audit executions --task WEB-08.05
 # Output: all attempts for a task — who, when, which model, tokens, cost, outcome
 
-brain pm audit executions --project OC --status failed
+brain pm audit executions --project WEB --status failed
 # Output: all failed executions — for debugging patterns
 
 brain pm audit executions --agent-id a4b6e491c93ded012
@@ -940,13 +963,13 @@ brain pm audit executions --agent-id a4b6e491c93ded012
 ### Summary Report
 
 ```bash
-brain pm audit summary --project OC --json
+brain pm audit summary --project WEB --json
 # Output: comprehensive audit report
 ```
 
 ```json
 {
-  "project": "OC",
+  "project": "WEB",
   "totalExecutions": 48,
   "totalCostUsd": 12.50,
   "byCategory": {
@@ -981,7 +1004,7 @@ brain pm audit summary --project OC --json
 ---
 type: capture
 module: pm
-module_instance: openclaw
+module_instance: webproject
 title: "Need to handle edge case in auth flow"
 source: session           # session | manual | agent
 captured_at: 2026-02-26T10:00:00Z
@@ -994,7 +1017,7 @@ Quick thought about the auth flow - what if the token expires mid-request?
 
 ```bash
 brain pm capture "Need to handle auth edge case"              # quick capture
-brain pm capture --from-agent OC-08.05 "Auth token expiry"    # agent surfaced this
+brain pm capture --from-agent WEB-08.05 "Auth token expiry"   # agent surfaced this
 brain pm inbox                                                 # list unprocessed captures
 brain pm inbox --count                                         # just the count
 brain pm process                                               # interactive: classify each capture
@@ -1055,7 +1078,7 @@ This prevents the "capturing without processing" anti-pattern identified across 
 - Tests
 
 ### Phase 6: Import & Migration
-- OpenClaw plans importer
+- JSON task data importer
 - Generic markdown importer
 - Tests
 
@@ -1161,4 +1184,4 @@ This fixture exercises: linear chains, diamonds, cross-workstream deps, and elig
 - Research: methodologies.md (GTD capture, Shape Up appetite/hill charts, Kanban WIP limits, ADR pattern)
 - Research: orchestration-patterns.md (state machines, decision propagation, context bundling)
 - Design: 01-brain-module-system.md (module registration, namespace isolation, visibility tiers)
-- OpenClaw execution framework (dependencies.json schema, prompt file format, orchestrator.md)
+- Prior execution framework (dependencies.json schema, prompt file format, orchestrator.md)

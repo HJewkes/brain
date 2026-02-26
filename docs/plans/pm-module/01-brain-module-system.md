@@ -84,10 +84,36 @@ export interface ModuleContext {
   /** Register a custom extraction strategy for module note types */
   registerExtractionStrategy(strategy: ModuleExtractionStrategy): void;
 
+  /** Register directory schemas for module note types that use managed directories */
+  registerDirectorySchemas(schemas: DirectorySchema[]): void;
+
   /** Access brain's core services (read-only unless module owns the data) */
   readonly db: BrainDB;
   readonly config: BrainConfig;
   readonly embedder: Embedder;
+}
+
+export interface DirectorySchema {
+  /** Which note type this schema applies to (e.g., 'task') */
+  noteType: string;
+
+  /** Files that must exist in the directory */
+  required: string[];
+
+  /** Files that may exist */
+  optional: string[];
+
+  /** Subdirectories that may exist */
+  optionalDirs: string[];
+
+  /** Which files to feed into brain's FTS index */
+  ftsIndexable: string[];
+
+  /** Called when a note with content_dir is created */
+  onCreate?(dirPath: string, noteMetadata: Record<string, unknown>): Promise<void>;
+
+  /** Called when a note with content_dir is archived or deleted */
+  onLifecycle?(event: 'archive' | 'delete', dirPath: string): Promise<void>;
 }
 ```
 
@@ -105,7 +131,7 @@ Modules are discovered from two sources:
     "pm": {
       "enabled": true,
       // module-specific config
-      "defaultProject": "openclaw"
+      "defaultProject": "webproject"
     }
   }
 }
@@ -187,19 +213,19 @@ Two modules might both define a `task` type. A CRM module's "task" (follow up wi
 Every module-owned note gets module metadata in frontmatter:
 
 **Identifier conventions:**
-- Fully qualified: `module:instance:displayId` (e.g., `pm:openclaw:OC-08.05`) — used for cross-module references
-- Within module context: bare display ID (e.g., `OC-08.05`) — used in frontmatter fields like `depends_on`
+- Fully qualified: `module:instance:displayId` (e.g., `pm:webproject:WEB-08.05`) — used for cross-module references
+- Within module context: bare display ID (e.g., `WEB-08.05`) — used in frontmatter fields like `depends_on`
 
 ```yaml
 ---
 type: task                    # local type name (module's concept)
 module: pm                    # owning module namespace
-module_instance: openclaw     # which project/instance (module-defined)
+module_instance: webproject     # which project/instance (module-defined)
 title: "Configure Brain CLI Access"
 status: in-progress
 priority: high
 depends_on:
-  - OC-08.02                  # bare display ID (within module context)
+  - WEB-08.02                  # bare display ID (within module context)
 ---
 ```
 
@@ -211,6 +237,7 @@ The `notes` table gets three new columns:
 ALTER TABLE notes ADD COLUMN module TEXT;           -- NULL for non-module notes
 ALTER TABLE notes ADD COLUMN module_instance TEXT;   -- NULL if not instance-scoped
 ALTER TABLE notes ADD COLUMN metadata TEXT;          -- JSON blob for module-specific fields
+ALTER TABLE notes ADD COLUMN content_dir TEXT;       -- NULL unless note has a managed directory
 ```
 
 The `metadata` column is the extensible storage layer. Core fields (`title`, `type`, `tier`, `status`) remain as typed columns for brain's internal queries. Everything else — module-specific fields like `depends_on`, `priority`, `mode`, `claim_token` — lives in `metadata` as a JSON object.
@@ -267,7 +294,7 @@ When brain indexes a note with `module: pm` and `type: task`, it:
 
 Each module note type declares a visibility tier that controls when it appears in brain searches:
 
-| Tier | `brain search "auth"` | `brain pm search "auth"` | `brain pm search "auth" --project openclaw` |
+| Tier | `brain search "auth"` | `brain pm search "auth"` | `brain pm search "auth" --project webproject` |
 |------|----------------------|--------------------------|---------------------------------------------|
 | **public** | Yes | Yes | Yes |
 | **contextual** | Only if module/instance is active | Yes | Yes |
@@ -278,7 +305,7 @@ Each module note type declares a visibility tier that controls when it appears i
 **Public** — The note's title, summary, and searchable fields are indexed into brain's global FTS and vector tables. Any `brain search` query can find them. Use for: reference docs, design decisions, project summaries.
 
 **Contextual** — The note is indexed but tagged. Global search includes it only when:
-- The user has set an active module context (`brain pm use openclaw`)
+- The user has set an active module context (`brain pm use webproject`)
 - The search explicitly requests module scope (`brain search --module pm`)
 - OR the query semantically matches strongly enough (future: relevance threshold)
 
@@ -320,7 +347,7 @@ function applyModuleVisibility(
 The "active module context" is stored as brain metadata (persists across sessions):
 
 ```bash
-brain pm use openclaw        # Sets active context: module=pm, instance=openclaw
+brain pm use webproject        # Sets active context: module=pm, instance=webproject
 brain pm use --clear         # Clears module context
 brain pm use --all           # Sets module context without instance filter
 brain context                # Shows current active contexts (could have multiple)
@@ -328,7 +355,7 @@ brain context                # Shows current active contexts (could have multipl
 
 Stored in `db_meta` table:
 ```sql
-INSERT INTO db_meta (key, value) VALUES ('active_context', '{"module":"pm","instance":"openclaw"}');
+INSERT INTO db_meta (key, value) VALUES ('active_context', '{"module":"pm","instance":"webproject"}');
 ```
 
 ---
@@ -492,6 +519,142 @@ When brain indexes a note with `module: pm`:
 
 ---
 
+## Directory-Backed Notes
+
+### Overview
+
+Directory-backed notes extend brain's note primitive with an optional **managed directory** for workspace artifacts. This is a brain core feature, not module-specific — any module can use it.
+
+Some notes need more than a title, metadata, and markdown body. A PM task needs a completion summary, reference files, and potentially output logs. A research note might have downloaded PDFs and data extracts. Rather than cramming everything into the note body or creating a parallel file management system, brain manages the directory as part of the note lifecycle.
+
+### The `content_dir` Column
+
+The `notes` table includes an optional `content_dir TEXT` column. When set:
+
+- Brain manages a directory at `{notesDir}/modules/{module}/{content_dir}/`
+- The note's `content` column (markdown body) holds searchable summary text
+- The directory holds structured artifacts whose schema is defined by the owning module
+- Brain's index pipeline asks the module hook "which files should I FTS-index?"
+
+When `content_dir` is NULL (the default), the note behaves exactly as it does today — no directory management, no overhead.
+
+### Directory Location Convention
+
+```
+{notesDir}/
+├── notes/                      ← existing brain notes (markdown files)
+├── modules/
+│   ├── pm/                     ← PM module's managed directories
+│   │   ├── WEB-01/03/          ← task WEB-01.03's content directory
+│   │   │   ├── summary.md
+│   │   │   └── references/
+│   │   ├── WEB-02/01/
+│   │   │   ├── summary.md
+│   │   │   └── references/
+│   │   │       └── api-spec.yaml
+│   │   └── ...
+│   └── crm/                    ← hypothetical CRM module
+│       └── ...
+└── inbox/                      ← existing brain inbox
+```
+
+The `content_dir` value stored in the database is the relative path from `{notesDir}/modules/{module}/` — e.g., `WEB-01/03` for task WEB-01.03 in the PM module.
+
+### Module Hook Contract (DirectorySchema)
+
+Modules that use directory-backed notes register hooks via the `registerDirectorySchemas` method on `ModuleContext` (see the interface definition above). Each `DirectorySchema` declares:
+
+- **`noteType`** — Which note type this schema applies to (e.g., `'task'`)
+- **`required` / `optional`** — Files that must or may exist in the directory
+- **`optionalDirs`** — Subdirectories that may exist (e.g., `'references'`)
+- **`ftsIndexable`** — Which files brain should feed into its FTS index
+- **`onCreate`** — Hook called when a note with `content_dir` is created (scaffold directory)
+- **`onLifecycle`** — Hook called on archive or delete (module decides cleanup behavior)
+
+**Example:** PM module registers a directory schema for task notes:
+
+```typescript
+ctx.registerDirectorySchemas([
+  {
+    noteType: 'task',
+    required: [],           // nothing required at creation; summary.md written on completion
+    optional: ['summary.md'],
+    optionalDirs: ['references'],
+    ftsIndexable: ['summary.md'],
+    async onCreate(dirPath) {
+      await fs.mkdir(dirPath, { recursive: true });
+      await fs.mkdir(path.join(dirPath, 'references'), { recursive: true });
+    },
+    async onLifecycle(event, dirPath) {
+      if (event === 'delete') {
+        await fs.rm(dirPath, { recursive: true, force: true });
+      }
+      // 'archive' — leave directory intact (preserves history)
+    },
+  },
+]);
+```
+
+Not all module note types need directories. For example, PM's project, workstream, decision, prompt, and capture types store everything in the note body and metadata — only tasks produce output artifacts that warrant a managed directory.
+
+### Indexing Integration
+
+When brain indexes a note with a `content_dir`:
+
+```
+1. Standard indexing: parse frontmatter → notes table (title, type, module, metadata)
+2. Body indexing: note's content field → FTS5 (as usual)
+3. Directory indexing (new):
+   a. Look up module's DirectorySchema for this note type
+   b. For each file in ftsIndexable:
+      - Read file content from {notesDir}/modules/{module}/{content_dir}/{file}
+      - Append to FTS index entry for this note
+   c. This means `brain search "authentication"` can find a task whose
+      summary.md mentions authentication, even if the note body doesn't
+```
+
+### Lifecycle Management
+
+Brain manages the directory lifecycle in coordination with note operations:
+
+| Note Operation | Directory Effect |
+|---------------|-----------------|
+| Create note with content_dir | Call module's `onCreate` hook — scaffold directory |
+| Index note | Read ftsIndexable files — update FTS |
+| Archive note | Call module's `onLifecycle('archive')` — module decides (PM: keep) |
+| Delete note | Call module's `onLifecycle('delete')` — module decides (PM: remove) |
+| Move/rename note | Update `content_dir` column; move directory if needed |
+
+### Path Resolution
+
+```typescript
+function resolveContentDir(note: NoteRecord, config: BrainConfig): string | null {
+  if (!note.contentDir || !note.module) return null;
+  return path.join(config.notesDir, 'modules', note.module, note.contentDir);
+}
+```
+
+### Migration
+
+```sql
+-- Migration: brain_content_dir_v1
+-- Adds nullable content_dir column to notes table
+ALTER TABLE notes ADD COLUMN content_dir TEXT;
+
+-- No separate index needed — queries on content_dir are rare (only on note creation/deletion)
+-- The module + module_instance index handles scoped queries
+```
+
+### Backward Compatibility
+
+- Existing notes get `NULL` for `content_dir` — no behavioral change
+- `brain search`, `brain index`, and all existing commands work identically
+- The FTS directory indexing only runs for notes with non-NULL `content_dir` and a registered `DirectorySchema`
+- Modules that don't use directory-backed notes are completely unaffected
+- The `{notesDir}/modules/` directory is created on first use by any module; no upfront scaffolding needed
+
+---
+
 ## Data Protection
 
 ### The Problem
@@ -524,7 +687,7 @@ Hard protection adds complexity and frustrates users who need to manually fix th
 Module commands live under `brain <module-name>`:
 
 ```bash
-brain pm init "openclaw"
+brain pm init "webproject"
 brain pm status
 brain pm next
 brain pm task add "Title" --priority high
@@ -616,7 +779,7 @@ Modules store all data through brain's three primitives. No module-specific tabl
 -- target_id: the task it depends ON
 -- relation_type: 'depends_on'
 -- module: 'pm'
--- module_instance: 'openclaw'
+-- module_instance: 'webproject'
 
 -- Eligible task query uses note_relations directly:
 SELECT n.id, json_extract(n.metadata, '$.display_id') as display_id,
@@ -727,7 +890,7 @@ Stored in brain's config.json under the module namespace:
   "modules": {
     "pm": {
       "enabled": true,
-      "defaultProject": "openclaw",
+      "defaultProject": "webproject",
       "parallelAgents": 3
     }
   }
@@ -804,6 +967,7 @@ Brain v0.3.0 already has an unused `metadata TEXT` column in the `notes` table. 
 -- Migration: brain_modules_v1
 ALTER TABLE notes ADD COLUMN module TEXT;
 ALTER TABLE notes ADD COLUMN module_instance TEXT;
+ALTER TABLE notes ADD COLUMN content_dir TEXT;       -- managed directory path (see Directory-Backed Notes)
 
 CREATE INDEX idx_notes_module ON notes(module);
 CREATE INDEX idx_notes_module_instance ON notes(module, module_instance);
