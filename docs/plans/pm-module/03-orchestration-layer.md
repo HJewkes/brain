@@ -104,19 +104,22 @@ Not all tasks need the same execution environment. Research tasks are read-only 
 
 The routing engine maps `category + mode` to concrete dispatch parameters:
 
-| Category | Mode | Agent Type | Isolation | Default Model | Concurrency |
-|----------|------|-----------|-----------|---------------|-------------|
-| implementation | agent | general-purpose | Worktree (coding) | Opus | Sequential within workstream |
-| research | agent | Explore (read-only) | None | Sonnet | Parallel (no file conflicts) |
-| validation | agent | general-purpose | None | Haiku | Parallel |
-| configuration | agent | general-purpose | Worktree if file edits | Haiku/Sonnet | Depends on file overlap |
-| design | agent | general-purpose | None (typically) | Opus | Parallel |
-| review | agent | Explore or general-purpose | None | Sonnet | Parallel |
-| documentation | agent | general-purpose | Worktree if file edits | Sonnet | Depends on file overlap |
-| migration | agent | general-purpose | Worktree | Opus | Sequential |
-| any | assisted | Orchestrator guides human | N/A | N/A | Sequential (one human) |
-| any | human | Human acts independently | N/A | N/A | Sequential |
-| any | review | Orchestrator presents artifacts | N/A | N/A | Sequential |
+| Category | Mode | Agent Type | Isolation | Default Model | Verify | Concurrency |
+|----------|------|-----------|-----------|---------------|--------|-------------|
+| implementation | agent | general-purpose | Worktree (coding) | Opus | always | Sequential within workstream |
+| research | agent | Explore (read-only) | None | Sonnet | never | Parallel (no file conflicts) |
+| validation | agent | general-purpose | None | Haiku | never | Parallel |
+| configuration | agent | general-purpose | Worktree if file edits | Haiku/Sonnet | if-file-edits | Depends on file overlap |
+| design | agent | general-purpose | None (typically) | Opus | never | Parallel |
+| review | agent | Explore or general-purpose | None | Sonnet | never | Parallel |
+| documentation | agent | general-purpose | Worktree if file edits | Sonnet | never | Depends on file overlap |
+| migration | agent | general-purpose | Worktree | Opus | always | Sequential |
+| interview | assisted/human | N/A | N/A | N/A | never | Sequential |
+| any | assisted | Orchestrator guides human | N/A | N/A | never | Sequential (one human) |
+| any | human | Human acts independently | N/A | N/A | never | Sequential |
+| any | review | Orchestrator presents artifacts | N/A | N/A | never | Sequential |
+
+> **Constraint:** `interview` category is only valid with `mode: assisted` or `mode: human`.
 
 ### Routing Is Computed, Not Stored
 
@@ -719,6 +722,8 @@ The task's `category` and `mode` fields inform the model choice. The orchestrato
    with incrementing attempt number in metadata.
 ```
 
+**Worktree creation failure:** If worktree creation fails, retry once. If retry fails, defer the task and emit a warning to the orchestrator. Do not block the session.
+
 ### Session Interruption
 
 All state is in brain. Next session:
@@ -736,7 +741,9 @@ brain pm task list --stale
 # Shows tasks that may need attention
 ```
 
-### Status Push Protocol
+---
+
+## Status Push Protocol
 
 Agents report status on **state transitions only** — not periodically:
 
@@ -763,6 +770,25 @@ brain pm audit executions --task WEB-01.03
 # Shows: claim -> start -> progress update -> progress update -> complete
 ```
 
+**Orchestrator consumption:** The orchestrator polls `brain pm task list --in-progress --json` between natural break points. For team-based dispatch, uses `SendMessage`.
+
+**BLOCKED protocol:** After reporting blocked, the agent should attempt an alternative approach if one exists, or exit with a summary of work accomplished. Do not wait indefinitely.
+
+**PROGRESS guidance (for dispatch prompt template):**
+
+Report:
+- Significant architectural decisions ("Chose middleware pattern X")
+- Key discoveries that affect approach ("Library Y doesn't support ESM")
+- Completion of major sub-tasks ("Auth middleware tests passing, moving to session management")
+
+Do NOT report:
+- Routine file creation ("Created auth.ts")
+- Writing tests for code you just wrote
+- Reading documentation
+- Standard build/lint passes
+
+**Completion log relationship:** The `--log` summary in `brain pm complete` should synthesize key decisions and outcomes. It is not a transcript of PROGRESS messages.
+
 ---
 
 ## Verification Agents
@@ -774,15 +800,25 @@ Agents that implement code and then self-verify have a bias toward confirming th
 When an implementation agent completes, the orchestrator spawns a separate verification agent:
 
 ```
-Implementation Agent (Opus)          Verification Agent (Haiku/Sonnet)
-+-------------------------+         +------------------------------+
-| Writes code              |         | Runs tests                    |
-| Creates/modifies files   |  --->   | Checks types                  |
-| Writes summary.md        |  done   | Validates deliverables table  |
-| Calls brain pm complete  |         | Checks for lint warnings      |
-+-------------------------+         | Verifies against criteria     |
-                                    | Reports pass/fail + details   |
-                                    +------------------------------+
+Implementation Agent (Opus)          Orchestrator                 Verification Agent (Haiku)
++-------------------------+         +-------------------+        +----------------------------+
+| Writes code              |         | Detects completion |        | Runs tests                  |
+| Creates/modifies files   |  --->   | (SubagentStop or  |  --->  | Checks types                |
+| Writes summary.md        |  done   |  poll)             |        | Validates deliverables      |
+| (stays in-progress)      |         | Spawns verifier    |        | Reports pass/fail           |
++-------------------------+         +-------------------+        +----------------------------+
+                                           │                              │
+                                           │  ┌── passed ────────────────┘
+                                           │  │
+                                           ▼  ▼
+                                    Orchestrator calls
+                                    brain pm complete → done
+                                           │
+                                    ┌── failed ──────────────────┘
+                                    │
+                                    ▼
+                              Revert to pending
+                              (new claim cycle)
 ```
 
 ### Verification Plan CLI
@@ -811,9 +847,9 @@ Returns a verification plan based on the task's category, validation criteria, a
 ### Detailed Verification Flow
 
 ```
-1. Implementation agent completes task
-   → brain pm complete WEB-01.03 --token <claim> --outcome completed --log "..."
-   → Activity recorded with activity_type='execution'
+1. Implementation agent completes work (task stays `in-progress`)
+   → Agent writes summary.md and exits
+   → Task remains in-progress — agent does NOT call brain pm complete
 
 2. Orchestrator detects completion (SubagentStop hook or poll)
 
@@ -830,7 +866,7 @@ Returns a verification plan based on the task's category, validation criteria, a
    → Creates activity with activity_type='verification'
 
 6a. If passed:
-    → Task confirmed as done
+    → Orchestrator calls `brain pm complete` → done
     → Worktree released for reuse
     → Newly eligible tasks dispatched
 
@@ -909,9 +945,12 @@ For each check, report:
 - Actual output (paste it, don't summarize)
 - Pass/fail assessment
 
-On completion:
-brain pm verify {display_id} --record --outcome {passed|failed} --log "summary"
+On completion, report pass/fail with a summary. The orchestrator decides on task completion.
 ```
+
+**Verification timeout:** If no `brain pm verify --record` within 30 minutes, the orchestrator treats the verification as failed.
+
+**Retry budget:** Verification failure counts as an attempt toward `maxRetries` (default: 2).
 
 ---
 
@@ -1144,40 +1183,9 @@ async function collectAndRecordTelemetry(
 
 ---
 
-## Implementation Phases
+## Implementation Roadmap
 
-### Phase 1: Orchestrator Skill with Parallel Dispatch
-- SKILL.md with session start/dispatch/complete flow
-- Session ID capture via SessionStart hook
-- Claim mechanism (claim → start → complete with tokens)
-- Parallel agent dispatch with WIP limits
-- Model selection by task category
-- Execution telemetry collection on every complete
-- Auto-recommendation logic (priority, mode, critical path)
-- `brain pm audit` commands for cost/performance visibility
-- Task routing engine in orchestrator skill
-- Wave computation CLI command (`brain pm waves`)
-- Worktree budget configuration and allocation tracking
-- Status push protocol in dispatch prompt templates
-- Adaptive automation metadata field and behavior switch
-
-### Phase 2: Decision Integration & Verification
-- Automatic decision capture from agent output
-- Prompt staleness detection
-- Decision propagation to downstream tasks
-- Worktree validation hook (PreToolUse)
-- `brain pm verify` command (plan generation + result recording)
-- Verification agent dispatch from orchestrator
-- Verification feedback loop (failed → pending with feedback in context)
-
-### Phase 3: Cross-Session Continuity & Context
-- Session summary notes with telemetry
-- Stale/orphaned claim detection and recovery
-- Velocity/health metrics
-- Brain memory integration for decision retrieval
-- `brain pm context` command with `--since` delta support
-- Orchestrator context push for critical state changes
-- Lean dispatch prompt template (startup context only, CLI for more)
+See [00-overview.md](00-overview.md) for the consolidated implementation roadmap.
 
 ---
 

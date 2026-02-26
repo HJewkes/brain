@@ -243,6 +243,8 @@ Prompts are **brain notes** with `type: prompt`, linked to tasks by convention (
 | blocked | pending | Blocker resolved | `blocked_reason` cleared |
 | any | cancelled | Explicitly cancelled | Update `blocks` dependents |
 
+**Verification gating:** Tasks that require verification (see routing table in doc 03) stay `in-progress` during the verification phase. The implementation agent does NOT call `brain pm complete` — the orchestrator gates completion. On verification pass, the orchestrator calls `brain pm complete` → `done`. On verification failure, the orchestrator reverts the task to `pending` for a new claim cycle. Verification failure counts toward `maxRetries` (default: 2). After max retries, task status → `blocked` with reason.
+
 ### Claim Mechanism
 
 Claims prevent race conditions when multiple orchestrator sessions or parallel agents might grab the same task:
@@ -464,6 +466,7 @@ brain pm project update <prefix> [options]
   --phase <n>          # current phase number
   --appetite <text>    # time budget
   --automation <assisted|autonomous>
+  --worktree-budget <n>  # max concurrent worktrees
 
 brain pm project delete <prefix> [--force]
   # Requires all tasks done/cancelled unless --force
@@ -496,9 +499,17 @@ brain pm task list                    # all tasks in active project
 brain pm task list --eligible          # tasks computed as +READY
 brain pm task list --workstream 08    # filter by workstream
 brain pm task list --mode agent       # only agent-executable tasks
+brain pm task list --stale              # tasks that may need attention
+  # With --status claimed: finds claims >10 min without start transition
+  # With --status in-progress: finds tasks >48h without activity updates
+  # Without --status: finds both
 brain pm task show WEB-08.05          # full task detail
 brain pm task update WEB-08.05 --status in-progress
 brain pm task update WEB-08.05 --worktree <path>  # record worktree assignment
+brain pm task update WEB-08.05 --msg "Key decision: using express middleware"
+  # Creates a state_change activity record. Activity has:
+  # note_ids: [taskNoteId], activity_type: 'state_change',
+  # metadata: { message: "...", previous_status: "...", new_status: "..." }
 brain pm task done WEB-08.05 --log "Implemented all CLI commands, tests passing"
 brain pm task block WEB-08.05 --reason "Waiting on API access"
 brain pm task unblock WEB-08.05
@@ -526,6 +537,7 @@ brain pm next --mode assisted         # next human-assisted task
 
 brain pm dispatch WEB-08.05            # render full execution prompt for this task
 brain pm dispatch WEB-08.05 --json    # structured output for Claude Code
+brain pm dispatch WEB-08.05 --model claude-opus-4-6  # override routing default
 
 brain pm complete <display-id> [options]
   --token <uuid>           # Claim token (required for agent tasks)
@@ -550,12 +562,27 @@ brain pm briefing --json              # structured for orchestrator prompt
 # Wave computation (dependency-free parallel groups)
 brain pm waves --json                    # all eligible tasks grouped into waves
 brain pm waves --project WEB --json      # specific project
+  # Algorithm: standard topological level assignment on the dependency DAG.
+  # Wave 1 = all +ELIGIBLE tasks with no unmet dependencies.
+  # Wave N+1 = tasks whose only unmet deps are in wave N.
+  # Idempotent — recomputes from current state on every call.
+  #
+  # Edge cases:
+  # - Claimed/in-progress tasks are "in-flight" — excluded from wave computation,
+  #   not treated as "done"
+  # - After a failure, re-call to get updated wave plan
+  # - Cycles are prevented at input time (cycle detection); if found, return error
 
 # Just-in-time context (on-demand context retrieval)
 brain pm context <display-id> --json                # full task context
 brain pm context <display-id> --decisions --json     # decisions impacting this task
 brain pm context <display-id> --deps --json          # dependency completion summaries
 brain pm context <display-id> --since <ISO-8601>     # changes since timestamp
+  # --since relevance filter: includes activities in the same workstream OR
+  # activities on tasks that are direct dependencies of this task.
+  #
+  # --decisions scope: decisions with `impacts` relation to this task;
+  # falls back to all decisions in the same workstream if none are tagged.
 ```
 
 ### Verification Commands
@@ -574,8 +601,6 @@ brain pm decision list                # all decisions in active project
 brain pm decision list --task WEB-03.01  # decisions from a specific task
 brain pm decision show DEC-003
 brain pm decision supersede DEC-003 --with "Switch to GraphQL" --reason "..."
-brain pm decision update <id> --superseded-by <new-id>
-  # Mark a decision as superseded
 ```
 
 ### Prompt Commands
@@ -778,7 +803,7 @@ The `category` field classifies what kind of work a task represents, independent
 | `validation` | Run tests, verify, check types, security audit | Haiku | Low tokens, mostly bash commands |
 | `documentation` | Write docs, READMEs, guides | Sonnet | Moderate output |
 | `interview` | Interactive Q&A with human | — | Human time, not token cost |
-| `migration` | Move data, transform formats, transfer state | Sonnet | Variable |
+| `migration` | Move data, transform formats, transfer state | Opus | Variable (needs precision) |
 
 A task can be `mode: agent, category: research` (agent does the research) or `mode: assisted, category: configuration` (human + agent configure together). The combination of mode + category drives model selection and cost expectations.
 
@@ -1035,7 +1060,6 @@ Quick thought about the auth flow - what if the token expires mid-request?
 
 ```bash
 brain pm capture "Need to handle auth edge case"              # quick capture
-brain pm capture --from-agent WEB-08.05 "Auth token expiry"   # agent surfaced this
 brain pm inbox                                                 # list unprocessed captures
 brain pm inbox --count                                         # just the count
 brain pm process                                               # interactive: classify each capture
@@ -1057,48 +1081,9 @@ This prevents the "capturing without processing" anti-pattern identified across 
 
 ---
 
-## Implementation Phases
+## Implementation Roadmap
 
-### Phase 1: Core Data Model & Brain Primitives
-- Project, workstream, task, decision note types with metadata JSON
-- Extend `note_relations` with `module` and `module_instance` columns (brain-level migration)
-- Create the `activities` table (brain-level migration)
-- PM registers relation types (`depends_on`, `blocks`, `impacts`, `supersedes`) and activity types (`execution`)
-- Module registration with brain
-- Basic CRUD commands
-- Tests
-
-### Phase 2: Dependency Engine
-- Dependency edges stored in `note_relations` with `module = 'pm'`
-- Eligible task computation via `json_extract()` on notes.metadata
-- Impact analysis on completion
-- Cycle detection
-- Tests
-
-### Phase 3: State Machine & WIP
-- State transitions with validation
-- WIP limit enforcement
-- Virtual computed states
-- Tests
-
-### Phase 4: Orchestration Commands
-- `brain pm next`, `dispatch`, `complete`, `briefing`
-- Context bundling for agent dispatch
-- Prompt staleness detection
-- JSON output for all commands
-- Tests
-
-### Phase 5: Decision Propagation
-- Decision CRUD
-- Impact tracking
-- Prompt re-rendering on decision changes
-- ADR supersession chain
-- Tests
-
-### Phase 6: Import & Migration
-- JSON task data importer
-- Generic markdown importer
-- Tests
+See [00-overview.md](00-overview.md) for the consolidated implementation roadmap.
 
 ---
 
