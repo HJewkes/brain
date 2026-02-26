@@ -9,7 +9,7 @@ import type {
   CutType,
 } from '../types.js';
 import {
-  VALID_NOTE_TYPES,
+  VALID_CORE_NOTE_TYPES,
   VALID_NOTE_TIERS,
   VALID_NOTE_CONFIDENCES,
   VALID_NOTE_STATUSES,
@@ -49,11 +49,17 @@ export function coerceFrontmatter(
   data: Record<string, unknown>
 ): NoteFrontmatter {
   const filename = (filePath.split('/').pop() ?? filePath).replace(/\.md$/, '');
+  const hasModule = typeof data.module === 'string';
+
+  // When a module is present, pass unknown types through instead of coercing to 'note'
+  const type = hasModule && typeof data.type === 'string'
+    ? (data.type as NoteFrontmatter['type'])
+    : coerceEnum(data.type, VALID_CORE_NOTE_TYPES, 'note');
 
   return {
     id: typeof data.id === 'string' ? data.id : undefined,
     title: typeof data.title === 'string' ? data.title : filename,
-    type: coerceEnum(data.type, VALID_NOTE_TYPES, 'note'),
+    type,
     tier: coerceEnum(data.tier, VALID_NOTE_TIERS, 'slow'),
     category: coerceString(data.category),
     tags: coerceTags(data.tags),
@@ -73,6 +79,9 @@ export function coerceFrontmatter(
     related: coerceStringArray(data.related),
     supersedes: coerceString(data.supersedes),
     parent: coerceString(data.parent),
+    module: coerceString(data.module),
+    'module-instance': coerceString(data['module-instance']),
+    'content-dir': coerceString(data['content-dir']),
   };
 }
 

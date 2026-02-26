@@ -7,6 +7,7 @@ import type {
   FileRecord,
   Chunk,
   Relation,
+  ActivityRecord,
   InboxItem,
   InboxStatus,
   FeedRecord,
@@ -17,6 +18,7 @@ import type {
 import { NoteRepo } from './repos/note-repo.js';
 import { MemoryRepo } from './repos/memory-repo.js';
 import { CaptureRepo } from './repos/capture-repo.js';
+import { ActivityRepo } from './repos/activity-repo.js';
 import { addFrontmatterField } from './indexing.js';
 
 export { sanitizeFtsQuery } from './repos/note-repo.js';
@@ -33,7 +35,7 @@ export interface ArchiveResult {
   orphanedChildren: string[];
 }
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 export class BrainDB {
   private db: Database.Database;
@@ -41,6 +43,7 @@ export class BrainDB {
   private noteRepo: NoteRepo;
   private memoryRepo: MemoryRepo;
   private captureRepo: CaptureRepo;
+  private activityRepo: ActivityRepo;
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
@@ -51,6 +54,7 @@ export class BrainDB {
     this.noteRepo = new NoteRepo(this.db, (dims) => this.ensureVectorTable(dims));
     this.memoryRepo = new MemoryRepo(this.db);
     this.captureRepo = new CaptureRepo(this.db);
+    this.activityRepo = new ActivityRepo(this.db);
   }
 
   close(): void {
@@ -82,6 +86,7 @@ export class BrainDB {
     this.applyMigration(currentVersion, 4, () => this.db.exec(this.captureDDL()));
     this.applyMigration(currentVersion, 5, () => this.db.exec(this.memoryDDL()));
     this.applyMigration(currentVersion, 6, () => this.db.exec(this.noteAccessDDL()));
+    this.applyMigration(currentVersion, 7, () => this.migrateToV7());
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -200,30 +205,35 @@ export class BrainDB {
       );
 
       CREATE TABLE IF NOT EXISTS notes (
-        id            TEXT PRIMARY KEY,
-        file_path     TEXT NOT NULL UNIQUE,
-        title         TEXT NOT NULL,
-        type          TEXT NOT NULL,
-        tier          TEXT NOT NULL,
-        category      TEXT,
-        tags          TEXT,
-        summary       TEXT,
-        confidence    TEXT,
-        status        TEXT DEFAULT 'current',
-        sources       TEXT,
-        created_at    TEXT,
-        modified_at   TEXT,
-        last_reviewed TEXT,
+        id              TEXT PRIMARY KEY,
+        file_path       TEXT NOT NULL UNIQUE,
+        title           TEXT NOT NULL,
+        type            TEXT NOT NULL,
+        tier            TEXT NOT NULL,
+        category        TEXT,
+        tags            TEXT,
+        summary         TEXT,
+        confidence      TEXT,
+        status          TEXT DEFAULT 'current',
+        sources         TEXT,
+        created_at      TEXT,
+        modified_at     TEXT,
+        last_reviewed   TEXT,
         review_interval TEXT,
-        expires       TEXT,
-        metadata      TEXT
+        expires         TEXT,
+        metadata        TEXT,
+        module          TEXT,
+        module_instance TEXT,
+        content_dir     TEXT
       );
 
       CREATE TABLE IF NOT EXISTS relations (
-        source_id   TEXT NOT NULL,
-        target_id   TEXT NOT NULL,
-        type        TEXT NOT NULL,
-        created_at  INTEGER NOT NULL,
+        source_id       TEXT NOT NULL,
+        target_id       TEXT NOT NULL,
+        type            TEXT NOT NULL,
+        created_at      INTEGER NOT NULL,
+        module          TEXT,
+        module_instance TEXT,
         PRIMARY KEY (source_id, target_id, type)
       );
 
@@ -258,6 +268,8 @@ export class BrainDB {
       ${this.captureDDL()}
       ${this.memoryDDL()}
       ${this.noteAccessDDL()}
+      ${this.activitiesDDL()}
+      ${this.moduleIndexesDDL()}
     `;
   }
 
@@ -274,6 +286,61 @@ export class BrainDB {
     if (!columnNames.has('position')) {
       this.db.exec('ALTER TABLE chunks ADD COLUMN position INTEGER DEFAULT 0');
     }
+  }
+
+  private migrateToV7(): void {
+    const noteColumns = this.db.pragma('table_info(notes)') as { name: string }[];
+    const noteColNames = new Set(noteColumns.map((c) => c.name));
+    if (!noteColNames.has('module')) {
+      this.db.exec('ALTER TABLE notes ADD COLUMN module TEXT');
+    }
+    if (!noteColNames.has('module_instance')) {
+      this.db.exec('ALTER TABLE notes ADD COLUMN module_instance TEXT');
+    }
+    if (!noteColNames.has('content_dir')) {
+      this.db.exec('ALTER TABLE notes ADD COLUMN content_dir TEXT');
+    }
+
+    const relColumns = this.db.pragma('table_info(relations)') as { name: string }[];
+    const relColNames = new Set(relColumns.map((c) => c.name));
+    if (!relColNames.has('module')) {
+      this.db.exec('ALTER TABLE relations ADD COLUMN module TEXT');
+    }
+    if (!relColNames.has('module_instance')) {
+      this.db.exec('ALTER TABLE relations ADD COLUMN module_instance TEXT');
+    }
+
+    this.db.exec(this.activitiesDDL());
+    this.db.exec(this.moduleIndexesDDL());
+  }
+
+  private activitiesDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS activities (
+        id              TEXT PRIMARY KEY,
+        note_ids        TEXT,
+        module          TEXT,
+        module_instance TEXT,
+        activity_type   TEXT,
+        actor_type      TEXT,
+        actor_id        TEXT,
+        session_id      TEXT,
+        metadata        TEXT,
+        outcome         TEXT,
+        started_at      TEXT,
+        completed_at    TEXT
+      );
+    `;
+  }
+
+  private moduleIndexesDDL(): string {
+    return `
+      CREATE INDEX IF NOT EXISTS idx_notes_module ON notes(module);
+      CREATE INDEX IF NOT EXISTS idx_notes_module_instance ON notes(module, module_instance);
+      CREATE INDEX IF NOT EXISTS idx_activities_module ON activities(module, module_instance);
+      CREATE INDEX IF NOT EXISTS idx_activities_type ON activities(module, activity_type);
+      CREATE INDEX IF NOT EXISTS idx_activities_session ON activities(session_id);
+    `;
   }
 
   // --- Meta ---
@@ -480,6 +547,9 @@ export class BrainDB {
   getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> {
     return this.noteRepo.getDescendants(noteId, maxDepth);
   }
+  getRelationsFiltered(opts: { module?: string; moduleInstance?: string; type?: string }): Relation[] {
+    return this.noteRepo.getRelationsFiltered(opts);
+  }
 
   // --- Access Delegates ---
 
@@ -518,6 +588,9 @@ export class BrainDB {
     tags?: string[];
   }): Set<string> | null {
     return this.noteRepo.getFilteredNoteIds(filters);
+  }
+  getModuleNoteIds(filter: { module?: string; moduleInstance?: string; type?: string; status?: string }): string[] {
+    return this.noteRepo.getModuleNoteIds(filter);
   }
 
   // --- Memory Delegates ---
@@ -605,5 +678,23 @@ export class BrainDB {
   }
   updateFeedLastPolled(id: string, lastPolled: string): void {
     this.captureRepo.updateFeedLastPolled(id, lastPolled);
+  }
+
+  // --- Activity Delegates ---
+
+  addActivity(record: ActivityRecord): void {
+    this.activityRepo.addActivity(record);
+  }
+  getActivity(id: string): ActivityRecord | null {
+    return this.activityRepo.getActivity(id);
+  }
+  getActivities(opts?: { module?: string; moduleInstance?: string; activityType?: string }): ActivityRecord[] {
+    return this.activityRepo.getActivities(opts);
+  }
+  getActivitiesByNoteId(noteId: string): ActivityRecord[] {
+    return this.activityRepo.getActivitiesByNoteId(noteId);
+  }
+  getActivitiesBySession(sessionId: string): ActivityRecord[] {
+    return this.activityRepo.getActivitiesBySession(sessionId);
   }
 }
