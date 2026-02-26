@@ -999,7 +999,8 @@ The agent prompt rendered by `brain pm dispatch --json` includes a minimal but c
 - [ ] Build succeeds
 
 ## On Completion
-brain pm complete WEB-01.03 --token {claim_token} --log "summary"
+Do NOT call `brain pm complete`. The orchestrator handles completion after verification.
+When you finish your work, report what you did and any decisions made. The orchestrator will verify and complete the task.
 
 ## Status Reporting
 Report significant state changes:
