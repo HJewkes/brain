@@ -1,8 +1,8 @@
 # Task Management Framework — Design Overview
 
-**Date:** 2026-02-25
+**Date:** 2026-02-25 (updated 2026-02-26)
 **Status:** Draft — Design Phase
-**Origin:** Extracted from OpenClaw project orchestration patterns
+**Origin:** Consolidated from brain PM module design + project orchestration prototype
 
 ---
 
@@ -10,7 +10,7 @@
 
 A reusable framework for managing complex AI-assisted projects through their full lifecycle: research, design, planning, execution, and verification. Built as a **brain module** with a **Claude Code orchestration layer** on top.
 
-The system was born from the OpenClaw setup project, where we built an ad-hoc orchestration system with markdown status files, JSON dependency graphs, workstream directories, and prompt files. This framework formalizes those patterns into a proper tool.
+The system consolidates two parallel efforts: (1) a brain PM module design with principled storage primitives, data models, and dependency engines, and (2) a project orchestration prototype with battle-tested CLI patterns, agent coordination protocols, and parallel execution strategies. This framework formalizes the best of both into a unified brain module.
 
 ---
 
@@ -39,7 +39,9 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 │                        │                             │
 │  ┌─────────────────────▼──────────────────────────┐ │
 │  │  Brain Core                                     │ │
-│  │  Notes, search, memory, SQLite, knowledge graph │ │
+│  │  Notes + directory-backed notes, search, memory,│ │
+│  │  SQLite, knowledge graph, note_relations,       │ │
+│  │  activities                                      │ │
 │  └────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ```
@@ -57,6 +59,9 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 | 05 | [Design Review](05-design-review.md) | Self-review: consistency, gaps, feasibility, recommendations |
 | 06 | [Design Review Resolutions](06-review-resolutions.md) | Resolution of review issues: virtual ready state, storage primitives, claim mechanism |
 | 07 | [Design Review #2](07-design-review-2.md) | Full consistency, gap, and research analysis with implementation risk assessment |
+| 08 | [Consolidation Overview](08-consolidation-overview.md) | How the two systems merge, what comes from where, updated implementation streams |
+| 09 | [Directory-Backed Notes](09-directory-backed-notes.md) | Brain core extension: managed directories for workspace artifacts (summary.md, references/) |
+| 10 | [Orchestration Enhancements](10-orchestration-enhancements.md) | Adaptive automation, task routing, wave execution, worktree safety, JIT context, verification agents |
 
 ## Research Documents
 
@@ -87,10 +92,28 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 | Session tracking | CLAUDE_ENV_FILE via SessionStart hook | Persists across all Bash commands; cleaner than temp files |
 | Task claiming | Claim tokens with 10-min timeout | Prevents double-dispatch in parallel execution; auto-recovers from crashes |
 | GTD capture | Capture notes with interactive processing | Quick inbox for ad-hoc items during sessions |
+| Workspace artifacts | Directory-backed notes (content_dir on notes table) | First-class brain primitive; modules define schemas; brain manages lifecycle; FTS-indexed |
+| Prompt vs summary storage | Prompts are notes; summaries live in task content_dir | Prompts are input (searchable, versioned). Summaries are output artifacts. |
+| Shared workstream context | Workstream note body IS the context | No separate context.md. Single source of truth. Dispatch assembles from note body. |
+| Adaptive automation | Per-project/workstream assisted vs autonomous mode | Same machinery in both modes. Only dispatch approval differs. |
+| Verification approach | Separate verification agent post-implementation | Independent validation prevents self-assessment bias. Uses Haiku for cost. |
+| Worktree safety | Three-layer defense (claim assignment, hook validation, orchestrator tracking) | Worktree conflicts are the most dangerous multi-agent failure mode. Defense in depth. |
+| Context efficiency | Just-in-time via CLI; lean startup, on-demand retrieval | Prevents context bloat. Agents fetch what they need when they need it. |
+| Wave execution | CLI computes dependency groups; orchestrator applies routing | CLI-first: deterministic DAG in code, routing decisions in skill. |
 
 ---
 
 ## Implementation Roadmap
+
+### Stream 0: Brain Core Extensions (New — doc 09)
+1. `content_dir` column on notes table + migration
+2. `DirectoryNoteHooks` in ModuleContext interface
+3. Directory lifecycle management (create, archive, delete)
+4. FTS integration for directory-backed note files
+5. Extended `note_relations` with module/module_instance columns
+6. `activities` table (brain-level workflow event log)
+7. NoteType widening (`CoreNoteType | (string & {})`)
+8. metadata JSON population in indexer
 
 ### Stream 1: Brain Module System (Foundation)
 1. Core schema migration (module, module_instance columns; populate metadata JSON)
@@ -105,36 +128,47 @@ The system was born from the OpenClaw setup project, where we built an ad-hoc or
 
 ### Stream 2: PM Module (Core)
 1. PM module skeleton (register, types, migrations)
-2. Register PM relation types (depends_on, blocks, impacts) and activity types (execution, state_change)
-3. Project/workstream/task/decision CRUD commands
-4. Capture/process (GTD inbox)
+2. Register PM relation types (depends_on, blocks, impacts) and activity types (execution, state_change, verification)
+3. Project/workstream CRUD with metadata
+4. Task CRUD with directory-backed notes (content_dir for summary.md, references/)
 5. State machine with transitions and edge cases
 6. Dependency engine (eligible computation, cycle detection, impact analysis)
 7. Claim mechanism with tokens and timeout
 8. Prompt lifecycle (prompt notes, dispatch assembly, staleness detection)
-9. Orchestration commands (next, dispatch, complete, briefing)
-10. Decision propagation (impacts, prompt assembly)
-11. Structured error format
-12. Execution telemetry (activities, two-phase collection)
-13. Audit commands (cost, performance, enrich from transcripts)
-14. Import from OpenClaw plans
+9. Decision propagation (impacts, prompt assembly)
+10. `brain pm context` command for JIT context delivery (doc 10)
+11. `brain pm verify` command for verification plans (doc 10)
+12. `brain pm waves` command for dependency-free grouping (doc 10)
+13. Orchestration commands (next, dispatch, complete, briefing)
+14. Capture/process (GTD inbox)
+15. Structured error format
+16. Execution telemetry (activities, two-phase collection)
+17. Audit commands (cost, performance, enrich from transcripts)
+18. Import tools
 
-### Stream 3: Orchestration Layer (Integration)
+### Stream 3: Orchestration Layer (Integration — docs 03, 10)
 1. Orchestrator skill (SKILL.md) with session lifecycle
 2. SessionStart + SubagentStop hooks for telemetry
-3. Parallel agent dispatch with claim tokens
-4. Model selection by task category
-5. Assisted walkthrough mode
-6. Skill chain (brainstorming → writing-plans → PM)
-7. Decision capture integration
-8. Session summaries and cross-session continuity
+3. Task routing engine (category + mode to agent type, model, isolation) (doc 10)
+4. Wave computation and dispatch planning (doc 10)
+5. Worktree budget management (allocation, tracking, recycling) (doc 10)
+6. Worktree validation hook (PreToolUse) (doc 10)
+7. Adaptive automation (assisted vs autonomous dispatch) (doc 10)
+8. Parallel agent dispatch with claim tokens
+9. Status push protocol in dispatch prompt templates (doc 10)
+10. Verification agent dispatch (SubagentStop trigger) (doc 10)
+11. JIT context push for in-flight agents (doc 10)
+12. Assisted walkthrough mode
+13. Skill chain (brainstorming → writing-plans → PM)
+14. Decision capture integration
+15. Session summaries and cross-session continuity
 
 ### Dependencies
-- Stream 2 depends on Stream 1 (module system must exist)
-- Stream 3 depends on Stream 2 (PM commands must exist)
-- Within each stream, items are roughly sequential but some can overlap
+- Stream 0 must complete before Stream 1
 - Stream 1 items 1-4 are prerequisites for Stream 2 to begin
 - Stream 2 items 1-8 are prerequisites for Stream 3 to begin
+- Within each stream, items are roughly sequential but some can overlap
+- Stream 3 items 3-7 (doc 10 patterns) can be developed in parallel once basic orchestration works
 
 ---
 
