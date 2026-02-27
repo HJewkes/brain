@@ -6,7 +6,7 @@
 
 ---
 
-> **Resolution Note:** This review was conducted before the storage architecture was finalized. References to `pm_tasks`, `pm_dependency_edges`, `pm_executions`, and other PM-specific tables throughout this document have been superseded by the three brain-level primitives design (notes.metadata, extended note_relations, activities). See docs 01 and 02 for the current architecture. Issues IC-01 through IC-13, GAP-01 through GAP-13, and OQ-01 through OQ-06 have all been resolved in the main design documents.
+> **Resolution Note:** This review was conducted before the storage architecture was finalized. References to `pm_tasks`, `pm_dependency_edges`, `pm_executions`, and other PM-specific tables throughout this document have been superseded by the three brain-level primitives design (notes.metadata, extended relations, activities). See docs 01 and 02 for the current architecture. Issues IC-01 through IC-13, GAP-01 through GAP-13, and OQ-01 through OQ-06 have all been resolved in the main design documents.
 
 ---
 
@@ -300,7 +300,7 @@ State changes (claim, start, complete) must update both markdown frontmatter and
 
 **What:** Best pattern for exclusive task claiming in SQLite without advisory locks?
 
-**Recommendation already likely:** `BEGIN IMMEDIATE; UPDATE pm_tasks SET status = 'claimed', claim_token = ? WHERE note_id = ? AND status = 'pending' AND [+READY check]; COMMIT;` then check `changes() === 1`. `IMMEDIATE` acquires write lock at BEGIN, preventing TOCTOU races. Note: since `ready` is now virtual, the claim query must verify eligibility inline (all deps done).
+**Recommendation already likely:** `BEGIN IMMEDIATE; UPDATE pm_tasks SET status = 'claimed', claim_token = ? WHERE note_id = ? AND status = 'pending' AND [+READY check]; COMMIT;` then check `changes() === 1`. `IMMEDIATE` acquires write lock at BEGIN, preventing TOCTOU races. Note: since `ready` is now virtual, the claim query must verify eligibility inline (all deps done via relations).
 
 ### RO-06: Brain's Indexing Pipeline Extension Points
 

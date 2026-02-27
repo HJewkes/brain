@@ -63,7 +63,7 @@ export interface ModuleContext {
   /** Register database migrations (rarely needed — most modules use the three primitives) */
   registerMigrations(migrations: ModuleMigration[]): void;
 
-  /** Register relation types this module uses in note_relations */
+  /** Register relation types this module uses in relations */
   registerRelationTypes(types: string[]): void;   // e.g., ['depends_on', 'impacts', 'blocks']
 
   /** Register activity types this module writes to the activities table */
@@ -139,7 +139,7 @@ Modules are discovered from two sources:
 
 **Loading order:**
 1. Brain core initializes (DB, config, embedder)
-2. Core migrations run (including note_relations extension, activities table)
+2. Core migrations run (including relations extension, activities table)
 3. Module registry created
 4. Each module's `register()` called in dependency order (registers types, relation types, activity types, commands)
 5. Module migrations run (if any — most modules don't need them)
@@ -245,7 +245,7 @@ The `metadata` column is the extensible storage layer. Core fields (`title`, `ty
 This means:
 - **Brain core** never needs schema changes for module fields
 - **All modules** store and query their entity data via `json_extract(metadata, '$.field')`
-- **Graph edges** between notes use brain's `note_relations` table (extended with module scope)
+- **Graph edges** between notes use brain's `relations` table (extended with module scope)
 - **Workflow events** use brain's `activities` table
 - **Any module** can add arbitrary fields without a migration
 
@@ -431,7 +431,7 @@ Instead of modules creating custom tables, brain provides three storage primitiv
 | Primitive | What it stores | Query mechanism | Example |
 |-----------|---------------|-----------------|---------|
 | **Notes + metadata** | All entity data (tasks, decisions, prompts, captures) | `json_extract(metadata, '$.field')` | Task status, priority, assignee |
-| **Relations** | All graph edges between notes | SQL joins on `note_relations` | depends_on, impacts, blocks |
+| **Relations** | All graph edges between notes | SQL joins on `relations` | depends_on, impacts, blocks |
 | **Activities** | All workflow events and audit trail | Filter by module + activity_type | Task executions, state changes, reviews |
 
 Modules create **zero custom tables**. They register relation types and activity types, then read/write using brain's primitives.
@@ -448,14 +448,14 @@ SELECT id, json_extract(metadata, '$.display_id') as display_id,
 FROM notes WHERE module = 'pm' AND type = 'task';
 ```
 
-#### Primitive 2: Extended note_relations
+#### Primitive 2: Extended relations
 
-Brain already has a `note_relations` table for its knowledge graph. Extend it to support module-typed, instance-scoped edges:
+Brain already has a `relations` table for its knowledge graph. Extend it to support module-typed, instance-scoped edges:
 
 ```sql
--- Extend existing note_relations
-ALTER TABLE note_relations ADD COLUMN module TEXT;
-ALTER TABLE note_relations ADD COLUMN module_instance TEXT;
+-- Extend existing relations
+ALTER TABLE relations ADD COLUMN module TEXT;
+ALTER TABLE relations ADD COLUMN module_instance TEXT;
 
 -- Example relation types by module:
 -- PM: depends_on, blocks, impacts, supersedes
@@ -510,7 +510,7 @@ When brain indexes a note with `module: pm`:
 3. ALL frontmatter → metadata JSON blob (including core fields, for completeness)
 4. Module's onIndex hook fires:
    - PM reads json_extract(metadata, '$.depends_on')
-   - PM writes module-scoped relation entries to note_relations
+   - PM writes module-scoped relation entries to relations
      (for depends_on, impacts, blocks edges parsed from frontmatter)
    - Task data stays in notes.metadata — no separate table to update
 5. FTS index updated (title + searchable fields from metadata)
@@ -749,7 +749,7 @@ All module commands support `--json` output, following brain's existing pattern.
 
 ### Module Migration System
 
-Most modules won't need migrations since the three primitives (notes+metadata, relations, activities) cover most storage needs. The migration system exists for brain core schema changes (like adding the activities table or extending note_relations) and for the rare module that genuinely needs custom storage beyond the primitives.
+Most modules won't need migrations since the three primitives (notes+metadata, relations, activities) cover most storage needs. The migration system exists for brain core schema changes (like adding the activities table or extending relations) and for the rare module that genuinely needs custom storage beyond the primitives.
 
 ```typescript
 export interface ModuleMigration {
@@ -777,17 +777,17 @@ Modules store all data through brain's three primitives. No module-specific tabl
 
 **Entity data** lives in notes with module-specific fields in the `metadata` JSON column. Decisions are notes with `type: decision`, queried via `json_extract()`. Prompt caching can use in-memory caches or brain-level cache mechanisms.
 
-**Graph edges** live in `note_relations` with module and relation_type filtering:
+**Graph edges** live in `relations` with module and relation_type filtering:
 
 ```sql
--- PM dependency edge (stored in brain's note_relations)
+-- PM dependency edge (stored in brain's relations)
 -- source_id: the task that depends
 -- target_id: the task it depends ON
 -- relation_type: 'depends_on'
 -- module: 'pm'
 -- module_instance: 'webproject'
 
--- Eligible task query uses note_relations directly:
+-- Eligible task query uses relations directly:
 SELECT n.id, json_extract(n.metadata, '$.display_id') as display_id,
        json_extract(n.metadata, '$.title') as title
 FROM notes n
@@ -795,7 +795,7 @@ WHERE n.module = 'pm' AND n.module_instance = ?
   AND json_extract(n.metadata, '$.type') = 'task'
   AND json_extract(n.metadata, '$.status') = 'pending'
   AND NOT EXISTS (
-    SELECT 1 FROM note_relations r
+    SELECT 1 FROM relations r
     JOIN notes dep ON dep.id = r.target_id
     WHERE r.source_id = n.id
       AND r.relation_type = 'depends_on'
@@ -810,7 +810,7 @@ WHERE n.module = 'pm' AND n.module_instance = ?
 
 When brain deletes a note:
 
-- **Relations:** Brain's native `ON DELETE CASCADE` on `note_relations` handles edge cleanup automatically. No module-specific cascade logic needed.
+- **Relations:** Brain's native `ON DELETE CASCADE` on `relations` handles edge cleanup automatically. No module-specific cascade logic needed.
 - **Activities:** Activity records referencing deleted notes keep their records (audit trail preservation). The `note_ids` entries become orphaned, which is acceptable for historical data.
 - **Metadata:** Deleted with the note row itself.
 
@@ -940,9 +940,9 @@ ALTER TABLE notes ADD COLUMN content_dir TEXT;       -- managed directory path (
 CREATE INDEX idx_notes_module ON notes(module);
 CREATE INDEX idx_notes_module_instance ON notes(module, module_instance);
 
--- Extend note_relations for module-scoped edges
-ALTER TABLE note_relations ADD COLUMN module TEXT;
-ALTER TABLE note_relations ADD COLUMN module_instance TEXT;
+-- Extend relations for module-scoped edges
+ALTER TABLE relations ADD COLUMN module TEXT;
+ALTER TABLE relations ADD COLUMN module_instance TEXT;
 
 -- Activities table for workflow event tracking
 CREATE TABLE IF NOT EXISTS activities (

@@ -14,7 +14,7 @@ The PM (project management) module is the first brain module. It provides struct
 **Storage model:** PM uses three brain-level primitives — no PM-specific tables.
 
 1. **Notes + metadata JSON** — All PM entities (tasks, decisions, projects, workstreams, prompts, captures) are brain notes with `module: pm`. Their PM-specific fields live in `notes.metadata` as JSON. Queried via `json_extract()`.
-2. **Extended note_relations** — Brain's existing relation table, extended with `module` and `module_instance` columns. PM registers relation types: `depends_on`, `blocks`, `impacts`, `supersedes`. The dependency engine queries `note_relations WHERE module = 'pm' AND relation_type = 'depends_on'`.
+2. **Extended relations** — Brain's existing relation table, extended with `module` and `module_instance` columns. PM registers relation types: `depends_on`, `blocks`, `impacts`, `supersedes`. The dependency engine queries `relations WHERE module = 'pm' AND relation_type = 'depends_on'`.
 3. **Activities** — A brain-level activity log table. PM writes execution telemetry, state changes, and reviews as activities with `module: 'pm'`. Token/model/cost data lives in the activity's `metadata` JSON.
 
 This document covers the data model, state machine, dependency engine, decision propagation, CLI interface, and the prompt system.
@@ -297,9 +297,9 @@ When a limit is hit, `brain pm next` surfaces the limit and suggests completing 
 
 Dependencies stored in two places:
 1. **Frontmatter** — `depends_on` and `blocks` arrays on task notes (human-readable source of truth)
-2. **note_relations** — Brain's relation table with `module = 'pm'` scoping (computed index for fast graph operations)
+2. **relations** — Brain's relation table with `module = 'pm'` scoping (computed index for fast graph operations)
 
-The `note_relations` rows are rebuilt on `brain index` — the frontmatter is authoritative.
+The `relations` rows are rebuilt on `brain index` — the frontmatter is authoritative.
 
 PM stores dependencies as brain relations:
 - `source_id`: the task note that depends on another
@@ -326,7 +326,7 @@ WHERE n.module = 'pm' AND n.module_instance = ?
   AND json_extract(n.metadata, '$.type') = 'task'
   AND json_extract(n.metadata, '$.status') = 'pending'
   AND NOT EXISTS (
-    SELECT 1 FROM note_relations r
+    SELECT 1 FROM relations r
     JOIN notes dep ON dep.id = r.target_id
     WHERE r.source_id = n.id
       AND r.relation_type = 'depends_on'
@@ -352,12 +352,12 @@ When a task completes:
 
 ```typescript
 async function onTaskComplete(taskId: string, db: BrainDB): Promise<TaskImpact> {
-  // 1. Find tasks blocked by this one (via note_relations)
+  // 1. Find tasks blocked by this one (via relations)
   const unblocked = db.query(`
-    SELECT r.source_id FROM note_relations r
+    SELECT r.source_id FROM relations r
     WHERE r.target_id = ? AND r.relation_type = 'depends_on' AND r.module = 'pm'
       AND r.source_id NOT IN (
-        SELECT r2.source_id FROM note_relations r2
+        SELECT r2.source_id FROM relations r2
         JOIN notes dep ON dep.id = r2.target_id
         WHERE r2.relation_type = 'depends_on' AND r2.module = 'pm'
           AND r2.target_id != ?
@@ -368,7 +368,7 @@ async function onTaskComplete(taskId: string, db: BrainDB): Promise<TaskImpact> 
   // 2. Newly eligible tasks are now +READY (virtual state, no status change needed)
   // They remain 'pending' but will appear in brain pm next / brain pm task list --eligible
 
-  // 3. Check for decision impacts (via note_relations with relation_type = 'impacts')
+  // 3. Check for decision impacts (via relations with relation_type = 'impacts')
   const decisions = await getDecisionsFromTask(taskId);
   const impactedTasks = decisions.flatMap(d => d.impacts);
 
@@ -427,11 +427,11 @@ When `brain pm dispatch` detects a stale prompt, it:
 
 ### Decision Impact Relations
 
-Decision impacts are stored as `note_relations` with `relation_type: 'impacts'`:
+Decision impacts are stored as `relations` with `relation_type: 'impacts'`:
 
 When `brain pm decision add "..." --impacts WEB-08.05,WEB-08.06` is called:
 - Creates a decision note with `type: decision` in notes.metadata
-- Creates `note_relations` entries: decision → each impacted task with `relation_type: 'impacts'`
+- Creates `relations` entries: decision → each impacted task with `relation_type: 'impacts'`
 - `brain pm dispatch` queries these relations to assemble decision context into the prompt
 
 ### Prompt Assembly Algorithm
@@ -440,7 +440,7 @@ When `brain pm dispatch <id> --json` renders a prompt:
 
 1. Load the task's prompt note (type: prompt, current version)
 2. Load completed dependency summaries: for each `depends_on` task that is `done`, fetch its completion log
-3. Load relevant decisions: query `note_relations WHERE relation_type = 'impacts' AND target_id = task_id AND module = 'pm'` for decisions impacting this task
+3. Load relevant decisions: query `relations WHERE relation_type = 'impacts' AND target_id = task_id AND module = 'pm'` for decisions impacting this task
 4. Load project constraints from project note metadata
 5. Assemble into the agent prompt template (instructions first, context second)
 6. Compute `context_hash = SHA256(prompt_content + sorted_decision_ids + sorted_dependency_ids)`
@@ -1153,9 +1153,9 @@ Run with `npm test` (`vitest run`). Coverage via `@vitest/coverage-v8`.
 
 **Database integrity:**
 - `brain index` with PM notes populates notes.metadata correctly
-- PM dependency edges stored in note_relations with correct module scoping
+- PM dependency edges stored in relations with correct module scoping
 - Activities created on task completion with correct metadata
-- Delete a note → note_relations cascade, activities retain historical record
+- Delete a note → relations cascade, activities retain historical record
 
 ### Test Fixtures
 

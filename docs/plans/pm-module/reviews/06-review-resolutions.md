@@ -20,11 +20,11 @@ Rather than PM-owned tables, the design uses three reusable brain-level primitiv
 
 1. **`notes.metadata` JSON** — Brain already has an unused `metadata TEXT` column. PM stores all entity data (tasks, projects, workstreams, decisions) as notes with structured metadata JSON. Indexing populates `metadata` from frontmatter.
 
-2. **Extended `note_relations`** — Brain's existing relation table gains `module` and `module_instance` columns. PM registers relation types (`depends_on`, `blocks`, `impacts`, `supersedes`) and uses standard graph queries.
+2. **Extended `relations`** — Brain's existing relation table gains `module` and `module_instance` columns. PM registers relation types (`depends_on`, `blocks`, `impacts`, `supersedes`) and uses standard graph queries.
 
 3. **`activities` table** — New brain-level event log for workflow events. Supports `note_ids` (JSON array for multi-note relations), typed by module. PM uses this for execution telemetry.
 
-The dependency engine queries `notes.metadata` + `note_relations`:
+The dependency engine queries `notes.metadata` + `relations`:
 
 ```sql
 -- Eligible tasks: pending with all dependencies done
@@ -39,7 +39,7 @@ WHERE n.module = 'pm' AND n.module_instance = ?
   AND json_extract(n.metadata, '$.type') = 'task'
   AND json_extract(n.metadata, '$.status') = 'pending'
   AND NOT EXISTS (
-    SELECT 1 FROM note_relations r
+    SELECT 1 FROM relations r
     JOIN notes dep ON dep.id = r.target_id
     WHERE r.source_id = n.id
       AND r.relation_type = 'depends_on'
@@ -234,7 +234,7 @@ No relationship to `status` state machine. It's a progress signal for humans, no
 
 **Include in v1:**
 - Module system foundation (registry, types, commands, migrations)
-- Storage extensibility (three brain-level primitives: notes.metadata, extended note_relations, activities)
+- Storage extensibility (three brain-level primitives: notes.metadata, extended relations, activities)
 - PM CRUD (project, workstream, task, decision)
 - `brain pm capture` / `brain pm process` (GTD inbox)
 - Dependency engine (eligible computation, impact analysis)
