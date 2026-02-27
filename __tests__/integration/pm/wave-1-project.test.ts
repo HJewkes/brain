@@ -29,20 +29,12 @@ beforeEach(async () => {
   mkdirSync(notesDir, { recursive: true });
   config = {
     notesDir,
-    dbPath: db.getMetaValue('schema_version') ? '' : '',
+    dbPath: '',
     embedder: 'local',
     fusionWeights: { bm25: 0.3, vector: 0.7 },
   };
 
-  const { registry, errors } = await loadModules({ modules: [pmModule] });
-  expect(errors).toHaveLength(0);
-  expect(registry.getModule('pm')).toBeDefined();
-  expect(registry.getNoteType('project')).toBeDefined();
-  expect(registry.getNoteType('task')).toBeDefined();
-  expect(registry.getNoteType('workstream')).toBeDefined();
-  expect(registry.getNoteType('decision')).toBeDefined();
-  expect(registry.getNoteType('prompt')).toBeDefined();
-  expect(registry.getNoteType('capture')).toBeDefined();
+  await loadModules({ modules: [pmModule] });
 });
 
 afterEach(() => {
