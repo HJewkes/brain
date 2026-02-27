@@ -1,6 +1,13 @@
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
-import { formatError } from '../errors.js';
+import type { BrainDB } from '../../../services/brain-db.js';
+import type { BrainConfig, Embedder } from '../../../types.js';
+import { indexSingleFile } from '../../../services/indexing.js';
+import { formatError, fail, pmError } from '../errors.js';
+import type { Result } from '../errors.js';
+import type { TaskMetadata, TaskStatus } from '../types.js';
 import {
   createTask,
   listTasks,
@@ -9,7 +16,9 @@ import {
   updateTaskStatus,
   deleteTask,
 } from '../data/task-ops.js';
-import type { TaskStatus } from '../types.js';
+import { getPmNotes } from '../data/queries.js';
+import { generateClaim, validateClaimToken } from '../engine/claims.js';
+import { validateTransition } from '../engine/state-machine.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -231,5 +240,184 @@ export function createTaskCommands(): Command {
       });
     });
 
+  cmd
+    .command('claim')
+    .description('Claim an eligible task (pending → claimed)')
+    .argument('<id>', 'Task display ID')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const displayId = id.toUpperCase();
+        const taskResult = getTask(svc.db, displayId);
+        if (!taskResult.ok) {
+          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        if (taskResult.data.status === 'claimed') {
+          const err = pmError('ALREADY_CLAIMED', `Task "${displayId}" is already claimed`);
+          process.stderr.write(formatError(err, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const transResult = validateTransition(taskResult.data.status, 'claimed');
+        if (!transResult.ok) {
+          process.stderr.write(formatError(transResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const claim = generateClaim();
+        const metaResult = await updateTaskMetadataFields(
+          svc.db, svc.config, svc.embedder, displayId,
+          { status: 'claimed', claim_token: claim.token, claimed_at: claim.claimedAt },
+        );
+        if (!metaResult.ok) {
+          process.stderr.write(formatError(metaResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const output = { ...metaResult.data, token: claim.token };
+        outputResult(output, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('start')
+    .description('Start a claimed task (claimed → in-progress)')
+    .argument('<id>', 'Task display ID')
+    .requiredOption('--token <token>', 'Claim token')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const displayId = id.toUpperCase();
+        const taskResult = getTask(svc.db, displayId);
+        if (!taskResult.ok) {
+          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const meta = taskResult.data;
+        if (!meta.claim_token) {
+          const err = pmError('INVALID_CLAIM_TOKEN', 'Task has no active claim');
+          process.stderr.write(formatError(err, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const tokenCheck = validateClaimToken(meta.claim_token, opts.token);
+        if (!tokenCheck.ok) {
+          process.stderr.write(formatError(tokenCheck.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const result = await updateTaskStatus(
+          svc.db, svc.config, svc.embedder,
+          displayId, 'in-progress' as TaskStatus,
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('release')
+    .description('Release a claim (claimed → pending)')
+    .argument('<id>', 'Task display ID')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const displayId = id.toUpperCase();
+        const taskResult = getTask(svc.db, displayId);
+        if (!taskResult.ok) {
+          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const transResult = validateTransition(taskResult.data.status, 'pending');
+        if (!transResult.ok) {
+          process.stderr.write(formatError(transResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const metaResult = await updateTaskMetadataFields(
+          svc.db, svc.config, svc.embedder, displayId,
+          { status: 'pending', claim_token: '', claimed_at: '' },
+        );
+        if (!metaResult.ok) {
+          process.stderr.write(formatError(metaResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(metaResult.data, !!opts.json);
+      });
+    });
+
   return cmd;
+}
+
+function replaceFrontmatterField(content: string, field: string, value: string): string {
+  const endOfFrontmatter = content.indexOf('\n---', 4);
+  if (endOfFrontmatter === -1) return content;
+
+  const frontmatter = content.slice(0, endOfFrontmatter);
+  const rest = content.slice(endOfFrontmatter);
+  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
+  const quoted = value.includes(' ') ? `"${value}"` : value;
+
+  if (fieldRegex.test(frontmatter)) {
+    if (!value) {
+      return frontmatter.replace(new RegExp(`\n${field}:.*$`, 'm'), '') + rest;
+    }
+    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
+  }
+  if (!value) return content;
+  return frontmatter + `\n${field}: ${quoted}` + rest;
+}
+
+async function updateTaskMetadataFields(
+  db: BrainDB,
+  config: BrainConfig,
+  embedder: Embedder,
+  displayId: string,
+  fields: Record<string, string>,
+): Promise<Result<TaskMetadata>> {
+  const notes = getPmNotes(db, 'task', { display_id: displayId });
+  if (notes.length === 0) {
+    return fail('NOT_FOUND', `Task "${displayId}" not found`);
+  }
+
+  const note = notes[0];
+  const filePath = note.filePath;
+  if (!existsSync(filePath)) {
+    return fail('NOT_FOUND', `Task file not found at "${filePath}"`);
+  }
+
+  let content = readFileSync(filePath, 'utf-8');
+  for (const [key, value] of Object.entries(fields)) {
+    content = replaceFrontmatterField(content, key, value);
+  }
+  const now = new Date().toISOString().slice(0, 10);
+  content = replaceFrontmatterField(content, 'modified', now);
+
+  writeFileSync(filePath, content, 'utf-8');
+
+  const hash = createHash('sha256').update(content).digest('hex');
+  const noteId = await indexSingleFile(db, embedder, filePath, content, hash, Date.now());
+
+  const refreshedNote = db.getNoteById(noteId);
+  const refreshedMeta = JSON.parse(refreshedNote!.metadata!) as TaskMetadata;
+
+  return { ok: true, data: refreshedMeta };
 }
