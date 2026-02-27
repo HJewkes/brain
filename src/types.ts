@@ -110,7 +110,12 @@ export interface ActivityRecord {
 
 // === Chunk Types ===
 
-export type ChunkType = 'section' | 'heading' | 'paragraph' | 'code' | 'list' | 'blockquote';
+/**
+ * Chunk type classification.
+ * Currently only 'section' and 'paragraph' are produced by the markdown parser.
+ * Additional variants can be added for future fine-grained chunking strategies.
+ */
+export type ChunkType = 'section' | 'paragraph';
 
 export type CutType =
   | 'heading_boundary'

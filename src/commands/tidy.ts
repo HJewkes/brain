@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import { withDb } from '../services/brain-service.js';
 import { requireOllama } from '../services/ollama.js';
 
+/** Max characters of note content sent to the tidy LLM call */
+const TIDY_CONTENT_MAX_CHARS = 3000;
+
+/** System prompt for the tidy LLM call */
 const TIDY_SYSTEM = `You are a note quality reviewer. Given a note, provide brief, actionable suggestions to improve it.
 
 Focus on:
@@ -67,7 +71,7 @@ export const tidyCommand = new Command('tidy')
           continue;
         }
 
-        const truncated = content.slice(0, 3000);
+        const truncated = content.slice(0, TIDY_CONTENT_MAX_CHARS);
         const suggestions = await llm.generate(truncated, TIDY_SYSTEM);
         results.push({ noteId: note.id, title: note.title, suggestions });
       }

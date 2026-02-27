@@ -13,6 +13,14 @@ export const feedCommand = new Command('feed')
       .option('--tag <tag>', 'Container tag for namespacing', 'default')
       .option('--filter <prompt>', 'Filter prompt to select relevant items')
       .action(async (url, opts) => {
+        try {
+          new URL(url);
+        } catch {
+          process.stderr.write(`Error: invalid URL: ${url}\n`);
+          process.exitCode = 1;
+          return;
+        }
+
         await withDb(({ db }) => {
           try {
             const name = opts.name ?? new URL(url).hostname;

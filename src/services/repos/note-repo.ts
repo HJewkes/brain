@@ -124,8 +124,12 @@ export class NoteRepo {
 
   // --- Chunk + Vector Operations ---
 
-  // TODO: add guard for chunks.length !== embeddings.length mismatch
   upsertChunks(noteId: string, chunks: Chunk[], embeddings: Float32Array[]): void {
+    if (chunks.length !== embeddings.length) {
+      throw new Error(
+        `upsertChunks: chunks (${chunks.length}) and embeddings (${embeddings.length}) length mismatch`
+      );
+    }
     if (embeddings.length > 0) {
       this.ensureVectorTable(embeddings[0].length);
     }

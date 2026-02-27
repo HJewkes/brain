@@ -14,7 +14,9 @@ import type {
 import type { ModuleRegistry } from '../modules/registry.js';
 
 const RRF_K = 60;
-const EXCERPT_MAX_LENGTH = 200;
+// Cross-encoder reranker (ms-marco-MiniLM-L-6-v2) has a 512-token window.
+// 500 chars balances rerank quality with response payload size.
+const EXCERPT_MAX_LENGTH = 500;
 const OVERFETCH_MULTIPLIER = 3;
 
 interface RRFEntry {
