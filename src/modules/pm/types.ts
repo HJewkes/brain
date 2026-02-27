@@ -15,14 +15,17 @@ export type PromptStatus = 'stub' | 'draft' | 'current' | 'stale' | 'superseded'
 export type VirtualState = '+READY' | '+ELIGIBLE' | '+BLOCKED' | '+STALE' | '+OVERDUE';
 
 // Task modes and categories
-export type TaskMode = 'auto' | 'interactive' | 'review';
+export type TaskMode = 'agent' | 'assisted' | 'human' | 'review' | 'auto' | 'interactive';
 export type TaskCategory =
   | 'implementation'
   | 'testing'
   | 'documentation'
   | 'research'
   | 'review'
-  | 'infrastructure';
+  | 'infrastructure'
+  | 'configuration'
+  | 'design'
+  | 'migration';
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
 
 // Note visibility for search scoping

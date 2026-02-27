@@ -50,11 +50,19 @@ function suggestVerificationSteps(category: TaskCategory): string[] {
         'Confirm no open questions remain',
       ];
     case 'infrastructure':
+    case 'configuration':
+    case 'migration':
       return [
         'Verify infrastructure changes deploy successfully',
         'Check monitoring and alerting are configured',
         'Run smoke tests in target environment',
         'Review rollback plan',
+      ];
+    case 'design':
+      return [
+        'Verify design document covers all requirements',
+        'Check for consistency with existing architecture',
+        'Review trade-offs and alternatives considered',
       ];
   }
 }

@@ -75,12 +75,12 @@ export const pmModule: BrainModule = {
           },
           mode: {
             type: 'string',
-            enum: ['auto', 'interactive', 'review'],
+            enum: ['agent', 'assisted', 'human', 'review', 'auto', 'interactive'],
             description: 'Task execution mode',
           },
           category: {
             type: 'string',
-            enum: ['implementation', 'testing', 'documentation', 'research', 'review', 'infrastructure'],
+            enum: ['implementation', 'testing', 'documentation', 'research', 'review', 'infrastructure', 'configuration', 'design', 'migration'],
             description: 'Task category',
           },
           priority: {
