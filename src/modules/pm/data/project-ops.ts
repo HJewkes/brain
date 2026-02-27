@@ -72,8 +72,7 @@ export async function createProject(
   writeFileSync(filePath, markdown, 'utf-8');
 
   const hash = createHash('sha256').update(markdown).digest('hex');
-  const noteId = await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
-
+  await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
 
   const metadata: ProjectMetadata = {
     display_id: input.prefix,

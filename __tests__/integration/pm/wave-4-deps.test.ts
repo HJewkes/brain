@@ -10,7 +10,6 @@ import type { BrainConfig } from '../../../src/types.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
 import { getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
-import { resolveDisplayId } from '../../../src/modules/pm/data/queries.js';
 import {
   computeEligible,
   computeWaves,

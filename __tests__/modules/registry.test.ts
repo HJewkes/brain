@@ -134,7 +134,7 @@ describe('ModuleRegistry', () => {
 
   describe('commands', () => {
     it('registers and retrieves commands', () => {
-      const cmd = {} as any;
+      const cmd = {} as unknown;
       registry.registerCommand('pm', cmd);
 
       const commands = registry.getCommands();

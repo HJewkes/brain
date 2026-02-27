@@ -15,7 +15,6 @@ import {
   listTasks,
   getTask,
   updateTaskStatus,
-  updateTask,
   deleteTask,
 } from '../../../src/modules/pm/data/task-ops.js';
 

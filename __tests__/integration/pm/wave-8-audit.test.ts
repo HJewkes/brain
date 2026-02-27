@@ -10,7 +10,7 @@ import type { BrainConfig } from '../../../src/types.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus, listTasks } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks } from '../../../src/modules/pm/data/task-ops.js';
 import { createCapture, listCaptures, processCapture } from '../../../src/modules/pm/data/capture-ops.js';
 import { estimateCost } from '../../../src/modules/pm/data/cost.js';
 import { executeImport, type ImportProjectDef } from '../../../src/modules/pm/commands/import.js';

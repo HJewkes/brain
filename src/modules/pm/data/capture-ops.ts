@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { Result } from '../errors.js';
-import type { CaptureMetadata, TaskMetadata } from '../types.js';
+import type { TaskMetadata } from '../types.js';
 import { ok, fail } from '../errors.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { getPmNotes } from './queries.js';

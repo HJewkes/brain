@@ -1,21 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
-import { assembleContext } from '../engine/dispatch.js';
-import type { ContextBundle } from '../engine/dispatch.js';
-
-function filterBySince(bundle: ContextBundle, since: string): ContextBundle {
-  const sinceDate = new Date(since);
-  const filtered = { ...bundle };
-  filtered.decisions = bundle.decisions.filter(() => {
-    // Decisions don't carry timestamps in DecisionSummary;
-    // the --since filter is best-effort based on available data.
-    // Keep all decisions since we can't determine their creation time
-    // from the summary alone.
-    return true;
-  });
-  return filtered;
-}
+import { assembleContext, type ContextBundle } from '../engine/dispatch.js';
 
 function formatHuman(bundle: ContextBundle): string {
   const lines: string[] = [];
@@ -74,11 +60,9 @@ export function createContextCommand(): Command {
           return;
         }
 
-        let bundle = result.data;
+        const bundle = result.data;
 
-        if (opts.since) {
-          bundle = filterBySince(bundle, opts.since);
-        }
+        // --since is accepted but not yet implemented (decisions lack timestamps)
 
         if (opts.json) {
           process.stdout.write(JSON.stringify(bundle, null, 2) + '\n');

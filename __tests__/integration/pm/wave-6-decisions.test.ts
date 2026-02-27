@@ -13,7 +13,6 @@ import {
   createDecision,
   listDecisions,
   supersedeDecision,
-  getDecision,
 } from '../../../src/modules/pm/data/decision-ops.js';
 import {
   writePrompt,

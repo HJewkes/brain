@@ -12,7 +12,7 @@ import { getProject } from '../data/project-ops.js';
 import { computeEligible, computeWaves, computeImpact } from '../engine/dependency.js';
 import { assembleContext } from '../engine/dispatch.js';
 import { validateClaimToken } from '../engine/claims.js';
-import type { TaskStatus, TaskMetadata, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
+import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
 
 function resolvePrefix(
   explicitProject: string | undefined,

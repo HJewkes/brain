@@ -311,6 +311,9 @@ describe('detectStalePrompts', () => {
       content: 'Build REST API.',
     });
 
+    // Ensure decision gets a later indexedAt timestamp than the prompt
+    await new Promise((resolve) => setTimeout(resolve, 15));
+
     // Create a decision that impacts the task (created after the prompt)
     await createDecision(db, config, embedder, {
       project: 'WEB',

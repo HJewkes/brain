@@ -14,7 +14,7 @@ import { createTask, getTask, updateTaskStatus, listTasks, deleteTask } from '..
 import { createDecision } from '../../src/modules/pm/data/decision-ops.js';
 import { writePrompt, detectStalePrompts } from '../../src/modules/pm/data/prompt-ops.js';
 import { getPmNotes, getProjectNotes } from '../../src/modules/pm/data/queries.js';
-import { computeEligible, computeWaves, detectCycle, buildDependencyGraph } from '../../src/modules/pm/engine/dependency.js';
+import { computeEligible, computeWaves, detectCycle } from '../../src/modules/pm/engine/dependency.js';
 import { assembleContext, isContextStale } from '../../src/modules/pm/engine/dispatch.js';
 import { validateTransition, computeVirtualState } from '../../src/modules/pm/engine/state-machine.js';
 import { generateClaim, validateClaimToken, isClaimActive } from '../../src/modules/pm/engine/claims.js';

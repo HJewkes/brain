@@ -113,7 +113,7 @@ describe('createModuleContext', () => {
     registry.registerModule(makeMockModule('pm'));
     const ctx = createModuleContext(registry, 'pm');
 
-    const fakeCmd = {} as any;
+    const fakeCmd = {} as unknown;
     ctx.registerCommand(fakeCmd);
 
     expect(registry.getCommands()).toHaveLength(1);
