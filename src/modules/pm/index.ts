@@ -4,6 +4,7 @@ import { createWorkstreamCommands } from './commands/workstream.js';
 import { createTaskCommands } from './commands/task.js';
 import { createOrchestrationCommands } from './commands/orchestration.js';
 import { createDecisionCommands } from './commands/decision.js';
+import { createPromptCommands } from './commands/prompt.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -183,6 +184,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createWorkstreamCommands());
     pmCmd.addCommand(createTaskCommands());
     pmCmd.addCommand(createDecisionCommands());
+    pmCmd.addCommand(createPromptCommands());
     for (const cmd of createOrchestrationCommands()) {
       pmCmd.addCommand(cmd);
     }
