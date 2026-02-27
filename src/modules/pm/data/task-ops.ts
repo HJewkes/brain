@@ -84,6 +84,7 @@ function replaceFrontmatterField(content: string, field: string, value: string):
 
 function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
   return {
+    title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     project: meta.project as string,
     workstream: meta.workstream as number,

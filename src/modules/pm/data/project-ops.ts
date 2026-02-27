@@ -89,6 +89,7 @@ export async function createProject(
 
 function projectMetaFromRecord(meta: Record<string, unknown>): ProjectMetadata {
   return {
+    title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     prefix: meta.prefix as string,
     status: meta.status as ProjectMetadata['status'],

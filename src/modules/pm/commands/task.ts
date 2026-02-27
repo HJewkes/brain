@@ -16,7 +16,7 @@ import {
   updateTaskStatus,
   deleteTask,
 } from '../data/task-ops.js';
-import { getPmNotes } from '../data/queries.js';
+import { getPmNotes, resolveProject } from '../data/queries.js';
 import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
 
@@ -37,11 +37,12 @@ function outputResult(data: unknown, json: boolean): void {
 
 function formatTaskLine(task: unknown): string {
   const t = task as Record<string, unknown>;
+  const title = t.title ? ` ${t.title}` : '';
   const priority = t.priority ? ` [${t.priority}]` : '';
   const mode = t.mode ? ` (${t.mode})` : '';
   const vs = t.virtualStates as string[] | undefined;
   const virtualStates = vs && vs.length > 0 ? ` ${vs.join(' ')}` : '';
-  return `${t.display_id} - ${t.status}${priority}${mode}${virtualStates}`;
+  return `${t.display_id} -${title}${priority} ${t.status}${mode}${virtualStates}`;
 }
 
 export function createTaskCommands(): Command {
@@ -51,7 +52,7 @@ export function createTaskCommands(): Command {
     .command('add')
     .description('Create a new task')
     .argument('<name>', 'Task name')
-    .requiredOption('--project <prefix>', 'Parent project prefix')
+    .option('--project <prefix>', 'Project prefix (uses active if omitted)')
     .requiredOption('--workstream <n>', 'Workstream number', parseInt)
     .option('--mode <mode>', 'Task mode (auto|interactive|review)')
     .option('--category <cat>', 'Task category')
@@ -60,8 +61,15 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (name, opts) => {
       await withBrain(async (svc) => {
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        const project = projectResult.data;
         const result = await createTask(svc.db, svc.config, svc.embedder, {
-          project: opts.project.toUpperCase(),
+          project,
           workstream: opts.workstream,
           name,
           mode: opts.mode as never,
@@ -87,21 +95,13 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        if (!opts.project) {
-          process.stderr.write(
-            formatError(
-              {
-                error: true,
-                code: 'INVALID_INPUT',
-                message: '--project is required for listing tasks',
-              },
-              !!opts.json
-            ) + '\n'
-          );
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
-        const result = listTasks(svc.db, opts.project.toUpperCase(), {
+        const result = listTasks(svc.db, projectResult.data, {
           workstream: opts.workstream,
           status: opts.status,
         });

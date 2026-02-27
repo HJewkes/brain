@@ -85,6 +85,7 @@ function buildDecisionMarkdown(
 
 function decisionMetaFromRecord(meta: Record<string, unknown>): DecisionMetadata {
   return {
+    title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     project: meta.project as string,
     status: meta.status as DecisionStatus,

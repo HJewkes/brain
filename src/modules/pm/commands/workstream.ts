@@ -8,6 +8,7 @@ import {
   updateWorkstream,
   deleteWorkstream,
 } from '../data/workstream-ops.js';
+import { resolveProject } from '../data/queries.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -26,7 +27,9 @@ function outputResult(data: unknown, json: boolean): void {
 
 function formatWorkstreamLine(ws: unknown): string {
   const w = ws as Record<string, unknown>;
-  return `${w.display_id} - ${w.project} #${w.number} (${w.status})`;
+  const rawTitle = (w.title as string) ?? '';
+  const name = rawTitle.replace(/^Workstream\s+/i, '') || `#${w.number}`;
+  return `${w.display_id} - ${name} (${w.status})`;
 }
 
 export function createWorkstreamCommands(): Command {
@@ -36,13 +39,20 @@ export function createWorkstreamCommands(): Command {
     .command('add')
     .description('Create a new workstream')
     .argument('<name>', 'Workstream name')
-    .requiredOption('--project <prefix>', 'Parent project prefix')
+    .option('--project <prefix>', 'Project prefix (uses active if omitted)')
     .option('--description <desc>', 'Workstream description')
     .option('--json', 'Output JSON')
     .action(async (name, opts) => {
       await withBrain(async (svc) => {
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        const project = projectResult.data;
         const result = await createWorkstream(svc.db, svc.config, svc.embedder, {
-          project: opts.project.toUpperCase(),
+          project,
           name,
           description: opts.description,
         });
@@ -62,21 +72,13 @@ export function createWorkstreamCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        if (!opts.project) {
-          process.stderr.write(
-            formatError(
-              {
-                error: true,
-                code: 'INVALID_INPUT',
-                message: '--project is required for listing workstreams',
-              },
-              !!opts.json
-            ) + '\n'
-          );
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
-        const result = listWorkstreams(svc.db, opts.project.toUpperCase());
+        const result = listWorkstreams(svc.db, projectResult.data);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;

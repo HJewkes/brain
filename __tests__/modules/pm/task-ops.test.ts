@@ -214,6 +214,7 @@ describe('getTask', () => {
     if (!result.ok) return;
 
     expect(result.data.display_id).toBe('WEB-01.01');
+    expect(result.data.title).toBe('Ready task');
     expect(result.data.virtualStates).toContain('+READY');
     expect(result.data.virtualStates).toContain('+ELIGIBLE');
   });

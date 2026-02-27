@@ -69,6 +69,7 @@ function replaceFrontmatterField(content: string, field: string, value: string):
 
 function workstreamMetaFromRecord(meta: Record<string, unknown>): WorkstreamMetadata {
   return {
+    title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     project: meta.project as string,
     number: meta.number as number,

@@ -35,6 +35,7 @@ export type NoteVisibility = 'public' | 'contextual' | 'private';
 
 // PM metadata interfaces (stored in notes.metadata JSON)
 export interface ProjectMetadata {
+  title?: string;
   display_id: string;
   prefix: string;
   status: ProjectStatus;
@@ -43,6 +44,7 @@ export interface ProjectMetadata {
 }
 
 export interface WorkstreamMetadata {
+  title?: string;
   display_id: string;
   project: string;
   number: number;
@@ -50,6 +52,7 @@ export interface WorkstreamMetadata {
 }
 
 export interface TaskMetadata {
+  title?: string;
   display_id: string;
   project: string;
   workstream: number;
@@ -64,6 +67,7 @@ export interface TaskMetadata {
 }
 
 export interface DecisionMetadata {
+  title?: string;
   display_id: string;
   project: string;
   status: DecisionStatus;
@@ -72,6 +76,7 @@ export interface DecisionMetadata {
 }
 
 export interface PromptMetadata {
+  title?: string;
   display_id: string;
   project: string;
   task: string;
