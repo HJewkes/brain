@@ -8,8 +8,7 @@ import type { TaskMetadata, TaskMode, TaskCategory, TaskPriority, TaskStatus, Vi
 import { ok, fail } from '../errors.js';
 import { nextTaskNumber, formatDisplayId, parseDisplayId } from '../ids.js';
 import { indexSingleFile } from '../../../services/indexing.js';
-import { getPmNotes } from './queries.js';
-import { resolveDisplayId } from './queries.js';
+import { getPmNotes, resolveDisplayId } from './queries.js';
 import { validateTransition, computeVirtualState } from '../engine/state-machine.js';
 
 export interface CreateTaskInput {
