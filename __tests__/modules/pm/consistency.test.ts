@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
@@ -20,7 +20,9 @@ import {
   computeDecisionPairs,
   computeTaskDecisionAlignment,
   computeSupersessionGaps,
+  clusterSourceDocuments,
 } from '../../../src/modules/pm/engine/consistency.js';
+import { indexSingleFile } from '../../../src/services/indexing.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -232,5 +234,51 @@ describe('computeSupersessionGaps', () => {
     expect(gaps[0].older.id).toBe('CHK-D01');
     expect(gaps[0].newer.id).toBe('CHK-D02');
     expect(gaps[0].reason).toContain('no supersession');
+  });
+});
+
+describe('clusterSourceDocuments', () => {
+  it('groups documents with similar titles', async () => {
+    const doc1Path = join(notesDir, 'auth-design-v1.md');
+    const doc1Content = '---\nid: auth-design-v1\ntitle: "Auth Design v1"\ntype: note\ntier: fast\nsource: google-docs\n---\n\nOriginal auth approach using JWT.';
+    writeFileSync(doc1Path, doc1Content);
+    const hash1 = createHash('sha256').update(doc1Content).digest('hex');
+    await indexSingleFile(db, embedder, doc1Path, doc1Content, hash1, Date.now() - 100000);
+
+    const doc2Path = join(notesDir, 'auth-design-v2.md');
+    const doc2Content = '---\nid: auth-design-v2\ntitle: "Auth Design v2"\ntype: note\ntier: fast\nsource: google-docs\n---\n\nRevised auth approach using sessions.';
+    writeFileSync(doc2Path, doc2Content);
+    const hash2 = createHash('sha256').update(doc2Content).digest('hex');
+    await indexSingleFile(db, embedder, doc2Path, doc2Content, hash2, Date.now());
+
+    const clusters = clusterSourceDocuments(db);
+    const authCluster = clusters.find((c) => c.topic.toLowerCase().includes('auth'));
+    expect(authCluster).toBeDefined();
+    expect(authCluster!.documents).toHaveLength(2);
+    expect(authCluster!.documents[0].title).toContain('v2');
+  });
+
+  it('returns empty when no source documents cluster', () => {
+    const clusters = clusterSourceDocuments(db);
+    expect(clusters).toHaveLength(0);
+  });
+
+  it('excludes PM module notes from clustering', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B' });
+
+    const clusters = clusterSourceDocuments(db);
+    expect(clusters).toHaveLength(0);
+  });
+
+  it('only returns clusters with 2+ documents', async () => {
+    const docPath = join(notesDir, 'solo-doc.md');
+    const docContent = '---\nid: solo-doc\ntitle: "Solo Document"\ntype: note\ntier: fast\n---\n\nA single document with no siblings.';
+    writeFileSync(docPath, docContent);
+    const hash = createHash('sha256').update(docContent).digest('hex');
+    await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());
+
+    const clusters = clusterSourceDocuments(db);
+    expect(clusters).toHaveLength(0);
   });
 });

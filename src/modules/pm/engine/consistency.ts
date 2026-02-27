@@ -191,6 +191,19 @@ export interface TaskDecisionPair {
   reason: string;
 }
 
+export interface SourceDocCluster {
+  topic: string;
+  documents: {
+    noteId: string;
+    title: string;
+    source?: string;
+    sourceUrl?: string;
+    indexedAt: string;
+    excerpt: string;
+  }[];
+  reason: string;
+}
+
 export interface SupersessionGap {
   older: { id: string; title: string; content: string; createdAt: string };
   newer: { id: string; title: string; content: string; createdAt: string };
@@ -386,4 +399,69 @@ export function computeSupersessionGaps(db: BrainDB, prefix: string): Supersessi
   }
 
   return gaps;
+}
+
+function extractTopicKey(title: string): string {
+  return title
+    .replace(/\s*[vV]\d+\s*$/g, '')
+    .replace(/\s*\d{4}-\d{2}-\d{2}\s*$/g, '')
+    .replace(/\s*#\d+\s*$/g, '')
+    .replace(/\s*\(\d+\)\s*$/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+export function clusterSourceDocuments(db: BrainDB): SourceDocCluster[] {
+  const allNotes = db.getAllNotes();
+  const sourceDocs = allNotes.filter((note) => !note.module && note.title);
+
+  if (sourceDocs.length === 0) return [];
+
+  const groups = new Map<string, typeof sourceDocs>();
+  for (const note of sourceDocs) {
+    const key = extractTopicKey(note.title);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(note);
+  }
+
+  const clusters: SourceDocCluster[] = [];
+  for (const [, notes] of groups) {
+    if (notes.length < 2) continue;
+
+    const docs = notes.map((note) => {
+      const meta = note.metadata ? JSON.parse(note.metadata) as Record<string, unknown> : {};
+      const indexedAt = getIndexedAt(db, note.filePath);
+      return {
+        noteId: note.id,
+        title: note.title,
+        source: meta.source as string | undefined,
+        sourceUrl: meta.sourceUrl as string | undefined,
+        indexedAt: new Date(indexedAt).toISOString(),
+        excerpt: note.title.slice(0, 300),
+        _indexedAtNum: indexedAt,
+      };
+    });
+
+    docs.sort((a, b) => b._indexedAtNum - a._indexedAtNum);
+
+    const span = docs.length > 1
+      ? Math.round((docs[0]._indexedAtNum - docs[docs.length - 1]._indexedAtNum) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    clusters.push({
+      topic: notes[0].title.replace(/\s*[vV]\d+\s*$/, ''),
+      documents: docs.map((d) => ({
+        noteId: d.noteId,
+        title: d.title,
+        source: d.source,
+        sourceUrl: d.sourceUrl,
+        indexedAt: d.indexedAt,
+        excerpt: d.excerpt,
+      })),
+      reason: `${notes.length} docs on same topic${span > 0 ? ` spanning ${span} days` : ''} — check for supersession`,
+    });
+  }
+
+  return clusters;
 }
