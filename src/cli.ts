@@ -23,7 +23,9 @@ import { tidyCommand } from './commands/tidy.js';
 import { installHooksCommand } from './commands/install-hooks.js';
 import { doctorCommand } from './commands/doctor.js';
 import { lineageCommand } from './commands/lineage.js';
+import { resetCommand } from './commands/reset.js';
 import { loadModules } from './modules/loader.js';
+import { pmModule } from './modules/pm/index.js';
 
 const program = new Command()
   .name('brain')
@@ -54,9 +56,10 @@ program.addCommand(tidyCommand);
 program.addCommand(installHooksCommand);
 program.addCommand(doctorCommand);
 program.addCommand(lineageCommand);
+program.addCommand(resetCommand);
 
 async function main(): Promise<void> {
-  const { registry } = await loadModules();
+  const { registry } = await loadModules({ modules: [pmModule] });
   for (const { command } of registry.getCommands()) {
     program.addCommand(command);
   }
