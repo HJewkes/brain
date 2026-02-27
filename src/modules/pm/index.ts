@@ -11,6 +11,7 @@ import { createCaptureCommands } from './commands/capture.js';
 import { createAuditCommands } from './commands/audit.js';
 import { createImportCommand } from './commands/import.js';
 import { createOrchestrateCommands } from './commands/orchestrate.js';
+import { createInstallHooksCommand } from './commands/install-hooks.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -202,6 +203,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createAuditCommands());
     pmCmd.addCommand(createImportCommand());
     pmCmd.addCommand(createOrchestrateCommands());
+    pmCmd.addCommand(createInstallHooksCommand());
     ctx.registerCommand(pmCmd);
   },
 };
