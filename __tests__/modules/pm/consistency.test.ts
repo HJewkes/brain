@@ -10,11 +10,13 @@ import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createDecision } from '../../../src/modules/pm/data/decision-ops.js';
+import { writePrompt } from '../../../src/modules/pm/data/prompt-ops.js';
 import {
   findOrphanedDecisions,
   findBrokenDependencies,
   findBlockedWithoutCause,
   findCancelledDependencies,
+  findStalePrompts,
 } from '../../../src/modules/pm/engine/consistency.js';
 
 let db: BrainDB;
@@ -110,5 +112,44 @@ describe('findCancelledDependencies', () => {
     expect(result).toHaveLength(1);
     expect(result[0].task).toBe('CHK-01.02');
     expect(result[0].dependsOnStatus).toBe('cancelled');
+  });
+});
+
+describe('findStalePrompts', () => {
+  it('returns prompts older than impacting decisions with decision details', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
+    // Write prompt first
+    await writePrompt(db, config, embedder, {
+      project: 'CHK', task: 'CHK-01.01', content: 'Build the API endpoint',
+    });
+    // Small delay to ensure different timestamps
+    await new Promise((r) => setTimeout(r, 50));
+    // Create decision that impacts the task (newer than prompt)
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Use REST', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'REST over GraphQL',
+    });
+
+    const result = findStalePrompts(db, 'CHK');
+    expect(result).toHaveLength(1);
+    expect(result[0].task).toBe('CHK-01.01');
+    expect(result[0].newerDecisions).toHaveLength(1);
+    expect(result[0].newerDecisions[0].id).toBe('CHK-D01');
+  });
+
+  it('returns empty when no stale prompts', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
+    // Decision first, prompt after — prompt is not stale
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Early Decision', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'Decided early',
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await writePrompt(db, config, embedder, {
+      project: 'CHK', task: 'CHK-01.01', content: 'Written after decision',
+    });
+
+    const result = findStalePrompts(db, 'CHK');
+    expect(result).toHaveLength(0);
   });
 });

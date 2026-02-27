@@ -26,6 +26,19 @@ export interface BlockedTask {
   reason: string;
 }
 
+export interface StalePrompt {
+  id: string;
+  task: string;
+  taskTitle: string;
+  promptIndexedAt: string;
+  newerDecisions: {
+    id: string;
+    title: string;
+    indexedAt: string;
+  }[];
+  reason: string;
+}
+
 export interface CancelledDep {
   task: string;
   taskTitle: string;
@@ -151,6 +164,57 @@ export function findCancelledDependencies(db: BrainDB, prefix: string): Cancelle
           reason: `Depends on cancelled task ${dep}`,
         });
       }
+    }
+  }
+
+  return results;
+}
+
+function getIndexedAt(db: BrainDB, filePath: string): number {
+  const file = db.getFile(filePath);
+  return file?.indexedAt ?? 0;
+}
+
+export function findStalePrompts(db: BrainDB, prefix: string): StalePrompt[] {
+  const currentPrompts = getPmNotes(db, 'prompt', { project: prefix, prompt_status: 'current' });
+  if (currentPrompts.length === 0) return [];
+
+  const decisionNotes = getPmNotes(db, 'decision', { project: prefix });
+  const results: StalePrompt[] = [];
+
+  for (const promptNote of currentPrompts) {
+    const promptMeta = JSON.parse(promptNote.metadata!) as Record<string, unknown>;
+    const taskDisplayId = promptMeta.task as string;
+    const promptIndexedAt = getIndexedAt(db, promptNote.filePath);
+    const newerDecisions: StalePrompt['newerDecisions'] = [];
+
+    for (const decNote of decisionNotes) {
+      const decMeta = JSON.parse(decNote.metadata!) as Record<string, unknown>;
+      const impacts = decMeta.impacts as string[] | undefined;
+      if (!impacts || !impacts.includes(taskDisplayId)) continue;
+
+      const decIndexedAt = getIndexedAt(db, decNote.filePath);
+      if (decIndexedAt > promptIndexedAt) {
+        newerDecisions.push({
+          id: decMeta.display_id as string,
+          title: decNote.title ?? (decMeta.display_id as string),
+          indexedAt: new Date(decIndexedAt).toISOString(),
+        });
+      }
+    }
+
+    if (newerDecisions.length > 0) {
+      const taskNotes = getPmNotes(db, 'task', { display_id: taskDisplayId });
+      const taskTitle = taskNotes.length > 0 ? (taskNotes[0].title ?? taskDisplayId) : taskDisplayId;
+
+      results.push({
+        id: promptMeta.display_id as string,
+        task: taskDisplayId,
+        taskTitle,
+        promptIndexedAt: new Date(promptIndexedAt).toISOString(),
+        newerDecisions,
+        reason: `Prompt is older than ${newerDecisions.length} impacting decision(s)`,
+      });
     }
   }
 
