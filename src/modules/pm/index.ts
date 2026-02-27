@@ -7,6 +7,8 @@ import { createDecisionCommands } from './commands/decision.js';
 import { createPromptCommands } from './commands/prompt.js';
 import { createContextCommand } from './commands/context.js';
 import { createVerifyCommand } from './commands/verify.js';
+import { createCaptureCommands } from './commands/capture.js';
+import { createAuditCommands } from './commands/audit.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -192,6 +194,10 @@ export const pmModule: BrainModule = {
     for (const cmd of createOrchestrationCommands()) {
       pmCmd.addCommand(cmd);
     }
+    for (const cmd of createCaptureCommands()) {
+      pmCmd.addCommand(cmd);
+    }
+    pmCmd.addCommand(createAuditCommands());
     ctx.registerCommand(pmCmd);
   },
 };
