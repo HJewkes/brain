@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
-import { getActiveProject, getPmNotes } from '../data/queries.js';
+import { getActiveProject, getPmNotes, resolveProject } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
 import { detectStalePrompts } from '../data/prompt-ops.js';
@@ -18,15 +18,8 @@ import {
   findBlockedWithoutCause,
   findCancelledDependencies,
 } from '../engine/consistency.js';
+import { listWorkstreams } from '../data/workstream-ops.js';
 import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
-
-function resolvePrefix(
-  explicitProject: string | undefined,
-  activeProject: string | null
-): string | null {
-  if (explicitProject) return explicitProject.toUpperCase();
-  return activeProject;
-}
 
 export function createOrchestrationCommands(): Command[] {
   const nextCmd = new Command('next')
@@ -35,16 +28,13 @@ export function createOrchestrationCommands(): Command[] {
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
-        if (!prefix) {
-          const msg =
-            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
-          process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
-          );
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
+        const prefix = projectResult.data;
 
         const eligibleIds = computeEligible(svc.db, prefix);
 
@@ -54,7 +44,7 @@ export function createOrchestrationCommands(): Command[] {
             if (!result.ok) return { display_id: id };
             return {
               display_id: result.data.display_id,
-              name: result.data.display_id,
+              title: result.data.title,
               priority: result.data.priority,
               virtualStates: result.data.virtualStates,
             };
@@ -75,8 +65,9 @@ export function createOrchestrationCommands(): Command[] {
             continue;
           }
           const t = result.data;
+          const title = t.title ? ` ${t.title}` : '';
           const vs = t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
-          process.stdout.write(`${t.display_id}  ${t.priority}${vs}\n`);
+          process.stdout.write(`${t.display_id}${title}  ${t.priority}${vs}\n`);
         }
       });
     });
@@ -87,16 +78,13 @@ export function createOrchestrationCommands(): Command[] {
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
-        if (!prefix) {
-          const msg =
-            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
-          process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
-          );
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
+        const prefix = projectResult.data;
 
         const waves = computeWaves(svc.db, prefix);
 
@@ -105,10 +93,10 @@ export function createOrchestrationCommands(): Command[] {
             wave: w.wave,
             tasks: w.taskIds.map((id) => {
               const r = getTask(svc.db, id);
-              if (!r.ok) return { display_id: id, name: id, status: 'unknown' };
+              if (!r.ok) return { display_id: id, title: undefined, status: 'unknown' };
               return {
                 display_id: r.data.display_id,
-                name: r.data.display_id,
+                title: r.data.title,
                 status: r.data.status,
               };
             }),
@@ -123,7 +111,16 @@ export function createOrchestrationCommands(): Command[] {
         }
 
         for (const w of waves) {
-          process.stdout.write(`Wave ${w.wave}: ${w.taskIds.join(', ')}\n`);
+          process.stdout.write(`Wave ${w.wave}:\n`);
+          for (const id of w.taskIds) {
+            const r = getTask(svc.db, id);
+            if (!r.ok) {
+              process.stdout.write(`  ${id}\n`);
+              continue;
+            }
+            const title = r.data.title ? ` ${r.data.title}` : '';
+            process.stdout.write(`  ${id}${title}\n`);
+          }
         }
       });
     });
@@ -266,19 +263,17 @@ export function createOrchestrationCommands(): Command[] {
   const briefingCmd = new Command('briefing')
     .description('Session briefing with project state overview')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
+    .option('--verbose', 'Show workstream breakdown and priority matrix')
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
-        if (!prefix) {
-          const msg =
-            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
-          process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
-          );
+        const resolvedResult = resolveProject(svc.db, opts.project);
+        if (!resolvedResult.ok) {
+          process.stderr.write(formatError(resolvedResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
+        const prefix = resolvedResult.data;
 
         const projectResult = getProject(svc.db, prefix);
         const project = projectResult.ok ? projectResult.data : null;
@@ -333,6 +328,30 @@ export function createOrchestrationCommands(): Command[] {
           consistencyIssues,
         };
 
+        if (opts.verbose) {
+          const wsResult = listWorkstreams(svc.db, prefix);
+          const workstreams = wsResult.ok ? wsResult.data : [];
+
+          briefing.workstreamBreakdown = workstreams.map((ws) => {
+            const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
+            return {
+              display_id: ws.display_id,
+              name: ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`,
+              pending: wsTasks.filter((t) => t.status === 'pending').length,
+              inProgress: wsTasks.filter((t) => t.status === 'in-progress').length,
+              done: wsTasks.filter((t) => t.status === 'done').length,
+              blocked: wsTasks.filter((t) => t.status === 'blocked').length,
+            };
+          });
+
+          briefing.priorityMatrix = {
+            critical: allTasks.filter((t) => t.priority === 'critical').length,
+            high: allTasks.filter((t) => t.priority === 'high').length,
+            medium: allTasks.filter((t) => t.priority === 'medium').length,
+            low: allTasks.filter((t) => t.priority === 'low').length,
+          };
+        }
+
         if (opts.json) {
           process.stdout.write(JSON.stringify(briefing, null, 2) + '\n');
           return;
@@ -350,9 +369,16 @@ export function createOrchestrationCommands(): Command[] {
         lines.push(`Tasks: ${allTasks.length} total`);
         lines.push(`  Done: ${done.length}`);
         lines.push(`  In-progress: ${inProgress.length}`);
-        lines.push(
-          `  Eligible: ${eligible.length}${eligible.length > 0 ? ` (${eligible.join(', ')})` : ''}`
-        );
+        if (eligible.length <= 5) {
+          lines.push(
+            `  Eligible: ${eligible.length}${eligible.length > 0 ? ` (${eligible.join(', ')})` : ''}`
+          );
+        } else {
+          const top5 = eligible.slice(0, 5);
+          lines.push(
+            `  Eligible: ${eligible.length} (${top5.join(', ')} and ${eligible.length - 5} more)`
+          );
+        }
         lines.push(
           `  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.join(', ')})` : ''}`
         );
@@ -389,6 +415,58 @@ export function createOrchestrationCommands(): Command[] {
           );
         }
 
+        if (opts.verbose) {
+          lines.push('');
+          lines.push('--- Workstream Breakdown ---');
+
+          const wsResult = listWorkstreams(svc.db, prefix);
+          const workstreams = wsResult.ok ? wsResult.data : [];
+
+          for (const ws of workstreams) {
+            const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
+            const wsDone = wsTasks.filter((t) => t.status === 'done').length;
+            const wsInProgress = wsTasks.filter((t) => t.status === 'in-progress').length;
+            const wsPending = wsTasks.filter((t) => t.status === 'pending').length;
+            const wsBlocked = wsTasks.filter((t) => t.status === 'blocked').length;
+            const wsName = ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`;
+            lines.push(
+              `  ${ws.display_id} ${wsName}: ${wsPending} pending, ${wsInProgress} in-progress, ${wsDone} done${wsBlocked > 0 ? `, ${wsBlocked} blocked` : ''}`
+            );
+          }
+
+          lines.push('');
+          lines.push('--- Priority Matrix ---');
+          const critical = allTasks.filter((t) => t.priority === 'critical').length;
+          const high = allTasks.filter((t) => t.priority === 'high').length;
+          const medium = allTasks.filter((t) => t.priority === 'medium').length;
+          const low = allTasks.filter((t) => t.priority === 'low').length;
+          lines.push(`  Critical: ${critical} | High: ${high} | Medium: ${medium} | Low: ${low}`);
+
+          if (eligible.length > 0) {
+            lines.push('');
+            lines.push('--- Top Eligible ---');
+            const priorityOrder = ['critical', 'high', 'medium', 'low'];
+            const sortedEligible = eligible
+              .map((id) => {
+                const r = getTask(svc.db, id);
+                if (!r.ok) return { display_id: id, title: undefined, priority: 'low' as const };
+                return r.data;
+              })
+              .sort(
+                (a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority)
+              );
+
+            const topN = sortedEligible.slice(0, 5);
+            for (const t of topN) {
+              const title = t.title ? ` ${t.title}` : '';
+              lines.push(`  ${t.display_id}${title} [${t.priority}]`);
+            }
+            if (sortedEligible.length > 5) {
+              lines.push(`  ... and ${sortedEligible.length - 5} more`);
+            }
+          }
+        }
+
         process.stdout.write(lines.join('\n') + '\n');
       });
     });
@@ -410,4 +488,18 @@ export interface BriefingData {
   stalePrompts: PromptMetadata[];
   nextActions: string[];
   consistencyIssues?: number;
+  workstreamBreakdown?: Array<{
+    display_id: string;
+    name: string;
+    pending: number;
+    inProgress: number;
+    done: number;
+    blocked: number;
+  }>;
+  priorityMatrix?: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
 }
