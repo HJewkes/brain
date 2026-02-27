@@ -11,6 +11,13 @@ export const inboxCommand = new Command('inbox')
   .option('--delete <id>', 'Permanently delete an inbox item')
   .option('--count', 'Show count only')
   .action(async (opts) => {
+    const actionFlags = [opts.discard, opts.delete, opts.count].filter(Boolean);
+    if (actionFlags.length > 1) {
+      process.stderr.write('Error: --discard, --delete, and --count are mutually exclusive\n');
+      process.exitCode = 1;
+      return;
+    }
+
     if (opts.status && !VALID_STATUSES.includes(opts.status as InboxStatus)) {
       process.stderr.write(
         `Error: invalid status "${opts.status}". Valid: ${VALID_STATUSES.join(', ')}\n`

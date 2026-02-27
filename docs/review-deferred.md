@@ -7,9 +7,6 @@ Items found during deep reviews of `feat/memory-engine`. Organized by severity. 
 ### No retry logic for Ollama (`ollama.ts`)
 A single network hiccup fails the entire extraction. No retry for transient 5xx errors.
 
-### Reranker uses truncated 200-char excerpts (`reranker.ts:29`)
-Cross-encoder reranking operates on partial content due to `EXCERPT_MAX_LENGTH = 200` truncation. Pass full chunk content for better reranking quality.
-
 ### Memory IDs sent to LLM are full UUIDs (`memory-extractor.ts`)
 UUIDs consume tokens in the LLM context. Use short sequential IDs in the prompt and map them back.
 
@@ -22,54 +19,12 @@ When the LLM hallucinates a memory ID during reconciliation, the UPDATE/DELETE i
 ### Heading regex only matches h1-h3 (`markdown-parser.ts`)
 H4-H6 headings are treated as body text. Intentional but undocumented.
 
-### `ChunkType` has variants never produced by the parser (`types.ts`)
-`'heading'`, `'code'`, `'list'`, `'blockquote'` are defined but never assigned.
-
-### Chunk/embedding length mismatch not guarded (`note-repo.ts`)
-`upsertChunks` assumes `chunks.length === embeddings.length` without asserting.
-
-**Status:** TODO added in `note-repo.ts`.
-
----
-
-## Minor — Commands
-
-### `quick.ts` stdin fallback is unreachable
-The `<text...>` argument is required. Commander errors before the action, so stdin fallback never runs. Should be `[text...]` (optional) if stdin piping is intended.
-
-### `inbox.ts` mutually exclusive options not enforced
-`--discard`, `--delete`, `--count`, and `--status` can all be passed together. Only the first matching branch runs.
-
-### `feed.ts` URL validation only happens implicitly
-`new URL(url)` throws a generic `TypeError` on invalid URLs.
-
-### `extract.ts` creates embedder before validation
-Config, DB, embedder, and LLM client are all created before note lookup that might exit early.
-
-### `memories.ts` `parseInt` without validation
-`--limit abc` produces `NaN`, `.slice(0, NaN)` returns empty array silently.
-
-### `tidy.ts` content truncation hardcoded to 3000 chars
-Magic number, unexplained and not configurable.
-
 ### `tidy.ts` system prompt in command file
 `TIDY_SYSTEM` is domain/service logic embedded in the command layer.
 
 ---
 
 ## Minor — Tests
-
-### `fusionStrategy: 'rrf'` not explicitly exercised in tests
-The RRF code path is only tested indirectly.
-
-### `rerank` option path untested
-`options.rerank` branch in `search.ts` has no test coverage.
-
-### `forgetExpiredMemories` history side-effect not verified
-Tests check return count and `isForgotten` flag but never verify the `'forget'` event in `memory_history`.
-
-### Multiple chunks not tested in memory extraction
-Every extraction test seeds exactly one chunk.
 
 ### Eval harness `rechunkBody` diverges from production chunker
 `harness.ts` reimplements section splitting without heading ancestry, code fence protection, or overlap.
@@ -91,3 +46,28 @@ Every extraction test seeds exactly one chunk.
 - ~~`getMemoriesForNote` isLatest filter not verified~~ — covered in memory-repo tests
 - ~~Schema DDL duplication between schemaV1() and migrations~~ — extracted captureDDL/memoryDDL
 - ~~Query branch duplication in memory-repo.ts~~ — extracted queryLatestMemories helper
+
+---
+
+## Resolved in v0.4.0
+
+The following items from the original deferred list were addressed during the v0.4.0 polish pass (Tasks 01–07):
+
+### Commands
+- ~~`quick.ts` stdin fallback is unreachable~~ — argument made optional (`[text...]`); stdin path is now reachable
+- ~~`memories.ts` `parseInt` without validation~~ — added `Number.isNaN` guard; invalid `--limit` values now error clearly
+- ~~`inbox.ts` mutually exclusive options not enforced~~ — added explicit mutual-exclusion check with `program.error`
+- ~~`feed.ts` URL validation only happens implicitly~~ — now wraps `new URL()` and surfaces a user-friendly error
+- ~~`extract.ts` creates embedder before validation~~ — note lookup moved before resource initialisation; early exit is now clean
+- ~~`tidy.ts` content truncation hardcoded to 3000 chars~~ — magic number extracted to named constant `TIDY_CONTENT_MAX_LENGTH`
+
+### Services
+- ~~Reranker uses truncated 200-char excerpts (`reranker.ts:29`)~~ — full chunk content now passed to the cross-encoder; `EXCERPT_MAX_LENGTH` constant removed
+- ~~Chunk/embedding length mismatch not guarded (`note-repo.ts`)~~ — assertion added; mismatch now throws before any DB write
+- ~~`ChunkType` has variants never produced by the parser (`types.ts`)~~ — dead variants (`'heading'`, `'code'`, `'list'`, `'blockquote'`) removed from the union
+
+### Tests
+- ~~`fusionStrategy: 'rrf'` not explicitly exercised in tests~~ — dedicated RRF test added to `search.test.ts`
+- ~~`rerank` option path untested~~ — `options.rerank` branch covered in `search.test.ts`
+- ~~`forgetExpiredMemories` history side-effect not verified~~ — test now queries `memory_history` and asserts the `'forget'` event
+- ~~Multiple chunks not tested in memory extraction~~ — multi-chunk fixture added to `memory-extractor.test.ts`

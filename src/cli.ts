@@ -23,6 +23,7 @@ import { tidyCommand } from './commands/tidy.js';
 import { installHooksCommand } from './commands/install-hooks.js';
 import { doctorCommand } from './commands/doctor.js';
 import { lineageCommand } from './commands/lineage.js';
+import { loadModules } from './modules/loader.js';
 
 const program = new Command()
   .name('brain')
@@ -54,7 +55,15 @@ program.addCommand(installHooksCommand);
 program.addCommand(doctorCommand);
 program.addCommand(lineageCommand);
 
-program.parseAsync().catch((err: Error) => {
+async function main(): Promise<void> {
+  const { registry } = await loadModules();
+  for (const { command } of registry.getCommands()) {
+    program.addCommand(command);
+  }
+  await program.parseAsync();
+}
+
+main().catch((err: Error) => {
   process.stderr.write(`Error: ${err.message}\n`);
   process.exitCode = 1;
 });

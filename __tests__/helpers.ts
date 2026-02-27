@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type {
+  ActivityRecord,
   Chunk,
   Embedder,
   FeedRecord,
@@ -118,5 +119,25 @@ export function makeNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
     reviewInterval: overrides.reviewInterval ?? null,
     expires: overrides.expires ?? null,
     metadata: overrides.metadata ?? null,
+    module: overrides.module ?? null,
+    moduleInstance: overrides.moduleInstance ?? null,
+    contentDir: overrides.contentDir ?? null,
+  };
+}
+
+export function makeActivity(overrides: Partial<ActivityRecord> = {}): ActivityRecord {
+  return {
+    id: overrides.id ?? `activity-${randomUUID().slice(0, 8)}`,
+    noteIds: overrides.noteIds ?? null,
+    module: overrides.module ?? null,
+    moduleInstance: overrides.moduleInstance ?? null,
+    activityType: overrides.activityType ?? null,
+    actorType: overrides.actorType ?? null,
+    actorId: overrides.actorId ?? null,
+    sessionId: overrides.sessionId ?? null,
+    metadata: overrides.metadata ?? null,
+    outcome: overrides.outcome ?? null,
+    startedAt: overrides.startedAt ?? null,
+    completedAt: overrides.completedAt ?? null,
   };
 }

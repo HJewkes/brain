@@ -26,9 +26,9 @@ export class NoteRepo {
     this.db
       .prepare(
         `INSERT OR REPLACE INTO notes
-          (id, file_path, title, type, tier, category, tags, summary, confidence, status, sources, created_at, modified_at, last_reviewed, review_interval, expires, metadata)
+          (id, file_path, title, type, tier, category, tags, summary, confidence, status, sources, created_at, modified_at, last_reviewed, review_interval, expires, metadata, module, module_instance, content_dir)
         VALUES
-          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         record.id,
@@ -47,7 +47,10 @@ export class NoteRepo {
         record.lastReviewed,
         record.reviewInterval,
         record.expires,
-        record.metadata
+        record.metadata,
+        record.module,
+        record.moduleInstance,
+        record.contentDir
       );
     return record;
   }
@@ -121,8 +124,12 @@ export class NoteRepo {
 
   // --- Chunk + Vector Operations ---
 
-  // TODO: add guard for chunks.length !== embeddings.length mismatch
   upsertChunks(noteId: string, chunks: Chunk[], embeddings: Float32Array[]): void {
+    if (chunks.length !== embeddings.length) {
+      throw new Error(
+        `upsertChunks: chunks (${chunks.length}) and embeddings (${embeddings.length}) length mismatch`
+      );
+    }
     if (embeddings.length > 0) {
       this.ensureVectorTable(embeddings[0].length);
     }
@@ -262,6 +269,34 @@ export class NoteRepo {
       result.get(rel.targetId)?.to.push(rel);
     }
     return result;
+  }
+
+  getRelationsFiltered(opts: {
+    module?: string;
+    moduleInstance?: string;
+    type?: string;
+  }): Relation[] {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (opts.module) {
+      conditions.push('module = ?');
+      params.push(opts.module);
+    }
+    if (opts.moduleInstance) {
+      conditions.push('module_instance = ?');
+      params.push(opts.moduleInstance);
+    }
+    if (opts.type) {
+      conditions.push('type = ?');
+      params.push(opts.type);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const rows = this.db
+      .prepare(`SELECT source_id, target_id, type FROM relations ${where}`)
+      .all(...params) as RelationRow[];
+    return rows.map(rowToRelation);
   }
 
   // --- Lineage ---
@@ -404,6 +439,39 @@ export class NoteRepo {
       .all(...params) as { id: string }[];
     return new Set(rows.map((r) => r.id));
   }
+
+  getModuleNoteIds(filter: {
+    module?: string;
+    moduleInstance?: string;
+    type?: string;
+    status?: string;
+  }): string[] {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (filter.module) {
+      conditions.push('module = ?');
+      params.push(filter.module);
+    }
+    if (filter.moduleInstance) {
+      conditions.push('module_instance = ?');
+      params.push(filter.moduleInstance);
+    }
+    if (filter.type) {
+      conditions.push('type = ?');
+      params.push(filter.type);
+    }
+    if (filter.status) {
+      conditions.push('status = ?');
+      params.push(filter.status);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const rows = this.db.prepare(`SELECT id FROM notes ${where}`).all(...params) as {
+      id: string;
+    }[];
+    return rows.map((r) => r.id);
+  }
 }
 
 // --- FTS Helpers ---
@@ -436,6 +504,9 @@ interface NoteRow {
   review_interval: string | null;
   expires: string | null;
   metadata: string | null;
+  module: string | null;
+  module_instance: string | null;
+  content_dir: string | null;
 }
 
 interface FileRow {
@@ -484,6 +555,9 @@ function rowToNoteRecord(row: NoteRow): NoteRecord {
     reviewInterval: row.review_interval,
     expires: row.expires,
     metadata: row.metadata,
+    module: row.module ?? null,
+    moduleInstance: row.module_instance ?? null,
+    contentDir: row.content_dir ?? null,
   };
 }
 

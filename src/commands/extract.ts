@@ -19,10 +19,6 @@ export const extractCommand = new Command('extract')
     }
 
     await withBrain(async ({ db, embedder, config }) => {
-      const llm = await requireOllama(config.ollamaUrl, opts.model ?? config.ollamaModel);
-      if (!llm) return;
-
-      db.setEmbeddingModel(embedder.model, embedder.dimensions);
       const noteIds: string[] = [];
 
       if (opts.note) {
@@ -37,6 +33,11 @@ export const extractCommand = new Command('extract')
         const allNotes = db.getAllNotes();
         noteIds.push(...allNotes.map((n) => n.id));
       }
+
+      const llm = await requireOllama(config.ollamaUrl, opts.model ?? config.ollamaModel);
+      if (!llm) return;
+
+      db.setEmbeddingModel(embedder.model, embedder.dimensions);
 
       let totalFacts = 0;
       let totalCreated = 0;

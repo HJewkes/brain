@@ -166,6 +166,24 @@ describe('MemoryRepo', () => {
       expect(db.getMemoryCount()).toBe(1);
     });
 
+    it('forgetExpiredMemories records forget event in history', () => {
+      const past = '2020-01-01T00:00:00Z';
+      db.addMemory(makeMemory({ id: 'expiring-hist', forgetAfter: past }));
+
+      db.forgetExpiredMemories();
+
+      const history = db.getMemoryHistory('expiring-hist');
+      expect(history).toHaveLength(1);
+      expect(history[0]).toEqual(
+        expect.objectContaining({
+          event: 'forget',
+          oldMemory: 'TypeScript uses structural typing',
+          newMemory: null,
+          actor: 'system',
+        })
+      );
+    });
+
     it('does not forget future-dated memories', () => {
       const future = '2099-01-01T00:00:00Z';
       db.addMemory(makeMemory({ id: 'future', forgetAfter: future }));

@@ -25,6 +25,11 @@ export const memoriesCommand = new Command('memories')
           }
 
           const limit = parseInt(opts.limit, 10);
+          if (isNaN(limit) || limit <= 0) {
+            process.stderr.write('Error: --limit must be a positive integer\n');
+            process.exitCode = 1;
+            return;
+          }
           const limited = memories.slice(0, limit);
 
           if (opts.json) {

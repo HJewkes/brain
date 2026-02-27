@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { OllamaClient } from './ollama.js';
 import type { BrainDB } from './brain-db.js';
 import type { Chunk, Embedder, ExtractedFact, MemoryEntry } from '../types.js';
+import type { ModuleRegistry } from '../modules/registry.js';
 
 const EXTRACTION_SYSTEM = `You are a fact extraction engine. Given a text, extract discrete, self-contained facts.
 Each fact should be a single sentence that stands alone without context.
@@ -47,11 +48,23 @@ export async function extractMemoriesFromNote(
   llm: OllamaClient,
   noteId: string,
   containerTag: string = 'default',
-  embedder?: Embedder
+  embedder?: Embedder,
+  moduleRegistry?: ModuleRegistry
 ): Promise<ExtractionResult> {
   const chunks = db.getChunksForNote(noteId);
   if (chunks.length === 0) {
     return { noteId, facts: [], memoriesCreated: 0, memoriesUpdated: 0, memoriesDeleted: 0 };
+  }
+
+  // Check if module has custom extraction strategy
+  if (moduleRegistry) {
+    const note = db.getNoteById(noteId);
+    if (note?.module) {
+      const strategy = moduleRegistry.getExtractionStrategy(note.module);
+      if (strategy && !strategy.shouldExtract(note)) {
+        return { noteId, facts: [], memoriesCreated: 0, memoriesUpdated: 0, memoriesDeleted: 0 };
+      }
+    }
   }
 
   const allFacts: ExtractedFact[] = [];

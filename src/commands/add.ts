@@ -6,9 +6,9 @@ import { loadConfig } from '../services/config.js';
 import { withBrain } from '../services/brain-service.js';
 import { indexSingleFile } from '../services/indexing.js';
 import { parseMarkdown } from '../services/markdown-parser.js';
-import type { NoteType, NoteTier } from '../types.js';
+import type { CoreNoteType, NoteTier } from '../types.js';
 import {
-  VALID_NOTE_TYPES,
+  VALID_CORE_NOTE_TYPES,
   VALID_NOTE_TIERS,
   VALID_NOTE_CONFIDENCES,
   VALID_NOTE_STATUSES,
@@ -65,7 +65,7 @@ function hasFrontmatter(content: string): boolean {
   return content.trimStart().startsWith('---');
 }
 
-const TYPE_DIRS: Record<NoteType, string> = {
+const TYPE_DIRS: Record<CoreNoteType, string> = {
   note: 'notes',
   decision: 'decisions',
   research: 'research',
@@ -75,7 +75,7 @@ const TYPE_DIRS: Record<NoteType, string> = {
   guide: 'guides',
 };
 
-function resolveOutputPath(notesDir: string, tier: NoteTier, type: NoteType, id: string): string {
+function resolveOutputPath(notesDir: string, tier: NoteTier, type: string, id: string): string {
   if (tier === 'fast') {
     const now = new Date();
     const yyyy = String(now.getFullYear());
@@ -84,7 +84,7 @@ function resolveOutputPath(notesDir: string, tier: NoteTier, type: NoteType, id:
     return join(notesDir, 'logs', yyyy, mm, `${yyyy}-${mm}-${dd}-${id}.md`);
   }
 
-  const typeDir = TYPE_DIRS[type];
+  const typeDir = TYPE_DIRS[type as CoreNoteType] ?? 'notes';
   return join(notesDir, typeDir, `${id}.md`);
 }
 
@@ -112,7 +112,7 @@ async function handleUrlAdd(opts: {
   }
 
   const title = opts.title ?? result.metadata.title ?? 'Web capture';
-  const type = (opts.type ?? 'research') as NoteType;
+  const type = (opts.type ?? 'research') as CoreNoteType;
   const tier = (opts.tier ?? 'fast') as NoteTier;
   const now = new Date().toISOString().slice(0, 10);
   const id = slugify(title);
@@ -196,9 +196,9 @@ export const addCommand = new Command('add')
   .option('--created <date>', 'Created date (YYYY-MM-DD), defaults to today')
   .option('--url <url>', 'Fetch URL and create note from extracted content')
   .action(async (file, opts) => {
-    if (opts.type && !VALID_NOTE_TYPES.includes(opts.type as NoteType)) {
+    if (opts.type && !VALID_CORE_NOTE_TYPES.includes(opts.type as CoreNoteType)) {
       process.stderr.write(
-        `Error: invalid type "${opts.type}". Valid types: ${VALID_NOTE_TYPES.join(', ')}\n`
+        `Error: invalid type "${opts.type}". Valid types: ${VALID_CORE_NOTE_TYPES.join(', ')}\n`
       );
       process.exitCode = 1;
       return;
@@ -255,7 +255,7 @@ export const addCommand = new Command('add')
     const parsed = parseMarkdown(file ?? 'untitled.md', content);
     const id = parsed.id;
     const tier = (opts.tier ?? parsed.frontmatter.tier ?? 'slow') as NoteTier;
-    const type = (opts.type ?? parsed.frontmatter.type ?? 'note') as NoteType;
+    const type = (opts.type ?? parsed.frontmatter.type ?? 'note') as CoreNoteType;
 
     const config = loadConfig();
     const outPath = resolveOutputPath(config.notesDir, tier, type, id);

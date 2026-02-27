@@ -1,12 +1,15 @@
 import { loadConfig } from './config.js';
 import { BrainDB } from './brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
+import { loadModules } from '../modules/loader.js';
+import type { ModuleRegistry } from '../modules/registry.js';
 import type { Embedder, BrainConfig } from '../types.js';
 
 export interface BrainService {
   db: BrainDB;
   embedder: Embedder;
   config: BrainConfig;
+  modules: ModuleRegistry;
   close(): void;
 }
 
@@ -20,10 +23,12 @@ export async function withBrain<T>(fn: (svc: BrainService) => T | Promise<T>): P
   const config = loadConfig();
   const db = new BrainDB(config.dbPath);
   const embedder = createEmbedder(config);
+  const { registry } = await loadModules();
   const svc: BrainService = {
     db,
     embedder,
     config,
+    modules: registry,
     close() {
       db.close();
     },

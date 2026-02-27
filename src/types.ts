@@ -10,7 +10,7 @@ export interface Embedder {
 
 export type NoteTier = 'slow' | 'fast';
 
-export type NoteType =
+export type CoreNoteType =
   | 'note'
   | 'decision'
   | 'pattern'
@@ -19,11 +19,13 @@ export type NoteType =
   | 'session-log'
   | 'guide';
 
+export type NoteType = CoreNoteType | (string & {});
+
 export type NoteConfidence = 'high' | 'medium' | 'low' | 'speculative';
 
 export type NoteStatus = 'current' | 'outdated' | 'deprecated' | 'draft';
 
-export const VALID_NOTE_TYPES: NoteType[] = [
+export const VALID_CORE_NOTE_TYPES: CoreNoteType[] = [
   'note',
   'decision',
   'pattern',
@@ -32,11 +34,20 @@ export const VALID_NOTE_TYPES: NoteType[] = [
   'session-log',
   'guide',
 ];
+
+export function isValidCoreNoteType(value: string): value is CoreNoteType {
+  return VALID_CORE_NOTE_TYPES.includes(value as CoreNoteType);
+}
+
+/** @deprecated Use VALID_CORE_NOTE_TYPES instead */
+export const VALID_NOTE_TYPES: CoreNoteType[] = VALID_CORE_NOTE_TYPES;
 export const VALID_NOTE_TIERS: NoteTier[] = ['slow', 'fast'];
 export const VALID_NOTE_CONFIDENCES: NoteConfidence[] = ['high', 'medium', 'low', 'speculative'];
 export const VALID_NOTE_STATUSES: NoteStatus[] = ['current', 'outdated', 'deprecated', 'draft'];
 
-export type RelationType = 'related-to' | 'supersedes' | 'informs' | 'parent' | 'derived-from';
+export type CoreRelationType = 'related-to' | 'supersedes' | 'informs' | 'parent' | 'derived-from';
+
+export type RelationType = CoreRelationType | (string & {});
 
 export type NoteAccessEvent = 'search_hit' | 'relation_target' | 'context_view';
 
@@ -75,11 +86,36 @@ export interface NoteFrontmatter {
   related?: string[];
   supersedes?: string;
   parent?: string;
+  module?: string;
+  'module-instance'?: string;
+  'content-dir'?: string;
+}
+
+// === Activity Types ===
+
+export interface ActivityRecord {
+  id: string;
+  noteIds: string | null;
+  module: string | null;
+  moduleInstance: string | null;
+  activityType: string | null;
+  actorType: string | null;
+  actorId: string | null;
+  sessionId: string | null;
+  metadata: string | null;
+  outcome: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
 }
 
 // === Chunk Types ===
 
-export type ChunkType = 'section' | 'heading' | 'paragraph' | 'code' | 'list' | 'blockquote';
+/**
+ * Chunk type classification.
+ * Currently only 'section' and 'paragraph' are produced by the markdown parser.
+ * Additional variants can be added for future fine-grained chunking strategies.
+ */
+export type ChunkType = 'section' | 'paragraph';
 
 export type CutType =
   | 'heading_boundary'
@@ -253,6 +289,10 @@ export interface BrainConfig {
     bm25: number;
     vector: number;
   };
+  modules?: {
+    enabled?: string[];
+    disabled?: string[];
+  };
 }
 
 // === Parsed Note (output of markdown parser) ===
@@ -261,6 +301,7 @@ export interface ParsedNote {
   id: string;
   filePath: string;
   frontmatter: NoteFrontmatter;
+  rawFrontmatter: Record<string, unknown>;
   content: string;
   chunks: RawChunk[];
   relations: Relation[];
@@ -309,4 +350,7 @@ export interface NoteRecord {
   reviewInterval: string | null;
   expires: string | null;
   metadata: string | null;
+  module: string | null;
+  moduleInstance: string | null;
+  contentDir: string | null;
 }

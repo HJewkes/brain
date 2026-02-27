@@ -5,6 +5,7 @@ import { parseMarkdown } from './markdown-parser.js';
 import type { BrainDB } from './brain-db.js';
 import type { Chunk, Embedder, InboxItem, NoteRecord, RawChunk } from '../types.js';
 import { scanForChanges } from './file-scanner.js';
+import { readIndexableContent } from './content-dir.js';
 import { slugify } from '../utils.js';
 export { slugify };
 
@@ -38,6 +39,12 @@ export interface IndexResult {
 
 export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): NoteRecord {
   const fm = parsed.frontmatter;
+
+  // Build metadata JSON from raw frontmatter when module is present
+  // Raw frontmatter preserves module-specific fields (e.g., prefix, display_id)
+  // that coerceFrontmatter strips to NoteFrontmatter shape
+  const metadata = fm.module ? JSON.stringify(parsed.rawFrontmatter) : null;
+
   return {
     id: parsed.id,
     filePath: parsed.filePath,
@@ -55,7 +62,10 @@ export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): N
     lastReviewed: fm['last-reviewed'] ?? null,
     reviewInterval: fm['review-interval'] ?? null,
     expires: fm.expires ?? null,
-    metadata: null,
+    metadata,
+    module: fm.module ?? null,
+    moduleInstance: fm['module-instance'] ?? null,
+    contentDir: fm['content-dir'] ?? null,
   };
 }
 
@@ -114,11 +124,19 @@ export async function indexSingleFile(
 
   const noteRecord = frontmatterToRecord(parsed);
   db.upsertNote(noteRecord);
+
+  let ftsContent = parsed.content;
+  if (noteRecord.contentDir) {
+    const dirContent = readIndexableContent(noteRecord.contentDir);
+    if (dirContent) {
+      ftsContent = ftsContent + '\n\n' + dirContent;
+    }
+  }
   db.upsertNoteFTS(
     parsed.id,
     parsed.frontmatter.title,
     parsed.frontmatter.summary ?? '',
-    parsed.content
+    ftsContent
   );
 
   const chunks = rawChunksToChunks(parsed.id, parsed.chunks);

@@ -137,6 +137,21 @@ describe('NoteRepo', () => {
       expect(stored[0].tokenCount).toBe(2);
     });
 
+    it('throws on chunks/embeddings length mismatch', () => {
+      const note = makeNote({ id: 'mismatch' });
+      db.upsertNote(note);
+
+      const chunks: Chunk[] = [
+        makeChunk({ id: 'mismatch:s:0', noteId: 'mismatch', content: 'data', tokenCount: 1 }),
+        makeChunk({ id: 'mismatch:s:1', noteId: 'mismatch', content: 'more', tokenCount: 1 }),
+      ];
+      const embeddings = [new Float32Array(384)];
+
+      expect(() => db.upsertChunks('mismatch', chunks, embeddings)).toThrow(
+        /chunks \(2\) and embeddings \(1\) length mismatch/
+      );
+    });
+
     it('deletes all chunks and vectors for a note', () => {
       const note = makeNote({ id: 'to-clear' });
       db.upsertNote(note);

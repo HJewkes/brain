@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
 import { search, searchMemories, checkAndPromote } from '../../src/services/search.js';
 import { unlinkSync } from 'node:fs';
-import type { Chunk, NoteRecord } from '../../src/types.js';
+import type { Chunk, NoteRecord, SearchResult } from '../../src/types.js';
 import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
+
+vi.mock('../../src/services/reranker.js', () => ({
+  rerank: vi.fn(async (_query: string, results: SearchResult[]) => results.reverse()),
+}));
 
 interface TestContext {
   db: BrainDB;
@@ -294,6 +298,22 @@ describe('search service', () => {
 
       const noteIds = results.map((r) => r.noteId);
       expect(noteIds).toContain('css-grid');
+    });
+
+    it('fusionStrategy rrf uses reciprocal rank fusion', async () => {
+      const rrfResults = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
+        limit: 5,
+        fusionStrategy: 'rrf',
+      });
+      const scoreResults = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
+        limit: 5,
+        fusionStrategy: 'score',
+      });
+
+      expect(rrfResults.length).toBeGreaterThan(0);
+      expect(rrfResults[0].noteId).toBe('ts-patterns');
+      // RRF and score fusion produce different scores for the same query
+      expect(rrfResults[0].score).not.toBeCloseTo(scoreResults[0].score, 5);
     });
   });
 
@@ -626,6 +646,32 @@ describe('search service', () => {
 
       const count = ctx.db.getAccessCount('ts-patterns');
       expect(count).toBe(2);
+    });
+  });
+
+  describe('rerank option', () => {
+    it('calls cross-encoder reranking when rerank is true', async () => {
+      const { rerank } = await import('../../src/services/reranker.js');
+
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 5,
+        rerank: true,
+      });
+
+      expect(rerank).toHaveBeenCalledOnce();
+      expect(results.length).toBeGreaterThan(0);
+    });
+
+    it('does not call reranker when rerank is false', async () => {
+      const { rerank } = await import('../../src/services/reranker.js');
+      vi.mocked(rerank).mockClear();
+
+      await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 5,
+        rerank: false,
+      });
+
+      expect(rerank).not.toHaveBeenCalled();
     });
   });
 

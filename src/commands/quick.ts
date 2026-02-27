@@ -7,7 +7,7 @@ import { VALID_INBOX_SOURCES } from '../types.js';
 
 export const quickCommand = new Command('quick')
   .description('Quickly capture a thought into the inbox')
-  .argument('<text...>', 'Text to capture (or pipe via stdin)')
+  .argument('[text...]', 'Text to capture (or pipe via stdin)')
   .option('--title <title>', 'Optional title for the item')
   .option('--source <source>', 'Source label (cli, api, alert)', 'cli')
   .option('--url <url>', 'Source URL for reference')
