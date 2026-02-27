@@ -13,6 +13,7 @@ import { createImportCommand } from './commands/import.js';
 import { createOrchestrateCommands } from './commands/orchestrate.js';
 import { createInstallHooksCommand } from './commands/install-hooks.js';
 import { createSetupCommand } from './commands/setup.js';
+import { createCheckCommand } from './commands/check.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -206,6 +207,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createOrchestrateCommands());
     pmCmd.addCommand(createInstallHooksCommand());
     pmCmd.addCommand(createSetupCommand());
+    pmCmd.addCommand(createCheckCommand());
     ctx.registerCommand(pmCmd);
   },
 };

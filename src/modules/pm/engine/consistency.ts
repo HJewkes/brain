@@ -443,7 +443,7 @@ export function clusterSourceDocuments(db: BrainDB): SourceDocCluster[] {
       };
     });
 
-    docs.sort((a, b) => b._indexedAtNum - a._indexedAtNum);
+    docs.sort((a, b) => b._indexedAtNum - a._indexedAtNum || b.title.localeCompare(a.title));
 
     const span = docs.length > 1
       ? Math.round((docs[0]._indexedAtNum - docs[docs.length - 1]._indexedAtNum) / (1000 * 60 * 60 * 24))
@@ -464,4 +464,87 @@ export function clusterSourceDocuments(db: BrainDB): SourceDocCluster[] {
   }
 
   return clusters;
+}
+
+export interface ConsistencyReport {
+  project: string;
+  timestamp: string;
+  summary: {
+    totalTasks: number;
+    totalDecisions: number;
+    totalPrompts: number;
+    sourceDocuments: number;
+    issuesFound: number;
+  };
+  structural: {
+    orphanedDecisions: OrphanedDecision[];
+    stalePrompts: StalePrompt[];
+    brokenDependencies: BrokenDep[];
+    blockedWithoutCause: BlockedTask[];
+    cancelledDependencies: CancelledDep[];
+  };
+  semantic?: {
+    decisionPairs: DecisionPair[];
+    taskDecisionAlignment: TaskDecisionPair[];
+    supersessionGaps: SupersessionGap[];
+  };
+  sourceDocuments?: SourceDocCluster[];
+}
+
+export function runConsistencyCheck(db: BrainDB, prefix: string, deep: boolean): ConsistencyReport {
+  const orphanedDecisions = findOrphanedDecisions(db, prefix);
+  const stalePrompts = findStalePrompts(db, prefix);
+  const brokenDependencies = findBrokenDependencies(db, prefix);
+  const blockedWithoutCause = findBlockedWithoutCause(db, prefix);
+  const cancelledDependencies = findCancelledDependencies(db, prefix);
+
+  const structural = {
+    orphanedDecisions,
+    stalePrompts,
+    brokenDependencies,
+    blockedWithoutCause,
+    cancelledDependencies,
+  };
+
+  const totalTasks = getPmNotes(db, 'task', { project: prefix }).length;
+  const totalDecisions = getPmNotes(db, 'decision', { project: prefix }).length;
+  const totalPrompts = getPmNotes(db, 'prompt', { project: prefix }).length;
+
+  let semantic: ConsistencyReport['semantic'];
+  let sourceDocuments: SourceDocCluster[] | undefined;
+
+  if (deep) {
+    semantic = {
+      decisionPairs: computeDecisionPairs(db, prefix),
+      taskDecisionAlignment: computeTaskDecisionAlignment(db, prefix),
+      supersessionGaps: computeSupersessionGaps(db, prefix),
+    };
+    sourceDocuments = clusterSourceDocuments(db);
+  }
+
+  const structuralCount =
+    orphanedDecisions.length +
+    stalePrompts.length +
+    brokenDependencies.length +
+    blockedWithoutCause.length +
+    cancelledDependencies.length;
+
+  const semanticCount = semantic
+    ? semantic.decisionPairs.length + semantic.supersessionGaps.length
+    : 0;
+
+  return {
+    project: prefix,
+    timestamp: new Date().toISOString(),
+    summary: {
+      totalTasks,
+      totalDecisions,
+      totalPrompts,
+      sourceDocuments: sourceDocuments?.reduce((sum, c) => sum + c.documents.length, 0) ?? 0,
+      issuesFound: structuralCount + semanticCount,
+    },
+    structural,
+    ...(semantic ? { semantic } : {}),
+    ...(sourceDocuments ? { sourceDocuments } : {}),
+  };
 }
