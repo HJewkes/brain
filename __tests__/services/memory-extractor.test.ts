@@ -152,6 +152,37 @@ describe('extractMemoriesFromNote', () => {
     expect(result.facts).toHaveLength(0);
   });
 
+  it('extracts facts from multiple chunks', async () => {
+    const chunk1 = makeChunk({
+      id: 'chunk-a',
+      noteId: 'note-1',
+      content: 'SQLite uses B-trees for indexing and storage.',
+    });
+    const chunk2 = makeChunk({
+      id: 'chunk-b',
+      noteId: 'note-1',
+      content: 'Vector search uses cosine distance for similarity.',
+    });
+    db.upsertChunks('note-1', [chunk1, chunk2], [new Float32Array([1, 2, 3]), new Float32Array([3, 2, 1])]);
+
+    const llm = makeMockLLM([
+      'SQLite uses B-trees for indexing',
+      'Vector search uses cosine distance',
+    ]);
+
+    const result = await extractMemoriesFromNote(db, llm, 'note-1');
+
+    expect(llm.generate).toHaveBeenCalledTimes(2);
+    expect(result.facts).toHaveLength(2);
+    expect(result.memoriesCreated).toBe(2);
+
+    const memories = db.getMemoriesForNote('note-1');
+    expect(memories).toHaveLength(2);
+    const facts = memories.map((m) => m.memory);
+    expect(facts).toContain('SQLite uses B-trees for indexing');
+    expect(facts).toContain('Vector search uses cosine distance');
+  });
+
   describe('reconciliation', () => {
     it('reconciles new facts against existing memories', async () => {
       const chunk = makeChunk({
