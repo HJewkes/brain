@@ -30,14 +30,6 @@ function buildNoteIdToDisplayId(tasks: TaskInfo[]): Map<string, string> {
   return map;
 }
 
-function buildDisplayIdToNoteId(tasks: TaskInfo[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const t of tasks) {
-    map.set(t.displayId, t.noteId);
-  }
-  return map;
-}
-
 /** Build adjacency list: displayId -> [displayIds it depends on] */
 export function buildDependencyGraph(
   db: BrainDB,
@@ -106,23 +98,9 @@ export function computeEligible(db: BrainDB, prefix: string): string[] {
 }
 
 /**
- * Incremental cycle detection: check if adding edge (fromId -> toId)
- * would create a cycle. fromId depends_on toId means fromId -> toId edge.
- * A cycle exists if toId can reach fromId via existing depends_on edges.
- *
- * DFS from toId following depends_on edges (outgoing). If we reach fromId,
- * that means toId -> ... -> fromId already exists, so adding fromId -> toId
- * would close the cycle.
- *
- * Wait — depends_on means "A depends_on B" = A needs B done first.
- * If we add "fromId depends_on toId", we need to check: can fromId be reached
- * from toId by following depends_on edges?
- *
- * Actually: depends_on edges form a DAG where A -> B means "A depends on B".
- * A cycle would be: A -> B -> ... -> A.
- * Adding fromId -> toId: cycle exists if toId -> ... -> fromId exists already.
- * Following "depends_on" from toId means: what does toId depend on?
- * If toId depends on something that depends on something that is fromId, then cycle.
+ * Incremental cycle detection: check if adding "fromId depends_on toId"
+ * would create a cycle. DFS from toId following existing depends_on edges;
+ * if we reach fromId, the proposed edge would close a cycle.
  */
 export function detectCycle(
   db: BrainDB,
