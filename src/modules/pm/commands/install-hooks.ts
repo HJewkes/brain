@@ -123,6 +123,49 @@ Present: tasks completed, decisions made, cost estimate, next steps.
 `;
 }
 
+export function generateSanityCheckSkillContent(): string {
+  return `# Sanity Check
+
+Run a consistency check on a PM project.
+
+Invoke with: /sanity-check
+
+## When to Use
+- After bulk ingesting planning docs into a PM project
+- Periodically during active project execution
+- When you suspect contradicting information in the project
+
+## Workflow
+
+### Step 1: Get structural report
+Run: \`brain pm check --project <PREFIX> --json\`
+Review the structural section. Report any issues found.
+
+### Step 2: Get deep analysis (if project has decisions/docs)
+Run: \`brain pm check --deep --project <PREFIX> --json\`
+Review the semantic section:
+- For each decision pair: read both decision contents, determine if they contradict
+- For each task-decision pair: verify the task's work aligns with its impacting decisions
+- For each supersession gap: determine if the older decision is effectively superseded
+
+### Step 3: Review source document clusters
+For each cluster with multiple docs:
+- Identify which is most recent / authoritative
+- Flag older docs that contain contradicted information
+- Recommend: annotate source doc, archive brain note, or produce consolidated doc
+
+### Step 4: Write report
+Save to: docs/pm-module/reports/sanity-check-YYYY-MM-DD.md
+Include sections: Summary, Critical Issues, Contradictions, Supersession Gaps, Stale Content, Source Document Freshness, Structural Issues, Recommended Actions.
+
+### Step 5: Offer actions
+Ask user if they want to:
+- Create PM tasks for actionable findings
+- Archive superseded notes
+- Produce a consolidated document for any topic with contradicting sources
+`;
+}
+
 function isBrainPmHook(entry: HookMatcher): boolean {
   return entry.hooks.some((h) => h.command.includes('brain-pm-'));
 }
@@ -185,6 +228,17 @@ export function installHooks(claudeDir?: string): { installed: string[]; errors:
     errors.push(`Failed to write skill: ${(err as Error).message}`);
   }
 
+  // Write sanity-check skill
+  const sanitySkillDir = join(baseDir, 'skills', 'sanity-check');
+  mkdirSync(sanitySkillDir, { recursive: true });
+  try {
+    const sanitySkillPath = join(sanitySkillDir, 'SKILL.md');
+    writeFileSync(sanitySkillPath, generateSanityCheckSkillContent());
+    installed.push(sanitySkillPath);
+  } catch (err) {
+    errors.push(`Failed to write sanity-check skill: ${(err as Error).message}`);
+  }
+
   return { installed, errors };
 }
 
@@ -243,6 +297,16 @@ export function removeHooks(claudeDir?: string): { removed: string[]; errors: st
     errors.push(`Failed to remove skill directory: ${(err as Error).message}`);
   }
 
+  try {
+    const sanitySkillDir = join(baseDir, 'skills', 'sanity-check');
+    if (existsSync(sanitySkillDir)) {
+      rmSync(sanitySkillDir, { recursive: true });
+      removed.push(sanitySkillDir);
+    }
+  } catch (err) {
+    errors.push(`Failed to remove sanity-check skill directory: ${(err as Error).message}`);
+  }
+
   return { removed, errors };
 }
 
@@ -259,6 +323,7 @@ export function createInstallHooksCommand(): Command {
             process.stdout.write(`  ~/.claude/hooks/${filename}\n`);
           }
           process.stdout.write('  ~/.claude/skills/orchestrator/\n');
+          process.stdout.write('  ~/.claude/skills/sanity-check/\n');
           process.stdout.write('  Hook entries in ~/.claude/settings.json\n');
         } else {
           process.stdout.write('Would install:\n');
@@ -266,6 +331,7 @@ export function createInstallHooksCommand(): Command {
             process.stdout.write(`  ~/.claude/hooks/${filename}\n`);
           }
           process.stdout.write('  ~/.claude/skills/orchestrator/SKILL.md\n');
+          process.stdout.write('  ~/.claude/skills/sanity-check/SKILL.md\n');
           process.stdout.write('  Hook entries in ~/.claude/settings.json\n');
         }
         return;

@@ -12,6 +12,12 @@ import { getProject } from '../data/project-ops.js';
 import { computeEligible, computeWaves, computeImpact } from '../engine/dependency.js';
 import { assembleContext } from '../engine/dispatch.js';
 import { validateClaimToken } from '../engine/claims.js';
+import {
+  findOrphanedDecisions,
+  findBrokenDependencies,
+  findBlockedWithoutCause,
+  findCancelledDependencies,
+} from '../engine/consistency.js';
 import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
 
 function resolvePrefix(
@@ -286,6 +292,14 @@ export function createOrchestrationCommands(): Command[] {
         const staleResult = detectStalePrompts(svc.db, prefix);
         const stalePrompts = staleResult.ok ? staleResult.data : [];
 
+        // Quick consistency check (structural only)
+        const orphans = findOrphanedDecisions(svc.db, prefix);
+        const brokenDeps = findBrokenDependencies(svc.db, prefix);
+        const blockedNoCause = findBlockedWithoutCause(svc.db, prefix);
+        const cancelledDeps = findCancelledDependencies(svc.db, prefix);
+        const consistencyIssues =
+          orphans.length + brokenDeps.length + blockedNoCause.length + cancelledDeps.length;
+
         const nextActions: string[] = [];
         if (eligible.length > 0) {
           nextActions.push(`Pick up eligible task: ${eligible[0]}`);
@@ -310,6 +324,7 @@ export function createOrchestrationCommands(): Command[] {
           recentDecisions,
           stalePrompts,
           nextActions,
+          consistencyIssues,
         };
 
         if (opts.json) {
@@ -355,6 +370,13 @@ export function createOrchestrationCommands(): Command[] {
           }
         }
 
+        if (consistencyIssues > 0) {
+          lines.push('');
+          lines.push(
+            `Consistency: ${consistencyIssues} structural issue(s) found. Run /sanity-check for details.`,
+          );
+        }
+
         process.stdout.write(lines.join('\n') + '\n');
       });
     });
@@ -375,4 +397,5 @@ export interface BriefingData {
   recentDecisions: DecisionMetadata[];
   stalePrompts: PromptMetadata[];
   nextActions: string[];
+  consistencyIssues: number;
 }
