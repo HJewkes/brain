@@ -77,12 +77,26 @@ describe('getBudget', () => {
     expect(budget.available).toBe(5);
   });
 
-  test('reflects used count from allocations', () => {
-    seedAllocations([makeAllocation(), makeAllocation({ taskId: 'PROJ-01-002' })]);
+  test('reflects used count from unique worktree paths', () => {
+    seedAllocations([
+      makeAllocation({ taskId: 'PROJ-01-001', path: '/fake/repo/.worktrees/ws-01' }),
+      makeAllocation({ taskId: 'PROJ-01-002', path: '/fake/repo/.worktrees/ws-02' }),
+    ]);
 
     const budget = getBudget(db);
     expect(budget.used).toBe(2);
     expect(budget.available).toBe(1);
+  });
+
+  test('counts shared workstream worktree as one budget slot', () => {
+    seedAllocations([
+      makeAllocation({ taskId: 'PROJ-01-001', path: '/fake/repo/.worktrees/ws-01' }),
+      makeAllocation({ taskId: 'PROJ-01-002', path: '/fake/repo/.worktrees/ws-01' }),
+    ]);
+
+    const budget = getBudget(db);
+    expect(budget.used).toBe(1);
+    expect(budget.available).toBe(2);
   });
 });
 

@@ -240,7 +240,7 @@ describe('V8: Orchestrator Dry Run', () => {
       expect(second.data.branch).toBe(first.data.branch);
 
       const budget = getBudget(db, 3);
-      expect(budget.used).toBe(2);
+      expect(budget.used).toBe(1);
       // Only 1 unique worktree path, so next different workstream should still work
       const third = allocateWorktree(db, 'task-3', 'ws-2', 'token-3', 3);
       expect(third.ok).toBe(true);

@@ -3,9 +3,9 @@ import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
 import { getActiveProject } from '../data/queries.js';
-import { getTask } from '../data/task-ops.js';
+import { getTask, listTasks } from '../data/task-ops.js';
 import { computeRouting } from '../engine/routing.js';
-import { renderAgentPrompt, renderVerificationPrompt, renderBriefingSummary } from '../engine/template.js';
+import { renderAgentPrompt, renderVerificationPrompt } from '../engine/template.js';
 import { allocateWorktree, checkWorktreePath, releaseWorktree, getBudget } from '../engine/worktree.js';
 import { assembleContext } from '../engine/dispatch.js';
 import type { TaskCategory, TaskMode } from '../types.js';
@@ -285,10 +285,24 @@ export function createOrchestrateCommands(): Command {
           }
 
           const budget = getBudget(svc.db);
+          const tasksResult = listTasks(svc.db, activeProject);
+          const allTasks = tasksResult.ok ? tasksResult.data : [];
+
+          const done = allTasks.filter((t) => t.status === 'done');
+          const inProgress = allTasks.filter((t) => t.status === 'in-progress');
+          const pending = allTasks.filter((t) => t.status === 'pending');
+          const blocked = allTasks.filter((t) => t.status === 'blocked');
 
           const summary = {
             session: 'ended',
             project: activeProject,
+            tasks: {
+              total: allTasks.length,
+              done: done.length,
+              inProgress: inProgress.length,
+              pending: pending.length,
+              blocked: blocked.length,
+            },
             worktrees: {
               used: budget.used,
               max: budget.max,
@@ -302,8 +316,14 @@ export function createOrchestrateCommands(): Command {
           if (opts.json) {
             process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
           } else {
-            const md = renderBriefingSummary(summary as unknown as Record<string, unknown>);
-            process.stdout.write(md + '\n');
+            process.stdout.write(`=== Session End: ${activeProject} ===\n`);
+            process.stdout.write(`Tasks: ${done.length} done, ${inProgress.length} in-progress, ${pending.length} pending, ${blocked.length} blocked (${allTasks.length} total)\n`);
+            process.stdout.write(`Worktrees: ${budget.used}/${budget.max} in use\n`);
+            if (budget.allocations.length > 0) {
+              for (const a of budget.allocations) {
+                process.stdout.write(`  ${a.taskId}: ${a.path}\n`);
+              }
+            }
           }
         });
       }),

@@ -40,10 +40,11 @@ export function getAllocations(db: BrainDB): WorktreeAllocation[] {
 export function getBudget(db: BrainDB, projectBudget?: number): WorktreeBudget {
   const max = projectBudget ?? DEFAULT_BUDGET;
   const allocations = readAllocations(db);
+  const uniqueWorktrees = new Set(allocations.map((a) => a.path)).size;
   return {
     max,
-    used: allocations.length,
-    available: Math.max(0, max - allocations.length),
+    used: uniqueWorktrees,
+    available: Math.max(0, max - uniqueWorktrees),
     allocations,
   };
 }
