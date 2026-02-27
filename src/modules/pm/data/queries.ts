@@ -94,6 +94,19 @@ export function setActiveProject(db: BrainDB, prefix: string): void {
   db.setMetaValue(PM_ACTIVE_PROJECT_KEY, prefix);
 }
 
+export function resolveProject(
+  db: BrainDB,
+  explicit: string | undefined
+): Result<string> {
+  if (explicit) return ok(explicit.toUpperCase());
+  const active = getActiveProject(db);
+  if (active) return ok(active);
+  return fail(
+    'INVALID_INPUT',
+    'No project specified and no active project set. Use "brain pm use <prefix>" first.'
+  );
+}
+
 export function getPmNotes(
   db: BrainDB,
   type: string,

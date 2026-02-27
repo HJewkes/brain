@@ -9,6 +9,7 @@ import {
   getActiveProject,
   setActiveProject,
   getPmNotes,
+  resolveProject,
 } from '../../../src/modules/pm/data/queries.js';
 
 let db: BrainDB;
@@ -251,6 +252,43 @@ describe('getActiveProject / setActiveProject', () => {
     setActiveProject(db, 'WEB');
     setActiveProject(db, 'API');
     expect(getActiveProject(db)).toBe('API');
+  });
+});
+
+describe('resolveProject', () => {
+  it('returns explicit project when provided', () => {
+    const result = resolveProject(db, 'WEB');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data).toBe('WEB');
+  });
+
+  it('returns active project when explicit is undefined', () => {
+    setActiveProject(db, 'WEB');
+    const result = resolveProject(db, undefined);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data).toBe('WEB');
+  });
+
+  it('returns error when neither explicit nor active is set', () => {
+    const result = resolveProject(db, undefined);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('INVALID_INPUT');
+      expect(result.error.message).toContain('pm use');
+    }
+  });
+
+  it('prefers explicit over active', () => {
+    setActiveProject(db, 'WEB');
+    const result = resolveProject(db, 'API');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data).toBe('API');
+  });
+
+  it('uppercases explicit project', () => {
+    const result = resolveProject(db, 'web');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data).toBe('WEB');
   });
 });
 

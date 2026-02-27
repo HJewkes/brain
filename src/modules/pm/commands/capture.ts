@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
 import { createCapture, listCaptures, processCapture } from '../data/capture-ops.js';
+import { resolveProject } from '../data/queries.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -76,12 +77,19 @@ export function createCaptureCommands(): Command<any, any, any>[] {
     .argument('<capture-id>', 'Capture note ID')
     .requiredOption('--task-name <n>', 'Name for the new task')
     .requiredOption('--workstream <ws>', 'Workstream number', parseInt)
-    .requiredOption('--project <p>', 'Project prefix')
+    .option('--project <p>', 'Project prefix (uses active if omitted)')
     .option('--json', 'Output JSON')
     .action(async (captureId, opts) => {
       await withBrain(async (svc) => {
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        const project = projectResult.data;
         const result = await processCapture(svc.db, svc.config, svc.embedder, captureId, {
-          project: opts.project.toUpperCase(),
+          project,
           workstream: opts.workstream,
           name: opts.taskName,
         });
