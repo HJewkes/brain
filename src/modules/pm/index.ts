@@ -9,6 +9,7 @@ import { createContextCommand } from './commands/context.js';
 import { createVerifyCommand } from './commands/verify.js';
 import { createCaptureCommands } from './commands/capture.js';
 import { createAuditCommands } from './commands/audit.js';
+import { createImportCommand } from './commands/import.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -198,6 +199,7 @@ export const pmModule: BrainModule = {
       pmCmd.addCommand(cmd);
     }
     pmCmd.addCommand(createAuditCommands());
+    pmCmd.addCommand(createImportCommand());
     ctx.registerCommand(pmCmd);
   },
 };
