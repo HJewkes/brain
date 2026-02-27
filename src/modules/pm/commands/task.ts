@@ -88,7 +88,9 @@ export function createTaskCommands(): Command {
     .action(async (opts) => {
       await withBrain(async (svc) => {
         if (!opts.project) {
-          process.stderr.write('Error: --project is required for listing tasks\n');
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing tasks' }, !!opts.json) + '\n',
+          );
           process.exitCode = 1;
           return;
         }

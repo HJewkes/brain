@@ -8,7 +8,7 @@ import { computeRouting } from '../engine/routing.js';
 import { renderAgentPrompt, renderVerificationPrompt } from '../engine/template.js';
 import { allocateWorktree, checkWorktreePath, releaseWorktree, getBudget } from '../engine/worktree.js';
 import { assembleContext } from '../engine/dispatch.js';
-import type { TaskCategory, TaskMode } from '../types.js';
+import { isValidTaskCategory, isValidTaskMode } from '../types.js';
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -73,7 +73,19 @@ export function createOrchestrateCommands(): Command {
           }
 
           const task = taskResult.data;
-          const routing = computeRouting(task.category as TaskCategory, task.mode as TaskMode);
+          if (!isValidTaskCategory(task.category)) {
+            const err = { error: true as const, code: 'INVALID_INPUT' as const, message: `Invalid task category "${task.category}"` };
+            process.stderr.write(formatError(err, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          if (!isValidTaskMode(task.mode)) {
+            const err = { error: true as const, code: 'INVALID_INPUT' as const, message: `Invalid task mode "${task.mode}"` };
+            process.stderr.write(formatError(err, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          const routing = computeRouting(task.category, task.mode);
 
           const output = { taskId: displayId, ...routing };
           if (opts.json) {

@@ -63,7 +63,9 @@ export function createWorkstreamCommands(): Command {
     .action(async (opts) => {
       await withBrain(async (svc) => {
         if (!opts.project) {
-          process.stderr.write('Error: --project is required for listing workstreams\n');
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing workstreams' }, !!opts.json) + '\n',
+          );
           process.exitCode = 1;
           return;
         }

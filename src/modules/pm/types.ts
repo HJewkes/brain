@@ -15,6 +15,8 @@ export type PromptStatus = 'stub' | 'draft' | 'current' | 'stale' | 'superseded'
 export type VirtualState = '+READY' | '+ELIGIBLE' | '+BLOCKED' | '+STALE' | '+OVERDUE';
 
 // Task modes and categories
+// Legacy values 'auto' and 'interactive' are retained for backward compatibility with
+// existing task files. They are default/fallback modes not exposed in the routing table.
 export type TaskMode = 'agent' | 'assisted' | 'human' | 'review' | 'auto' | 'interactive';
 export type TaskCategory =
   | 'implementation'
@@ -80,4 +82,30 @@ export interface PromptMetadata {
 export interface CaptureMetadata {
   source: string;
   processed?: boolean;
+}
+
+// Type guards for runtime validation of metadata values
+const VALID_TASK_CATEGORIES = new Set<string>([
+  'implementation', 'testing', 'documentation', 'research',
+  'review', 'infrastructure', 'configuration', 'design', 'migration',
+]);
+
+const VALID_TASK_MODES = new Set<string>([
+  'agent', 'assisted', 'human', 'review', 'auto', 'interactive',
+]);
+
+const VALID_TASK_STATUSES = new Set<string>([
+  'pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled',
+]);
+
+export function isValidTaskCategory(value: unknown): value is TaskCategory {
+  return typeof value === 'string' && VALID_TASK_CATEGORIES.has(value);
+}
+
+export function isValidTaskMode(value: unknown): value is TaskMode {
+  return typeof value === 'string' && VALID_TASK_MODES.has(value);
+}
+
+export function isValidTaskStatus(value: unknown): value is TaskStatus {
+  return typeof value === 'string' && VALID_TASK_STATUSES.has(value);
 }

@@ -68,7 +68,9 @@ export function createDecisionCommands(): Command {
     .action(async (opts) => {
       await withBrain(async (svc) => {
         if (!opts.project) {
-          process.stderr.write('Error: --project is required for listing decisions\n');
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing decisions' }, !!opts.json) + '\n',
+          );
           process.exitCode = 1;
           return;
         }

@@ -92,7 +92,9 @@ export function createPromptCommands(): Command {
     .action(async (opts) => {
       await withBrain(async (svc) => {
         if (!opts.project) {
-          process.stderr.write('Error: --project is required for listing prompts\n');
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing prompts' }, !!opts.json) + '\n',
+          );
           process.exitCode = 1;
           return;
         }
