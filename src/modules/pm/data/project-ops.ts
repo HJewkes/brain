@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import matter from 'gray-matter';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { Result } from '../errors.js';
@@ -47,18 +46,6 @@ function buildProjectMarkdown(input: CreateProjectInput): string {
   return lines.join('\n');
 }
 
-/**
- * After indexSingleFile, the metadata JSON only contains coerced NoteFrontmatter fields.
- * PM needs the full raw frontmatter (prefix, display_id, PM-specific status, etc.).
- * This patches the note's metadata with the raw frontmatter data.
- */
-function patchNoteMetadata(db: BrainDB, noteId: string, markdown: string): void {
-  const { data } = matter(markdown);
-  const note = db.getNoteById(noteId);
-  if (!note) return;
-
-  db.upsertNote({ ...note, metadata: JSON.stringify(data) });
-}
 
 export async function createProject(
   db: BrainDB,
@@ -86,7 +73,7 @@ export async function createProject(
 
   const hash = createHash('sha256').update(markdown).digest('hex');
   const noteId = await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
-  patchNoteMetadata(db, noteId, markdown);
+
 
   const metadata: ProjectMetadata = {
     display_id: input.prefix,
@@ -168,7 +155,6 @@ export async function updateProject(
 
   const hash = createHash('sha256').update(updated).digest('hex');
   const noteId = await indexSingleFile(db, embedder, filePath, updated, hash, Date.now());
-  patchNoteMetadata(db, noteId, updated);
 
   const refreshedNote = db.getNoteById(noteId);
   const meta = JSON.parse(refreshedNote!.metadata!) as Record<string, unknown>;

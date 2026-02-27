@@ -296,6 +296,7 @@ export interface ParsedNote {
   id: string;
   filePath: string;
   frontmatter: NoteFrontmatter;
+  rawFrontmatter: Record<string, unknown>;
   content: string;
   chunks: RawChunk[];
   relations: Relation[];

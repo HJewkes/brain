@@ -34,7 +34,7 @@ export function parseMarkdown(filePath: string, content: string): ParsedNote {
   const chunks = chunkBody(body);
   const relations = extractRelations(id, data);
 
-  return { id, filePath, frontmatter, content: body, chunks, relations };
+  return { id, filePath, frontmatter, rawFrontmatter: data, content: body, chunks, relations };
 }
 
 function deriveId(filePath: string, data: Record<string, unknown>): string {
