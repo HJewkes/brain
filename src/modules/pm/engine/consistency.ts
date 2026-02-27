@@ -1,5 +1,7 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import { getPmNotes, resolveDisplayId } from '../data/queries.js';
+import { getDecision } from '../data/decision-ops.js';
+import { getPrompt } from '../data/prompt-ops.js';
 
 export interface OrphanedDecision {
   id: string;
@@ -175,6 +177,27 @@ function getIndexedAt(db: BrainDB, filePath: string): number {
   return file?.indexedAt ?? 0;
 }
 
+export interface DecisionPair {
+  decision1: { id: string; title: string; content: string; status: string; impacts: string[] };
+  decision2: { id: string; title: string; content: string; status: string; impacts: string[] };
+  sharedImpacts: string[];
+  reason: string;
+}
+
+export interface TaskDecisionPair {
+  task: { id: string; title: string; category: string; status: string };
+  decisions: { id: string; title: string; content: string; status: string }[];
+  prompt?: string;
+  reason: string;
+}
+
+export interface SupersessionGap {
+  older: { id: string; title: string; content: string; createdAt: string };
+  newer: { id: string; title: string; content: string; createdAt: string };
+  sharedContext: string;
+  reason: string;
+}
+
 export function findStalePrompts(db: BrainDB, prefix: string): StalePrompt[] {
   const currentPrompts = getPmNotes(db, 'prompt', { project: prefix, prompt_status: 'current' });
   if (currentPrompts.length === 0) return [];
@@ -219,4 +242,148 @@ export function findStalePrompts(db: BrainDB, prefix: string): StalePrompt[] {
   }
 
   return results;
+}
+
+export function computeDecisionPairs(db: BrainDB, prefix: string): DecisionPair[] {
+  const decNotes = getPmNotes(db, 'decision', { project: prefix });
+  const decisions = decNotes.map((note) => {
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    const result = getDecision(db, meta.display_id as string);
+    const content = result.ok ? result.data.content : '';
+    return {
+      id: meta.display_id as string,
+      title: note.title ?? (meta.display_id as string),
+      content,
+      status: meta.status as string,
+      impacts: (meta.impacts as string[] | undefined) ?? [],
+    };
+  });
+
+  const pairs: DecisionPair[] = [];
+  for (let i = 0; i < decisions.length; i++) {
+    for (let j = i + 1; j < decisions.length; j++) {
+      const shared = decisions[i].impacts.filter((id) => decisions[j].impacts.includes(id));
+      if (shared.length > 0) {
+        pairs.push({
+          decision1: decisions[i],
+          decision2: decisions[j],
+          sharedImpacts: shared,
+          reason: `Both affect ${shared.join(', ')} — check for contradictions`,
+        });
+      }
+    }
+  }
+
+  return pairs;
+}
+
+export function computeTaskDecisionAlignment(db: BrainDB, prefix: string): TaskDecisionPair[] {
+  const taskNotes = getPmNotes(db, 'task', { project: prefix });
+  const decNotes = getPmNotes(db, 'decision', { project: prefix });
+  const results: TaskDecisionPair[] = [];
+
+  for (const taskNote of taskNotes) {
+    const taskMeta = JSON.parse(taskNote.metadata!) as Record<string, unknown>;
+    const taskDisplayId = taskMeta.display_id as string;
+
+    const impactingDecisions: TaskDecisionPair['decisions'] = [];
+    for (const decNote of decNotes) {
+      const decMeta = JSON.parse(decNote.metadata!) as Record<string, unknown>;
+      const impacts = (decMeta.impacts as string[] | undefined) ?? [];
+      if (impacts.includes(taskDisplayId)) {
+        const result = getDecision(db, decMeta.display_id as string);
+        impactingDecisions.push({
+          id: decMeta.display_id as string,
+          title: decNote.title ?? (decMeta.display_id as string),
+          content: result.ok ? result.data.content : '',
+          status: decMeta.status as string,
+        });
+      }
+    }
+
+    if (impactingDecisions.length === 0) continue;
+
+    const promptResult = getPrompt(db, taskDisplayId);
+    const prompt = promptResult.ok ? promptResult.data.content : undefined;
+
+    results.push({
+      task: {
+        id: taskDisplayId,
+        title: taskNote.title ?? taskDisplayId,
+        category: (taskMeta.category as string) ?? 'unknown',
+        status: taskMeta.status as string,
+      },
+      decisions: impactingDecisions,
+      prompt,
+      reason: `Task has ${impactingDecisions.length} impacting decision(s) — check alignment`,
+    });
+  }
+
+  return results;
+}
+
+export function computeSupersessionGaps(db: BrainDB, prefix: string): SupersessionGap[] {
+  const decNotes = getPmNotes(db, 'decision', { project: prefix });
+  const gaps: SupersessionGap[] = [];
+
+  const bySourceTask = new Map<string, typeof decNotes>();
+  for (const note of decNotes) {
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    const sourceTask = meta.source_task as string;
+    if (!bySourceTask.has(sourceTask)) {
+      bySourceTask.set(sourceTask, []);
+    }
+    bySourceTask.get(sourceTask)!.push(note);
+  }
+
+  const supersededIds = new Set<string>();
+  for (const note of decNotes) {
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    if (meta.status === 'superseded') {
+      supersededIds.add(meta.display_id as string);
+    }
+  }
+
+  for (const [sourceTask, notes] of bySourceTask) {
+    if (notes.length < 2) continue;
+
+    const sorted = notes
+      .map((n) => ({
+        note: n,
+        meta: JSON.parse(n.metadata!) as Record<string, unknown>,
+        indexedAt: getIndexedAt(db, n.filePath),
+      }))
+      .sort((a, b) => a.indexedAt - b.indexedAt);
+
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const older = sorted[i];
+      const newer = sorted[i + 1];
+      const olderId = older.meta.display_id as string;
+
+      if (supersededIds.has(olderId)) continue;
+
+      const olderResult = getDecision(db, olderId);
+      const newerId = newer.meta.display_id as string;
+      const newerResult = getDecision(db, newerId);
+
+      gaps.push({
+        older: {
+          id: olderId,
+          title: older.note.title ?? olderId,
+          content: olderResult.ok ? olderResult.data.content : '',
+          createdAt: new Date(older.indexedAt).toISOString(),
+        },
+        newer: {
+          id: newerId,
+          title: newer.note.title ?? newerId,
+          content: newerResult.ok ? newerResult.data.content : '',
+          createdAt: new Date(newer.indexedAt).toISOString(),
+        },
+        sharedContext: `Both created for task ${sourceTask}`,
+        reason: `Both created for task ${sourceTask}, no supersession relation`,
+      });
+    }
+  }
+
+  return gaps;
 }

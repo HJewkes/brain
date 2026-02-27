@@ -17,6 +17,9 @@ import {
   findBlockedWithoutCause,
   findCancelledDependencies,
   findStalePrompts,
+  computeDecisionPairs,
+  computeTaskDecisionAlignment,
+  computeSupersessionGaps,
 } from '../../../src/modules/pm/engine/consistency.js';
 
 let db: BrainDB;
@@ -151,5 +154,83 @@ describe('findStalePrompts', () => {
 
     const result = findStalePrompts(db, 'CHK');
     expect(result).toHaveLength(0);
+  });
+});
+
+describe('computeDecisionPairs', () => {
+  it('returns pairs of decisions sharing impact targets', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Shared Task' });
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Use REST', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'REST API design',
+    });
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Use GraphQL', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'GraphQL API design',
+    });
+
+    const pairs = computeDecisionPairs(db, 'CHK');
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].sharedImpacts).toContain('CHK-01.01');
+    expect(pairs[0].decision1.id).not.toBe(pairs[0].decision2.id);
+  });
+
+  it('returns empty when no overlapping impacts', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B' });
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Dec A', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'Only A',
+    });
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Dec B', sourceTask: 'CHK-01.02',
+      impacts: ['CHK-01.02'], content: 'Only B',
+    });
+
+    const pairs = computeDecisionPairs(db, 'CHK');
+    expect(pairs).toHaveLength(0);
+  });
+});
+
+describe('computeTaskDecisionAlignment', () => {
+  it('returns tasks with their impacting decisions', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Use REST', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'REST design',
+    });
+
+    const alignments = computeTaskDecisionAlignment(db, 'CHK');
+    const match = alignments.find((a) => a.task.id === 'CHK-01.01');
+    expect(match).toBeDefined();
+    expect(match!.decisions).toHaveLength(1);
+    expect(match!.decisions[0].id).toBe('CHK-D01');
+  });
+
+  it('skips tasks with no impacting decisions', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'No decisions' });
+    const alignments = computeTaskDecisionAlignment(db, 'CHK');
+    expect(alignments).toHaveLength(0);
+  });
+});
+
+describe('computeSupersessionGaps', () => {
+  it('returns decision pairs on same source task without supersession relation', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'Old approach', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'Version 1',
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await createDecision(db, config, embedder, {
+      project: 'CHK', name: 'New approach', sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'], content: 'Version 2',
+    });
+
+    const gaps = computeSupersessionGaps(db, 'CHK');
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0].older.id).toBe('CHK-D01');
+    expect(gaps[0].newer.id).toBe('CHK-D02');
+    expect(gaps[0].reason).toContain('no supersession');
   });
 });
