@@ -43,9 +43,7 @@ export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): N
   // Build metadata JSON from raw frontmatter when module is present
   // Raw frontmatter preserves module-specific fields (e.g., prefix, display_id)
   // that coerceFrontmatter strips to NoteFrontmatter shape
-  const metadata = fm.module
-    ? JSON.stringify(parsed.rawFrontmatter)
-    : null;
+  const metadata = fm.module ? JSON.stringify(parsed.rawFrontmatter) : null;
 
   return {
     id: parsed.id,

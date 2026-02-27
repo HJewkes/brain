@@ -97,9 +97,7 @@ export class ActivityRepo {
 
   getActivitiesByNoteId(noteId: string): ActivityRecord[] {
     const rows = this.db
-      .prepare(
-        `SELECT * FROM activities WHERE note_ids LIKE '%' || ? || '%'`
-      )
+      .prepare(`SELECT * FROM activities WHERE note_ids LIKE '%' || ? || '%'`)
       .all(noteId) as ActivityRow[];
     return rows.map(rowToActivityRecord).filter((a) => {
       if (!a.noteIds) return false;

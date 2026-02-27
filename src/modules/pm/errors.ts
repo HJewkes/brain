@@ -24,11 +24,19 @@ export function ok<T>(data: T): Result<T> {
   return { ok: true, data };
 }
 
-export function fail(code: PmErrorCode, message: string, details?: Record<string, unknown>): Result<never> {
+export function fail(
+  code: PmErrorCode,
+  message: string,
+  details?: Record<string, unknown>
+): Result<never> {
   return { ok: false, error: pmError(code, message, details) };
 }
 
-export function pmError(code: PmErrorCode, message: string, details?: Record<string, unknown>): PmError {
+export function pmError(
+  code: PmErrorCode,
+  message: string,
+  details?: Record<string, unknown>
+): PmError {
   const err: PmError = { error: true, code, message };
   if (details !== undefined) {
     err.details = details;

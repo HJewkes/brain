@@ -176,16 +176,26 @@ describe('nextWorkstreamNumber', () => {
         id: 'ws-1',
         type: 'workstream',
         module: 'pm',
-        metadata: JSON.stringify({ project: 'WEB', number: 1, status: 'active', display_id: 'WEB-01' }),
-      }),
+        metadata: JSON.stringify({
+          project: 'WEB',
+          number: 1,
+          status: 'active',
+          display_id: 'WEB-01',
+        }),
+      })
     );
     db.upsertNote(
       makeNote({
         id: 'ws-3',
         type: 'workstream',
         module: 'pm',
-        metadata: JSON.stringify({ project: 'WEB', number: 3, status: 'active', display_id: 'WEB-03' }),
-      }),
+        metadata: JSON.stringify({
+          project: 'WEB',
+          number: 3,
+          status: 'active',
+          display_id: 'WEB-03',
+        }),
+      })
     );
 
     expect(nextWorkstreamNumber(db, 'WEB')).toBe(4);
@@ -197,8 +207,13 @@ describe('nextWorkstreamNumber', () => {
         id: 'ws-other',
         type: 'workstream',
         module: 'pm',
-        metadata: JSON.stringify({ project: 'API', number: 5, status: 'active', display_id: 'API-05' }),
-      }),
+        metadata: JSON.stringify({
+          project: 'API',
+          number: 5,
+          status: 'active',
+          display_id: 'API-05',
+        }),
+      })
     );
 
     expect(nextWorkstreamNumber(db, 'WEB')).toBe(1);
@@ -217,7 +232,7 @@ describe('nextWorkstreamNumber', () => {
           status: 'pending',
           display_id: 'WEB-01.10',
         }),
-      }),
+      })
     );
 
     expect(nextWorkstreamNumber(db, 'WEB')).toBe(1);
@@ -259,7 +274,7 @@ describe('nextTaskNumber', () => {
           status: 'pending',
           display_id: 'WEB-01.02',
         }),
-      }),
+      })
     );
     db.upsertNote(
       makeNote({
@@ -273,7 +288,7 @@ describe('nextTaskNumber', () => {
           status: 'done',
           display_id: 'WEB-01.05',
         }),
-      }),
+      })
     );
 
     expect(nextTaskNumber(db, 'WEB', 1)).toBe(6);
@@ -292,7 +307,7 @@ describe('nextTaskNumber', () => {
           status: 'pending',
           display_id: 'WEB-02.10',
         }),
-      }),
+      })
     );
 
     expect(nextTaskNumber(db, 'WEB', 1)).toBe(1);
@@ -311,7 +326,7 @@ describe('nextTaskNumber', () => {
           status: 'pending',
           display_id: 'API-01.07',
         }),
-      }),
+      })
     );
 
     expect(nextTaskNumber(db, 'WEB', 1)).toBe(1);
@@ -323,8 +338,13 @@ describe('nextTaskNumber', () => {
         id: 'ws-1',
         type: 'workstream',
         module: 'pm',
-        metadata: JSON.stringify({ project: 'WEB', number: 8, status: 'active', display_id: 'WEB-08' }),
-      }),
+        metadata: JSON.stringify({
+          project: 'WEB',
+          number: 8,
+          status: 'active',
+          display_id: 'WEB-08',
+        }),
+      })
     );
 
     expect(nextTaskNumber(db, 'WEB', 8)).toBe(1);

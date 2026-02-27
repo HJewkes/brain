@@ -50,10 +50,7 @@ describe('validateNoteFrontmatter', () => {
   });
 
   it('fails on enum violation', () => {
-    const result = validateNoteFrontmatter(
-      { status: 'invalid', title: 'Test' },
-      taskSchema
-    );
+    const result = validateNoteFrontmatter({ status: 'invalid', title: 'Test' }, taskSchema);
     expect(result.valid).toBe(false);
     const err = result.errors.find((e) => e.field === 'status');
     expect(err!.message).toContain('must be one of');
@@ -132,10 +129,7 @@ describe('validateNoteFrontmatter', () => {
   });
 
   it('reports combined required, type, and enum errors', () => {
-    const result = validateNoteFrontmatter(
-      { status: 123, priority: 'not-a-number' },
-      taskSchema
-    );
+    const result = validateNoteFrontmatter({ status: 123, priority: 'not-a-number' }, taskSchema);
     expect(result.valid).toBe(false);
     const fields = result.errors.map((e) => e.field);
     expect(fields).toContain('title');

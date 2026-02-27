@@ -53,8 +53,11 @@ describe('findOrphanedDecisions', () => {
   it('returns decisions with no impacts', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Orphan Decision', sourceTask: 'CHK-01.01',
-      impacts: [], content: 'No impacts listed',
+      project: 'CHK',
+      name: 'Orphan Decision',
+      sourceTask: 'CHK-01.01',
+      impacts: [],
+      content: 'No impacts listed',
     });
     const result = findOrphanedDecisions(db, 'CHK');
     expect(result).toHaveLength(1);
@@ -65,8 +68,11 @@ describe('findOrphanedDecisions', () => {
   it('excludes decisions with impacts', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Good Decision', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'Has impacts',
+      project: 'CHK',
+      name: 'Good Decision',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'Has impacts',
     });
     const result = findOrphanedDecisions(db, 'CHK');
     expect(result).toHaveLength(0);
@@ -76,7 +82,12 @@ describe('findOrphanedDecisions', () => {
 describe('findBrokenDependencies', () => {
   it('returns empty when all dependencies exist', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B', dependsOn: ['CHK-01.01'] });
+    await createTask(db, config, embedder, {
+      project: 'CHK',
+      workstream: 1,
+      name: 'Task B',
+      dependsOn: ['CHK-01.01'],
+    });
     const result = findBrokenDependencies(db, 'CHK');
     expect(result).toHaveLength(0);
   });
@@ -101,10 +112,17 @@ describe('findBrokenDependencies', () => {
 
 describe('findBlockedWithoutCause', () => {
   it('returns blocked tasks where all deps are done', async () => {
-    const t1 = await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Dep Task' });
+    const t1 = await createTask(db, config, embedder, {
+      project: 'CHK',
+      workstream: 1,
+      name: 'Dep Task',
+    });
     expect(t1.ok).toBe(true);
     const t2 = await createTask(db, config, embedder, {
-      project: 'CHK', workstream: 1, name: 'Blocked Task', dependsOn: ['CHK-01.01'],
+      project: 'CHK',
+      workstream: 1,
+      name: 'Blocked Task',
+      dependsOn: ['CHK-01.01'],
     });
     expect(t2.ok).toBe(true);
     // Complete the dep
@@ -125,7 +143,10 @@ describe('findCancelledDependencies', () => {
   it('returns tasks depending on cancelled tasks', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Will Cancel' });
     await createTask(db, config, embedder, {
-      project: 'CHK', workstream: 1, name: 'Depends On Cancelled', dependsOn: ['CHK-01.01'],
+      project: 'CHK',
+      workstream: 1,
+      name: 'Depends On Cancelled',
+      dependsOn: ['CHK-01.01'],
     });
     // Cancel the dependency
     await updateTaskStatus(db, config, embedder, 'CHK-01.01', 'cancelled');
@@ -142,14 +163,19 @@ describe('findStalePrompts', () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
     // Write prompt first
     await writePrompt(db, config, embedder, {
-      project: 'CHK', task: 'CHK-01.01', content: 'Build the API endpoint',
+      project: 'CHK',
+      task: 'CHK-01.01',
+      content: 'Build the API endpoint',
     });
     // Small delay to ensure different timestamps
     await new Promise((r) => setTimeout(r, 50));
     // Create decision that impacts the task (newer than prompt)
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Use REST', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'REST over GraphQL',
+      project: 'CHK',
+      name: 'Use REST',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'REST over GraphQL',
     });
 
     const result = findStalePrompts(db, 'CHK');
@@ -163,12 +189,17 @@ describe('findStalePrompts', () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
     // Decision first, prompt after — prompt is not stale
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Early Decision', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'Decided early',
+      project: 'CHK',
+      name: 'Early Decision',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'Decided early',
     });
     await new Promise((r) => setTimeout(r, 50));
     await writePrompt(db, config, embedder, {
-      project: 'CHK', task: 'CHK-01.01', content: 'Written after decision',
+      project: 'CHK',
+      task: 'CHK-01.01',
+      content: 'Written after decision',
     });
 
     const result = findStalePrompts(db, 'CHK');
@@ -180,12 +211,18 @@ describe('computeDecisionPairs', () => {
   it('returns pairs of decisions sharing impact targets', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Shared Task' });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Use REST', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'REST API design',
+      project: 'CHK',
+      name: 'Use REST',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'REST API design',
     });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Use GraphQL', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'GraphQL API design',
+      project: 'CHK',
+      name: 'Use GraphQL',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'GraphQL API design',
     });
 
     const pairs = computeDecisionPairs(db, 'CHK');
@@ -198,12 +235,18 @@ describe('computeDecisionPairs', () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B' });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Dec A', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'Only A',
+      project: 'CHK',
+      name: 'Dec A',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'Only A',
     });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Dec B', sourceTask: 'CHK-01.02',
-      impacts: ['CHK-01.02'], content: 'Only B',
+      project: 'CHK',
+      name: 'Dec B',
+      sourceTask: 'CHK-01.02',
+      impacts: ['CHK-01.02'],
+      content: 'Only B',
     });
 
     const pairs = computeDecisionPairs(db, 'CHK');
@@ -215,8 +258,11 @@ describe('computeTaskDecisionAlignment', () => {
   it('returns tasks with their impacting decisions', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Use REST', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'REST design',
+      project: 'CHK',
+      name: 'Use REST',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'REST design',
     });
 
     const alignments = computeTaskDecisionAlignment(db, 'CHK');
@@ -237,13 +283,19 @@ describe('computeSupersessionGaps', () => {
   it('returns decision pairs on same source task without supersession relation', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'Old approach', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'Version 1',
+      project: 'CHK',
+      name: 'Old approach',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'Version 1',
     });
     await new Promise((r) => setTimeout(r, 50));
     await createDecision(db, config, embedder, {
-      project: 'CHK', name: 'New approach', sourceTask: 'CHK-01.01',
-      impacts: ['CHK-01.01'], content: 'Version 2',
+      project: 'CHK',
+      name: 'New approach',
+      sourceTask: 'CHK-01.01',
+      impacts: ['CHK-01.01'],
+      content: 'Version 2',
     });
 
     const gaps = computeSupersessionGaps(db, 'CHK');
@@ -257,13 +309,15 @@ describe('computeSupersessionGaps', () => {
 describe('clusterSourceDocuments', () => {
   it('groups documents with similar titles', async () => {
     const doc1Path = join(notesDir, 'auth-design-v1.md');
-    const doc1Content = '---\nid: auth-design-v1\ntitle: "Auth Design v1"\ntype: note\ntier: fast\nsource: google-docs\n---\n\nOriginal auth approach using JWT.';
+    const doc1Content =
+      '---\nid: auth-design-v1\ntitle: "Auth Design v1"\ntype: note\ntier: fast\nsource: google-docs\n---\n\nOriginal auth approach using JWT.';
     writeFileSync(doc1Path, doc1Content);
     const hash1 = createHash('sha256').update(doc1Content).digest('hex');
     await indexSingleFile(db, embedder, doc1Path, doc1Content, hash1, Date.now() - 100000);
 
     const doc2Path = join(notesDir, 'auth-design-v2.md');
-    const doc2Content = '---\nid: auth-design-v2\ntitle: "Auth Design v2"\ntype: note\ntier: fast\nsource: google-docs\n---\n\nRevised auth approach using sessions.';
+    const doc2Content =
+      '---\nid: auth-design-v2\ntitle: "Auth Design v2"\ntype: note\ntier: fast\nsource: google-docs\n---\n\nRevised auth approach using sessions.';
     writeFileSync(doc2Path, doc2Content);
     const hash2 = createHash('sha256').update(doc2Content).digest('hex');
     await indexSingleFile(db, embedder, doc2Path, doc2Content, hash2, Date.now());
@@ -290,7 +344,8 @@ describe('clusterSourceDocuments', () => {
 
   it('only returns clusters with 2+ documents', async () => {
     const docPath = join(notesDir, 'solo-doc.md');
-    const docContent = '---\nid: solo-doc\ntitle: "Solo Document"\ntype: note\ntier: fast\n---\n\nA single document with no siblings.';
+    const docContent =
+      '---\nid: solo-doc\ntitle: "Solo Document"\ntype: note\ntier: fast\n---\n\nA single document with no siblings.';
     writeFileSync(docPath, docContent);
     const hash = createHash('sha256').update(docContent).digest('hex');
     await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());

@@ -328,10 +328,7 @@ describe('V9: Session Lifecycle', () => {
     });
 
     it('check rejects path outside worktree', () => {
-      const result = checkWorktreePath(
-        '/fake/repo/.worktrees/ws-a',
-        '/some/other/path/file.ts',
-      );
+      const result = checkWorktreePath('/fake/repo/.worktrees/ws-a', '/some/other/path/file.ts');
 
       expect(result.ok).toBe(false);
       if (result.ok) return;

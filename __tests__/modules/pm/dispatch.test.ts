@@ -5,10 +5,7 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import {
-  assembleContext,
-  isContextStale,
-} from '../../../src/modules/pm/engine/dispatch.js';
+import { assembleContext, isContextStale } from '../../../src/modules/pm/engine/dispatch.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -38,7 +35,12 @@ function decisionMeta(displayId: string, project: string, overrides: Record<stri
   });
 }
 
-function promptMeta(displayId: string, project: string, task: string, overrides: Record<string, unknown> = {}) {
+function promptMeta(
+  displayId: string,
+  project: string,
+  task: string,
+  overrides: Record<string, unknown> = {}
+) {
   return JSON.stringify({
     display_id: displayId,
     project,
@@ -70,13 +72,15 @@ describe('assembleContext', () => {
   });
 
   test('assembles context for task with no deps, decisions, or prompt', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Setup project',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Setup project',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-001');
     expect(result.ok).toBe(true);
@@ -90,21 +94,25 @@ describe('assembleContext', () => {
   });
 
   test('includes dependency summaries', () => {
-    db.upsertNote(makeNote({
-      id: 'task-dep',
-      title: 'Dependency Task',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB', { status: 'done' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-dep',
+        title: 'Dependency Task',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB', { status: 'done' }),
+      })
+    );
 
-    db.upsertNote(makeNote({
-      id: 'task-main',
-      title: 'Main Task',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-002', 'WEB', { depends_on: ['WEB-01-001'] }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-main',
+        title: 'Main Task',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-002', 'WEB', { depends_on: ['WEB-01-001'] }),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-002');
     expect(result.ok).toBe(true);
@@ -124,22 +132,26 @@ describe('assembleContext', () => {
     mkdirSync(contentDir, { recursive: true });
     writeFileSync(join(contentDir, 'summary.md'), 'This task set up the auth layer.');
 
-    db.upsertNote(makeNote({
-      id: 'task-dep',
-      title: 'Auth Setup',
-      module: 'pm',
-      type: 'task',
-      contentDir,
-      metadata: taskMeta('WEB-01-001', 'WEB', { status: 'done' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-dep',
+        title: 'Auth Setup',
+        module: 'pm',
+        type: 'task',
+        contentDir,
+        metadata: taskMeta('WEB-01-001', 'WEB', { status: 'done' }),
+      })
+    );
 
-    db.upsertNote(makeNote({
-      id: 'task-main',
-      title: 'Build API',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-002', 'WEB', { depends_on: ['WEB-01-001'] }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-main',
+        title: 'Build API',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-002', 'WEB', { depends_on: ['WEB-01-001'] }),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-002');
     expect(result.ok).toBe(true);
@@ -149,21 +161,25 @@ describe('assembleContext', () => {
   });
 
   test('includes impacting decisions', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Build Feature',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Build Feature',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
-    db.upsertNote(makeNote({
-      id: 'dec-001',
-      title: 'Use PostgreSQL for storage',
-      module: 'pm',
-      type: 'decision',
-      metadata: decisionMeta('WEB-D001', 'WEB', { impacts: ['WEB-01-001'] }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'dec-001',
+        title: 'Use PostgreSQL for storage',
+        module: 'pm',
+        type: 'decision',
+        metadata: decisionMeta('WEB-D001', 'WEB', { impacts: ['WEB-01-001'] }),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-001');
     expect(result.ok).toBe(true);
@@ -178,21 +194,25 @@ describe('assembleContext', () => {
   });
 
   test('includes prompt content when prompt note exists', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Build Feature',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Build Feature',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
-    db.upsertNote(makeNote({
-      id: 'prompt-001',
-      title: 'Implement the user login flow using OAuth2',
-      module: 'pm',
-      type: 'prompt',
-      metadata: promptMeta('WEB-P001', 'WEB', 'WEB-01-001'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'prompt-001',
+        title: 'Implement the user login flow using OAuth2',
+        module: 'pm',
+        type: 'prompt',
+        metadata: promptMeta('WEB-P001', 'WEB', 'WEB-01-001'),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-001');
     expect(result.ok).toBe(true);
@@ -202,13 +222,15 @@ describe('assembleContext', () => {
   });
 
   test('prompt is undefined when no prompt note exists', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Build Feature',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Build Feature',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-001');
     expect(result.ok).toBe(true);
@@ -218,13 +240,15 @@ describe('assembleContext', () => {
   });
 
   test('context hash is deterministic', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Build Feature',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Build Feature',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
     const r1 = assembleContext(db, 'WEB-01-001');
     const r2 = assembleContext(db, 'WEB-01-001');
@@ -237,13 +261,15 @@ describe('assembleContext', () => {
 
 describe('isContextStale', () => {
   test('returns false when nothing changed', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Build Feature',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Build Feature',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-001');
     expect(result.ok).toBe(true);
@@ -253,69 +279,81 @@ describe('isContextStale', () => {
   });
 
   test('returns true when a decision is added after dispatch', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Build Feature',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Build Feature',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-001');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    db.upsertNote(makeNote({
-      id: 'dec-new',
-      title: 'New Decision',
-      module: 'pm',
-      type: 'decision',
-      metadata: decisionMeta('WEB-D002', 'WEB', { impacts: ['WEB-01-001'] }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'dec-new',
+        title: 'New Decision',
+        module: 'pm',
+        type: 'decision',
+        metadata: decisionMeta('WEB-D002', 'WEB', { impacts: ['WEB-01-001'] }),
+      })
+    );
 
     expect(isContextStale(result.data, db)).toBe(true);
   });
 
   test('returns true when dependency status changes', () => {
-    db.upsertNote(makeNote({
-      id: 'task-dep',
-      title: 'Dep Task',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB', { status: 'in-progress' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-dep',
+        title: 'Dep Task',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB', { status: 'in-progress' }),
+      })
+    );
 
-    db.upsertNote(makeNote({
-      id: 'task-main',
-      title: 'Main Task',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-002', 'WEB', { depends_on: ['WEB-01-001'] }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-main',
+        title: 'Main Task',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-002', 'WEB', { depends_on: ['WEB-01-001'] }),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-002');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    db.upsertNote(makeNote({
-      id: 'task-dep',
-      title: 'Dep Task',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB', { status: 'done' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-dep',
+        title: 'Dep Task',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB', { status: 'done' }),
+      })
+    );
 
     expect(isContextStale(result.data, db)).toBe(true);
   });
 
   test('returns true when task is deleted', () => {
-    db.upsertNote(makeNote({
-      id: 'task-001',
-      title: 'Build Feature',
-      module: 'pm',
-      type: 'task',
-      metadata: taskMeta('WEB-01-001', 'WEB'),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'task-001',
+        title: 'Build Feature',
+        module: 'pm',
+        type: 'task',
+        metadata: taskMeta('WEB-01-001', 'WEB'),
+      })
+    );
 
     const result = assembleContext(db, 'WEB-01-001');
     expect(result.ok).toBe(true);

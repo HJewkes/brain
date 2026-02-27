@@ -208,12 +208,14 @@ describe('deleteProject', () => {
   it('fails with HAS_DEPENDENTS when project has tasks', async () => {
     await createProject(db, config, embedder, { name: 'Web', prefix: 'WEB' });
 
-    db.upsertNote(makeNote({
-      id: 'web-01-01',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-01',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
+      })
+    );
 
     const result = await deleteProject(db, config, 'WEB');
     expect(result.ok).toBe(false);
@@ -229,13 +231,15 @@ describe('deleteProject', () => {
     const { writeFileSync } = await import('node:fs');
     writeFileSync(taskFilePath, '---\nid: web-01-01\n---\n# Task');
 
-    db.upsertNote(makeNote({
-      id: 'web-01-01',
-      filePath: taskFilePath,
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-01',
+        filePath: taskFilePath,
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
+      })
+    );
 
     const result = await deleteProject(db, config, 'WEB', true);
     expect(result.ok).toBe(true);

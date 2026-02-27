@@ -69,7 +69,14 @@ export function createDecisionCommands(): Command {
       await withBrain(async (svc) => {
         if (!opts.project) {
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing decisions' }, !!opts.json) + '\n',
+            formatError(
+              {
+                error: true,
+                code: 'INVALID_INPUT',
+                message: '--project is required for listing decisions',
+              },
+              !!opts.json
+            ) + '\n'
           );
           process.exitCode = 1;
           return;
@@ -143,7 +150,9 @@ export function createDecisionCommands(): Command {
         if (opts.json) {
           process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
         } else {
-          process.stdout.write(`Superseded ${result.data.old.display_id} -> ${result.data.new.display_id}\n`);
+          process.stdout.write(
+            `Superseded ${result.data.old.display_id} -> ${result.data.new.display_id}\n`
+          );
         }
       });
     });

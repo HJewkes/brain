@@ -204,18 +204,20 @@ describe('deleteWorkstream', () => {
     await createProject(db, config, embedder, { name: 'Web', prefix: 'WEB' });
     await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Frontend' });
 
-    db.upsertNote(makeNote({
-      id: 'web-01-task',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({
-        display_id: 'WEB-01.01',
-        project: 'WEB',
-        workstream: 1,
-        number: 1,
-        status: 'pending',
-      }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-task',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({
+          display_id: 'WEB-01.01',
+          project: 'WEB',
+          workstream: 1,
+          number: 1,
+          status: 'pending',
+        }),
+      })
+    );
 
     const result = await deleteWorkstream(db, config, 'WEB-01');
     expect(result.ok).toBe(false);

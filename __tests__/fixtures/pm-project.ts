@@ -15,7 +15,7 @@ import { createTask } from '../../src/modules/pm/data/task-ops.js';
 export async function createStandardProject(
   db: BrainDB,
   config: BrainConfig,
-  embedder: Embedder,
+  embedder: Embedder
 ): Promise<void> {
   const project = await createProject(db, config, embedder, {
     name: 'Test Project',

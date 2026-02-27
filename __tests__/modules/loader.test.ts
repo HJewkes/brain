@@ -155,7 +155,11 @@ describe('runModuleMigrations', () => {
     const registry = new ModuleRegistry();
     const calls: number[] = [];
 
-    registry.registerMigration('pm', { version: 2, description: 'Second', up: () => calls.push(2) });
+    registry.registerMigration('pm', {
+      version: 2,
+      description: 'Second',
+      up: () => calls.push(2),
+    });
     registry.registerMigration('pm', { version: 1, description: 'First', up: () => calls.push(1) });
     registry.registerMigration('pm', { version: 3, description: 'Third', up: () => calls.push(3) });
 
@@ -174,7 +178,11 @@ describe('runModuleMigrations', () => {
     const calls: number[] = [];
 
     registry.registerMigration('pm', { version: 1, description: 'First', up: () => calls.push(1) });
-    registry.registerMigration('pm', { version: 2, description: 'Second', up: () => calls.push(2) });
+    registry.registerMigration('pm', {
+      version: 2,
+      description: 'Second',
+      up: () => calls.push(2),
+    });
     registry.registerMigration('pm', { version: 3, description: 'Third', up: () => calls.push(3) });
 
     const applied = runModuleMigrations(registry, {}, new Map([['pm', 2]]));
@@ -187,9 +195,21 @@ describe('runModuleMigrations', () => {
     const registry = new ModuleRegistry();
     const calls: string[] = [];
 
-    registry.registerMigration('pm', { version: 1, description: 'PM init', up: () => calls.push('pm-1') });
-    registry.registerMigration('eng', { version: 1, description: 'Eng init', up: () => calls.push('eng-1') });
-    registry.registerMigration('eng', { version: 2, description: 'Eng v2', up: () => calls.push('eng-2') });
+    registry.registerMigration('pm', {
+      version: 1,
+      description: 'PM init',
+      up: () => calls.push('pm-1'),
+    });
+    registry.registerMigration('eng', {
+      version: 1,
+      description: 'Eng init',
+      up: () => calls.push('eng-1'),
+    });
+    registry.registerMigration('eng', {
+      version: 2,
+      description: 'Eng v2',
+      up: () => calls.push('eng-2'),
+    });
 
     const applied = runModuleMigrations(registry, {}, new Map([['eng', 1]]));
 
@@ -216,7 +236,9 @@ describe('runModuleMigrations', () => {
     registry.registerMigration('pm', {
       version: 1,
       description: 'Init',
-      up: (db) => { receivedDb = db; },
+      up: (db) => {
+        receivedDb = db;
+      },
     });
 
     runModuleMigrations(registry, mockDb, new Map());

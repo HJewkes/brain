@@ -30,7 +30,7 @@ export function validateClaimToken(expected: string, provided: string): Result<v
 export function isClaimStale(
   claimedAt: string,
   timeoutMs: number = DEFAULT_CLAIM_TIMEOUT_MS,
-  now: Date = new Date(),
+  now: Date = new Date()
 ): boolean {
   const claimedTime = new Date(claimedAt).getTime();
   return now.getTime() - claimedTime > timeoutMs;

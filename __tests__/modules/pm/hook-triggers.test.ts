@@ -209,16 +209,13 @@ describe('worktree-check path validation', () => {
   test('accepts file deep inside worktree', () => {
     const result = checkWorktreePath(
       '/repo/.worktrees/ws-1',
-      '/repo/.worktrees/ws-1/src/modules/deep/file.ts',
+      '/repo/.worktrees/ws-1/src/modules/deep/file.ts'
     );
     expect(result.ok).toBe(true);
   });
 
   test('rejects sibling worktree path', () => {
-    const result = checkWorktreePath(
-      '/repo/.worktrees/ws-1',
-      '/repo/.worktrees/ws-2/src/file.ts',
-    );
+    const result = checkWorktreePath('/repo/.worktrees/ws-1', '/repo/.worktrees/ws-2/src/file.ts');
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('INVALID_INPUT');
@@ -227,33 +224,24 @@ describe('worktree-check path validation', () => {
   });
 
   test('rejects parent directory of worktree', () => {
-    const result = checkWorktreePath(
-      '/repo/.worktrees/ws-1',
-      '/repo/.worktrees',
-    );
+    const result = checkWorktreePath('/repo/.worktrees/ws-1', '/repo/.worktrees');
     expect(result.ok).toBe(false);
   });
 
   test('accepts worktree root exactly', () => {
-    const result = checkWorktreePath(
-      '/repo/.worktrees/ws-1',
-      '/repo/.worktrees/ws-1',
-    );
+    const result = checkWorktreePath('/repo/.worktrees/ws-1', '/repo/.worktrees/ws-1');
     expect(result.ok).toBe(true);
   });
 
   test('normalizes trailing slashes on worktree path', () => {
-    const result = checkWorktreePath(
-      '/repo/.worktrees/ws-1/',
-      '/repo/.worktrees/ws-1/file.ts',
-    );
+    const result = checkWorktreePath('/repo/.worktrees/ws-1/', '/repo/.worktrees/ws-1/file.ts');
     expect(result.ok).toBe(true);
   });
 
   test('rejects path that shares prefix but is not subdirectory', () => {
     const result = checkWorktreePath(
       '/repo/.worktrees/ws-1',
-      '/repo/.worktrees/ws-1-extended/file.ts',
+      '/repo/.worktrees/ws-1-extended/file.ts'
     );
     expect(result.ok).toBe(false);
   });

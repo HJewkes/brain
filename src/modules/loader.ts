@@ -84,7 +84,7 @@ export async function loadModules(opts?: {
 export function runModuleMigrations(
   registry: ModuleRegistry,
   db: unknown,
-  currentVersions: Map<string, number>,
+  currentVersions: Map<string, number>
 ): Array<{ module: string; version: number }> {
   const applied: Array<{ module: string; version: number }> = [];
   const allMigrations = registry.getMigrations();

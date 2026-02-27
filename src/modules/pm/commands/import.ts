@@ -71,7 +71,10 @@ function validateImportDef(data: unknown): Result<ImportProjectDef> {
     for (let j = 0; j < tasks.length; j++) {
       const t = tasks[j];
       if (typeof t.name !== 'string' || t.name.trim().length === 0) {
-        return fail('INVALID_INPUT', `Task at index ${j} in workstream "${ws.name}" must have a non-empty "name"`);
+        return fail(
+          'INVALID_INPUT',
+          `Task at index ${j} in workstream "${ws.name}" must have a non-empty "name"`
+        );
       }
     }
   }
@@ -83,7 +86,7 @@ export async function executeImport(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  def: ImportProjectDef,
+  def: ImportProjectDef
 ): Promise<ImportResult> {
   const result: ImportResult = { created: [], errors: [] };
 
@@ -218,7 +221,10 @@ export function createImportCommand(): Command {
           rawData = JSON.parse(content);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          const error = fail('INVALID_INPUT', `Failed to read/parse "${opts.fromJson}": ${message}`);
+          const error = fail(
+            'INVALID_INPUT',
+            `Failed to read/parse "${opts.fromJson}": ${message}`
+          );
           if (!error.ok) {
             process.stderr.write(formatError(error.error, !!opts.json) + '\n');
           }

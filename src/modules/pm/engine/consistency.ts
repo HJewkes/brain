@@ -241,7 +241,8 @@ export function findStalePrompts(db: BrainDB, prefix: string): StalePrompt[] {
 
     if (newerDecisions.length > 0) {
       const taskNotes = getPmNotes(db, 'task', { display_id: taskDisplayId });
-      const taskTitle = taskNotes.length > 0 ? (taskNotes[0].title ?? taskDisplayId) : taskDisplayId;
+      const taskTitle =
+        taskNotes.length > 0 ? (taskNotes[0].title ?? taskDisplayId) : taskDisplayId;
 
       results.push({
         id: promptMeta.display_id as string,
@@ -414,7 +415,7 @@ function extractTopicKey(title: string): string {
 export function clusterSourceDocuments(db: BrainDB): SourceDocCluster[] {
   const allNotes = db.getAllNotes();
   const sourceDocs = allNotes.filter(
-    (note): note is typeof note & { title: string } => !note.module && note.title != null,
+    (note): note is typeof note & { title: string } => !note.module && note.title != null
   );
 
   if (sourceDocs.length === 0) return [];
@@ -432,7 +433,7 @@ export function clusterSourceDocuments(db: BrainDB): SourceDocCluster[] {
     if (notes.length < 2) continue;
 
     const docs = notes.map((note) => {
-      const meta = note.metadata ? JSON.parse(note.metadata) as Record<string, unknown> : {};
+      const meta = note.metadata ? (JSON.parse(note.metadata) as Record<string, unknown>) : {};
       const indexedAt = getIndexedAt(db, note.filePath);
       return {
         noteId: note.id,
@@ -447,9 +448,12 @@ export function clusterSourceDocuments(db: BrainDB): SourceDocCluster[] {
 
     docs.sort((a, b) => b._indexedAtNum - a._indexedAtNum || b.title.localeCompare(a.title));
 
-    const span = docs.length > 1
-      ? Math.round((docs[0]._indexedAtNum - docs[docs.length - 1]._indexedAtNum) / (1000 * 60 * 60 * 24))
-      : 0;
+    const span =
+      docs.length > 1
+        ? Math.round(
+            (docs[0]._indexedAtNum - docs[docs.length - 1]._indexedAtNum) / (1000 * 60 * 60 * 24)
+          )
+        : 0;
 
     clusters.push({
       topic: notes[0].title.replace(/\s*[vV]\d+\s*$/, ''),

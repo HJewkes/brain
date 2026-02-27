@@ -66,7 +66,7 @@ export function allocateWorktree(
   taskId: string,
   workstream: string,
   claimToken: string,
-  projectBudget?: number,
+  projectBudget?: number
 ): Result<WorktreeAllocation> {
   const allocations = readAllocations(db);
   const max = projectBudget ?? DEFAULT_BUDGET;
@@ -115,26 +115,26 @@ export function allocateWorktree(
   return ok(allocation);
 }
 
-export function checkWorktreePath(
-  expectedWorktree: string,
-  targetPath: string,
-): Result<void> {
+export function checkWorktreePath(expectedWorktree: string, targetPath: string): Result<void> {
   const normalizedWorktree = normalize(resolve(expectedWorktree)).replace(/\/+$/, '');
   const normalizedTarget = normalize(resolve(targetPath));
 
-  if (normalizedTarget === normalizedWorktree || normalizedTarget.startsWith(normalizedWorktree + '/')) {
+  if (
+    normalizedTarget === normalizedWorktree ||
+    normalizedTarget.startsWith(normalizedWorktree + '/')
+  ) {
     return ok(undefined);
   }
 
   return fail(
     'INVALID_INPUT',
-    `Path "${targetPath}" is outside expected worktree "${expectedWorktree}"`,
+    `Path "${targetPath}" is outside expected worktree "${expectedWorktree}"`
   );
 }
 
 export function releaseWorktree(
   db: BrainDB,
-  taskId: string,
+  taskId: string
 ): Result<{ released: boolean; path?: string }> {
   const allocations = readAllocations(db);
   const idx = allocations.findIndex((a) => a.taskId === taskId);
@@ -148,10 +148,7 @@ export function releaseWorktree(
   return ok({ released: true, path: removed.path });
 }
 
-export function cleanupStaleAllocations(
-  db: BrainDB,
-  activeTaskIds: Set<string>,
-): string[] {
+export function cleanupStaleAllocations(db: BrainDB, activeTaskIds: Set<string>): string[] {
   const allocations = readAllocations(db);
   const stale: string[] = [];
   const kept: WorktreeAllocation[] = [];

@@ -82,10 +82,7 @@ const NON_AGENT_DEFAULT: RoutingResult = {
   concurrency: 'parallel',
 };
 
-export function computeRouting(
-  category: TaskCategory,
-  mode: TaskMode,
-): RoutingResult {
+export function computeRouting(category: TaskCategory, mode: TaskMode): RoutingResult {
   if (!isAgentDispatchable(mode)) {
     return { ...NON_AGENT_DEFAULT };
   }

@@ -8,16 +8,38 @@ import Database from 'better-sqlite3';
 import { BrainDB } from '../../src/services/brain-db.js';
 import { loadModules, runModuleMigrations } from '../../src/modules/loader.js';
 import { pmModule } from '../../src/modules/pm/index.js';
-import { createProject, listProjects, updateProject, deleteProject } from '../../src/modules/pm/data/project-ops.js';
+import {
+  createProject,
+  listProjects,
+  updateProject,
+  deleteProject,
+} from '../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../src/modules/pm/data/workstream-ops.js';
-import { createTask, getTask, updateTaskStatus, listTasks, deleteTask } from '../../src/modules/pm/data/task-ops.js';
+import {
+  createTask,
+  getTask,
+  updateTaskStatus,
+  listTasks,
+  deleteTask,
+} from '../../src/modules/pm/data/task-ops.js';
 import { createDecision } from '../../src/modules/pm/data/decision-ops.js';
 import { writePrompt, detectStalePrompts } from '../../src/modules/pm/data/prompt-ops.js';
 import { getPmNotes, getProjectNotes } from '../../src/modules/pm/data/queries.js';
-import { computeEligible, computeWaves, detectCycle } from '../../src/modules/pm/engine/dependency.js';
+import {
+  computeEligible,
+  computeWaves,
+  detectCycle,
+} from '../../src/modules/pm/engine/dependency.js';
 import { assembleContext, isContextStale } from '../../src/modules/pm/engine/dispatch.js';
-import { validateTransition, computeVirtualState } from '../../src/modules/pm/engine/state-machine.js';
-import { generateClaim, validateClaimToken, isClaimActive } from '../../src/modules/pm/engine/claims.js';
+import {
+  validateTransition,
+  computeVirtualState,
+} from '../../src/modules/pm/engine/state-machine.js';
+import {
+  generateClaim,
+  validateClaimToken,
+  isClaimActive,
+} from '../../src/modules/pm/engine/claims.js';
 import { createStandardProject } from '../fixtures/pm-project.js';
 import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
 import type { ModuleRegistry } from '../../src/modules/registry.js';
@@ -148,7 +170,7 @@ describe('V4: PM Module Smoke Test', () => {
     const t2Notes = getPmNotes(db, 'task', { display_id: 'REL-01.02' });
     expect(t2Notes).toHaveLength(1);
     const relations = db.getRelationsFrom(t2Notes[0].id);
-    expect(relations.some(r => r.type === 'depends_on')).toBe(true);
+    expect(relations.some((r) => r.type === 'depends_on')).toBe(true);
   });
 
   it('query scoping: getPmNotes returns only PM notes', async () => {
@@ -178,7 +200,7 @@ describe('V4: PM Module Smoke Test', () => {
     });
 
     const pmNotes = getPmNotes(db, 'project');
-    const pmIds = pmNotes.map(n => n.id);
+    const pmIds = pmNotes.map((n) => n.id);
     expect(pmIds).not.toContain('non-pm-note');
     expect(pmNotes.length).toBeGreaterThanOrEqual(1);
   });
@@ -186,12 +208,8 @@ describe('V4: PM Module Smoke Test', () => {
   it('extraction strategy: shouldExtract returns false for PM notes', () => {
     const strategy = registry.getExtractionStrategy('pm');
     expect(strategy).toBeDefined();
-    expect(strategy!.shouldExtract(
-      makeNote({ module: 'pm', type: 'task' }),
-    )).toBe(false);
-    expect(strategy!.shouldExtract(
-      makeNote({ module: 'pm', type: 'project' }),
-    )).toBe(false);
+    expect(strategy!.shouldExtract(makeNote({ module: 'pm', type: 'task' }))).toBe(false);
+    expect(strategy!.shouldExtract(makeNote({ module: 'pm', type: 'project' }))).toBe(false);
   });
 
   it('module migration runs successfully', () => {
@@ -343,7 +361,7 @@ describe('V5: State Machine + Dependency Engine', () => {
     expect(waves[0].taskIds).toContain('TEST-02.01');
 
     // 01.02 and 02.02 should be in a later wave
-    const laterTasks = waves.slice(1).flatMap(w => w.taskIds);
+    const laterTasks = waves.slice(1).flatMap((w) => w.taskIds);
     expect(laterTasks).toContain('TEST-01.02');
     expect(laterTasks).toContain('TEST-02.02');
   });
@@ -454,7 +472,7 @@ describe('V6: CLI Commands (data layer)', () => {
     const listResult = listProjects(db);
     expect(listResult.ok).toBe(true);
     if (!listResult.ok) return;
-    expect(listResult.data.some(p => p.prefix === 'CRUD')).toBe(true);
+    expect(listResult.data.some((p) => p.prefix === 'CRUD')).toBe(true);
 
     // Update
     const updateResult = await updateProject(db, config, embedder, 'CRUD', {
@@ -472,7 +490,7 @@ describe('V6: CLI Commands (data layer)', () => {
     const postDelete = listProjects(db);
     expect(postDelete.ok).toBe(true);
     if (postDelete.ok) {
-      expect(postDelete.data.some(p => p.prefix === 'CRUD')).toBe(false);
+      expect(postDelete.data.some((p) => p.prefix === 'CRUD')).toBe(false);
     }
   });
 
@@ -541,7 +559,7 @@ describe('V6: CLI Commands (data layer)', () => {
     expect(staleResult.ok).toBe(true);
     if (staleResult.ok) {
       expect(staleResult.data.length).toBeGreaterThanOrEqual(1);
-      expect(staleResult.data.some(p => p.task === 'DP-01.01')).toBe(true);
+      expect(staleResult.data.some((p) => p.task === 'DP-01.01')).toBe(true);
     }
   });
 
@@ -581,7 +599,7 @@ describe('V6: CLI Commands (data layer)', () => {
     const allNotes = getProjectNotes(db, 'BRF');
     expect(allNotes.length).toBeGreaterThanOrEqual(4); // 1 project + 1 workstream + 2 tasks
 
-    const types = allNotes.map(n => n.type);
+    const types = allNotes.map((n) => n.type);
     expect(types).toContain('project');
     expect(types).toContain('workstream');
     expect(types).toContain('task');
@@ -681,7 +699,7 @@ describe('V7: Directory-Backed Tasks', () => {
     await indexSingleFile(db, embedder, taskFilePath, content, hash, Date.now());
 
     const ftsResults = db.searchFTS(uniquePhrase, 10);
-    expect(ftsResults.some(r => r.noteId.includes('fts-01.01'))).toBe(true);
+    expect(ftsResults.some((r) => r.noteId.includes('fts-01.01'))).toBe(true);
   });
 
   it('dispatch includes dependency summaries from content_dir', async () => {

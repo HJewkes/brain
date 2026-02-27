@@ -89,7 +89,14 @@ export function createTaskCommands(): Command {
       await withBrain(async (svc) => {
         if (!opts.project) {
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing tasks' }, !!opts.json) + '\n',
+            formatError(
+              {
+                error: true,
+                code: 'INVALID_INPUT',
+                message: '--project is required for listing tasks',
+              },
+              !!opts.json
+            ) + '\n'
           );
           process.exitCode = 1;
           return;
@@ -144,7 +151,7 @@ export function createTaskCommands(): Command {
           svc.config,
           svc.embedder,
           id.toUpperCase(),
-          updates,
+          updates
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -163,8 +170,11 @@ export function createTaskCommands(): Command {
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const result = await updateTaskStatus(
-          svc.db, svc.config, svc.embedder,
-          id.toUpperCase(), 'done' as TaskStatus,
+          svc.db,
+          svc.config,
+          svc.embedder,
+          id.toUpperCase(),
+          'done' as TaskStatus
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -183,8 +193,11 @@ export function createTaskCommands(): Command {
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const result = await updateTaskStatus(
-          svc.db, svc.config, svc.embedder,
-          id.toUpperCase(), 'blocked' as TaskStatus,
+          svc.db,
+          svc.config,
+          svc.embedder,
+          id.toUpperCase(),
+          'blocked' as TaskStatus
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -203,8 +216,11 @@ export function createTaskCommands(): Command {
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const result = await updateTaskStatus(
-          svc.db, svc.config, svc.embedder,
-          id.toUpperCase(), 'pending' as TaskStatus,
+          svc.db,
+          svc.config,
+          svc.embedder,
+          id.toUpperCase(),
+          'pending' as TaskStatus
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -223,12 +239,7 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
-        const result = await deleteTask(
-          svc.db,
-          svc.config,
-          id.toUpperCase(),
-          opts.force,
-        );
+        const result = await deleteTask(svc.db, svc.config, id.toUpperCase(), opts.force);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
@@ -273,8 +284,11 @@ export function createTaskCommands(): Command {
 
         const claim = generateClaim();
         const metaResult = await updateTaskMetadataFields(
-          svc.db, svc.config, svc.embedder, displayId,
-          { status: 'claimed', claim_token: claim.token, claimed_at: claim.claimedAt },
+          svc.db,
+          svc.config,
+          svc.embedder,
+          displayId,
+          { status: 'claimed', claim_token: claim.token, claimed_at: claim.claimedAt }
         );
         if (!metaResult.ok) {
           process.stderr.write(formatError(metaResult.error, !!opts.json) + '\n');
@@ -319,8 +333,11 @@ export function createTaskCommands(): Command {
         }
 
         const result = await updateTaskStatus(
-          svc.db, svc.config, svc.embedder,
-          displayId, 'in-progress' as TaskStatus,
+          svc.db,
+          svc.config,
+          svc.embedder,
+          displayId,
+          'in-progress' as TaskStatus
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -354,8 +371,11 @@ export function createTaskCommands(): Command {
         }
 
         const metaResult = await updateTaskMetadataFields(
-          svc.db, svc.config, svc.embedder, displayId,
-          { status: 'pending', claim_token: '', claimed_at: '' },
+          svc.db,
+          svc.config,
+          svc.embedder,
+          displayId,
+          { status: 'pending', claim_token: '', claimed_at: '' }
         );
         if (!metaResult.ok) {
           process.stderr.write(formatError(metaResult.error, !!opts.json) + '\n');
@@ -393,7 +413,7 @@ async function updateTaskMetadataFields(
   config: BrainConfig,
   embedder: Embedder,
   displayId: string,
-  fields: Record<string, string>,
+  fields: Record<string, string>
 ): Promise<Result<TaskMetadata>> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {

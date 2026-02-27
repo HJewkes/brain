@@ -6,10 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
-import {
-  executeImport,
-  type ImportProjectDef,
-} from '../../../src/modules/pm/commands/import.js';
+import { executeImport, type ImportProjectDef } from '../../../src/modules/pm/commands/import.js';
 import { listTasks } from '../../../src/modules/pm/data/task-ops.js';
 import { listWorkstreams } from '../../../src/modules/pm/data/workstream-ops.js';
 import { getProject } from '../../../src/modules/pm/data/project-ops.js';
@@ -94,10 +91,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [
-            { name: 'First task' },
-            { name: 'Second task', depends_on: ['DEP-01.01'] },
-          ],
+          tasks: [{ name: 'First task' }, { name: 'Second task', depends_on: ['DEP-01.01'] }],
         },
       ],
     };
@@ -126,7 +120,7 @@ describe('executeImport', () => {
 
     const relations = db.getRelationsFrom(secondTaskNoteId!);
     const depRelation = relations.find(
-      (r) => r.type === 'depends_on' && r.targetId === firstTaskNoteId,
+      (r) => r.type === 'depends_on' && r.targetId === firstTaskNoteId
     );
     expect(depRelation).toBeDefined();
   });
@@ -169,10 +163,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [
-            { name: 'First' },
-            { name: 'Second', depends_on: ['BAD-99.99'] },
-          ],
+          tasks: [{ name: 'First' }, { name: 'Second', depends_on: ['BAD-99.99'] }],
         },
       ],
     };
@@ -230,6 +221,8 @@ describe('executeImport', () => {
     }
 
     const relations = db.getRelationsFrom(ws2TaskNoteId!);
-    expect(relations.some((r) => r.type === 'depends_on' && r.targetId === ws1TaskNoteId)).toBe(true);
+    expect(relations.some((r) => r.type === 'depends_on' && r.targetId === ws1TaskNoteId)).toBe(
+      true
+    );
   });
 });

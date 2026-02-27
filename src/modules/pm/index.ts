@@ -84,7 +84,17 @@ export const pmModule: BrainModule = {
           },
           category: {
             type: 'string',
-            enum: ['implementation', 'testing', 'documentation', 'research', 'review', 'infrastructure', 'configuration', 'design', 'migration'],
+            enum: [
+              'implementation',
+              'testing',
+              'documentation',
+              'research',
+              'review',
+              'infrastructure',
+              'configuration',
+              'design',
+              'migration',
+            ],
             description: 'Task category',
           },
           priority: {

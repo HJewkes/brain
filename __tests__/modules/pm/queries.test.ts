@@ -25,12 +25,14 @@ afterEach(() => {
 
 describe('resolveDisplayId', () => {
   it('returns note ID when display ID exists', () => {
-    db.upsertNote(makeNote({
-      id: 'web-project',
-      module: 'pm',
-      type: 'project',
-      metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
 
     const result = resolveDisplayId(db, 'WEB');
     expect(result).toEqual({ ok: true, data: 'web-project' });
@@ -55,24 +57,35 @@ describe('resolveDisplayId', () => {
 
 describe('getProjectNotes', () => {
   it('returns notes matching project prefix', () => {
-    db.upsertNote(makeNote({
-      id: 'web-project',
-      module: 'pm',
-      type: 'project',
-      metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'web-01',
-      module: 'pm',
-      type: 'workstream',
-      metadata: JSON.stringify({ display_id: 'WEB-01', project: 'WEB', number: 1, status: 'active' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'api-project',
-      module: 'pm',
-      type: 'project',
-      metadata: JSON.stringify({ display_id: 'API', prefix: 'API', status: 'active' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'web-01',
+        module: 'pm',
+        type: 'workstream',
+        metadata: JSON.stringify({
+          display_id: 'WEB-01',
+          project: 'WEB',
+          number: 1,
+          status: 'active',
+        }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'api-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'API', prefix: 'API', status: 'active' }),
+      })
+    );
 
     const notes = getProjectNotes(db, 'WEB');
     expect(notes).toHaveLength(2);
@@ -88,24 +101,48 @@ describe('getProjectNotes', () => {
 
 describe('getTasksByStatus', () => {
   it('filters tasks by status within a project', () => {
-    db.upsertNote(makeNote({
-      id: 'web-01-01',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', workstream: 1, number: 1, status: 'pending' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'web-01-02',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.02', project: 'WEB', workstream: 1, number: 2, status: 'done' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'api-01-01',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'API-01.01', project: 'API', workstream: 1, number: 1, status: 'pending' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-01',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({
+          display_id: 'WEB-01.01',
+          project: 'WEB',
+          workstream: 1,
+          number: 1,
+          status: 'pending',
+        }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-02',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({
+          display_id: 'WEB-01.02',
+          project: 'WEB',
+          workstream: 1,
+          number: 2,
+          status: 'done',
+        }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'api-01-01',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({
+          display_id: 'API-01.01',
+          project: 'API',
+          workstream: 1,
+          number: 1,
+          status: 'pending',
+        }),
+      })
+    );
 
     const pending = getTasksByStatus(db, 'WEB', 'pending');
     expect(pending).toHaveLength(1);
@@ -124,12 +161,14 @@ describe('getTasksByStatus', () => {
 
 describe('getEligibleTasks', () => {
   it('returns pending tasks with no dependencies', () => {
-    db.upsertNote(makeNote({
-      id: 'web-01-01',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-01',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
+      })
+    );
 
     const eligible = getEligibleTasks(db, 'WEB');
     expect(eligible).toHaveLength(1);
@@ -137,18 +176,27 @@ describe('getEligibleTasks', () => {
   });
 
   it('returns pending tasks whose dependencies are all done', () => {
-    db.upsertNote(makeNote({
-      id: 'web-01-01',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'done' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'web-01-02',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.02', project: 'WEB', status: 'pending', depends_on: ['WEB-01.01'] }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-01',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'done' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-02',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({
+          display_id: 'WEB-01.02',
+          project: 'WEB',
+          status: 'pending',
+          depends_on: ['WEB-01.01'],
+        }),
+      })
+    );
 
     const eligible = getEligibleTasks(db, 'WEB');
     expect(eligible).toHaveLength(1);
@@ -156,18 +204,27 @@ describe('getEligibleTasks', () => {
   });
 
   it('excludes pending tasks with unfinished dependencies', () => {
-    db.upsertNote(makeNote({
-      id: 'web-01-01',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'web-01-02',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({ display_id: 'WEB-01.02', project: 'WEB', status: 'pending', depends_on: ['WEB-01.01'] }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-01',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'web-01-02',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({
+          display_id: 'WEB-01.02',
+          project: 'WEB',
+          status: 'pending',
+          depends_on: ['WEB-01.01'],
+        }),
+      })
+    );
 
     const eligible = getEligibleTasks(db, 'WEB');
     expect(eligible).toHaveLength(1);
@@ -199,18 +256,27 @@ describe('getActiveProject / setActiveProject', () => {
 
 describe('getPmNotes', () => {
   it('returns notes filtered by type', () => {
-    db.upsertNote(makeNote({
-      id: 'web-project',
-      module: 'pm',
-      type: 'project',
-      metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'web-01',
-      module: 'pm',
-      type: 'workstream',
-      metadata: JSON.stringify({ display_id: 'WEB-01', project: 'WEB', number: 1, status: 'active' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'web-01',
+        module: 'pm',
+        type: 'workstream',
+        metadata: JSON.stringify({
+          display_id: 'WEB-01',
+          project: 'WEB',
+          number: 1,
+          status: 'active',
+        }),
+      })
+    );
 
     const projects = getPmNotes(db, 'project');
     expect(projects).toHaveLength(1);
@@ -218,18 +284,22 @@ describe('getPmNotes', () => {
   });
 
   it('applies metadata filters', () => {
-    db.upsertNote(makeNote({
-      id: 'web-project',
-      module: 'pm',
-      type: 'project',
-      metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'api-project',
-      module: 'pm',
-      type: 'project',
-      metadata: JSON.stringify({ display_id: 'API', prefix: 'API', status: 'paused' }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'api-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'API', prefix: 'API', status: 'paused' }),
+      })
+    );
 
     const active = getPmNotes(db, 'project', { status: 'active' });
     expect(active).toHaveLength(1);

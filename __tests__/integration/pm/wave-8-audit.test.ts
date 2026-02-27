@@ -11,7 +11,11 @@ import { pmModule } from '../../../src/modules/pm/index.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import { listTasks } from '../../../src/modules/pm/data/task-ops.js';
-import { createCapture, listCaptures, processCapture } from '../../../src/modules/pm/data/capture-ops.js';
+import {
+  createCapture,
+  listCaptures,
+  processCapture,
+} from '../../../src/modules/pm/data/capture-ops.js';
 import { estimateCost } from '../../../src/modules/pm/data/cost.js';
 import { executeImport, type ImportProjectDef } from '../../../src/modules/pm/commands/import.js';
 import { formatError, type PmError } from '../../../src/modules/pm/errors.js';
@@ -109,7 +113,7 @@ describe('Wave 8: Capture + Audit + Import', () => {
         outcome: 'success',
         startedAt: '2026-02-01T10:00:00Z',
         completedAt: '2026-02-01T10:05:00Z',
-      }),
+      })
     );
     db.addActivity(
       makeActivity({
@@ -119,7 +123,7 @@ describe('Wave 8: Capture + Audit + Import', () => {
         outcome: 'failure',
         startedAt: '2026-02-01T11:00:00Z',
         completedAt: '2026-02-01T11:01:00Z',
-      }),
+      })
     );
 
     const activities = db.getActivities({ module: 'pm' });
@@ -138,7 +142,7 @@ describe('Wave 8: Capture + Audit + Import', () => {
         moduleInstance: 'TEST',
         activityType: 'task_execution',
         metadata: JSON.stringify({ tokens: 5000, model: 'claude-sonnet' }),
-      }),
+      })
     );
     db.addActivity(
       makeActivity({
@@ -146,7 +150,7 @@ describe('Wave 8: Capture + Audit + Import', () => {
         moduleInstance: 'TEST',
         activityType: 'task_execution',
         metadata: JSON.stringify({ tokens: 10000, model: 'claude-opus' }),
-      }),
+      })
     );
 
     const activities = db.getActivities({ module: 'pm' });

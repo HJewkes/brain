@@ -204,7 +204,10 @@ describe('Wave 4: Dependencies', () => {
     }));
 
     const json = JSON.stringify(result);
-    const parsed = JSON.parse(json) as Array<{ wave: number; tasks: Array<Record<string, unknown>> }>;
+    const parsed = JSON.parse(json) as Array<{
+      wave: number;
+      tasks: Array<Record<string, unknown>>;
+    }>;
 
     expect(parsed.length).toBeGreaterThanOrEqual(3);
     for (const w of parsed) {

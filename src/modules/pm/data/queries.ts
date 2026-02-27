@@ -66,7 +66,8 @@ export function getEligibleTasks(db: BrainDB, prefix: string): NoteRecord[] {
   if (pendingTasks.length === 0) return [];
 
   const allTaskIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
-  const allTaskNotes = allTaskIds.length > 0 ? db.getNotesByIds(allTaskIds) : new Map<string, NoteRecord>();
+  const allTaskNotes =
+    allTaskIds.length > 0 ? db.getNotesByIds(allTaskIds) : new Map<string, NoteRecord>();
 
   const doneIds = new Set<string>();
   for (const [, note] of allTaskNotes) {
@@ -93,7 +94,11 @@ export function setActiveProject(db: BrainDB, prefix: string): void {
   db.setMetaValue(PM_ACTIVE_PROJECT_KEY, prefix);
 }
 
-export function getPmNotes(db: BrainDB, type: string, filters?: Record<string, unknown>): NoteRecord[] {
+export function getPmNotes(
+  db: BrainDB,
+  type: string,
+  filters?: Record<string, unknown>
+): NoteRecord[] {
   const noteIds = db.getModuleNoteIds({ module: 'pm', type });
   if (noteIds.length === 0) return [];
 

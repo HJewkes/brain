@@ -1,12 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
-import {
-  writePrompt,
-  getPrompt,
-  listPrompts,
-  getPromptHistory,
-} from '../data/prompt-ops.js';
+import { writePrompt, getPrompt, listPrompts, getPromptHistory } from '../data/prompt-ops.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -93,7 +88,14 @@ export function createPromptCommands(): Command {
       await withBrain(async (svc) => {
         if (!opts.project) {
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing prompts' }, !!opts.json) + '\n',
+            formatError(
+              {
+                error: true,
+                code: 'INVALID_INPUT',
+                message: '--project is required for listing prompts',
+              },
+              !!opts.json
+            ) + '\n'
           );
           process.exitCode = 1;
           return;

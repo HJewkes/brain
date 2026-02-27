@@ -11,9 +11,7 @@ export function renderAgentPrompt(bundle: ContextBundle, options?: RenderOptions
   const sections: string[] = [];
 
   sections.push(`# Task ${task.display_id}`);
-  sections.push(
-    'You are executing a project task. Follow these instructions precisely.',
-  );
+  sections.push('You are executing a project task. Follow these instructions precisely.');
 
   if (dependencies.length > 0) {
     sections.push(renderDependenciesSection(dependencies));
@@ -27,9 +25,7 @@ export function renderAgentPrompt(bundle: ContextBundle, options?: RenderOptions
   sections.push(renderValidationSection(task.category));
   sections.push(renderStatusReportingSection(task.display_id));
   sections.push(renderWorktreeSection(options?.worktreePath));
-  sections.push(
-    '## Completion\n\nDo NOT call brain pm complete. Write a summary as final output.',
-  );
+  sections.push('## Completion\n\nDo NOT call brain pm complete. Write a summary as final output.');
 
   return sections.join('\n\n');
 }
@@ -40,7 +36,7 @@ export function renderVerificationPrompt(bundle: ContextBundle, options?: Render
 
   sections.push(`# Verification: ${task.display_id}`);
   sections.push(
-    'You are verifying the output of a completed implementation task. Do NOT modify any code.',
+    'You are verifying the output of a completed implementation task. Do NOT modify any code.'
   );
 
   sections.push(renderWorktreeSection(options?.worktreePath));
@@ -134,9 +130,7 @@ function renderDependenciesSection(deps: DependencySummary[]): string {
 }
 
 function renderDecisionsSection(decisions: DecisionSummary[]): string {
-  const items = decisions
-    .map((d) => `- **${d.displayId}** [${d.status}]: ${d.content}`)
-    .join('\n');
+  const items = decisions.map((d) => `- **${d.displayId}** [${d.status}]: ${d.content}`).join('\n');
   return `## Decisions\n\n${items}`;
 }
 
@@ -165,10 +159,7 @@ function validationChecksFor(category: string): string[] {
         'Run `npm run typecheck` with no errors',
       ];
     case 'documentation':
-      return [
-        'Verify all links resolve',
-        'Run `npm run lint` with no warnings',
-      ];
+      return ['Verify all links resolve', 'Run `npm run lint` with no warnings'];
     case 'infrastructure':
       return [
         'Run `npm run build` and confirm success',

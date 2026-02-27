@@ -52,33 +52,56 @@ async function setupDemoProject(): Promise<void> {
 
   // Wave 0: design (no deps)
   await createTask(db, config, embedder, {
-    project: 'DEMO', workstream: 1, name: 'Design data model',
-    category: 'design', mode: 'agent',
+    project: 'DEMO',
+    workstream: 1,
+    name: 'Design data model',
+    category: 'design',
+    mode: 'agent',
   });
   // Wave 1: implement (depends on design)
   await createTask(db, config, embedder, {
-    project: 'DEMO', workstream: 1, name: 'Implement CRUD',
-    category: 'implementation', mode: 'agent', dependsOn: ['DEMO-01.01'],
+    project: 'DEMO',
+    workstream: 1,
+    name: 'Implement CRUD',
+    category: 'implementation',
+    mode: 'agent',
+    dependsOn: ['DEMO-01.01'],
   });
   // Wave 1: docs (depends on design)
   await createTask(db, config, embedder, {
-    project: 'DEMO', workstream: 1, name: 'Write README',
-    category: 'documentation', mode: 'agent', dependsOn: ['DEMO-01.01'],
+    project: 'DEMO',
+    workstream: 1,
+    name: 'Write README',
+    category: 'documentation',
+    mode: 'agent',
+    dependsOn: ['DEMO-01.01'],
   });
   // Wave 2: tests (depends on CRUD)
   await createTask(db, config, embedder, {
-    project: 'DEMO', workstream: 2, name: 'Unit tests',
-    category: 'testing', mode: 'agent', dependsOn: ['DEMO-01.02'],
+    project: 'DEMO',
+    workstream: 2,
+    name: 'Unit tests',
+    category: 'testing',
+    mode: 'agent',
+    dependsOn: ['DEMO-01.02'],
   });
   // Wave 2: config (depends on CRUD)
   await createTask(db, config, embedder, {
-    project: 'DEMO', workstream: 1, name: 'CI configuration',
-    category: 'configuration', mode: 'agent', dependsOn: ['DEMO-01.02'],
+    project: 'DEMO',
+    workstream: 1,
+    name: 'CI configuration',
+    category: 'configuration',
+    mode: 'agent',
+    dependsOn: ['DEMO-01.02'],
   });
   // Wave 3: integration (depends on tests + config)
   await createTask(db, config, embedder, {
-    project: 'DEMO', workstream: 2, name: 'Integration tests',
-    category: 'testing', mode: 'agent', dependsOn: ['DEMO-02.01', 'DEMO-01.04'],
+    project: 'DEMO',
+    workstream: 2,
+    name: 'Integration tests',
+    category: 'testing',
+    mode: 'agent',
+    dependsOn: ['DEMO-02.01', 'DEMO-01.04'],
   });
 }
 
@@ -94,8 +117,12 @@ describe('Wave 10: Demo Workflow Integration', () => {
 
     const ids = tasks.data.map((t) => t.display_id).sort();
     expect(ids).toEqual([
-      'DEMO-01.01', 'DEMO-01.02', 'DEMO-01.03', 'DEMO-01.04',
-      'DEMO-02.01', 'DEMO-02.02',
+      'DEMO-01.01',
+      'DEMO-01.02',
+      'DEMO-01.03',
+      'DEMO-01.04',
+      'DEMO-02.01',
+      'DEMO-02.02',
     ]);
 
     const withDeps = tasks.data.filter((t) => t.depends_on && t.depends_on.length > 0);

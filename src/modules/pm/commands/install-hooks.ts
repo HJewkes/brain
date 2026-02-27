@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync, rmSync, chmodSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  unlinkSync,
+  rmSync,
+  chmodSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { Command } from '@commander-js/extra-typings';
@@ -357,7 +365,9 @@ export function createInstallHooksCommand(): Command {
           return;
         }
         process.stdout.write(`Installed ${result.installed.length} items.\n`);
-        process.stdout.write('Orchestration hooks are ready. Start a new Claude Code session to activate.\n');
+        process.stdout.write(
+          'Orchestration hooks are ready. Start a new Claude Code session to activate.\n'
+        );
       }
     }) as unknown as Command;
 }

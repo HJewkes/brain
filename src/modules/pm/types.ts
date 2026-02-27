@@ -86,16 +86,33 @@ export interface CaptureMetadata {
 
 // Type guards for runtime validation of metadata values
 const VALID_TASK_CATEGORIES = new Set<string>([
-  'implementation', 'testing', 'documentation', 'research',
-  'review', 'infrastructure', 'configuration', 'design', 'migration',
+  'implementation',
+  'testing',
+  'documentation',
+  'research',
+  'review',
+  'infrastructure',
+  'configuration',
+  'design',
+  'migration',
 ]);
 
 const VALID_TASK_MODES = new Set<string>([
-  'agent', 'assisted', 'human', 'review', 'auto', 'interactive',
+  'agent',
+  'assisted',
+  'human',
+  'review',
+  'auto',
+  'interactive',
 ]);
 
 const VALID_TASK_STATUSES = new Set<string>([
-  'pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled',
+  'pending',
+  'claimed',
+  'in-progress',
+  'done',
+  'blocked',
+  'cancelled',
 ]);
 
 export function isValidTaskCategory(value: unknown): value is TaskCategory {

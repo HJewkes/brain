@@ -547,7 +547,11 @@ export class BrainDB {
   getDescendants(noteId: string, maxDepth?: number): Array<{ id: string; depth: number }> {
     return this.noteRepo.getDescendants(noteId, maxDepth);
   }
-  getRelationsFiltered(opts: { module?: string; moduleInstance?: string; type?: string }): Relation[] {
+  getRelationsFiltered(opts: {
+    module?: string;
+    moduleInstance?: string;
+    type?: string;
+  }): Relation[] {
     return this.noteRepo.getRelationsFiltered(opts);
   }
 
@@ -589,7 +593,12 @@ export class BrainDB {
   }): Set<string> | null {
     return this.noteRepo.getFilteredNoteIds(filters);
   }
-  getModuleNoteIds(filter: { module?: string; moduleInstance?: string; type?: string; status?: string }): string[] {
+  getModuleNoteIds(filter: {
+    module?: string;
+    moduleInstance?: string;
+    type?: string;
+    status?: string;
+  }): string[] {
     return this.noteRepo.getModuleNoteIds(filter);
   }
 
@@ -688,7 +697,11 @@ export class BrainDB {
   getActivity(id: string): ActivityRecord | null {
     return this.activityRepo.getActivity(id);
   }
-  getActivities(opts?: { module?: string; moduleInstance?: string; activityType?: string }): ActivityRecord[] {
+  getActivities(opts?: {
+    module?: string;
+    moduleInstance?: string;
+    activityType?: string;
+  }): ActivityRecord[] {
     return this.activityRepo.getActivities(opts);
   }
   getActivitiesByNoteId(noteId: string): ActivityRecord[] {

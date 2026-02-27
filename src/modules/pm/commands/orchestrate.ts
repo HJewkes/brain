@@ -6,7 +6,12 @@ import { getActiveProject } from '../data/queries.js';
 import { getTask, listTasks } from '../data/task-ops.js';
 import { computeRouting } from '../engine/routing.js';
 import { renderAgentPrompt, renderVerificationPrompt } from '../engine/template.js';
-import { allocateWorktree, checkWorktreePath, releaseWorktree, getBudget } from '../engine/worktree.js';
+import {
+  allocateWorktree,
+  checkWorktreePath,
+  releaseWorktree,
+  getBudget,
+} from '../engine/worktree.js';
 import { assembleContext } from '../engine/dispatch.js';
 import { isValidTaskCategory, isValidTaskMode } from '../types.js';
 
@@ -20,8 +25,9 @@ function readStdin(): Promise<string> {
 }
 
 export function createOrchestrateCommands(): Command {
-  const cmd = new Command('orchestrate')
-    .description('Orchestration layer commands (used by hooks and skill)');
+  const cmd = new Command('orchestrate').description(
+    'Orchestration layer commands (used by hooks and skill)'
+  );
 
   cmd.addCommand(
     new Command('session-start')
@@ -35,9 +41,13 @@ export function createOrchestrateCommands(): Command {
           if (!activeProject) {
             process.stderr.write(
               formatError(
-                { error: true, code: 'INVALID_INPUT', message: 'No active project set. Use "brain pm use <prefix>" first.' },
-                true,
-              ) + '\n',
+                {
+                  error: true,
+                  code: 'INVALID_INPUT',
+                  message: 'No active project set. Use "brain pm use <prefix>" first.',
+                },
+                true
+              ) + '\n'
             );
             process.exitCode = 1;
             return;
@@ -54,7 +64,7 @@ export function createOrchestrateCommands(): Command {
           };
           process.stdout.write(JSON.stringify(output, null, 2) + '\n');
         });
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -74,13 +84,21 @@ export function createOrchestrateCommands(): Command {
 
           const task = taskResult.data;
           if (!isValidTaskCategory(task.category)) {
-            const err = { error: true as const, code: 'INVALID_INPUT' as const, message: `Invalid task category "${task.category}"` };
+            const err = {
+              error: true as const,
+              code: 'INVALID_INPUT' as const,
+              message: `Invalid task category "${task.category}"`,
+            };
             process.stderr.write(formatError(err, !!opts.json) + '\n');
             process.exitCode = 1;
             return;
           }
           if (!isValidTaskMode(task.mode)) {
-            const err = { error: true as const, code: 'INVALID_INPUT' as const, message: `Invalid task mode "${task.mode}"` };
+            const err = {
+              error: true as const,
+              code: 'INVALID_INPUT' as const,
+              message: `Invalid task mode "${task.mode}"`,
+            };
             process.stderr.write(formatError(err, !!opts.json) + '\n');
             process.exitCode = 1;
             return;
@@ -99,7 +117,7 @@ export function createOrchestrateCommands(): Command {
             process.stdout.write(`Concurrency: ${routing.concurrency}\n`);
           }
         });
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -137,7 +155,7 @@ export function createOrchestrateCommands(): Command {
             process.stdout.write(rendered + '\n');
           }
         });
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -173,7 +191,7 @@ export function createOrchestrateCommands(): Command {
             process.stdout.write(`Branch: ${allocResult.data.branch}\n`);
           }
         });
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -197,7 +215,7 @@ export function createOrchestrateCommands(): Command {
           process.stderr.write(formatError(result.error, false) + '\n');
           process.exitCode = 1;
         }
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -216,7 +234,9 @@ export function createOrchestrateCommands(): Command {
           }
 
           if (opts.json) {
-            process.stdout.write(JSON.stringify({ taskId: displayId, ...result.data }, null, 2) + '\n');
+            process.stdout.write(
+              JSON.stringify({ taskId: displayId, ...result.data }, null, 2) + '\n'
+            );
           } else {
             if (result.data.released) {
               process.stdout.write(`Released worktree for ${displayId}\n`);
@@ -225,7 +245,7 @@ export function createOrchestrateCommands(): Command {
             }
           }
         });
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -239,7 +259,9 @@ export function createOrchestrateCommands(): Command {
           if (opts.json) {
             process.stdout.write(JSON.stringify(budget, null, 2) + '\n');
           } else {
-            process.stdout.write(`Budget: ${budget.used}/${budget.max} (${budget.available} available)\n`);
+            process.stdout.write(
+              `Budget: ${budget.used}/${budget.max} (${budget.available} available)\n`
+            );
             if (budget.allocations.length > 0) {
               for (const alloc of budget.allocations) {
                 process.stdout.write(`  ${alloc.taskId}: ${alloc.path} (${alloc.branch})\n`);
@@ -247,7 +269,7 @@ export function createOrchestrateCommands(): Command {
             }
           }
         });
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -280,7 +302,7 @@ export function createOrchestrateCommands(): Command {
 
           process.stdout.write(JSON.stringify({ recorded: true, taskId, outcome }) + '\n');
         });
-      }),
+      })
   );
 
   cmd.addCommand(
@@ -329,7 +351,9 @@ export function createOrchestrateCommands(): Command {
             process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
           } else {
             process.stdout.write(`=== Session End: ${activeProject} ===\n`);
-            process.stdout.write(`Tasks: ${done.length} done, ${inProgress.length} in-progress, ${pending.length} pending, ${blocked.length} blocked (${allTasks.length} total)\n`);
+            process.stdout.write(
+              `Tasks: ${done.length} done, ${inProgress.length} in-progress, ${pending.length} pending, ${blocked.length} blocked (${allTasks.length} total)\n`
+            );
             process.stdout.write(`Worktrees: ${budget.used}/${budget.max} in use\n`);
             if (budget.allocations.length > 0) {
               for (const a of budget.allocations) {
@@ -338,7 +362,7 @@ export function createOrchestrateCommands(): Command {
             }
           }
         });
-      }),
+      })
   );
 
   return cmd as unknown as Command;

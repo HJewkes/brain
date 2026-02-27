@@ -4,7 +4,14 @@ import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder, Relation } from '../../../types.js';
 import type { Result } from '../errors.js';
-import type { TaskMetadata, TaskMode, TaskCategory, TaskPriority, TaskStatus, VirtualState } from '../types.js';
+import type {
+  TaskMetadata,
+  TaskMode,
+  TaskCategory,
+  TaskPriority,
+  TaskStatus,
+  VirtualState,
+} from '../types.js';
 import { ok, fail } from '../errors.js';
 import { nextTaskNumber, formatDisplayId, parseDisplayId } from '../ids.js';
 import { indexSingleFile } from '../../../services/indexing.js';
@@ -107,7 +114,7 @@ export async function createTask(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  input: CreateTaskInput,
+  input: CreateTaskInput
 ): Promise<Result<TaskMetadata>> {
   const projectNotes = getPmNotes(db, 'project', { prefix: input.project });
   if (projectNotes.length === 0) {
@@ -178,7 +185,7 @@ export async function createTask(
 export function listTasks(
   db: BrainDB,
   prefix: string,
-  filters?: { workstream?: number; status?: string; mode?: string },
+  filters?: { workstream?: number; status?: string; mode?: string }
 ): Result<TaskMetadata[]> {
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
@@ -196,7 +203,7 @@ export function listTasks(
 
 export function getTask(
   db: BrainDB,
-  displayId: string,
+  displayId: string
 ): Result<TaskMetadata & { virtualStates: VirtualState[] }> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
@@ -224,7 +231,7 @@ export async function updateTaskStatus(
   config: BrainConfig,
   embedder: Embedder,
   displayId: string,
-  newStatus: TaskStatus,
+  newStatus: TaskStatus
 ): Promise<Result<TaskMetadata>> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
@@ -237,7 +244,11 @@ export async function updateTaskStatus(
 
   const transitionResult = validateTransition(currentStatus, newStatus);
   if (!transitionResult.ok) {
-    return fail('INVALID_TRANSITION', transitionResult.error.message, transitionResult.error.details);
+    return fail(
+      'INVALID_TRANSITION',
+      transitionResult.error.message,
+      transitionResult.error.details
+    );
   }
 
   const filePath = note.filePath;
@@ -266,7 +277,7 @@ export async function updateTask(
   config: BrainConfig,
   embedder: Embedder,
   displayId: string,
-  updates: Partial<Pick<TaskMetadata, 'mode' | 'category' | 'priority'>>,
+  updates: Partial<Pick<TaskMetadata, 'mode' | 'category' | 'priority'>>
 ): Promise<Result<TaskMetadata>> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
@@ -310,7 +321,7 @@ export async function deleteTask(
   db: BrainDB,
   config: BrainConfig,
   displayId: string,
-  force?: boolean,
+  force?: boolean
 ): Promise<Result<void>> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
@@ -326,15 +337,13 @@ export async function deleteTask(
       return fail(
         'HAS_DEPENDENTS',
         `Task "${displayId}" has ${dependents.length} dependent task(s). Use force to delete.`,
-        { count: dependents.length },
+        { count: dependents.length }
       );
     }
   }
 
   const parsed = parseDisplayId(displayId);
-  const contentDir = parsed
-    ? taskContentDirPath(config, parsed.prefix, displayId)
-    : null;
+  const contentDir = parsed ? taskContentDirPath(config, parsed.prefix, displayId) : null;
 
   db.deleteNote(taskNote.id);
   if (existsSync(taskNote.filePath)) {

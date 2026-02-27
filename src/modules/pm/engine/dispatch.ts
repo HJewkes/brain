@@ -54,7 +54,11 @@ function buildDependencySummaries(db: BrainDB, dependsOn: string[]): DependencyS
   return summaries;
 }
 
-function findImpactingDecisions(db: BrainDB, taskDisplayId: string, project: string): DecisionSummary[] {
+function findImpactingDecisions(
+  db: BrainDB,
+  taskDisplayId: string,
+  project: string
+): DecisionSummary[] {
   const decisionNotes = getPmNotes(db, 'decision', { project });
   const results: DecisionSummary[] = [];
 
@@ -72,7 +76,11 @@ function findImpactingDecisions(db: BrainDB, taskDisplayId: string, project: str
   return results;
 }
 
-function findPromptContent(db: BrainDB, taskDisplayId: string, project: string): string | undefined {
+function findPromptContent(
+  db: BrainDB,
+  taskDisplayId: string,
+  project: string
+): string | undefined {
   const promptNotes = getPmNotes(db, 'prompt', { task: taskDisplayId, project });
   if (promptNotes.length === 0) return undefined;
 
@@ -87,7 +95,7 @@ function computeHash(
   task: TaskMetadata,
   deps: DependencySummary[],
   decisions: DecisionSummary[],
-  prompt: string | undefined,
+  prompt: string | undefined
 ): string {
   const payload = JSON.stringify({ task, deps, decisions, prompt });
   return createHash('sha256').update(payload).digest('hex');

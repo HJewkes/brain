@@ -55,7 +55,7 @@ export function createProjectCommands(): Command {
           svc.config,
           svc.embedder,
           prefix.toUpperCase(),
-          updates,
+          updates
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -74,19 +74,16 @@ export function createProjectCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (prefix, opts) => {
       await withBrain(async (svc) => {
-        const result = await deleteProject(
-          svc.db,
-          svc.config,
-          prefix.toUpperCase(),
-          opts.force,
-        );
+        const result = await deleteProject(svc.db, svc.config, prefix.toUpperCase(), opts.force);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
         if (opts.json) {
-          process.stdout.write(JSON.stringify({ deleted: true, prefix: prefix.toUpperCase() }) + '\n');
+          process.stdout.write(
+            JSON.stringify({ deleted: true, prefix: prefix.toUpperCase() }) + '\n'
+          );
         } else {
           process.stdout.write(`Deleted project ${prefix.toUpperCase()}\n`);
         }
@@ -146,8 +143,11 @@ export function createPmCommand(): Command {
       await withBrain(async (svc) => {
         const targetPrefix = prefix?.toUpperCase() ?? getActiveProject(svc.db);
         if (!targetPrefix) {
-          const msg = 'No project specified and no active project set. Use "brain pm use <prefix>" first.';
-          process.stderr.write(formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n');
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
+          );
           process.exitCode = 1;
           return;
         }

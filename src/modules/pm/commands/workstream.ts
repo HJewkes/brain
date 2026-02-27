@@ -64,7 +64,14 @@ export function createWorkstreamCommands(): Command {
       await withBrain(async (svc) => {
         if (!opts.project) {
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: '--project is required for listing workstreams' }, !!opts.json) + '\n',
+            formatError(
+              {
+                error: true,
+                code: 'INVALID_INPUT',
+                message: '--project is required for listing workstreams',
+              },
+              !!opts.json
+            ) + '\n'
           );
           process.exitCode = 1;
           return;
@@ -112,7 +119,7 @@ export function createWorkstreamCommands(): Command {
           svc.config,
           svc.embedder,
           id.toUpperCase(),
-          updates,
+          updates
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -131,12 +138,7 @@ export function createWorkstreamCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
-        const result = await deleteWorkstream(
-          svc.db,
-          svc.config,
-          id.toUpperCase(),
-          opts.force,
-        );
+        const result = await deleteWorkstream(svc.db, svc.config, id.toUpperCase(), opts.force);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;

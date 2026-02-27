@@ -6,7 +6,7 @@ import type { ActivityRecord } from '../../../types.js';
 
 function filterActivities(
   activities: ActivityRecord[],
-  opts: { project?: string; since?: string },
+  opts: { project?: string; since?: string }
 ): ActivityRecord[] {
   let filtered = activities;
 
@@ -61,11 +61,14 @@ function buildPerformance(activities: ActivityRecord[]): Record<string, unknown>
   }
 
   const avgDurationMs =
-    durations.length > 0
-      ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length)
-      : 0;
+    durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
 
-  return { total, completed, completionRate: Math.round(completionRate * 100) / 100, avgDurationMs };
+  return {
+    total,
+    completed,
+    completionRate: Math.round(completionRate * 100) / 100,
+    avgDurationMs,
+  };
 }
 
 export function createAuditCommands(): Command {
@@ -85,7 +88,9 @@ export function createAuditCommands(): Command {
         if (opts.json) {
           process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
         } else {
-          process.stdout.write(`Total: ${summary.total}, Completed: ${summary.completed}, Failed: ${summary.failed}\n`);
+          process.stdout.write(
+            `Total: ${summary.total}, Completed: ${summary.completed}, Failed: ${summary.failed}\n`
+          );
           const byType = summary.byType as Record<string, number>;
           for (const [type, count] of Object.entries(byType)) {
             process.stdout.write(`  ${type}: ${count}\n`);
@@ -130,7 +135,9 @@ export function createAuditCommands(): Command {
           process.stdout.write(JSON.stringify(perf, null, 2) + '\n');
         } else {
           process.stdout.write(`Total: ${perf.total}, Completed: ${perf.completed}\n`);
-          process.stdout.write(`Completion rate: ${(perf.completionRate as number * 100).toFixed(0)}%\n`);
+          process.stdout.write(
+            `Completion rate: ${((perf.completionRate as number) * 100).toFixed(0)}%\n`
+          );
           process.stdout.write(`Avg duration: ${perf.avgDurationMs}ms\n`);
         }
       });
@@ -173,13 +180,21 @@ export function createAuditCommands(): Command {
       await withBrain(async (svc) => {
         const activity = svc.db.getActivity(activityId);
         if (!activity) {
-          const err = { error: true, code: 'NOT_FOUND', message: `Activity "${activityId}" not found` };
-          process.stderr.write(formatError(err as Parameters<typeof formatError>[0], !!opts.json) + '\n');
+          const err = {
+            error: true,
+            code: 'NOT_FOUND',
+            message: `Activity "${activityId}" not found`,
+          };
+          process.stderr.write(
+            formatError(err as Parameters<typeof formatError>[0], !!opts.json) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
 
-        const existingMeta = activity.metadata ? JSON.parse(activity.metadata) as Record<string, unknown> : {};
+        const existingMeta = activity.metadata
+          ? (JSON.parse(activity.metadata) as Record<string, unknown>)
+          : {};
         const updatedMeta = { ...existingMeta, tokens: opts.tokens, model: opts.model };
         const updatedActivity = { ...activity, metadata: JSON.stringify(updatedMeta) };
         svc.db.addActivity(updatedActivity);
@@ -187,7 +202,9 @@ export function createAuditCommands(): Command {
         if (opts.json) {
           process.stdout.write(JSON.stringify(updatedActivity, null, 2) + '\n');
         } else {
-          process.stdout.write(`Enriched activity ${activityId} with ${opts.tokens} tokens (${opts.model})\n`);
+          process.stdout.write(
+            `Enriched activity ${activityId} with ${opts.tokens} tokens (${opts.model})\n`
+          );
         }
       });
     });

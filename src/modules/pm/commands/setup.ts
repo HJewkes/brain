@@ -9,20 +9,30 @@ import { createWorkstream } from '../data/workstream-ops.js';
 import { createTask } from '../data/task-ops.js';
 import { setActiveProject } from '../data/queries.js';
 
-interface CheckResult { label: string; passed: boolean; error?: string }
+interface CheckResult {
+  label: string;
+  passed: boolean;
+  error?: string;
+}
 
 function resolveClaudeDir(): string {
   return process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
 }
 
-function checkFile(path: string, label: string, contentCheck?: (c: string) => boolean): CheckResult {
+function checkFile(
+  path: string,
+  label: string,
+  contentCheck?: (c: string) => boolean
+): CheckResult {
   if (!existsSync(path)) return { label, passed: false, error: `File missing: ${path}` };
   if (contentCheck) {
     const ok = contentCheck(readFileSync(path, 'utf-8'));
     return { label, passed: ok, error: ok ? undefined : `Content check failed: ${path}` };
   }
   const stat = statSync(path);
-  return (stat.mode & 0o100) ? { label, passed: true } : { label, passed: false, error: `Not executable: ${path}` };
+  return stat.mode & 0o100
+    ? { label, passed: true }
+    : { label, passed: false, error: `Not executable: ${path}` };
 }
 
 function validateInstallation(claudeDir: string): CheckResult[] {
@@ -35,10 +45,15 @@ function validateInstallation(claudeDir: string): CheckResult[] {
       try {
         const s = JSON.parse(c);
         return !!(s.hooks?.SessionStart && s.hooks?.PreToolUse && s.hooks?.SubagentStop);
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     }),
-    checkFile(join(claudeDir, 'skills', 'orchestrator', 'SKILL.md'), 'Orchestrator skill installed',
-      (c) => c.includes('Project Orchestrator')),
+    checkFile(
+      join(claudeDir, 'skills', 'orchestrator', 'SKILL.md'),
+      'Orchestrator skill installed',
+      (c) => c.includes('Project Orchestrator')
+    ),
   ];
 }
 
@@ -52,21 +67,50 @@ async function validateDatabase(): Promise<CheckResult> {
 }
 
 const DEMO_TASKS = [
-  { name: 'Set up project structure', ws: 1, category: 'implementation' as const, priority: 'high' as const },
-  { name: 'Implement core logic', ws: 1, category: 'implementation' as const, priority: 'medium' as const, deps: [0] },
-  { name: 'Write unit tests', ws: 2, category: 'testing' as const, priority: 'medium' as const, deps: [1] },
-  { name: 'Write documentation', ws: 2, category: 'documentation' as const, priority: 'low' as const, deps: [1] },
+  {
+    name: 'Set up project structure',
+    ws: 1,
+    category: 'implementation' as const,
+    priority: 'high' as const,
+  },
+  {
+    name: 'Implement core logic',
+    ws: 1,
+    category: 'implementation' as const,
+    priority: 'medium' as const,
+    deps: [0],
+  },
+  {
+    name: 'Write unit tests',
+    ws: 2,
+    category: 'testing' as const,
+    priority: 'medium' as const,
+    deps: [1],
+  },
+  {
+    name: 'Write documentation',
+    ws: 2,
+    category: 'documentation' as const,
+    priority: 'low' as const,
+    deps: [1],
+  },
 ];
 
 async function createDemoProject(): Promise<{ success: boolean; error?: string }> {
   try {
     return await withBrain(async (svc) => {
-      const proj = await createProject(svc.db, svc.config, svc.embedder, { name: 'Demo Project', prefix: 'DEMO' });
+      const proj = await createProject(svc.db, svc.config, svc.embedder, {
+        name: 'Demo Project',
+        prefix: 'DEMO',
+      });
       if (!proj.ok) return { success: false, error: proj.error.message };
       setActiveProject(svc.db, 'DEMO');
 
       for (const name of ['Implementation', 'Testing']) {
-        const ws = await createWorkstream(svc.db, svc.config, svc.embedder, { project: 'DEMO', name });
+        const ws = await createWorkstream(svc.db, svc.config, svc.embedder, {
+          project: 'DEMO',
+          name,
+        });
         if (!ws.ok) return { success: false, error: ws.error.message };
       }
 
@@ -74,8 +118,12 @@ async function createDemoProject(): Promise<{ success: boolean; error?: string }
       for (const t of DEMO_TASKS) {
         const dependsOn = t.deps?.map((i) => ids[i]);
         const r = await createTask(svc.db, svc.config, svc.embedder, {
-          project: 'DEMO', workstream: t.ws, name: t.name,
-          mode: 'auto', category: t.category, priority: t.priority,
+          project: 'DEMO',
+          workstream: t.ws,
+          name: t.name,
+          mode: 'auto',
+          category: t.category,
+          priority: t.priority,
           dependsOn: dependsOn?.length ? dependsOn : undefined,
         });
         if (!r.ok) return { success: false, error: r.error.message };
@@ -91,12 +139,17 @@ async function createDemoProject(): Promise<{ success: boolean; error?: string }
 function formatText(checks: CheckResult[], demo?: { success: boolean; error?: string }): string {
   const lines = ['PM Module Setup Complete', ''];
   for (const c of checks) {
-    lines.push(`  ${c.passed ? '\u2713' : '\u2717'} ${c.label}${c.error ? ` \u2014 ${c.error}` : ''}`);
+    lines.push(
+      `  ${c.passed ? '\u2713' : '\u2717'} ${c.label}${c.error ? ` \u2014 ${c.error}` : ''}`
+    );
   }
   if (demo) {
-    lines.push('', demo.success
-      ? '  \u2713 Demo project created (DEMO)'
-      : `  \u2717 Demo project failed \u2014 ${demo.error}`);
+    lines.push(
+      '',
+      demo.success
+        ? '  \u2713 Demo project created (DEMO)'
+        : `  \u2717 Demo project failed \u2014 ${demo.error}`
+    );
   }
   if (checks.every((c) => c.passed) && (!demo || demo.success)) {
     lines.push('', 'Next steps:', '  brain pm init "My Project" --prefix MY', '  brain pm use MY');
@@ -138,11 +191,17 @@ export function createSetupCommand(): Command {
       if (hasFailure) process.exitCode = 1;
 
       if (opts.json) {
-        process.stdout.write(JSON.stringify({
-          checks: checks.map((c) => ({ label: c.label, passed: c.passed, error: c.error })),
-          demo: demo ? { success: demo.success, error: demo.error } : undefined,
-          success: !hasFailure,
-        }, null, 2) + '\n');
+        process.stdout.write(
+          JSON.stringify(
+            {
+              checks: checks.map((c) => ({ label: c.label, passed: c.passed, error: c.error })),
+              demo: demo ? { success: demo.success, error: demo.error } : undefined,
+              success: !hasFailure,
+            },
+            null,
+            2
+          ) + '\n'
+        );
       } else {
         process.stdout.write(formatText(checks, demo));
       }

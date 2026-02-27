@@ -11,7 +11,11 @@ import { indexSingleFile } from '../../src/services/indexing.js';
 import { search } from '../../src/services/search.js';
 import { loadModules, runModuleMigrations } from '../../src/modules/loader.js';
 import { validateNoteFrontmatter } from '../../src/modules/validation.js';
-import { readIndexableContent, archiveContentDir, deleteContentDir } from '../../src/services/content-dir.js';
+import {
+  readIndexableContent,
+  archiveContentDir,
+  deleteContentDir,
+} from '../../src/services/content-dir.js';
 import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
 import { widgetModule } from '../fixtures/widget-module.js';
 import type { ModuleRegistry } from '../../src/modules/registry.js';
@@ -22,7 +26,12 @@ function tmpDir(prefix = 'brain-integ'): string {
   return dir;
 }
 
-function writeNote(dir: string, filename: string, frontmatter: Record<string, string>, body = ''): string {
+function writeNote(
+  dir: string,
+  filename: string,
+  frontmatter: Record<string, string>,
+  body = ''
+): string {
   const lines = ['---'];
   for (const [k, v] of Object.entries(frontmatter)) {
     lines.push(`${k}: ${v}`);
@@ -70,14 +79,19 @@ describe('V1: Module Registration and Indexing', () => {
   });
 
   it('module note preserves custom type', async () => {
-    const filePath = writeNote(notesDir, 'gadget-1.md', {
-      id: 'gadget-1',
-      title: '"Test Gadget"',
-      module: 'widget',
-      type: 'gadget',
-      tier: 'slow',
-      priority: 'high',
-    }, 'Gadget body text');
+    const filePath = writeNote(
+      notesDir,
+      'gadget-1.md',
+      {
+        id: 'gadget-1',
+        title: '"Test Gadget"',
+        module: 'widget',
+        type: 'gadget',
+        tier: 'slow',
+        priority: 'high',
+      },
+      'Gadget body text'
+    );
 
     const content = readFileSync(filePath, 'utf-8');
     await indexSingleFile(db, embedder, filePath, content, hashOf(content), Date.now());
@@ -93,16 +107,21 @@ describe('V1: Module Registration and Indexing', () => {
   });
 
   it('module note populates all columns', async () => {
-    const filePath = writeNote(notesDir, 'full-widget.md', {
-      id: 'full-widget',
-      title: '"Full Widget"',
-      module: 'widget',
-      type: 'widget',
-      tier: 'slow',
-      priority: 'medium',
-      'module-instance': 'project-alpha',
-      'content-dir': '/tmp/fake-dir',
-    }, 'Full widget body');
+    const filePath = writeNote(
+      notesDir,
+      'full-widget.md',
+      {
+        id: 'full-widget',
+        title: '"Full Widget"',
+        module: 'widget',
+        type: 'widget',
+        tier: 'slow',
+        priority: 'medium',
+        'module-instance': 'project-alpha',
+        'content-dir': '/tmp/fake-dir',
+      },
+      'Full widget body'
+    );
 
     const content = readFileSync(filePath, 'utf-8');
     await indexSingleFile(db, embedder, filePath, content, hashOf(content), Date.now());
@@ -117,7 +136,7 @@ describe('V1: Module Registration and Indexing', () => {
     const schema = registry.getNoteType('widget')!.schema!;
     const result = validateNoteFrontmatter({ assignee: 'alice' }, schema);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'priority')).toBe(true);
+    expect(result.errors.some((e) => e.field === 'priority')).toBe(true);
   });
 
   it('schema validation passes valid frontmatter', () => {
@@ -128,36 +147,48 @@ describe('V1: Module Registration and Indexing', () => {
   });
 
   it('private module notes excluded from search', async () => {
-    const widgetPath = writeNote(notesDir, 'private-widget.md', {
-      id: 'private-widget',
-      title: '"Private Widget"',
-      module: 'widget',
-      type: 'widget',
-      tier: 'slow',
-      priority: 'low',
-    }, 'Secret widget content about rockets');
+    const widgetPath = writeNote(
+      notesDir,
+      'private-widget.md',
+      {
+        id: 'private-widget',
+        title: '"Private Widget"',
+        module: 'widget',
+        type: 'widget',
+        tier: 'slow',
+        priority: 'low',
+      },
+      'Secret widget content about rockets'
+    );
 
     const wContent = readFileSync(widgetPath, 'utf-8');
     await indexSingleFile(db, embedder, widgetPath, wContent, hashOf(wContent), Date.now());
 
-    const regularPath = writeNote(notesDir, 'regular-note.md', {
-      id: 'regular-note',
-      title: '"Regular Note"',
-      type: 'note',
-      tier: 'slow',
-    }, 'Regular content about rockets');
+    const regularPath = writeNote(
+      notesDir,
+      'regular-note.md',
+      {
+        id: 'regular-note',
+        title: '"Regular Note"',
+        type: 'note',
+        tier: 'slow',
+      },
+      'Regular content about rockets'
+    );
 
     const rContent = readFileSync(regularPath, 'utf-8');
     await indexSingleFile(db, embedder, regularPath, rContent, hashOf(rContent), Date.now());
 
     const results = await search(
-      db, embedder, 'rockets',
+      db,
+      embedder,
+      'rockets',
       { limit: 10 },
       { bm25: 0.3, vector: 0.7 },
       registry
     );
 
-    const noteIds = results.map(r => r.noteId);
+    const noteIds = results.map((r) => r.noteId);
     expect(noteIds).toContain('regular-note');
     expect(noteIds).not.toContain('private-widget');
   });
@@ -165,9 +196,7 @@ describe('V1: Module Registration and Indexing', () => {
   it('extraction strategy respected', () => {
     const strategy = registry.getExtractionStrategy('widget');
     expect(strategy).toBeDefined();
-    expect(strategy!.shouldExtract(
-      makeNote({ module: 'widget', type: 'widget' })
-    )).toBe(false);
+    expect(strategy!.shouldExtract(makeNote({ module: 'widget', type: 'widget' }))).toBe(false);
   });
 
   it('module migration runs', () => {
@@ -253,12 +282,26 @@ describe('V2: Schema Migration Round-Trip', () => {
       // Verify module columns work by inserting and reading a note with module fields
       db.setEmbeddingModel('mock-embedder', 384);
       db.upsertNote({
-        id: 'v7-test', filePath: '/test.md', title: 'V7 Test', type: 'note',
-        tier: 'slow', category: null, tags: null, summary: null,
-        confidence: null, status: 'current', sources: null,
-        createdAt: null, modifiedAt: null, lastReviewed: null,
-        reviewInterval: null, expires: null, metadata: null,
-        module: 'test-mod', moduleInstance: 'inst-1', contentDir: '/tmp/dir',
+        id: 'v7-test',
+        filePath: '/test.md',
+        title: 'V7 Test',
+        type: 'note',
+        tier: 'slow',
+        category: null,
+        tags: null,
+        summary: null,
+        confidence: null,
+        status: 'current',
+        sources: null,
+        createdAt: null,
+        modifiedAt: null,
+        lastReviewed: null,
+        reviewInterval: null,
+        expires: null,
+        metadata: null,
+        module: 'test-mod',
+        moduleInstance: 'inst-1',
+        contentDir: '/tmp/dir',
       });
 
       const note = db.getNoteById('v7-test');
@@ -274,24 +317,26 @@ describe('V2: Schema Migration Round-Trip', () => {
     const raw = new Database(dbPath);
     try {
       const noteColumns = raw.pragma('table_info(notes)') as { name: string }[];
-      const noteColNames = noteColumns.map(c => c.name);
+      const noteColNames = noteColumns.map((c) => c.name);
       expect(noteColNames).toContain('module');
       expect(noteColNames).toContain('module_instance');
       expect(noteColNames).toContain('content_dir');
 
       const relColumns = raw.pragma('table_info(relations)') as { name: string }[];
-      const relColNames = relColumns.map(c => c.name);
+      const relColNames = relColumns.map((c) => c.name);
       expect(relColNames).toContain('module');
       expect(relColNames).toContain('module_instance');
 
-      const tables = raw.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='activities'"
-      ).all();
+      const tables = raw
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='activities'")
+        .all();
       expect(tables).toHaveLength(1);
 
-      const indexes = raw.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_notes_module%'"
-      ).all();
+      const indexes = raw
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_notes_module%'"
+        )
+        .all();
       expect(indexes.length).toBeGreaterThanOrEqual(2);
     } finally {
       raw.close();
@@ -302,12 +347,16 @@ describe('V2: Schema Migration Round-Trip', () => {
     const dbPath = tmpDbPath();
     const raw = createV6Database(dbPath);
 
-    raw.prepare(`INSERT INTO notes (id, file_path, title, type, tier, status) VALUES (?, ?, ?, ?, ?, ?)`).run(
-      'note-1', '/notes/note-1.md', 'Test Note 1', 'note', 'slow', 'current'
-    );
-    raw.prepare(`INSERT INTO notes (id, file_path, title, type, tier, status) VALUES (?, ?, ?, ?, ?, ?)`).run(
-      'note-2', '/notes/note-2.md', 'Test Note 2', 'research', 'fast', 'draft'
-    );
+    raw
+      .prepare(
+        `INSERT INTO notes (id, file_path, title, type, tier, status) VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run('note-1', '/notes/note-1.md', 'Test Note 1', 'note', 'slow', 'current');
+    raw
+      .prepare(
+        `INSERT INTO notes (id, file_path, title, type, tier, status) VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run('note-2', '/notes/note-2.md', 'Test Note 2', 'research', 'fast', 'draft');
     raw.close();
 
     // Reopen with BrainDB (triggers migration)
@@ -327,17 +376,17 @@ describe('V2: Schema Migration Round-Trip', () => {
     const rawAfter = new Database(dbPath);
     try {
       const noteColumns = rawAfter.pragma('table_info(notes)') as { name: string }[];
-      const noteColNames = noteColumns.map(c => c.name);
+      const noteColNames = noteColumns.map((c) => c.name);
       expect(noteColNames).toContain('module');
       expect(noteColNames).toContain('module_instance');
       expect(noteColNames).toContain('content_dir');
 
       const relColumns = rawAfter.pragma('table_info(relations)') as { name: string }[];
-      expect(relColumns.map(c => c.name)).toContain('module');
+      expect(relColumns.map((c) => c.name)).toContain('module');
 
-      const tables = rawAfter.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='activities'"
-      ).all();
+      const tables = rawAfter
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='activities'")
+        .all();
       expect(tables).toHaveLength(1);
     } finally {
       rawAfter.close();
@@ -347,12 +396,25 @@ describe('V2: Schema Migration Round-Trip', () => {
   it('existing data survives migration', () => {
     const dbPath = tmpDbPath();
     const raw = createV6Database(dbPath);
-    raw.prepare(`INSERT INTO notes (id, file_path, title, type, tier, status, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'surv-1', '/notes/surv-1.md', 'Survivor One', 'decision', 'slow', 'current', 'architecture', 'db,migration'
-    );
-    raw.prepare(`INSERT INTO notes (id, file_path, title, type, tier, status) VALUES (?, ?, ?, ?, ?, ?)`).run(
-      'surv-2', '/notes/surv-2.md', 'Survivor Two', 'research', 'fast', 'draft'
-    );
+    raw
+      .prepare(
+        `INSERT INTO notes (id, file_path, title, type, tier, status, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        'surv-1',
+        '/notes/surv-1.md',
+        'Survivor One',
+        'decision',
+        'slow',
+        'current',
+        'architecture',
+        'db,migration'
+      );
+    raw
+      .prepare(
+        `INSERT INTO notes (id, file_path, title, type, tier, status) VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run('surv-2', '/notes/surv-2.md', 'Survivor Two', 'research', 'fast', 'draft');
     raw.close();
 
     const db = new BrainDB(dbPath);
@@ -396,22 +458,31 @@ describe('V3: Content Directory + FTS Integration', () => {
   it('content directory text indexed into FTS', async () => {
     const contentDirPath = join(notesDir, 'dirtest.d');
     mkdirSync(contentDirPath, { recursive: true });
-    writeFileSync(join(contentDirPath, 'details.md'), '# Details\n\nxylophone-quantum-42 is the secret code.', 'utf-8');
+    writeFileSync(
+      join(contentDirPath, 'details.md'),
+      '# Details\n\nxylophone-quantum-42 is the secret code.',
+      'utf-8'
+    );
     writeFileSync(join(contentDirPath, 'image.png'), 'fakepngdata', 'utf-8');
 
-    const filePath = writeNote(notesDir, 'dirtest.md', {
-      id: 'dirtest',
-      title: '"Directory Test"',
-      type: 'note',
-      tier: 'slow',
-      'content-dir': contentDirPath,
-    }, 'Note body text');
+    const filePath = writeNote(
+      notesDir,
+      'dirtest.md',
+      {
+        id: 'dirtest',
+        title: '"Directory Test"',
+        type: 'note',
+        tier: 'slow',
+        'content-dir': contentDirPath,
+      },
+      'Note body text'
+    );
 
     const content = readFileSync(filePath, 'utf-8');
     await indexSingleFile(db, embedder, filePath, content, hashOf(content), Date.now());
 
     const results = db.searchFTS('xylophone-quantum-42', 10);
-    expect(results.some(r => r.noteId === 'dirtest')).toBe(true);
+    expect(results.some((r) => r.noteId === 'dirtest')).toBe(true);
   });
 
   it('non-indexable files skipped', async () => {
@@ -419,34 +490,44 @@ describe('V3: Content Directory + FTS Integration', () => {
     mkdirSync(contentDirPath, { recursive: true });
     writeFileSync(join(contentDirPath, 'image.png'), 'png-unique-marker-9876', 'utf-8');
 
-    const filePath = writeNote(notesDir, 'skiptest.md', {
-      id: 'skiptest',
-      title: '"Skip Test"',
-      type: 'note',
-      tier: 'slow',
-      'content-dir': contentDirPath,
-    }, 'Skip test body');
+    const filePath = writeNote(
+      notesDir,
+      'skiptest.md',
+      {
+        id: 'skiptest',
+        title: '"Skip Test"',
+        type: 'note',
+        tier: 'slow',
+        'content-dir': contentDirPath,
+      },
+      'Skip test body'
+    );
 
     const content = readFileSync(filePath, 'utf-8');
     await indexSingleFile(db, embedder, filePath, content, hashOf(content), Date.now());
 
     const results = db.searchFTS('png-unique-marker-9876', 10);
-    expect(results.some(r => r.noteId === 'skiptest')).toBe(false);
+    expect(results.some((r) => r.noteId === 'skiptest')).toBe(false);
   });
 
   it('note without content-dir still works', async () => {
-    const filePath = writeNote(notesDir, 'plain.md', {
-      id: 'plain-note',
-      title: '"Plain Note"',
-      type: 'note',
-      tier: 'slow',
-    }, 'This note has zephyr-unique-text-777 in the body');
+    const filePath = writeNote(
+      notesDir,
+      'plain.md',
+      {
+        id: 'plain-note',
+        title: '"Plain Note"',
+        type: 'note',
+        tier: 'slow',
+      },
+      'This note has zephyr-unique-text-777 in the body'
+    );
 
     const content = readFileSync(filePath, 'utf-8');
     await indexSingleFile(db, embedder, filePath, content, hashOf(content), Date.now());
 
     const results = db.searchFTS('zephyr-unique-text-777', 10);
-    expect(results.some(r => r.noteId === 'plain-note')).toBe(true);
+    expect(results.some((r) => r.noteId === 'plain-note')).toBe(true);
   });
 
   it('archive content directory', () => {

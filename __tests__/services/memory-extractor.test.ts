@@ -163,7 +163,11 @@ describe('extractMemoriesFromNote', () => {
       noteId: 'note-1',
       content: 'Vector search uses cosine distance for similarity.',
     });
-    db.upsertChunks('note-1', [chunk1, chunk2], [new Float32Array([1, 2, 3]), new Float32Array([3, 2, 1])]);
+    db.upsertChunks(
+      'note-1',
+      [chunk1, chunk2],
+      [new Float32Array([1, 2, 3]), new Float32Array([3, 2, 1])]
+    );
 
     const llm = makeMockLLM([
       'SQLite uses B-trees for indexing',

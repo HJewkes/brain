@@ -20,7 +20,11 @@ function workstreamFilePath(config: BrainConfig, prefix: string, displayId: stri
   return join(config.notesDir, 'modules', 'pm', prefix, `${displayId}.md`);
 }
 
-function buildWorkstreamMarkdown(input: CreateWorkstreamInput, displayId: string, number: number): string {
+function buildWorkstreamMarkdown(
+  input: CreateWorkstreamInput,
+  displayId: string,
+  number: number
+): string {
   const now = new Date().toISOString().slice(0, 10);
   const lines = [
     '---',
@@ -76,7 +80,7 @@ export async function createWorkstream(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  input: CreateWorkstreamInput,
+  input: CreateWorkstreamInput
 ): Promise<Result<WorkstreamMetadata>> {
   const projectNotes = getPmNotes(db, 'project', { prefix: input.project });
   if (projectNotes.length === 0) {
@@ -133,7 +137,7 @@ export async function updateWorkstream(
   config: BrainConfig,
   embedder: Embedder,
   displayId: string,
-  updates: Partial<Pick<WorkstreamMetadata, 'status'>>,
+  updates: Partial<Pick<WorkstreamMetadata, 'status'>>
 ): Promise<Result<WorkstreamMetadata>> {
   const notes = getPmNotes(db, 'workstream', { display_id: displayId });
   if (notes.length === 0) {
@@ -172,7 +176,7 @@ export async function deleteWorkstream(
   db: BrainDB,
   config: BrainConfig,
   displayId: string,
-  force?: boolean,
+  force?: boolean
 ): Promise<Result<void>> {
   const notes = getPmNotes(db, 'workstream', { display_id: displayId });
   if (notes.length === 0) {
@@ -184,12 +188,15 @@ export async function deleteWorkstream(
     return fail('INVALID_INPUT', `Invalid workstream display ID "${displayId}"`);
   }
 
-  const taskNotes = getPmNotes(db, 'task', { project: parsed.prefix, workstream: parsed.workstream });
+  const taskNotes = getPmNotes(db, 'task', {
+    project: parsed.prefix,
+    workstream: parsed.workstream,
+  });
   if (taskNotes.length > 0 && !force) {
     return fail(
       'HAS_DEPENDENTS',
       `Workstream "${displayId}" has ${taskNotes.length} task(s). Use force to delete.`,
-      { count: taskNotes.length },
+      { count: taskNotes.length }
     );
   }
 

@@ -104,8 +104,12 @@ describe('computeEligible', () => {
 
     // Complete in topological order
     const order = [
-      'TEST-01.01', 'TEST-02.01', 'TEST-01.02',
-      'TEST-02.02', 'TEST-01.03', 'TEST-02.03',
+      'TEST-01.01',
+      'TEST-02.01',
+      'TEST-01.02',
+      'TEST-02.02',
+      'TEST-01.03',
+      'TEST-02.03',
     ];
     for (const id of order) {
       await updateTaskStatus(db, config, embedder, id, 'claimed');

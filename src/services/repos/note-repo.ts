@@ -467,9 +467,9 @@ export class NoteRepo {
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = this.db
-      .prepare(`SELECT id FROM notes ${where}`)
-      .all(...params) as { id: string }[];
+    const rows = this.db.prepare(`SELECT id FROM notes ${where}`).all(...params) as {
+      id: string;
+    }[];
     return rows.map((r) => r.id);
   }
 }

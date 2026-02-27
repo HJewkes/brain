@@ -57,7 +57,7 @@ export async function createCapture(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  input: CaptureInput,
+  input: CaptureInput
 ): Promise<Result<CaptureRecord>> {
   if (!input.content || input.content.trim().length === 0) {
     return fail('INVALID_INPUT', 'Capture content cannot be empty');
@@ -90,7 +90,7 @@ export async function createCapture(
 
 export function listCaptures(
   db: BrainDB,
-  filters?: { project?: string; processed?: boolean },
+  filters?: { project?: string; processed?: boolean }
 ): Result<CaptureRecord[]> {
   const filterObj: Record<string, unknown> = {};
   if (filters?.project) filterObj.project = filters.project;
@@ -120,7 +120,7 @@ export async function processCapture(
   config: BrainConfig,
   embedder: Embedder,
   captureNoteId: string,
-  asTask: CreateTaskInput,
+  asTask: CreateTaskInput
 ): Promise<Result<TaskMetadata>> {
   const note = db.getNoteById(captureNoteId);
   if (!note) {

@@ -116,18 +116,14 @@ export function createVerifyCommand(): Command {
 
         const taskResult = getTask(svc.db, displayId);
         if (!taskResult.ok) {
-          process.stderr.write(
-            formatError(taskResult.error, !!opts.json) + '\n',
-          );
+          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
 
         const contextResult = assembleContext(svc.db, displayId);
         if (!contextResult.ok) {
-          process.stderr.write(
-            formatError(contextResult.error, !!opts.json) + '\n',
-          );
+          process.stderr.write(formatError(contextResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }

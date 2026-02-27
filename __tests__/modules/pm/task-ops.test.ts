@@ -74,8 +74,16 @@ describe('createTask', () => {
   });
 
   it('auto-numbers tasks: first = 1, second = 2', async () => {
-    const r1 = await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
-    const r2 = await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 2' });
+    const r1 = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Task 1',
+    });
+    const r2 = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Task 2',
+    });
 
     expect(r1.ok && r1.data.number).toBe(1);
     expect(r2.ok && r2.data.number).toBe(2);
@@ -84,7 +92,11 @@ describe('createTask', () => {
   });
 
   it('creates task with depends_on and stores relations', async () => {
-    const r1 = await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task A' });
+    const r1 = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Task A',
+    });
     expect(r1.ok).toBe(true);
 
     const r2 = await createTask(db, config, embedder, {
@@ -251,7 +263,11 @@ describe('updateTaskStatus', () => {
   });
 
   it('valid lifecycle: pending → claimed → in-progress → done', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Full lifecycle' });
+    await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Full lifecycle',
+    });
 
     const r1 = await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'claimed');
     expect(r1.ok).toBe(true);

@@ -3,12 +3,12 @@ import type { Result } from '../errors.js';
 import { ok, fail } from '../errors.js';
 
 const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  'pending': ['claimed', 'blocked', 'cancelled'],
-  'claimed': ['in-progress', 'pending', 'cancelled'],
+  pending: ['claimed', 'blocked', 'cancelled'],
+  claimed: ['in-progress', 'pending', 'cancelled'],
   'in-progress': ['done', 'blocked', 'cancelled'],
-  'done': [],
-  'blocked': ['pending', 'cancelled'],
-  'cancelled': [],
+  done: [],
+  blocked: ['pending', 'cancelled'],
+  cancelled: [],
 };
 
 const DEFAULT_STALE_MS = 7 * 24 * 60 * 60 * 1000;

@@ -46,7 +46,12 @@ describe('renderAgentPrompt', () => {
   test('includes dependency summaries when present', () => {
     const bundle = makeBundle({
       dependencies: [
-        { displayId: 'WEB-01-001', name: 'Setup DB', status: 'done', summary: 'Database initialized' },
+        {
+          displayId: 'WEB-01-001',
+          name: 'Setup DB',
+          status: 'done',
+          summary: 'Database initialized',
+        },
         { displayId: 'WEB-01-002', name: 'Add schema', status: 'done' },
       ],
     });
@@ -204,9 +209,7 @@ describe('renderBriefingSummary', () => {
   });
 
   test('lists eligible tasks', () => {
-    const tasks = [
-      { displayId: 'WEB-01-005', status: 'pending', name: 'Build API' },
-    ];
+    const tasks = [{ displayId: 'WEB-01-005', status: 'pending', name: 'Build API' }];
     const result = renderBriefingSummary({ projectName: 'P', status: 'active', tasks });
     expect(result).toContain('## Eligible Tasks');
     expect(result).toContain('WEB-01-005: Build API');

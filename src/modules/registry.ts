@@ -39,9 +39,7 @@ export class ModuleRegistry {
     const key = noteType.name;
     if (this.noteTypes.has(key)) {
       const existing = this.noteTypes.get(key)!;
-      throw new Error(
-        `Note type "${key}" already registered by module "${existing.module}"`
-      );
+      throw new Error(`Note type "${key}" already registered by module "${existing.module}"`);
     }
     this.noteTypes.set(key, { module: moduleName, noteType });
   }
@@ -64,9 +62,7 @@ export class ModuleRegistry {
     const key = relationType.name;
     if (this.relationTypes.has(key)) {
       const existing = this.relationTypes.get(key)!;
-      throw new Error(
-        `Relation type "${key}" already registered by module "${existing.module}"`
-      );
+      throw new Error(`Relation type "${key}" already registered by module "${existing.module}"`);
     }
     this.relationTypes.set(key, { module: moduleName, relationType });
   }

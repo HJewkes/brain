@@ -22,7 +22,7 @@ import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } fr
 
 function resolvePrefix(
   explicitProject: string | undefined,
-  activeProject: string | null,
+  activeProject: string | null
 ): string | null {
   if (explicitProject) return explicitProject.toUpperCase();
   return activeProject;
@@ -37,9 +37,10 @@ export function createOrchestrationCommands(): Command[] {
       await withBrain(async (svc) => {
         const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
         if (!prefix) {
-          const msg = 'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n',
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
           );
           process.exitCode = 1;
           return;
@@ -88,9 +89,10 @@ export function createOrchestrationCommands(): Command[] {
       await withBrain(async (svc) => {
         const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
         if (!prefix) {
-          const msg = 'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n',
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
           );
           process.exitCode = 1;
           return;
@@ -136,9 +138,7 @@ export function createOrchestrationCommands(): Command[] {
         const result = assembleContext(svc.db, displayId);
 
         if (!result.ok) {
-          process.stderr.write(
-            formatError(result.error, !!opts.json) + '\n',
-          );
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
@@ -155,10 +155,14 @@ export function createOrchestrationCommands(): Command[] {
           process.stdout.write(`Prompt: ${bundle.prompt}\n`);
         }
         if (bundle.dependencies.length > 0) {
-          process.stdout.write(`Dependencies: ${bundle.dependencies.map((d) => d.displayId).join(', ')}\n`);
+          process.stdout.write(
+            `Dependencies: ${bundle.dependencies.map((d) => d.displayId).join(', ')}\n`
+          );
         }
         if (bundle.decisions.length > 0) {
-          process.stdout.write(`Decisions: ${bundle.decisions.map((d) => d.displayId).join(', ')}\n`);
+          process.stdout.write(
+            `Decisions: ${bundle.decisions.map((d) => d.displayId).join(', ')}\n`
+          );
         }
         process.stdout.write(`Context hash: ${bundle.contextHash}\n`);
       });
@@ -176,9 +180,7 @@ export function createOrchestrationCommands(): Command[] {
 
         const taskResult = getTask(svc.db, displayId);
         if (!taskResult.ok) {
-          process.stderr.write(
-            formatError(taskResult.error, !!opts.json) + '\n',
-          );
+          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
@@ -189,8 +191,8 @@ export function createOrchestrationCommands(): Command[] {
             process.stderr.write(
               formatError(
                 { error: true, code: 'INVALID_CLAIM_TOKEN', message: 'Task has no active claim' },
-                !!opts.json,
-              ) + '\n',
+                !!opts.json
+              ) + '\n'
             );
             process.exitCode = 1;
             return;
@@ -204,8 +206,11 @@ export function createOrchestrationCommands(): Command[] {
         }
 
         const statusResult = await updateTaskStatus(
-          svc.db, svc.config, svc.embedder,
-          displayId, 'done' as TaskStatus,
+          svc.db,
+          svc.config,
+          svc.embedder,
+          displayId,
+          'done' as TaskStatus
         );
         if (!statusResult.ok) {
           process.stderr.write(formatError(statusResult.error, !!opts.json) + '\n');
@@ -266,9 +271,10 @@ export function createOrchestrationCommands(): Command[] {
       await withBrain(async (svc) => {
         const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
         if (!prefix) {
-          const msg = 'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n',
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
           );
           process.exitCode = 1;
           return;
@@ -335,15 +341,21 @@ export function createOrchestrationCommands(): Command[] {
         const lines: string[] = [];
         lines.push(`=== Briefing: ${project?.display_id ?? prefix} ===`);
         if (project) {
-          lines.push(`Status: ${project.status}${project.phase ? ` | Phase: ${project.phase}` : ''}`);
+          lines.push(
+            `Status: ${project.status}${project.phase ? ` | Phase: ${project.phase}` : ''}`
+          );
         }
         lines.push('');
 
         lines.push(`Tasks: ${allTasks.length} total`);
         lines.push(`  Done: ${done.length}`);
         lines.push(`  In-progress: ${inProgress.length}`);
-        lines.push(`  Eligible: ${eligible.length}${eligible.length > 0 ? ` (${eligible.join(', ')})` : ''}`);
-        lines.push(`  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.join(', ')})` : ''}`);
+        lines.push(
+          `  Eligible: ${eligible.length}${eligible.length > 0 ? ` (${eligible.join(', ')})` : ''}`
+        );
+        lines.push(
+          `  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.join(', ')})` : ''}`
+        );
         lines.push(`  Pending: ${pending.length}`);
         lines.push('');
 
@@ -373,7 +385,7 @@ export function createOrchestrationCommands(): Command[] {
         if (consistencyIssues > 0) {
           lines.push('');
           lines.push(
-            `Consistency: ${consistencyIssues} structural issue(s) found. Run /sanity-check for details.`,
+            `Consistency: ${consistencyIssues} structural issue(s) found. Run /sanity-check for details.`
           );
         }
 

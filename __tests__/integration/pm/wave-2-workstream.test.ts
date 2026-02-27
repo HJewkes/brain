@@ -81,7 +81,10 @@ describe('Wave 2: Workstream CRUD integration', () => {
 
   it('creates second workstream with display_id = PREFIX-02 (auto-number)', async () => {
     await createWorkstream(db, config, embedder, { project: 'TST', name: 'Frontend' });
-    const result = await createWorkstream(db, config, embedder, { project: 'TST', name: 'Backend' });
+    const result = await createWorkstream(db, config, embedder, {
+      project: 'TST',
+      name: 'Backend',
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -164,18 +167,20 @@ describe('Wave 2: Workstream CRUD integration', () => {
   it('returns HAS_DEPENDENTS when deleting workstream with tasks', async () => {
     await createWorkstream(db, config, embedder, { project: 'TST', name: 'Frontend' });
 
-    db.upsertNote(makeNote({
-      id: 'tst-01-task',
-      module: 'pm',
-      type: 'task',
-      metadata: JSON.stringify({
-        display_id: 'TST-01.01',
-        project: 'TST',
-        workstream: 1,
-        number: 1,
-        status: 'pending',
-      }),
-    }));
+    db.upsertNote(
+      makeNote({
+        id: 'tst-01-task',
+        module: 'pm',
+        type: 'task',
+        metadata: JSON.stringify({
+          display_id: 'TST-01.01',
+          project: 'TST',
+          workstream: 1,
+          number: 1,
+          status: 'pending',
+        }),
+      })
+    );
 
     const result = await deleteWorkstream(db, config, 'TST-01');
     expect(result.ok).toBe(false);

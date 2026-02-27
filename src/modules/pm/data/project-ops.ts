@@ -46,15 +46,17 @@ function buildProjectMarkdown(input: CreateProjectInput): string {
   return lines.join('\n');
 }
 
-
 export async function createProject(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  input: CreateProjectInput,
+  input: CreateProjectInput
 ): Promise<Result<ProjectMetadata>> {
   if (!validatePrefix(input.prefix)) {
-    return fail('INVALID_INPUT', `Invalid prefix "${input.prefix}": must be 2-5 uppercase alphanumeric characters`);
+    return fail(
+      'INVALID_INPUT',
+      `Invalid prefix "${input.prefix}": must be 2-5 uppercase alphanumeric characters`
+    );
   }
 
   const existing = getPmNotes(db, 'project', { prefix: input.prefix });
@@ -120,7 +122,7 @@ export async function updateProject(
   config: BrainConfig,
   embedder: Embedder,
   prefix: string,
-  updates: Partial<Pick<ProjectMetadata, 'status' | 'phase' | 'wip_limit'>>,
+  updates: Partial<Pick<ProjectMetadata, 'status' | 'phase' | 'wip_limit'>>
 ): Promise<Result<ProjectMetadata>> {
   const notes = getPmNotes(db, 'project', { prefix });
   if (notes.length === 0) {
@@ -165,7 +167,7 @@ export async function deleteProject(
   db: BrainDB,
   config: BrainConfig,
   prefix: string,
-  force?: boolean,
+  force?: boolean
 ): Promise<Result<void>> {
   const notes = getPmNotes(db, 'project', { prefix });
   if (notes.length === 0) {
@@ -179,7 +181,7 @@ export async function deleteProject(
     return fail(
       'HAS_DEPENDENTS',
       `Project "${prefix}" has ${nonProjectNotes.length} dependent note(s). Use force to delete.`,
-      { count: nonProjectNotes.length },
+      { count: nonProjectNotes.length }
     );
   }
 

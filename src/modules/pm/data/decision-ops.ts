@@ -49,7 +49,7 @@ function formatDecisionDisplayId(prefix: string, number: number): string {
 function buildDecisionMarkdown(
   input: CreateDecisionInput,
   displayId: string,
-  status: DecisionStatus,
+  status: DecisionStatus
 ): string {
   const now = new Date().toISOString().slice(0, 10);
   const lines = [
@@ -70,7 +70,16 @@ function buildDecisionMarkdown(
     lines.push(`impacts: [${input.impacts.join(', ')}]`);
   }
 
-  lines.push(`created: ${now}`, `modified: ${now}`, '---', '', `# ${input.name}`, '', input.content, '');
+  lines.push(
+    `created: ${now}`,
+    `modified: ${now}`,
+    '---',
+    '',
+    `# ${input.name}`,
+    '',
+    input.content,
+    ''
+  );
   return lines.join('\n');
 }
 
@@ -103,7 +112,7 @@ export async function createDecision(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  input: CreateDecisionInput,
+  input: CreateDecisionInput
 ): Promise<Result<DecisionMetadata>> {
   const projectNotes = getPmNotes(db, 'project', { prefix: input.project });
   if (projectNotes.length === 0) {
@@ -164,7 +173,7 @@ export async function createDecision(
 export function listDecisions(
   db: BrainDB,
   prefix: string,
-  filters?: { status?: string; task?: string },
+  filters?: { status?: string; task?: string }
 ): Result<DecisionMetadata[]> {
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.status !== undefined) filterObj.status = filters.status;
@@ -181,7 +190,7 @@ export function listDecisions(
 
 export function getDecision(
   db: BrainDB,
-  displayId: string,
+  displayId: string
 ): Result<DecisionMetadata & { content: string }> {
   const notes = getPmNotes(db, 'decision', { display_id: displayId });
   if (notes.length === 0) {
@@ -211,7 +220,7 @@ export async function supersedeDecision(
   config: BrainConfig,
   embedder: Embedder,
   oldDisplayId: string,
-  newInput: CreateDecisionInput,
+  newInput: CreateDecisionInput
 ): Promise<Result<{ old: DecisionMetadata; new: DecisionMetadata }>> {
   const oldNotes = getPmNotes(db, 'decision', { display_id: oldDisplayId });
   if (oldNotes.length === 0) {
@@ -250,11 +259,13 @@ export async function supersedeDecision(
   const oldResolved = resolveDisplayId(db, oldDisplayId);
 
   if (newResolved.ok && oldResolved.ok) {
-    const supersedesRelation: Relation[] = [{
-      sourceId: newResolved.data,
-      targetId: oldResolved.data,
-      type: 'supersedes',
-    }];
+    const supersedesRelation: Relation[] = [
+      {
+        sourceId: newResolved.data,
+        targetId: oldResolved.data,
+        type: 'supersedes',
+      },
+    ];
     db.upsertRelations(newResolved.data, supersedesRelation);
   }
 

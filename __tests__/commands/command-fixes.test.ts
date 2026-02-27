@@ -64,38 +64,19 @@ describe('inbox mutually exclusive flags', () => {
   it('rejects --discard and --delete together', async () => {
     const { inboxCommand } = await import('../../src/commands/inbox.js');
     const program = new Command().exitOverride().addCommand(inboxCommand);
-    await program.parseAsync([
-      'node',
-      'test',
-      'inbox',
-      '--discard',
-      'id1',
-      '--delete',
-      'id2',
-    ]);
+    await program.parseAsync(['node', 'test', 'inbox', '--discard', 'id1', '--delete', 'id2']);
 
     expect(process.exitCode).toBe(1);
-    expect(stderrSpy).toHaveBeenCalledWith(
-      expect.stringContaining('mutually exclusive')
-    );
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('mutually exclusive'));
   });
 
   it('rejects --discard and --count together', async () => {
     const { inboxCommand } = await import('../../src/commands/inbox.js');
     const program = new Command().exitOverride().addCommand(inboxCommand);
-    await program.parseAsync([
-      'node',
-      'test',
-      'inbox',
-      '--discard',
-      'id1',
-      '--count',
-    ]);
+    await program.parseAsync(['node', 'test', 'inbox', '--discard', 'id1', '--count']);
 
     expect(process.exitCode).toBe(1);
-    expect(stderrSpy).toHaveBeenCalledWith(
-      expect.stringContaining('mutually exclusive')
-    );
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('mutually exclusive'));
   });
 });
 
@@ -118,9 +99,7 @@ describe('feed add URL validation', () => {
     await program.parseAsync(['node', 'test', 'feed', 'add', 'not-a-url']);
 
     expect(process.exitCode).toBe(1);
-    expect(stderrSpy).toHaveBeenCalledWith(
-      expect.stringContaining('invalid URL: not-a-url')
-    );
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('invalid URL: not-a-url'));
   });
 
   it('accepts valid URL without URL validation error', async () => {

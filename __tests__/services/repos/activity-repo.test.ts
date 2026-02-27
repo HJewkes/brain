@@ -77,15 +77,9 @@ describe('ActivityRepo', () => {
   });
 
   it('finds activities by note id', () => {
-    db.addActivity(
-      makeActivity({ noteIds: JSON.stringify(['note-1', 'note-2']) })
-    );
-    db.addActivity(
-      makeActivity({ noteIds: JSON.stringify(['note-2', 'note-3']) })
-    );
-    db.addActivity(
-      makeActivity({ noteIds: JSON.stringify(['note-4']) })
-    );
+    db.addActivity(makeActivity({ noteIds: JSON.stringify(['note-1', 'note-2']) }));
+    db.addActivity(makeActivity({ noteIds: JSON.stringify(['note-2', 'note-3']) }));
+    db.addActivity(makeActivity({ noteIds: JSON.stringify(['note-4']) }));
 
     const forNote2 = db.getActivitiesByNoteId('note-2');
     expect(forNote2).toHaveLength(2);

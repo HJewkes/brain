@@ -134,14 +134,16 @@ describe('setup validation', () => {
 
     const parsed = JSON.parse(output.stdout());
     expect(parsed.success).toBe(false);
-    const sessionCheck = parsed.checks.find((c: { label: string }) => c.label === 'SessionStart hook');
+    const sessionCheck = parsed.checks.find(
+      (c: { label: string }) => c.label === 'SessionStart hook'
+    );
     expect(sessionCheck.passed).toBe(false);
   });
 
   test('reports success when all components are installed', async () => {
-    const actual = await vi.importActual<typeof import('../../../src/modules/pm/commands/install-hooks.js')>(
-      '../../../src/modules/pm/commands/install-hooks.js',
-    );
+    const actual = await vi.importActual<
+      typeof import('../../../src/modules/pm/commands/install-hooks.js')
+    >('../../../src/modules/pm/commands/install-hooks.js');
     mockInstallHooks.mockImplementation((dir) => actual.installHooks(dir));
 
     const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
@@ -149,8 +151,9 @@ describe('setup validation', () => {
     await cmd.parseAsync(['--json'], { from: 'user' });
 
     const parsed = JSON.parse(output.stdout());
-    const hookChecks = parsed.checks.filter((c: { label: string }) =>
-      c.label.includes('hook') || c.label.includes('Settings') || c.label.includes('skill'),
+    const hookChecks = parsed.checks.filter(
+      (c: { label: string }) =>
+        c.label.includes('hook') || c.label.includes('Settings') || c.label.includes('skill')
     );
     for (const check of hookChecks) {
       expect(check.passed).toBe(true);
@@ -158,9 +161,9 @@ describe('setup validation', () => {
   });
 
   test('text output contains status and next steps', async () => {
-    const actual = await vi.importActual<typeof import('../../../src/modules/pm/commands/install-hooks.js')>(
-      '../../../src/modules/pm/commands/install-hooks.js',
-    );
+    const actual = await vi.importActual<
+      typeof import('../../../src/modules/pm/commands/install-hooks.js')
+    >('../../../src/modules/pm/commands/install-hooks.js');
     mockInstallHooks.mockImplementation((dir) => actual.installHooks(dir));
 
     const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
@@ -200,9 +203,9 @@ describe('setup --demo', () => {
     process.exitCode = undefined;
     output = captureOutput();
 
-    const actual = await vi.importActual<typeof import('../../../src/modules/pm/commands/install-hooks.js')>(
-      '../../../src/modules/pm/commands/install-hooks.js',
-    );
+    const actual = await vi.importActual<
+      typeof import('../../../src/modules/pm/commands/install-hooks.js')
+    >('../../../src/modules/pm/commands/install-hooks.js');
     mockInstallHooks.mockImplementation((dir) => actual.installHooks(dir));
 
     mockWithBrain.mockImplementation(async (fn: (svc: unknown) => unknown) => fn(fakeSvc));
@@ -212,8 +215,14 @@ describe('setup --demo', () => {
       data: { display_id: 'DEMO', prefix: 'DEMO', status: 'active' },
     });
     mockCreateWorkstream
-      .mockResolvedValueOnce({ ok: true, data: { display_id: 'DEMO-01', project: 'DEMO', number: 1, status: 'active' } })
-      .mockResolvedValueOnce({ ok: true, data: { display_id: 'DEMO-02', project: 'DEMO', number: 2, status: 'active' } });
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { display_id: 'DEMO-01', project: 'DEMO', number: 1, status: 'active' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { display_id: 'DEMO-02', project: 'DEMO', number: 2, status: 'active' },
+      });
     mockCreateTask
       .mockResolvedValueOnce({ ok: true, data: { display_id: 'DEMO-01.01' } })
       .mockResolvedValueOnce({ ok: true, data: { display_id: 'DEMO-01.02' } })
@@ -241,7 +250,7 @@ describe('setup --demo', () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      expect.objectContaining({ name: 'Demo Project', prefix: 'DEMO' }),
+      expect.objectContaining({ name: 'Demo Project', prefix: 'DEMO' })
     );
     expect(mockSetActiveProject).toHaveBeenCalledWith(expect.anything(), 'DEMO');
     expect(mockCreateWorkstream).toHaveBeenCalledTimes(2);

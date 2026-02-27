@@ -31,10 +31,7 @@ function buildNoteIdToDisplayId(tasks: TaskInfo[]): Map<string, string> {
 }
 
 /** Build adjacency list: displayId -> [displayIds it depends on] */
-export function buildDependencyGraph(
-  db: BrainDB,
-  prefix: string,
-): Map<string, string[]> {
+export function buildDependencyGraph(db: BrainDB, prefix: string): Map<string, string[]> {
   const tasks = getProjectTasks(db, prefix);
   const noteToDisplay = buildNoteIdToDisplayId(tasks);
   const taskNoteIds = new Set(tasks.map((t) => t.noteId));
@@ -106,7 +103,7 @@ export function detectCycle(
   db: BrainDB,
   prefix: string,
   fromDisplayId: string,
-  toDisplayId: string,
+  toDisplayId: string
 ): Result<void> {
   if (fromDisplayId === toDisplayId) {
     return fail('CYCLE_DETECTED', `Self-dependency: ${fromDisplayId}`, {
@@ -161,9 +158,7 @@ export function computeWaves(db: BrainDB, prefix: string): WaveAssignment[] {
   const graph = buildDependencyGraph(db, prefix);
 
   // Exclude done and cancelled tasks
-  const activeTasks = tasks.filter(
-    (t) => t.status !== 'done' && t.status !== 'cancelled',
-  );
+  const activeTasks = tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled');
   const activeIds = new Set(activeTasks.map((t) => t.displayId));
   const statusByDisplay = new Map<string, TaskStatus>();
   for (const t of tasks) {
@@ -230,11 +225,7 @@ export function computeWaves(db: BrainDB, prefix: string): WaveAssignment[] {
  * Impact analysis: what tasks become eligible if taskId is completed.
  * Returns display IDs of tasks that would become eligible.
  */
-export function computeImpact(
-  db: BrainDB,
-  prefix: string,
-  taskDisplayId: string,
-): string[] {
+export function computeImpact(db: BrainDB, prefix: string, taskDisplayId: string): string[] {
   const tasks = getProjectTasks(db, prefix);
   const graph = buildDependencyGraph(db, prefix);
   const reverse = buildReverseGraph(graph);

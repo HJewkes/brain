@@ -121,7 +121,11 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('full lifecycle: pending → claimed → in-progress → done', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Lifecycle task' });
+    await createTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Lifecycle task',
+    });
 
     const r1 = await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
     expect(r1.ok).toBe(true);
@@ -137,7 +141,11 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('invalid transition: done on pending returns INVALID_TRANSITION', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Bad transition' });
+    await createTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Bad transition',
+    });
 
     const result = await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
     expect(result.ok).toBe(false);

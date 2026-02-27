@@ -12,13 +12,14 @@ import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import { createTask, getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createDecision } from '../../../src/modules/pm/data/decision-ops.js';
-import { writePrompt, getPrompt, getPromptHistory } from '../../../src/modules/pm/data/prompt-ops.js';
+import {
+  writePrompt,
+  getPrompt,
+  getPromptHistory,
+} from '../../../src/modules/pm/data/prompt-ops.js';
 import { assembleContext } from '../../../src/modules/pm/engine/dispatch.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
-import {
-  allocateWorktree,
-  getBudget,
-} from '../../../src/modules/pm/engine/worktree.js';
+import { allocateWorktree, getBudget } from '../../../src/modules/pm/engine/worktree.js';
 
 vi.mock('node:child_process', () => ({
   execSync: vi.fn((cmd: string) => {
@@ -67,13 +68,17 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
       await createWorkstream(db, config, embedder, { project: 'LC', name: 'WS1' });
 
       const t1 = await createTask(db, config, embedder, {
-        project: 'LC', workstream: 1, name: 'First task',
+        project: 'LC',
+        workstream: 1,
+        name: 'First task',
       });
       expect(t1.ok).toBe(true);
       if (!t1.ok) return;
 
       const t2 = await createTask(db, config, embedder, {
-        project: 'LC', workstream: 1, name: 'Second task',
+        project: 'LC',
+        workstream: 1,
+        name: 'Second task',
         dependsOn: ['LC-01.01'],
       });
       expect(t2.ok).toBe(true);
@@ -113,10 +118,14 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
       await createWorkstream(db, config, embedder, { project: 'DT', name: 'WS1' });
 
       await createTask(db, config, embedder, {
-        project: 'DT', workstream: 1, name: 'Task A',
+        project: 'DT',
+        workstream: 1,
+        name: 'Task A',
       });
       await createTask(db, config, embedder, {
-        project: 'DT', workstream: 1, name: 'Task B',
+        project: 'DT',
+        workstream: 1,
+        name: 'Task B',
         dependsOn: ['DT-01.01'],
       });
 
@@ -145,12 +154,16 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
       await createProject(db, config, embedder, { name: 'PromptTest', prefix: 'PT' });
       await createWorkstream(db, config, embedder, { project: 'PT', name: 'WS1' });
       await createTask(db, config, embedder, {
-        project: 'PT', workstream: 1, name: 'Prompt task',
+        project: 'PT',
+        workstream: 1,
+        name: 'Prompt task',
       });
 
       // Write v1
       const v1 = await writePrompt(db, config, embedder, {
-        project: 'PT', task: 'PT-01.01', content: 'First version',
+        project: 'PT',
+        task: 'PT-01.01',
+        content: 'First version',
       });
       expect(v1.ok).toBe(true);
       if (!v1.ok) return;
@@ -159,7 +172,9 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
 
       // Write v2 (supersedes v1)
       const v2 = await writePrompt(db, config, embedder, {
-        project: 'PT', task: 'PT-01.01', content: 'Second version',
+        project: 'PT',
+        task: 'PT-01.01',
+        content: 'Second version',
       });
       expect(v2.ok).toBe(true);
       if (!v2.ok) return;

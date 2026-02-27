@@ -59,7 +59,14 @@ describe('validateTransition', () => {
   });
 
   test('self-transitions are invalid', () => {
-    const statuses: TaskStatus[] = ['pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled'];
+    const statuses: TaskStatus[] = [
+      'pending',
+      'claimed',
+      'in-progress',
+      'done',
+      'blocked',
+      'cancelled',
+    ];
     for (const s of statuses) {
       const result = validateTransition(s, s);
       expect(result.ok).toBe(false);

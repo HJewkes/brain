@@ -19,9 +19,10 @@ export function createCheckCommand(): Command {
       await withBrain(async (svc) => {
         const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
         if (!prefix) {
-          const msg = 'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
           process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, true) + '\n',
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, true) + '\n'
           );
           process.exitCode = 1;
           return;

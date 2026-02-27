@@ -53,9 +53,7 @@ export function createContextCommand(): Command {
         const result = assembleContext(svc.db, displayId);
 
         if (!result.ok) {
-          process.stderr.write(
-            formatError(result.error, !!opts.json) + '\n',
-          );
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }

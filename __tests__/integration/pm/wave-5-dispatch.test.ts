@@ -10,7 +10,12 @@ import type { BrainConfig } from '../../../src/types.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
 import { getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
-import { generateClaim, validateClaimToken, isClaimActive, isClaimStale } from '../../../src/modules/pm/engine/claims.js';
+import {
+  generateClaim,
+  validateClaimToken,
+  isClaimActive,
+  isClaimStale,
+} from '../../../src/modules/pm/engine/claims.js';
 import { assembleContext } from '../../../src/modules/pm/engine/dispatch.js';
 import { computeImpact } from '../../../src/modules/pm/engine/dependency.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
@@ -44,7 +49,7 @@ function replaceFrontmatterField(content: string, field: string, value: string):
 
 async function updateTaskMetadataFields(
   displayId: string,
-  fields: Record<string, string>,
+  fields: Record<string, string>
 ): Promise<void> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) throw new Error(`Task "${displayId}" not found`);
@@ -268,15 +273,16 @@ describe('Wave 5: Claims + Dispatch', () => {
 
     // Active now
     const meta = result.data;
-    expect(isClaimActive({ ...meta, claim_token: claim.token, claimed_at: claim.claimedAt })).toBe(true);
+    expect(isClaimActive({ ...meta, claim_token: claim.token, claimed_at: claim.claimedAt })).toBe(
+      true
+    );
 
     // Stale 11 minutes later
     const futureDate = new Date(Date.now() + 11 * 60 * 1000);
     expect(isClaimStale(claim.claimedAt, 10 * 60 * 1000, futureDate)).toBe(true);
-    expect(isClaimActive(
-      { ...meta, claim_token: claim.token, claimed_at: claim.claimedAt },
-      futureDate,
-    )).toBe(false);
+    expect(
+      isClaimActive({ ...meta, claim_token: claim.token, claimed_at: claim.claimedAt }, futureDate)
+    ).toBe(false);
   });
 
   it('all --json outputs parse correctly', async () => {

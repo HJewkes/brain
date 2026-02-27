@@ -52,7 +52,15 @@ describe('getAllocations', () => {
   });
 
   test('returns stored allocations', () => {
-    const allocs = [makeAllocation(), makeAllocation({ taskId: 'PROJ-01-002', workstream: 'ws-02', path: '/fake/repo/.worktrees/ws-02', branch: 'worktree/ws-02' })];
+    const allocs = [
+      makeAllocation(),
+      makeAllocation({
+        taskId: 'PROJ-01-002',
+        workstream: 'ws-02',
+        path: '/fake/repo/.worktrees/ws-02',
+        branch: 'worktree/ws-02',
+      }),
+    ];
     seedAllocations(allocs);
 
     const result = getAllocations(db);
@@ -165,19 +173,28 @@ describe('allocateWorktree', () => {
 
 describe('checkWorktreePath', () => {
   test('passes when path is within worktree', () => {
-    const result = checkWorktreePath('/repo/.worktrees/ws-01', '/repo/.worktrees/ws-01/src/file.ts');
+    const result = checkWorktreePath(
+      '/repo/.worktrees/ws-01',
+      '/repo/.worktrees/ws-01/src/file.ts'
+    );
     expect(result.ok).toBe(true);
   });
 
   test('fails when path is outside worktree', () => {
-    const result = checkWorktreePath('/repo/.worktrees/ws-01', '/repo/.worktrees/ws-02/src/file.ts');
+    const result = checkWorktreePath(
+      '/repo/.worktrees/ws-01',
+      '/repo/.worktrees/ws-02/src/file.ts'
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('INVALID_INPUT');
   });
 
   test('handles trailing slashes', () => {
-    const result = checkWorktreePath('/repo/.worktrees/ws-01/', '/repo/.worktrees/ws-01/src/file.ts');
+    const result = checkWorktreePath(
+      '/repo/.worktrees/ws-01/',
+      '/repo/.worktrees/ws-01/src/file.ts'
+    );
     expect(result.ok).toBe(true);
   });
 
@@ -187,14 +204,20 @@ describe('checkWorktreePath', () => {
   });
 
   test('rejects path that is a prefix but not a subdirectory', () => {
-    const result = checkWorktreePath('/repo/.worktrees/ws-01', '/repo/.worktrees/ws-01-extra/file.ts');
+    const result = checkWorktreePath(
+      '/repo/.worktrees/ws-01',
+      '/repo/.worktrees/ws-01-extra/file.ts'
+    );
     expect(result.ok).toBe(false);
   });
 });
 
 describe('releaseWorktree', () => {
   test('removes allocation from db_meta', () => {
-    seedAllocations([makeAllocation({ taskId: 'PROJ-01-001' }), makeAllocation({ taskId: 'PROJ-01-002', workstream: 'ws-02' })]);
+    seedAllocations([
+      makeAllocation({ taskId: 'PROJ-01-001' }),
+      makeAllocation({ taskId: 'PROJ-01-002', workstream: 'ws-02' }),
+    ]);
 
     const result = releaseWorktree(db, 'PROJ-01-001');
 

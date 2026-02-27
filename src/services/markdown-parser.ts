@@ -52,9 +52,10 @@ export function coerceFrontmatter(
   const hasModule = typeof data.module === 'string';
 
   // When a module is present, pass unknown types through instead of coercing to 'note'
-  const type = hasModule && typeof data.type === 'string'
-    ? (data.type as NoteFrontmatter['type'])
-    : coerceEnum(data.type, VALID_CORE_NOTE_TYPES, 'note');
+  const type =
+    hasModule && typeof data.type === 'string'
+      ? (data.type as NoteFrontmatter['type'])
+      : coerceEnum(data.type, VALID_CORE_NOTE_TYPES, 'note');
 
   return {
     id: typeof data.id === 'string' ? data.id : undefined,

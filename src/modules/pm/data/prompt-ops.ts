@@ -60,7 +60,7 @@ function buildPromptMarkdown(
   input: WritePromptInput,
   displayId: string,
   status: PromptStatus,
-  version: number,
+  version: number
 ): string {
   const now = new Date().toISOString().slice(0, 10);
   const lines = [
@@ -117,7 +117,7 @@ async function supersedeCurrentPrompt(
   db: BrainDB,
   embedder: Embedder,
   taskDisplayId: string,
-  project: string,
+  project: string
 ): Promise<void> {
   const notes = getPmNotes(db, 'prompt', { task: taskDisplayId, project });
   for (const note of notes) {
@@ -142,7 +142,7 @@ export async function writePrompt(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  input: WritePromptInput,
+  input: WritePromptInput
 ): Promise<Result<PromptMetadata>> {
   const projectNotes = getPmNotes(db, 'project', { prefix: input.project });
   if (projectNotes.length === 0) {
@@ -187,7 +187,7 @@ export async function writePrompt(
 export function getPrompt(
   db: BrainDB,
   taskDisplayId: string,
-  version?: number,
+  version?: number
 ): Result<PromptMetadata & { content: string }> {
   const notes = getPmNotes(db, 'prompt', { task: taskDisplayId });
   if (notes.length === 0) {
@@ -236,7 +236,7 @@ export function getPrompt(
 export function listPrompts(
   db: BrainDB,
   prefix: string,
-  filters?: { status?: string; task?: string },
+  filters?: { status?: string; task?: string }
 ): Result<PromptMetadata[]> {
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.status !== undefined) filterObj.prompt_status = filters.status;
@@ -251,10 +251,7 @@ export function listPrompts(
   return ok(prompts);
 }
 
-export function getPromptHistory(
-  db: BrainDB,
-  taskDisplayId: string,
-): Result<PromptMetadata[]> {
+export function getPromptHistory(db: BrainDB, taskDisplayId: string): Result<PromptMetadata[]> {
   const notes = getPmNotes(db, 'prompt', { task: taskDisplayId });
   if (notes.length === 0) {
     return fail('NOT_FOUND', `No prompts found for task "${taskDisplayId}"`);
@@ -275,10 +272,7 @@ function getIndexedAt(db: BrainDB, filePath: string): number {
   return file?.indexedAt ?? 0;
 }
 
-export function detectStalePrompts(
-  db: BrainDB,
-  prefix: string,
-): Result<PromptMetadata[]> {
+export function detectStalePrompts(db: BrainDB, prefix: string): Result<PromptMetadata[]> {
   const currentPrompts = getPmNotes(db, 'prompt', { project: prefix, prompt_status: 'current' });
   if (currentPrompts.length === 0) {
     return ok([]);
