@@ -27,9 +27,11 @@ function outputResult(data: unknown, json: boolean): void {
 
 function formatProjectLine(project: unknown): string {
   const p = project as Record<string, unknown>;
+  const rawTitle = (p.title as string) ?? '';
+  const name = rawTitle.replace(/^Project\s+/i, '') || p.prefix;
   const status = p.status ?? 'unknown';
   const phase = p.phase ? ` [${p.phase}]` : '';
-  return `${p.prefix} - ${p.display_id}${phase} (${status})`;
+  return `${p.prefix} - ${name}${phase} (${status})`;
 }
 
 export function createProjectCommands(): Command {
@@ -116,7 +118,15 @@ export function createPmCommand(): Command {
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+
+        const prefix = result.data.prefix;
+        setActiveProject(svc.db, prefix);
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
+        } else {
+          process.stdout.write(`Created project "${name}" (${prefix}) — active\n`);
+        }
       });
     });
 
