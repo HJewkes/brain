@@ -143,8 +143,34 @@ Recommended actions:
 
 ---
 
+## 8. Check for Consistency Issues
+
+After adding tasks and decisions, run a quick health check:
+
+```
+brain pm check --json
+```
+
+Output (JSON):
+
+```
+{
+  "project": "MY",
+  "summary": { "totalTasks": 3, "issuesFound": 0, ... },
+  "structural": { "orphanedDecisions": [], "stalePrompts": [], ... }
+}
+```
+
+For deeper analysis (decision contradictions, supersession gaps), add `--deep`:
+
+```
+brain pm check --deep --json
+```
+
+---
+
 ## Next Steps
 
-- [User Guide](guide.md) — comprehensive workflow documentation
+- [User Guide](guide.md) — comprehensive workflow documentation (incl. consistency checking)
 - [Demo Workflow](demo.md) — end-to-end scenario walkthrough
 - [Command Reference](commands.md) — all commands with examples

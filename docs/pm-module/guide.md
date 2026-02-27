@@ -687,7 +687,7 @@ brain pm project update WEB --status active
 
 ### Hook installation
 
-The `install-hooks` command writes three hook scripts to `~/.claude/hooks/` and registers them in `~/.claude/settings.json`. It also installs the orchestrator skill to `~/.claude/skills/orchestrator/SKILL.md`.
+The `install-hooks` command writes three hook scripts to `~/.claude/hooks/` and registers them in `~/.claude/settings.json`. It also installs two skills: the orchestrator (`~/.claude/skills/orchestrator/SKILL.md`) and the sanity-check (`~/.claude/skills/sanity-check/SKILL.md`).
 
 ```bash
 # Install hooks and skill (idempotent: safe to run again)
@@ -702,6 +702,7 @@ brain pm install-hooks --dry-run
 #   ~/.claude/hooks/brain-pm-worktree.sh
 #   ~/.claude/hooks/brain-pm-agent-done.sh
 #   ~/.claude/skills/orchestrator/SKILL.md
+#   ~/.claude/skills/sanity-check/SKILL.md
 #   Hook entries in ~/.claude/settings.json
 
 # Remove all installed hooks and skill
@@ -733,3 +734,60 @@ The task `mode` field controls how the orchestration skill handles the task:
 - Run `brain pm install-hooks` once after installing the brain CLI. Re-running it is safe.
 - Change task mode from `human` to `agent` when you're ready to automate a task you were previously doing manually.
 - The worktree budget (default 3) is managed in memory per session; it resets when a new session starts. Adjust by releasing unused worktrees with `orchestrate worktree-release`.
+
+---
+
+## 13. Consistency Checking
+
+After ingesting planning docs, recording decisions, and working through tasks, inconsistencies accumulate: contradicting decisions, stale prompts, orphaned references, superseded documents that haven't been annotated. The consistency check surfaces these issues.
+
+### Quick structural check
+
+```bash
+# Fast structural checks — orphans, broken deps, stale prompts, blocked without cause
+brain pm check --project WEB --json
+```
+
+Returns a JSON report with `structural` section containing deterministic issues. No LLM needed.
+
+### Deep analysis
+
+```bash
+# Adds semantic analysis pairs and source document clustering
+brain pm check --deep --project WEB --json
+```
+
+The `--deep` flag adds:
+- **Decision pairs** — two decisions that impact the same task(s), pre-assembled for contradiction analysis
+- **Task-decision alignment** — each task with its impacting decisions and current prompt, for misalignment detection
+- **Supersession gaps** — decisions on the same source task without a formal supersession relation
+- **Source document clusters** — ingested docs grouped by title similarity, sorted newest-first
+
+These are data assemblies, not judgments. The CLI pre-computes pairs so the LLM doesn't need to do O(n²) comparisons.
+
+### Briefing integration
+
+The `brain pm briefing` command includes a one-line summary when structural issues exist:
+
+```
+Consistency: 3 structural issue(s) found. Run /sanity-check for details.
+```
+
+### The `/sanity-check` skill
+
+Installed by `brain pm install-hooks`, the `/sanity-check` Claude Code skill automates the full workflow:
+
+1. Run `brain pm check --json` for structural issues
+2. Run `brain pm check --deep --json` for semantic analysis
+3. For each decision pair: read both contents, judge contradictions
+4. For each supersession gap: determine if the older decision is effectively superseded
+5. Review source document clusters for staleness
+6. Write a report to `docs/pm-module/reports/sanity-check-YYYY-MM-DD.md`
+7. Offer actions: create tasks for findings, archive superseded notes, produce consolidated docs
+
+### When to run
+
+- After bulk ingesting planning docs into a project
+- Periodically during active execution (weekly or at phase boundaries)
+- When you suspect contradicting information
+- Before starting a new phase to ensure the knowledge base is clean

@@ -1366,11 +1366,63 @@ Enriched activity act-uuid-1234 with 18000 tokens (claude-opus-4-6)
 
 ---
 
+## Consistency Commands
+
+### brain pm check
+
+Run consistency checks on a PM project. Returns a JSON report of structural issues and (with `--deep`) semantic analysis pairs for LLM-powered contradiction detection.
+
+**Usage:** `brain pm check [options]`
+
+**Options:**
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--project <PREFIX>` | Project prefix; uses active project if omitted | — |
+| `--deep` | Include semantic analysis (decision pairs, supersession gaps, source doc clustering) | false |
+| `--json` | Output JSON | false |
+
+**Structural checks (always run):**
+- Orphaned decisions — decisions with no task impacts
+- Stale prompts — prompts older than their impacting decisions (with decision details inline)
+- Broken dependencies — tasks referencing nonexistent dependency targets
+- Blocked without cause — blocked tasks whose dependencies are all done
+- Cancelled dependencies — active tasks depending on cancelled tasks
+
+**Semantic analysis (with `--deep`):**
+- Decision pairs — decisions sharing impact targets, for contradiction analysis
+- Task-decision alignment — tasks with their impacting decisions, for misalignment detection
+- Supersession gaps — decisions on the same source task without formal supersession
+- Source document clustering — groups ingested docs by title similarity for freshness review
+
+**Example:**
+```bash
+# Quick structural check
+$ brain pm check --project WEB --json
+{
+  "project": "WEB",
+  "summary": { "totalTasks": 12, "issuesFound": 3, ... },
+  "structural": { "orphanedDecisions": [...], "stalePrompts": [...], ... }
+}
+
+# Full deep analysis
+$ brain pm check --deep --project WEB --json
+# Includes semantic.decisionPairs, semantic.supersessionGaps, sourceDocuments
+```
+
+**Integration:** The briefing command (`brain pm briefing`) includes a one-line consistency summary when structural issues exist:
+```
+Consistency: 3 structural issue(s) found. Run /sanity-check for details.
+```
+
+**Claude Code skill:** The `/sanity-check` skill (installed by `brain pm install-hooks`) automates the full workflow: run checks, reason over semantic pairs, write a report, and offer corrective actions.
+
+---
+
 ## Admin Commands
 
 ### brain pm install-hooks
 
-Install orchestration hooks and the orchestrator skill into `~/.claude/`. Writes three hook scripts (`brain-pm-session.sh`, `brain-pm-worktree.sh`, `brain-pm-agent-done.sh`) and registers them in `~/.claude/settings.json` under `SessionStart`, `PreToolUse`, and `SubagentStop` hooks.
+Install orchestration hooks and skills into `~/.claude/`. Writes three hook scripts (`brain-pm-session.sh`, `brain-pm-worktree.sh`, `brain-pm-agent-done.sh`) and registers them in `~/.claude/settings.json` under `SessionStart`, `PreToolUse`, and `SubagentStop` hooks. Also installs the orchestrator skill (`~/.claude/skills/orchestrator/SKILL.md`) and the sanity-check skill (`~/.claude/skills/sanity-check/SKILL.md`).
 
 **Usage:** `brain pm install-hooks [options]`
 
@@ -1392,6 +1444,7 @@ Would install:
   ~/.claude/hooks/brain-pm-worktree.sh
   ~/.claude/hooks/brain-pm-agent-done.sh
   ~/.claude/skills/orchestrator/SKILL.md
+  ~/.claude/skills/sanity-check/SKILL.md
   Hook entries in ~/.claude/settings.json
 
 $ brain pm install-hooks --remove
