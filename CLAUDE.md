@@ -17,7 +17,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all tests (Vitest, 380 tests) |
+| `npm test` | Run all tests (Vitest, 1,067 tests) |
 | `npm run build` | Build with tsup (output: `dist/cli.js`) |
 | `npm run typecheck` | TypeScript type checking |
 | `npm run lint` | ESLint |
@@ -48,6 +48,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 | `template` | Manage note templates |
 | `archive` | Archive old notes |
 | `config` | View/set configuration |
+| `pm` | Project management module (init, tasks, waves, dispatch, audit) |
 
 ## Architecture
 
@@ -75,6 +76,16 @@ src/
     health.ts           — System health checks (database, embedder, LLM, inbox, stale notes)
     reranker.ts         — Cross-encoder reranking pipeline
   adapters/             — Embedder backends (local/ollama/remote) with factory
+  modules/
+    types.ts            — Module system interfaces
+    registry.ts         — ModuleRegistry class
+    context.ts          — Module context factory
+    loader.ts           — Module discovery and loading
+    validation.ts       — Frontmatter schema validation
+    pm/                 — Project management module (32 files)
+      commands/         — 14 command groups
+      data/             — CRUD operations and queries
+      engine/           — State machine, routing, dispatch, templates, worktrees, dependencies
 ```
 
 ### Database Layer
@@ -92,12 +103,16 @@ Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts
 - **Memories**: LLM-extracted facts with version chaining, temporal validity, and auto-forgetting
 - **Inbox**: Zero-friction capture pipeline (CLI, file import, RSS feeds)
 - **LLM**: Ollama integration for memory extraction, reconciliation, and note cleanup
+- **Module System**: Plugin architecture with namespace isolation, visibility tiers, schema enforcement, command registration, directory-backed notes, and module migrations
+- **PM Module**: Project/workstream/task management with dependency waves, agent routing, worktree isolation, claim tokens, verification agents, and telemetry
 
 ## Testing
 
 - Unit tests: `__tests__/services/` and `__tests__/services/repos/`
 - Adapter tests: `__tests__/adapters/`
 - Integration tests: `__tests__/integration/`
+- PM unit tests: `__tests__/modules/pm/`
+- PM integration tests: `__tests__/integration/pm/`
 - Eval tests: `__tests__/eval/` — chunk quality benchmarks
 - Framework: Vitest with globals enabled
 - Conventions: Arrange-Act-Assert, mock only external dependencies
@@ -109,3 +124,5 @@ Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts
 - Native modules (better-sqlite3, sqlite-vec) are external in tsup build
 - Config stored via env-paths (`~/Library/Preferences/brain` on macOS)
 - Deferred review items tracked in `docs/review-deferred.md`
+- Module notes use `module` field in frontmatter for namespace isolation
+- PM notes are `visibility: 'private'` — kept separate from the user's knowledge base
