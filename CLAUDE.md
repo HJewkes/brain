@@ -17,7 +17,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all tests (Vitest, 1,067 tests) |
+| `npm test` | Run all tests (Vitest, 1,095 tests) |
 | `npm run build` | Build with tsup (output: `dist/cli.js`) |
 | `npm run typecheck` | TypeScript type checking |
 | `npm run lint` | ESLint |
@@ -82,10 +82,10 @@ src/
     context.ts          — Module context factory
     loader.ts           — Module discovery and loading
     validation.ts       — Frontmatter schema validation
-    pm/                 — Project management module (32 files)
-      commands/         — 14 command groups
+    pm/                 — Project management module (34 files)
+      commands/         — 15 command groups (incl. check)
       data/             — CRUD operations and queries
-      engine/           — State machine, routing, dispatch, templates, worktrees, dependencies
+      engine/           — State machine, routing, dispatch, templates, worktrees, dependencies, consistency
 ```
 
 ### Database Layer
@@ -104,7 +104,7 @@ Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts
 - **Inbox**: Zero-friction capture pipeline (CLI, file import, RSS feeds)
 - **LLM**: Ollama integration for memory extraction, reconciliation, and note cleanup
 - **Module System**: Plugin architecture with namespace isolation, visibility tiers, schema enforcement, command registration, directory-backed notes, and module migrations
-- **PM Module**: Project/workstream/task management with dependency waves, agent routing, worktree isolation, claim tokens, verification agents, and telemetry
+- **PM Module**: Project/workstream/task management with dependency waves, agent routing, worktree isolation, claim tokens, verification agents, telemetry, and consistency checking
 
 ## Testing
 

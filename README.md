@@ -89,8 +89,9 @@ See [PM Quick Start](docs/pm-module/quickstart.md) for the full 5-minute guide.
 | `brain pm complete <id>` | Mark done, run impact analysis |
 | `brain pm briefing` | Session briefing with project state overview |
 | `brain pm audit summary` | Activity log, cost tracking |
+| `brain pm check [--deep]` | Consistency check (structural + semantic analysis) |
 | `brain pm setup` | Configure PM module (paths, hooks) |
-| `brain pm install-hooks` | Install PM git hooks |
+| `brain pm install-hooks` | Install PM hooks and skills (orchestrator + sanity-check) |
 
 ## Architecture
 
@@ -107,9 +108,9 @@ src/
     loader.ts            — Module discovery and loading
     validation.ts        — Frontmatter schema validation
     pm/                  — Project management module
-      commands/          — 14 command groups
+      commands/          — 15 command groups (incl. check)
       data/              — CRUD operations and queries
-      engine/            — Dependency waves, dispatch, state machine, claims
+      engine/            — Dependency waves, dispatch, state machine, claims, consistency
   services/
     brain-db.ts          — Database facade
     brain-service.ts     — Resource lifecycle (withBrain/withDb)
@@ -148,7 +149,7 @@ Brain indexes markdown files with YAML frontmatter into a SQLite database. It co
 ## Testing
 
 ```bash
-npm test          # 1,067 tests (Vitest)
+npm test          # 1,095 tests (Vitest)
 npm run typecheck # TypeScript checking
 npm run lint      # ESLint
 npm run build     # Production build (tsup)
