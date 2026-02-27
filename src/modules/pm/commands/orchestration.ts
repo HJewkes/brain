@@ -397,5 +397,5 @@ export interface BriefingData {
   recentDecisions: DecisionMetadata[];
   stalePrompts: PromptMetadata[];
   nextActions: string[];
-  consistencyIssues: number;
+  consistencyIssues?: number;
 }

@@ -413,7 +413,9 @@ function extractTopicKey(title: string): string {
 
 export function clusterSourceDocuments(db: BrainDB): SourceDocCluster[] {
   const allNotes = db.getAllNotes();
-  const sourceDocs = allNotes.filter((note) => !note.module && note.title);
+  const sourceDocs = allNotes.filter(
+    (note): note is typeof note & { title: string } => !note.module && note.title != null,
+  );
 
   if (sourceDocs.length === 0) return [];
 

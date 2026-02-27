@@ -5,7 +5,8 @@ import { formatError } from '../errors.js';
 import { runConsistencyCheck } from '../engine/consistency.js';
 
 function resolvePrefix(explicit: string | undefined, active: string | null): string | undefined {
-  return explicit ?? active ?? undefined;
+  if (explicit) return explicit.toUpperCase();
+  return active ?? undefined;
 }
 
 export function createCheckCommand(): Command {
@@ -13,7 +14,7 @@ export function createCheckCommand(): Command {
     .description('Run consistency checks on a PM project')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
     .option('--deep', 'Include semantic analysis and source document clustering')
-    .option('--json', 'Output JSON (default, always JSON)')
+    .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
         const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));

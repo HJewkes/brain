@@ -11,6 +11,7 @@ import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js
 import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createDecision } from '../../../src/modules/pm/data/decision-ops.js';
 import { writePrompt } from '../../../src/modules/pm/data/prompt-ops.js';
+import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import {
   findOrphanedDecisions,
   findBrokenDependencies,
@@ -73,12 +74,28 @@ describe('findOrphanedDecisions', () => {
 });
 
 describe('findBrokenDependencies', () => {
-  it('returns tasks with nonexistent dependency targets', async () => {
+  it('returns empty when all dependencies exist', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B', dependsOn: ['CHK-01.01'] });
     const result = findBrokenDependencies(db, 'CHK');
-    // CHK-01.01 exists, so no broken deps
     expect(result).toHaveLength(0);
+  });
+
+  it('detects dependencies referencing nonexistent tasks', async () => {
+    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    // Manually patch metadata to include a broken dep (createTask validates deps)
+    const taskNotes = getPmNotes(db, 'task', { project: 'CHK', display_id: 'CHK-01.01' });
+    expect(taskNotes).toHaveLength(1);
+    const note = taskNotes[0];
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    meta.depends_on = ['CHK-99.99'];
+    db.upsertNote({ ...note, metadata: JSON.stringify(meta) });
+
+    const result = findBrokenDependencies(db, 'CHK');
+    expect(result).toHaveLength(1);
+    expect(result[0].task).toBe('CHK-01.01');
+    expect(result[0].dependsOn).toBe('CHK-99.99');
+    expect(result[0].reason).toContain('does not exist');
   });
 });
 
