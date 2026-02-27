@@ -130,31 +130,37 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 8. ✅ Module database migrations — `runModuleMigrations` in loader
 9. ✅ Memory extraction integration — extraction strategy hook in `memory-extractor.ts`
 
-**Verification:** 501 tests (72 new), zero type errors, zero lint warnings.
+**Verification:** 517 tests (88 new), zero type errors, zero lint warnings.
 
-**Known gap:** No integration tests yet. Unit tests cover individual pieces but don't prove the full module registration → indexing → search loop works end-to-end. Recommended before starting Stream 2.
+**Integration tests:** V1-V3 gate tests pass (16 tests in `__tests__/integration/module-system.test.ts`). Widget module fixture exercises all extension points. Migration round-trip, content-dir FTS, and search filtering all verified.
 
 **Table name correction:** Design docs reference `note_relations` but the actual table is `relations`. Docs 01, 02, and reviews should be updated.
 
-### Stream 2: PM Module (Core)
-1. PM module skeleton (register, types, migrations)
-2. Register PM relation types (depends_on, blocks, impacts) and activity types (execution, state_change, verification)
-3. Project/workstream CRUD with metadata
-4. Task CRUD with directory-backed notes (content_dir for summary.md, references/)
-5. State machine with transitions and edge cases
-6. Dependency engine (eligible computation, cycle detection, impact analysis)
-7. Claim mechanism with tokens and timeout
-8. Prompt lifecycle (prompt notes, dispatch assembly, staleness detection)
-9. Decision propagation (impacts, prompt assembly)
-10. `brain pm context` command for JIT context delivery (see doc 03)
-11. `brain pm verify` command for verification plans (see doc 03)
-12. `brain pm waves` command for dependency-free grouping (see doc 03)
-13. Orchestration commands (next, dispatch, complete, briefing)
-14. Capture/process (GTD inbox)
-15. Structured error format
-16. Execution telemetry (activities, two-phase collection)
-17. Audit commands (cost, performance, enrich from transcripts)
-18. Import tools
+### Stream 2: PM Module (Full)
+
+Implementation follows **vertical slices** — 8 waves, each delivering a working end-to-end feature with its own unit and integration tests. See [2026-02-26-pm-module-stream2-design.md](2026-02-26-pm-module-stream2-design.md) for the full design.
+
+| Wave | Slice | Delivers |
+|------|-------|----------|
+| 1 | Module skeleton + Project CRUD | `brain pm init`, `list`, `status`, `use`, `project update/delete` |
+| 2 | Workstream CRUD | `brain pm workstream add/list/show/update/delete` |
+| 3 | Task CRUD + State machine | `brain pm task add/list/show/update/done/block/unblock/delete` with full state transitions |
+| 4 | Dependency engine + Waves | `brain pm next`, `waves`, cycle detection, eligible computation, impact analysis |
+| 5 | Claim mechanism + Dispatch | `brain pm task claim/start/release`, `dispatch`, `complete` |
+| 6 | Decision + Prompt lifecycle | `brain pm decision add/list/show/supersede`, `prompt write/show/list/history` |
+| 7 | Context + Verify + Briefing | `brain pm context`, `verify`, `briefing` |
+| 8 | Telemetry + Audit + Import | `brain pm audit summary/cost/performance/enrich`, `import`, `capture/inbox/process` |
+
+**Testing per wave:**
+- Unit tests for data/engine layer (`__tests__/modules/pm/`)
+- Wave integration test (`__tests__/integration/pm/wave-N-*.test.ts`)
+- Gate: all tests pass + tsc clean before next wave
+
+**Cumulative integration tests** (V4-V7) after all 8 waves:
+- V4: PM module smoke test (load module, CRUD, indexing, query scoping)
+- V5: State machine + dependency engine (full lifecycle, blocking/unblocking cascade)
+- V6: CLI commands (programmatic Commander.js parseAsync for all command paths)
+- V7: Directory-backed tasks (content_dir, FTS, dispatch includes directory contents)
 
 ### Stream 3: Orchestration Layer (Integration — doc 03)
 1. Orchestrator skill (SKILL.md) with session lifecycle
@@ -176,14 +182,15 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 ### Dependencies
 - ~~Stream 0 must complete before Stream 1~~ ✅ Both complete
 - ~~Stream 1 items 1-4 are prerequisites for Stream 2 to begin~~ ✅ All Stream 1 complete
-- Stream 2 items 1-8 are prerequisites for Stream 3 to begin
-- Within each stream, items are roughly sequential but some can overlap
+- ~~V1-V3 integration tests must pass before Stream 2~~ ✅ 16 tests passing
+- Stream 2 waves 1-5 are prerequisites for Stream 3 to begin
+- Within Stream 2, waves are sequential (each builds on the previous)
 - Stream 3 items 3-7 (doc 03 patterns) can be developed in parallel once basic orchestration works
 
 ### Next Steps
-1. **Integration tests** for Streams 0+1 (see Verification Strategy below)
+1. ~~**Integration tests** for Streams 0+1~~ ✅ V1-V3 passing (16 tests)
 2. **Fix `note_relations` → `relations`** in docs 01, 02, and review docs
-3. **Stream 2 task 1**: PM module skeleton
+3. **Stream 2 Wave 1**: PM module skeleton + Project CRUD
 
 ---
 
@@ -191,11 +198,11 @@ Design reasoning trail from the iterative review process. Resolutions are incorp
 
 Each stream boundary requires integration tests that prove the seams work before building the next layer on top. Unit tests cover individual functions; these tests prove the *composition*.
 
-### After Streams 0+1 (Module System) — **gate for Stream 2**
+### After Streams 0+1 (Module System) — **gate for Stream 2** ✅
 
-The core question: can a module register itself, index notes with custom types, search them, validate them, and have visibility/extraction hooks fire correctly?
+All 16 gate tests passing in `__tests__/integration/module-system.test.ts` with shared widget module fixture at `__tests__/fixtures/widget-module.ts`.
 
-**V1. Smoke Test Module** (`__tests__/integration/smoke-module.test.ts`)
+**V1. Module Registration and Indexing** (`__tests__/integration/module-system.test.ts` — V1 block)
 A minimal "widget" module that registers every extension point:
 - Note type (`widget`) with a JSON Schema (required `priority` field)
 - Relation type (`depends-on`)
