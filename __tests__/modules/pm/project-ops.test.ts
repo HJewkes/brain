@@ -222,11 +222,16 @@ describe('deleteProject', () => {
     }
   });
 
-  it('deletes project with tasks when force is true', async () => {
+  it('deletes project with tasks when force is true and cleans up files', async () => {
     await createProject(db, config, embedder, { name: 'Web', prefix: 'WEB' });
+
+    const taskFilePath = join(notesDir, 'modules', 'pm', 'WEB', 'task-01.md');
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(taskFilePath, '---\nid: web-01-01\n---\n# Task');
 
     db.upsertNote(makeNote({
       id: 'web-01-01',
+      filePath: taskFilePath,
       module: 'pm',
       type: 'task',
       metadata: JSON.stringify({ display_id: 'WEB-01.01', project: 'WEB', status: 'pending' }),
@@ -237,6 +242,11 @@ describe('deleteProject', () => {
 
     const check = getProject(db, 'WEB');
     expect(check.ok).toBe(false);
+
+    expect(existsSync(taskFilePath)).toBe(false);
+
+    const projectDir = join(notesDir, 'modules', 'pm', 'WEB');
+    expect(existsSync(projectDir)).toBe(false);
   });
 
   it('returns NOT_FOUND for missing project', async () => {

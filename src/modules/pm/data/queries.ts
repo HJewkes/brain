@@ -33,6 +33,8 @@ export function getProjectNotes(db: BrainDB, prefix: string): NoteRecord[] {
   for (const [, note] of notes) {
     if (!note.metadata) continue;
     const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+    // Project notes store the prefix in `prefix`; child notes (tasks, workstreams) reference
+    // the parent project via `project`. Check both to collect all notes belonging to a project.
     if (meta.project === prefix || meta.prefix === prefix) {
       results.push(note);
     }
@@ -63,11 +65,11 @@ export function getEligibleTasks(db: BrainDB, prefix: string): NoteRecord[] {
   const pendingTasks = getTasksByStatus(db, prefix, 'pending');
   if (pendingTasks.length === 0) return [];
 
-  const allPmIds = db.getModuleNoteIds({ module: 'pm' });
-  const allPmNotes = allPmIds.length > 0 ? db.getNotesByIds(allPmIds) : new Map<string, NoteRecord>();
+  const allTaskIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+  const allTaskNotes = allTaskIds.length > 0 ? db.getNotesByIds(allTaskIds) : new Map<string, NoteRecord>();
 
   const doneIds = new Set<string>();
-  for (const [, note] of allPmNotes) {
+  for (const [, note] of allTaskNotes) {
     if (!note.metadata) continue;
     const meta = JSON.parse(note.metadata) as Record<string, unknown>;
     if (meta.status === 'done') {

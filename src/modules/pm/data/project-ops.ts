@@ -99,17 +99,21 @@ export async function createProject(
   return ok(metadata);
 }
 
+function projectMetaFromRecord(meta: Record<string, unknown>): ProjectMetadata {
+  return {
+    display_id: meta.display_id as string,
+    prefix: meta.prefix as string,
+    status: meta.status as ProjectMetadata['status'],
+    phase: meta.phase as string | undefined,
+    wip_limit: meta.wip_limit as number | undefined,
+  };
+}
+
 export function listProjects(db: BrainDB): Result<ProjectMetadata[]> {
   const notes = getPmNotes(db, 'project');
   const projects: ProjectMetadata[] = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    return {
-      display_id: meta.display_id as string,
-      prefix: meta.prefix as string,
-      status: meta.status as ProjectMetadata['status'],
-      phase: meta.phase as string | undefined,
-      wip_limit: meta.wip_limit as number | undefined,
-    };
+    return projectMetaFromRecord(meta);
   });
 
   return ok(projects);
@@ -122,13 +126,7 @@ export function getProject(db: BrainDB, prefix: string): Result<ProjectMetadata>
   }
 
   const meta = JSON.parse(notes[0].metadata!) as Record<string, unknown>;
-  return ok({
-    display_id: meta.display_id as string,
-    prefix: meta.prefix as string,
-    status: meta.status as ProjectMetadata['status'],
-    phase: meta.phase as string | undefined,
-    wip_limit: meta.wip_limit as number | undefined,
-  });
+  return ok(projectMetaFromRecord(meta));
 }
 
 export async function updateProject(
@@ -175,13 +173,7 @@ export async function updateProject(
   const refreshedNote = db.getNoteById(noteId);
   const meta = JSON.parse(refreshedNote!.metadata!) as Record<string, unknown>;
 
-  return ok({
-    display_id: meta.display_id as string,
-    prefix: meta.prefix as string,
-    status: meta.status as ProjectMetadata['status'],
-    phase: meta.phase as string | undefined,
-    wip_limit: meta.wip_limit as number | undefined,
-  });
+  return ok(projectMetaFromRecord(meta));
 }
 
 export async function deleteProject(
@@ -196,11 +188,7 @@ export async function deleteProject(
   }
 
   const projectNotes = getProjectNotes(db, prefix);
-  const nonProjectNotes = projectNotes.filter((n) => {
-    if (!n.metadata) return true;
-    const meta = JSON.parse(n.metadata) as Record<string, unknown>;
-    return meta.prefix !== prefix;
-  });
+  const nonProjectNotes = projectNotes.filter((n) => n.id !== notes[0].id);
 
   if (nonProjectNotes.length > 0 && !force) {
     return fail(
@@ -240,9 +228,10 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   const frontmatter = content.slice(0, endOfFrontmatter);
   const rest = content.slice(endOfFrontmatter);
   const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
+  const quoted = value.includes(' ') ? `"${value}"` : value;
 
   if (fieldRegex.test(frontmatter)) {
-    return frontmatter.replace(fieldRegex, `${field}: ${value}`) + rest;
+    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
   }
-  return frontmatter + `\n${field}: ${value}` + rest;
+  return frontmatter + `\n${field}: ${quoted}` + rest;
 }
