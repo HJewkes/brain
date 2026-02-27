@@ -5,6 +5,8 @@ import { createTaskCommands } from './commands/task.js';
 import { createOrchestrationCommands } from './commands/orchestration.js';
 import { createDecisionCommands } from './commands/decision.js';
 import { createPromptCommands } from './commands/prompt.js';
+import { createContextCommand } from './commands/context.js';
+import { createVerifyCommand } from './commands/verify.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -185,6 +187,8 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createTaskCommands());
     pmCmd.addCommand(createDecisionCommands());
     pmCmd.addCommand(createPromptCommands());
+    pmCmd.addCommand(createContextCommand());
+    pmCmd.addCommand(createVerifyCommand());
     for (const cmd of createOrchestrationCommands()) {
       pmCmd.addCommand(cmd);
     }

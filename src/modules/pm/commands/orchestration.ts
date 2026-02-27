@@ -5,11 +5,14 @@ import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
 import { getActiveProject, getPmNotes } from '../data/queries.js';
-import { getTask, updateTaskStatus } from '../data/task-ops.js';
+import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
+import { listDecisions } from '../data/decision-ops.js';
+import { detectStalePrompts } from '../data/prompt-ops.js';
+import { getProject } from '../data/project-ops.js';
 import { computeEligible, computeWaves, computeImpact } from '../engine/dependency.js';
 import { assembleContext } from '../engine/dispatch.js';
 import { validateClaimToken } from '../engine/claims.js';
-import type { TaskStatus } from '../types.js';
+import type { TaskStatus, TaskMetadata, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
 
 function resolvePrefix(
   explicitProject: string | undefined,
@@ -249,5 +252,127 @@ export function createOrchestrationCommands(): Command[] {
       });
     });
 
-  return [nextCmd, wavesCmd, dispatchCmd, completeCmd] as Command[];
+  const briefingCmd = new Command('briefing')
+    .description('Session briefing with project state overview')
+    .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
+    .option('--json', 'Output JSON')
+    .action(async (opts) => {
+      await withBrain(async (svc) => {
+        const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
+        if (!prefix) {
+          const msg = 'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n',
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const projectResult = getProject(svc.db, prefix);
+        const project = projectResult.ok ? projectResult.data : null;
+
+        const allTasksResult = listTasks(svc.db, prefix);
+        const allTasks = allTasksResult.ok ? allTasksResult.data : [];
+
+        const eligible = computeEligible(svc.db, prefix);
+        const inProgress = allTasks.filter((t) => t.status === 'in-progress');
+        const blocked = allTasks.filter((t) => t.status === 'blocked');
+        const done = allTasks.filter((t) => t.status === 'done');
+        const pending = allTasks.filter((t) => t.status === 'pending');
+
+        const decisionsResult = listDecisions(svc.db, prefix);
+        const recentDecisions = decisionsResult.ok ? decisionsResult.data : [];
+
+        const staleResult = detectStalePrompts(svc.db, prefix);
+        const stalePrompts = staleResult.ok ? staleResult.data : [];
+
+        const nextActions: string[] = [];
+        if (eligible.length > 0) {
+          nextActions.push(`Pick up eligible task: ${eligible[0]}`);
+        }
+        if (stalePrompts.length > 0) {
+          nextActions.push(`Update ${stalePrompts.length} stale prompt(s)`);
+        }
+        if (blocked.length > 0) {
+          nextActions.push(`Resolve ${blocked.length} blocked task(s)`);
+        }
+
+        const briefing: BriefingData = {
+          project: project ?? { display_id: prefix, prefix, status: 'active' as const },
+          tasks: {
+            total: allTasks.length,
+            eligible,
+            inProgress: inProgress.map((t) => t.display_id),
+            blocked: blocked.map((t) => t.display_id),
+            done: done.map((t) => t.display_id),
+            pending: pending.map((t) => t.display_id),
+          },
+          recentDecisions,
+          stalePrompts,
+          nextActions,
+        };
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(briefing, null, 2) + '\n');
+          return;
+        }
+
+        const lines: string[] = [];
+        lines.push(`=== Briefing: ${project?.display_id ?? prefix} ===`);
+        if (project) {
+          lines.push(`Status: ${project.status}${project.phase ? ` | Phase: ${project.phase}` : ''}`);
+        }
+        lines.push('');
+
+        lines.push(`Tasks: ${allTasks.length} total`);
+        lines.push(`  Done: ${done.length}`);
+        lines.push(`  In-progress: ${inProgress.length}`);
+        lines.push(`  Eligible: ${eligible.length}${eligible.length > 0 ? ` (${eligible.join(', ')})` : ''}`);
+        lines.push(`  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.join(', ')})` : ''}`);
+        lines.push(`  Pending: ${pending.length}`);
+        lines.push('');
+
+        if (recentDecisions.length > 0) {
+          lines.push('Recent decisions:');
+          for (const d of recentDecisions) {
+            lines.push(`  ${d.display_id} [${d.status}] (source: ${d.source_task})`);
+          }
+          lines.push('');
+        }
+
+        if (stalePrompts.length > 0) {
+          lines.push('Stale prompts:');
+          for (const p of stalePrompts) {
+            lines.push(`  ${p.display_id} for ${p.task}`);
+          }
+          lines.push('');
+        }
+
+        if (nextActions.length > 0) {
+          lines.push('Recommended actions:');
+          for (const action of nextActions) {
+            lines.push(`  -> ${action}`);
+          }
+        }
+
+        process.stdout.write(lines.join('\n') + '\n');
+      });
+    });
+
+  return [nextCmd, wavesCmd, dispatchCmd, completeCmd, briefingCmd] as Command[];
+}
+
+export interface BriefingData {
+  project: ProjectMetadata | { display_id: string; prefix: string; status: 'active' };
+  tasks: {
+    total: number;
+    eligible: string[];
+    inProgress: string[];
+    blocked: string[];
+    done: string[];
+    pending: string[];
+  };
+  recentDecisions: DecisionMetadata[];
+  stalePrompts: PromptMetadata[];
+  nextActions: string[];
 }
