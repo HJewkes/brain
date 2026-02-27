@@ -10,6 +10,7 @@ import { createVerifyCommand } from './commands/verify.js';
 import { createCaptureCommands } from './commands/capture.js';
 import { createAuditCommands } from './commands/audit.js';
 import { createImportCommand } from './commands/import.js';
+import { createOrchestrateCommands } from './commands/orchestrate.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -200,6 +201,7 @@ export const pmModule: BrainModule = {
     }
     pmCmd.addCommand(createAuditCommands());
     pmCmd.addCommand(createImportCommand());
+    pmCmd.addCommand(createOrchestrateCommands());
     ctx.registerCommand(pmCmd);
   },
 };
