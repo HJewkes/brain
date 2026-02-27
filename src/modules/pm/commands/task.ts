@@ -1,0 +1,235 @@
+import { Command } from '@commander-js/extra-typings';
+import { withBrain } from '../../../services/brain-service.js';
+import { formatError } from '../errors.js';
+import {
+  createTask,
+  listTasks,
+  getTask,
+  updateTask,
+  updateTaskStatus,
+  deleteTask,
+} from '../data/task-ops.js';
+import type { TaskStatus } from '../types.js';
+
+function outputResult(data: unknown, json: boolean): void {
+  if (json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  } else if (Array.isArray(data)) {
+    for (const item of data) {
+      process.stdout.write(formatTaskLine(item) + '\n');
+    }
+    if (data.length === 0) {
+      process.stdout.write('No tasks found.\n');
+    }
+  } else {
+    process.stdout.write(formatTaskLine(data) + '\n');
+  }
+}
+
+function formatTaskLine(task: unknown): string {
+  const t = task as Record<string, unknown>;
+  const priority = t.priority ? ` [${t.priority}]` : '';
+  const mode = t.mode ? ` (${t.mode})` : '';
+  const vs = t.virtualStates as string[] | undefined;
+  const virtualStates = vs && vs.length > 0 ? ` ${vs.join(' ')}` : '';
+  return `${t.display_id} - ${t.status}${priority}${mode}${virtualStates}`;
+}
+
+export function createTaskCommands(): Command {
+  const cmd = new Command('task').description('Manage tasks');
+
+  cmd
+    .command('add')
+    .description('Create a new task')
+    .argument('<name>', 'Task name')
+    .requiredOption('--project <prefix>', 'Parent project prefix')
+    .requiredOption('--workstream <n>', 'Workstream number', parseInt)
+    .option('--mode <mode>', 'Task mode (auto|interactive|review)')
+    .option('--category <cat>', 'Task category')
+    .option('--priority <pri>', 'Task priority (critical|high|medium|low)')
+    .option('--depends-on <ids...>', 'Display IDs this task depends on')
+    .option('--json', 'Output JSON')
+    .action(async (name, opts) => {
+      await withBrain(async (svc) => {
+        const result = await createTask(svc.db, svc.config, svc.embedder, {
+          project: opts.project.toUpperCase(),
+          workstream: opts.workstream,
+          name,
+          mode: opts.mode as never,
+          category: opts.category as never,
+          priority: opts.priority as never,
+          dependsOn: opts.dependsOn,
+        });
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('list')
+    .description('List tasks')
+    .option('--project <prefix>', 'Filter by project prefix')
+    .option('--workstream <n>', 'Filter by workstream number', parseInt)
+    .option('--status <status>', 'Filter by status')
+    .option('--json', 'Output JSON')
+    .action(async (opts) => {
+      await withBrain(async (svc) => {
+        if (!opts.project) {
+          process.stderr.write('Error: --project is required for listing tasks\n');
+          process.exitCode = 1;
+          return;
+        }
+        const result = listTasks(svc.db, opts.project.toUpperCase(), {
+          workstream: opts.workstream,
+          status: opts.status,
+        });
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('show')
+    .description('Show task detail')
+    .argument('<id>', 'Task display ID (e.g. WEB-01.03)')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const result = getTask(svc.db, id.toUpperCase());
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('update')
+    .description('Update task fields')
+    .argument('<id>', 'Task display ID')
+    .option('--mode <mode>', 'New mode')
+    .option('--category <cat>', 'New category')
+    .option('--priority <pri>', 'New priority')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const updates: Record<string, unknown> = {};
+        if (opts.mode) updates.mode = opts.mode;
+        if (opts.category) updates.category = opts.category;
+        if (opts.priority) updates.priority = opts.priority;
+
+        const result = await updateTask(
+          svc.db,
+          svc.config,
+          svc.embedder,
+          id.toUpperCase(),
+          updates,
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('done')
+    .description('Mark task as done')
+    .argument('<id>', 'Task display ID')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const result = await updateTaskStatus(
+          svc.db, svc.config, svc.embedder,
+          id.toUpperCase(), 'done' as TaskStatus,
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('block')
+    .description('Mark task as blocked')
+    .argument('<id>', 'Task display ID')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const result = await updateTaskStatus(
+          svc.db, svc.config, svc.embedder,
+          id.toUpperCase(), 'blocked' as TaskStatus,
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('unblock')
+    .description('Unblock a task (set to pending)')
+    .argument('<id>', 'Task display ID')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const result = await updateTaskStatus(
+          svc.db, svc.config, svc.embedder,
+          id.toUpperCase(), 'pending' as TaskStatus,
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        outputResult(result.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('delete')
+    .description('Delete a task')
+    .argument('<id>', 'Task display ID')
+    .option('--force', 'Force delete even with dependents')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const result = await deleteTask(
+          svc.db,
+          svc.config,
+          id.toUpperCase(),
+          opts.force,
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        if (opts.json) {
+          process.stdout.write(JSON.stringify({ deleted: true, id: id.toUpperCase() }) + '\n');
+        } else {
+          process.stdout.write(`Deleted task ${id.toUpperCase()}\n`);
+        }
+      });
+    });
+
+  return cmd;
+}

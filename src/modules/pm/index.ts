@@ -1,6 +1,7 @@
 import type { BrainModule } from '../../modules/types.js';
 import { createPmCommand } from './commands/project.js';
 import { createWorkstreamCommands } from './commands/workstream.js';
+import { createTaskCommands } from './commands/task.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -178,6 +179,7 @@ export const pmModule: BrainModule = {
 
     const pmCmd = createPmCommand();
     pmCmd.addCommand(createWorkstreamCommands());
+    pmCmd.addCommand(createTaskCommands());
     ctx.registerCommand(pmCmd);
   },
 };
