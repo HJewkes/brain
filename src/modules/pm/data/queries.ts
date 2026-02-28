@@ -8,19 +8,28 @@ const PM_ACTIVE_PROJECT_KEY = 'pm_active_project';
 export function resolveDisplayId(db: BrainDB, displayId: string): Result<string> {
   const noteIds = db.getModuleNoteIds({ module: 'pm' });
   if (noteIds.length === 0) {
-    return fail('NOT_FOUND', `No PM note found with display ID "${displayId}"`);
+    return fail('NOT_FOUND', `No PM notes found. Run "brain pm list" to check projects.`);
   }
 
   const notes = db.getNotesByIds(noteIds);
+  const knownPrefixes = new Set<string>();
+
   for (const [, note] of notes) {
     if (!note.metadata) continue;
     const meta = JSON.parse(note.metadata) as Record<string, unknown>;
     if (meta.display_id === displayId) {
       return ok(note.id);
     }
+    if (typeof meta.prefix === 'string') {
+      knownPrefixes.add(meta.prefix);
+    }
   }
 
-  return fail('NOT_FOUND', `No PM note found with display ID "${displayId}"`);
+  const prefixList = [...knownPrefixes].sort().join(', ');
+  const hint = prefixList
+    ? ` Known projects: ${prefixList}. Run "brain pm list" to see all projects.`
+    : ' Run "brain pm list" to check available projects.';
+  return fail('NOT_FOUND', `No PM note found with display ID "${displayId}".${hint}`);
 }
 
 export function getProjectNotes(db: BrainDB, prefix: string): NoteRecord[] {

@@ -52,6 +52,35 @@ describe('resolveDisplayId', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).toContain('brain pm list');
+    }
+  });
+
+  it('NOT_FOUND includes known project prefixes', () => {
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'api-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'API', prefix: 'API', status: 'active' }),
+      })
+    );
+
+    const result = resolveDisplayId(db, 'WRONG-01.01');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).toContain('API');
+      expect(result.error.message).toContain('WEB');
+      expect(result.error.message).toContain('brain pm list');
     }
   });
 });
