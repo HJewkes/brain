@@ -7,6 +7,7 @@ import type { BrainConfig, Embedder } from '../../../types.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { formatError, fail, pmError } from '../errors.js';
 import type { Result } from '../errors.js';
+import { resolveWorkstreamFilter } from '../ids.js';
 import type { TaskMetadata, TaskStatus } from '../types.js';
 import {
   createTask,
@@ -21,7 +22,7 @@ import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
 
-function outputResult(data: unknown, json: boolean): void {
+function outputResult(data: unknown, json: boolean, filters?: Record<string, string>): void {
   if (json) {
     process.stdout.write(JSON.stringify(data, null, 2) + '\n');
   } else if (Array.isArray(data)) {
@@ -29,7 +30,14 @@ function outputResult(data: unknown, json: boolean): void {
       process.stdout.write(formatTaskLine(item) + '\n');
     }
     if (data.length === 0) {
-      process.stdout.write('No tasks found.\n');
+      if (filters && Object.keys(filters).length > 0) {
+        const filterStr = Object.entries(filters)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ');
+        process.stdout.write(`0 tasks found matching: ${filterStr}\n`);
+      } else {
+        process.stdout.write('No tasks found.\n');
+      }
     }
   } else {
     process.stdout.write(formatTaskLine(data) + '\n');
@@ -91,7 +99,7 @@ export function createTaskCommands(): Command {
     .command('list')
     .description('List tasks')
     .option('--project <prefix>', 'Filter by project prefix')
-    .option('--workstream <n>', 'Filter by workstream number', parseInt)
+    .option('--workstream <n>', 'Filter by workstream number or display ID (e.g. 6 or VOLT-06)')
     .option('--status <status>', 'Filter by status')
     .option('--priority <level>', 'Filter by priority (critical|high|medium|low)')
     .option('--category <cat>', 'Filter by category')
@@ -105,8 +113,20 @@ export function createTaskCommands(): Command {
           process.exitCode = 1;
           return;
         }
+
+        let workstreamNumber: number | undefined;
+        if (opts.workstream) {
+          const wsResult = resolveWorkstreamFilter(opts.workstream);
+          if (!wsResult.ok) {
+            process.stderr.write(formatError(wsResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          workstreamNumber = wsResult.data;
+        }
+
         const result = listTasks(svc.db, projectResult.data, {
-          workstream: opts.workstream,
+          workstream: workstreamNumber,
           status: opts.status,
           priority: opts.priority,
           category: opts.category,
@@ -117,7 +137,15 @@ export function createTaskCommands(): Command {
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+
+        const activeFilters: Record<string, string> = {};
+        if (opts.workstream) activeFilters.workstream = opts.workstream;
+        if (opts.status) activeFilters.status = opts.status;
+        if (opts.priority) activeFilters.priority = opts.priority;
+        if (opts.category) activeFilters.category = opts.category;
+        if (opts.search) activeFilters.search = opts.search;
+
+        outputResult(result.data, !!opts.json, activeFilters);
       });
     });
 
