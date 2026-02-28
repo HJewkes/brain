@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
@@ -39,6 +39,18 @@ export async function runOnboard(
     return fail('PROJECT_EXISTS', `Project "${opts.prefix}" already exists. Use --reset to re-onboard.`);
   }
 
+  // If --reset, delete existing onboard-manifest note
+  if (opts.reset && existing.length > 0) {
+    const manifestNotes = getPmNotes(db, 'onboard-manifest', { project: opts.prefix });
+    for (const note of manifestNotes) {
+      const noteRecord = db.getNoteById(note.id);
+      if (noteRecord?.filePath && existsSync(noteRecord.filePath)) {
+        unlinkSync(noteRecord.filePath);
+      }
+      db.deleteNote(note.id);
+    }
+  }
+
   // Phase 1: Detect
   const components = detectComponents(opts.cwd);
   const detectPhase = { completedAt: now(), componentCount: components.length };
@@ -71,7 +83,11 @@ export async function runOnboard(
 
   // Phase 4: Ingest
   let ingestedCount = 0;
+  const ingestErrors: string[] = [];
   if (!opts.skipIngest) {
+    const outDir = join(config.notesDir, 'modules', 'pm', opts.prefix, 'docs');
+    if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+
     for (const doc of scoredDocs) {
       try {
         let content = readFileSync(doc.path, 'utf-8');
@@ -87,6 +103,8 @@ export async function runOnboard(
             `title: "${title}"`,
             'type: research',
             'tier: slow',
+            'module: pm',
+            `project: ${opts.prefix}`,
             `created: ${fmNow}`,
             `modified: ${fmNow}`,
             '---',
@@ -94,8 +112,6 @@ export async function runOnboard(
           content = fm + '\n\n' + content;
         }
 
-        const outDir = join(config.notesDir, 'research');
-        if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
         const outPath = join(outDir, `${slug}.md`);
         writeFileSync(outPath, content, 'utf-8');
 
@@ -105,10 +121,15 @@ export async function runOnboard(
         doc.ingested = true;
         doc.noteSlug = slug;
         ingestedCount++;
-      } catch {
-        // Skip files that fail to ingest — don't block the whole flow
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        ingestErrors.push(`${basename(doc.path)}: ${msg}`);
       }
     }
+  }
+  if (ingestErrors.length > 0) {
+    process.stderr.write(`Warning: ${ingestErrors.length} doc(s) failed to ingest:\n`);
+    for (const e of ingestErrors) process.stderr.write(`  - ${e}\n`);
   }
   const ingestPhase = { completedAt: now(), docsIngested: ingestedCount };
 
@@ -176,9 +197,10 @@ function buildManifestNote(manifest: OnboardManifest, slug: string, projectName:
     '',
   ];
 
-  if (manifest.docs.items.filter(d => d.ingested).length > 0) {
+  const ingested = manifest.docs.items.filter(d => d.ingested);
+  if (ingested.length > 0) {
     lines.push('### Ingested');
-    for (const doc of manifest.docs.items.filter(d => d.ingested)) {
+    for (const doc of ingested) {
       lines.push(`- \`${doc.noteSlug}\` (score: ${doc.score}) — ${basename(doc.path)}`);
     }
     lines.push('');
@@ -206,8 +228,8 @@ export function createOnboardCommand(): Command {
     .action(async (projectName, opts) => {
       await withBrain(async (svc) => {
         const prefix = opts.prefix ?? projectName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
-        if (prefix.length < 2) {
-          process.stderr.write('Error: prefix must be 2-5 uppercase chars. Use --prefix to specify.\n');
+        if (prefix.length < 2 || prefix.length > 5) {
+          process.stderr.write('Error: prefix must be 2-5 uppercase alphanumeric chars. Use --prefix to specify.\n');
           process.exitCode = 1;
           return;
         }

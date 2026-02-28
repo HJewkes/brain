@@ -155,6 +155,49 @@ describe('runOnboard', () => {
     expect(result.data.docs.ingested).toBeLessThanOrEqual(2);
   });
 
+  it('re-onboards with --reset by deleting existing manifest', async () => {
+    writeFileSync(join(projectDir, 'package.json'), JSON.stringify({ name: 'testapp' }));
+
+    // First onboard
+    const r1 = await runOnboard(db, config, embedder, {
+      projectName: 'TestApp',
+      prefix: 'TST',
+      cwd: projectDir,
+    });
+    expect(r1.ok).toBe(true);
+
+    // Re-onboard with reset
+    const r2 = await runOnboard(db, config, embedder, {
+      projectName: 'TestApp',
+      prefix: 'TST',
+      cwd: projectDir,
+      reset: true,
+    });
+    expect(r2.ok).toBe(true);
+
+    // Should still have exactly one manifest note (old one deleted)
+    const manifestNotes = getPmNotes(db, 'onboard-manifest', { project: 'TST' });
+    expect(manifestNotes).toHaveLength(1);
+  });
+
+  it('ingests docs under project-namespaced directory', async () => {
+    writeFileSync(join(projectDir, 'package.json'), JSON.stringify({ name: 'testapp' }));
+    writeFileSync(join(projectDir, 'README.md'), '# Test App\n\n' + 'x'.repeat(600));
+
+    const result = await runOnboard(db, config, embedder, {
+      projectName: 'TestApp',
+      prefix: 'TST',
+      cwd: projectDir,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Verify doc was written under modules/pm/TST/docs/
+    const docsDir = join(notesDir, 'modules', 'pm', 'TST', 'docs');
+    expect(existsSync(docsDir)).toBe(true);
+  });
+
   it('skips ingestion when skipIngest is true', async () => {
     writeFileSync(join(projectDir, 'package.json'), JSON.stringify({ name: 'testapp' }));
     writeFileSync(join(projectDir, 'README.md'), '# App\n\n' + 'x'.repeat(600));

@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join, basename, relative, dirname } from 'node:path';
+import { resolve, basename, relative, dirname, join } from 'node:path';
 import type { ScoredDoc } from '../data/onboard-types.js';
 
 const IGNORED_DIRS = new Set([
@@ -87,10 +87,9 @@ export function discoverDocs(componentPaths: string[], options?: DiscoverOptions
     const docs = walkForDocs(componentPath);
 
     for (const docPath of docs) {
-      // Deduplicate across overlapping component paths
-      const resolved = join(docPath); // normalize
-      if (seen.has(resolved)) continue;
-      seen.add(resolved);
+      const canonical = resolve(docPath);
+      if (seen.has(canonical)) continue;
+      seen.add(canonical);
 
       scored.push({
         path: docPath,
