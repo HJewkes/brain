@@ -183,6 +183,22 @@ export async function createTask(
   return ok(metadata);
 }
 
+function buildWorkstreamMap(
+  db: BrainDB,
+  project: string
+): Map<number, { title: string; description?: string }> {
+  const wsNotes = getPmNotes(db, 'workstream', { project });
+  const map = new Map<number, { title: string; description?: string }>();
+  for (const note of wsNotes) {
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    const num = meta.number as number;
+    const title = (meta.title as string) ?? '';
+    const description = (meta.description as string) ?? undefined;
+    map.set(num, { title, description });
+  }
+  return map;
+}
+
 export function listTasks(
   db: BrainDB,
   prefix: string,
@@ -232,7 +248,14 @@ export function listTasks(
 
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase();
-    tasks = tasks.filter((t) => t.title?.toLowerCase().includes(searchLower));
+    const wsMap = buildWorkstreamMap(db, prefix);
+    tasks = tasks.filter((t) => {
+      if (t.title?.toLowerCase().includes(searchLower)) return true;
+      const ws = wsMap.get(t.workstream);
+      if (ws?.title.toLowerCase().includes(searchLower)) return true;
+      if (ws?.description?.toLowerCase().includes(searchLower)) return true;
+      return false;
+    });
   }
 
   if (virtualStateFilter) {
