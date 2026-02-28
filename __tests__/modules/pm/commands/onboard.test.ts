@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe('runOnboard', () => {
-  it('creates project and triage workstream', async () => {
+  it('creates project without auto-Triage workstream', async () => {
     writeFileSync(join(projectDir, 'package.json'), JSON.stringify({ name: 'testapp' }));
 
     const result = await runOnboard(db, config, embedder, {
@@ -54,9 +54,9 @@ describe('runOnboard', () => {
     const projects = getPmNotes(db, 'project', { prefix: 'TST' });
     expect(projects).toHaveLength(1);
 
-    // Verify triage workstream exists
+    // Verify no workstreams created automatically
     const workstreams = getPmNotes(db, 'workstream', { project: 'TST' });
-    expect(workstreams).toHaveLength(1);
+    expect(workstreams).toHaveLength(0);
   });
 
   it('detects components and stores in manifest', async () => {
