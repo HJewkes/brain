@@ -1,3 +1,4 @@
+import { Command } from '@commander-js/extra-typings';
 import type { BrainModule } from '../../modules/types.js';
 import { createPmCommand } from './commands/project.js';
 import { createWorkstreamCommands } from './commands/workstream.js';
@@ -233,6 +234,28 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createSetupCommand());
     pmCmd.addCommand(createCheckCommand());
     pmCmd.addCommand(createOnboardCommand());
+
+    // Plural aliases — delegate to list subcommand
+    const tasksAlias = new Command('tasks')
+      .description('List tasks (alias for "task list")')
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(async (_, cmd) => {
+        const rawArgs = cmd.args || [];
+        await cmd.parent!.parseAsync(['node', 'brain-pm', 'task', 'list', ...rawArgs]);
+      });
+    pmCmd.addCommand(tasksAlias);
+
+    const workstreamsAlias = new Command('workstreams')
+      .description('List workstreams (alias for "workstream list")')
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(async (_, cmd) => {
+        const rawArgs = cmd.args || [];
+        await cmd.parent!.parseAsync(['node', 'brain-pm', 'workstream', 'list', ...rawArgs]);
+      });
+    pmCmd.addCommand(workstreamsAlias);
+
     ctx.registerCommand(pmCmd);
   },
 };
