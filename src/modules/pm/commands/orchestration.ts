@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
+import { resolveWorkstreamFilter } from '../ids.js';
 import { getActiveProject, getPmNotes, resolveProject } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
@@ -26,6 +27,7 @@ export function createOrchestrationCommands(): Command[] {
     .description('Show eligible tasks (pending with all deps done)')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
     .option('--limit <n>', 'Max tasks to show (default: 10)', '10')
+    .option('--workstream <ws>', 'Filter by workstream number or display ID')
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
@@ -48,7 +50,18 @@ export function createOrchestrationCommands(): Command[] {
           })
           .sort((a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority));
 
-        const limited = resolved.slice(0, limit);
+        let filtered = resolved;
+        if (opts.workstream) {
+          const wsResult = resolveWorkstreamFilter(opts.workstream);
+          if (!wsResult.ok) {
+            process.stderr.write(formatError(wsResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          filtered = resolved.filter((t) => t.workstream === wsResult.data);
+        }
+
+        const limited = filtered.slice(0, limit);
 
         if (opts.json) {
           process.stdout.write(JSON.stringify(limited, null, 2) + '\n');
@@ -76,8 +89,8 @@ export function createOrchestrationCommands(): Command[] {
           }
         }
 
-        if (eligibleIds.length > limit) {
-          process.stdout.write(`\n... and ${eligibleIds.length - limit} more eligible tasks\n`);
+        if (filtered.length > limit) {
+          process.stdout.write(`\n... and ${filtered.length - limit} more eligible tasks\n`);
         }
       });
     });
@@ -108,6 +121,7 @@ export function createOrchestrationCommands(): Command[] {
                 display_id: r.data.display_id,
                 title: r.data.title,
                 status: r.data.status,
+                depends_on: r.data.depends_on ?? [],
               };
             }),
           }));
