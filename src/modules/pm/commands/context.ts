@@ -6,11 +6,31 @@ import { assembleContext, type ContextBundle } from '../engine/dispatch.js';
 function formatHuman(bundle: ContextBundle): string {
   const lines: string[] = [];
 
-  lines.push(`Task: ${bundle.task.display_id}`);
-  lines.push(`Status: ${bundle.task.status}`);
-  lines.push(`Category: ${bundle.task.category}`);
-  lines.push(`Priority: ${bundle.task.priority}`);
+  const title = bundle.task.title ?? bundle.task.display_id;
+  lines.push(`Task: ${bundle.task.display_id} - ${title}`);
+  lines.push(`Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`);
+
+  if (bundle.workstream) {
+    lines.push(`Workstream: ${bundle.workstream.displayId} - ${bundle.workstream.title}`);
+  }
   lines.push('');
+
+  if (bundle.body) {
+    lines.push('--- Description ---');
+    lines.push(bundle.body);
+    lines.push('');
+  }
+
+  if (bundle.relatedNotes.length > 0) {
+    lines.push('--- Related Notes ---');
+    for (const note of bundle.relatedNotes) {
+      lines.push(`  [${note.score.toFixed(2)}] ${note.title}`);
+      if (note.excerpt) {
+        lines.push(`    ${note.excerpt.slice(0, 200)}`);
+      }
+    }
+    lines.push('');
+  }
 
   if (bundle.prompt) {
     lines.push('--- Prompt ---');
@@ -35,7 +55,6 @@ function formatHuman(bundle: ContextBundle): string {
     lines.push('');
   }
 
-  lines.push(`Context hash: ${bundle.contextHash}`);
   return lines.join('\n');
 }
 

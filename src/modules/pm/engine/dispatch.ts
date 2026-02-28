@@ -22,6 +22,9 @@ export interface DecisionSummary {
 
 export interface ContextBundle {
   task: TaskMetadata;
+  body: string;
+  workstream?: { displayId: string; title: string };
+  relatedNotes: Array<{ title: string; excerpt: string; score: number }>;
   prompt?: string;
   dependencies: DependencySummary[];
   decisions: DecisionSummary[];
@@ -34,6 +37,34 @@ function readTaskSummary(note: { contentDir: string | null }): string | undefine
   const summaryPath = join(note.contentDir, 'summary.md');
   if (!existsSync(summaryPath)) return undefined;
   return readFileSync(summaryPath, 'utf-8').trim();
+}
+
+function readTaskBody(note: { filePath: string }): string {
+  if (!existsSync(note.filePath)) return '';
+  const content = readFileSync(note.filePath, 'utf-8');
+  const fmEnd = content.indexOf('\n---', 4);
+  if (fmEnd === -1) return '';
+  let body = content.slice(fmEnd + 4).trim();
+  if (body.startsWith('#')) {
+    const headingEnd = body.indexOf('\n');
+    if (headingEnd === -1) return '';
+    body = body.slice(headingEnd + 1).trim();
+  }
+  return body;
+}
+
+function findWorkstreamInfo(
+  db: BrainDB,
+  project: string,
+  workstreamNum: number
+): { displayId: string; title: string } | undefined {
+  const wsDisplayId = `${project}-${String(workstreamNum).padStart(2, '0')}`;
+  const wsNotes = getPmNotes(db, 'workstream', { display_id: wsDisplayId });
+  if (wsNotes.length === 0) return undefined;
+  const meta = JSON.parse(wsNotes[0].metadata!) as Record<string, unknown>;
+  const rawTitle = (meta.title as string) ?? '';
+  const title = rawTitle.replace(/^Workstream\s+/i, '') || `#${workstreamNum}`;
+  return { displayId: wsDisplayId, title };
 }
 
 function buildDependencySummaries(db: BrainDB, dependsOn: string[]): DependencySummary[] {
@@ -109,6 +140,8 @@ export function assembleContext(db: BrainDB, taskDisplayId: string): Result<Cont
 
   const taskNote = taskNotes[0];
   const task = JSON.parse(taskNote.metadata!) as TaskMetadata;
+  const body = readTaskBody(taskNote);
+  const workstream = findWorkstreamInfo(db, task.project, task.workstream);
   const dependencies = buildDependencySummaries(db, task.depends_on ?? []);
   const decisions = findImpactingDecisions(db, taskDisplayId, task.project);
   const prompt = findPromptContent(db, taskDisplayId, task.project);
@@ -116,6 +149,9 @@ export function assembleContext(db: BrainDB, taskDisplayId: string): Result<Cont
 
   return ok({
     task,
+    body,
+    workstream,
+    relatedNotes: [],
     prompt,
     dependencies,
     decisions,
