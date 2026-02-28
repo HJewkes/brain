@@ -14,6 +14,7 @@ import { createOrchestrateCommands } from './commands/orchestrate.js';
 import { createInstallHooksCommand } from './commands/install-hooks.js';
 import { createSetupCommand } from './commands/setup.js';
 import { createCheckCommand } from './commands/check.js';
+import { createOnboardCommand } from './commands/onboard.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -162,6 +163,19 @@ export const pmModule: BrainModule = {
       },
     });
 
+    ctx.registerNoteType({
+      name: 'onboard-manifest',
+      description: 'Onboarding activity manifest',
+      tier: 'slow',
+      schema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Parent project prefix' },
+        },
+        required: ['project'],
+      },
+    });
+
     ctx.registerRelationType({
       name: 'depends_on',
       description: 'Task dependency',
@@ -218,6 +232,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createInstallHooksCommand());
     pmCmd.addCommand(createSetupCommand());
     pmCmd.addCommand(createCheckCommand());
+    pmCmd.addCommand(createOnboardCommand());
     ctx.registerCommand(pmCmd);
   },
 };
