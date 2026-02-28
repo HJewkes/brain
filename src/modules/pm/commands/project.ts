@@ -9,6 +9,8 @@ import {
   deleteProject,
 } from '../data/project-ops.js';
 import { getActiveProject, setActiveProject } from '../data/queries.js';
+import { listTasks } from '../data/task-ops.js';
+import { listWorkstreams } from '../data/workstream-ops.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -168,7 +170,52 @@ export function createPmCommand(): Command {
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+
+        const tasksResult = listTasks(svc.db, targetPrefix);
+        const tasks = tasksResult.ok ? tasksResult.data : [];
+        const wsResult = listWorkstreams(svc.db, targetPrefix);
+        const workstreams = wsResult.ok ? wsResult.data : [];
+
+        if (opts.json) {
+          const enriched = {
+            ...result.data,
+            taskCounts: {
+              total: tasks.length,
+              pending: tasks.filter((t) => t.status === 'pending').length,
+              claimed: tasks.filter((t) => t.status === 'claimed').length,
+              inProgress: tasks.filter((t) => t.status === 'in-progress').length,
+              done: tasks.filter((t) => t.status === 'done').length,
+              blocked: tasks.filter((t) => t.status === 'blocked').length,
+            },
+            workstreamCount: workstreams.length,
+          };
+          process.stdout.write(JSON.stringify(enriched, null, 2) + '\n');
+          return;
+        }
+
+        const p = result.data;
+        const lines: string[] = [];
+        lines.push(formatProjectLine(p));
+
+        const activeWs = workstreams.filter((w) => w.status === 'active').length;
+        const wsStatus = activeWs === workstreams.length ? 'all active' : `${activeWs} active`;
+        lines.push(`  Workstreams: ${workstreams.length} (${wsStatus})`);
+
+        const pending = tasks.filter((t) => t.status === 'pending').length;
+        const inProgress = tasks.filter((t) => t.status === 'in-progress').length;
+        const done = tasks.filter((t) => t.status === 'done').length;
+        const blocked = tasks.filter((t) => t.status === 'blocked').length;
+        lines.push(
+          `  Tasks: ${tasks.length} (${pending} pending, ${inProgress} in-progress, ${done} done${blocked > 0 ? `, ${blocked} blocked` : ''})`
+        );
+
+        const critical = tasks.filter((t) => t.priority === 'critical').length;
+        const high = tasks.filter((t) => t.priority === 'high').length;
+        const medium = tasks.filter((t) => t.priority === 'medium').length;
+        const low = tasks.filter((t) => t.priority === 'low').length;
+        lines.push(`  Priority: ${critical} critical, ${high} high, ${medium} medium, ${low} low`);
+
+        process.stdout.write(lines.join('\n') + '\n');
       });
     });
 

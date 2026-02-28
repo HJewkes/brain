@@ -61,7 +61,13 @@ export function createWorkstreamCommands(): Command {
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
+        } else {
+          const ws = result.data;
+          const displayName = ws.title?.replace(/^Workstream\s+/i, '') || name;
+          process.stdout.write(`Created ${ws.display_id} - ${displayName} (${ws.status})\n`);
+        }
       });
     });
 
