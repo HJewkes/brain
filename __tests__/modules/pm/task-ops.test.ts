@@ -203,6 +203,80 @@ describe('listTasks', () => {
     const result = listTasks(db, 'WEB');
     expect(result).toEqual({ ok: true, data: [] });
   });
+
+  it('filters by priority', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'High task', priority: 'high',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Low task', priority: 'low',
+    });
+
+    const result = listTasks(db, 'WEB', { priority: 'high' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.01');
+  });
+
+  it('filters by category', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Impl task', category: 'implementation',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Test task', category: 'testing',
+    });
+
+    const result = listTasks(db, 'WEB', { category: 'testing' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.02');
+  });
+
+  it('filters by title search (case-insensitive)', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Setup Auth',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Deploy Pipeline',
+    });
+
+    const result = listTasks(db, 'WEB', { search: 'auth' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.01');
+  });
+
+  it('combines multiple filters', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'High impl', priority: 'high', category: 'implementation',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'High test', priority: 'high', category: 'testing',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Low impl', priority: 'low', category: 'implementation',
+    });
+
+    const result = listTasks(db, 'WEB', { priority: 'high', category: 'testing' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.02');
+  });
+
+  it('returns empty array when no tasks match filters', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Medium task', priority: 'medium',
+    });
+
+    const result = listTasks(db, 'WEB', { priority: 'low' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(0);
+  });
 });
 
 describe('getTask', () => {

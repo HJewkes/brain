@@ -186,18 +186,32 @@ export async function createTask(
 export function listTasks(
   db: BrainDB,
   prefix: string,
-  filters?: { workstream?: number; status?: string; mode?: string }
+  filters?: {
+    workstream?: number;
+    status?: string;
+    mode?: string;
+    priority?: string;
+    category?: string;
+    search?: string;
+  }
 ): Result<TaskMetadata[]> {
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
   if (filters?.status !== undefined) filterObj.status = filters.status;
   if (filters?.mode !== undefined) filterObj.mode = filters.mode;
+  if (filters?.priority !== undefined) filterObj.priority = filters.priority;
+  if (filters?.category !== undefined) filterObj.category = filters.category;
 
   const notes = getPmNotes(db, 'task', filterObj);
-  const tasks: TaskMetadata[] = notes.map((note) => {
+  let tasks: TaskMetadata[] = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
     return taskMetaFromRecord(meta);
   });
+
+  if (filters?.search) {
+    const searchLower = filters.search.toLowerCase();
+    tasks = tasks.filter((t) => t.title?.toLowerCase().includes(searchLower));
+  }
 
   return ok(tasks);
 }

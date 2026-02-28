@@ -92,6 +92,9 @@ export function createTaskCommands(): Command {
     .option('--project <prefix>', 'Filter by project prefix')
     .option('--workstream <n>', 'Filter by workstream number', parseInt)
     .option('--status <status>', 'Filter by status')
+    .option('--priority <level>', 'Filter by priority (critical|high|medium|low)')
+    .option('--category <cat>', 'Filter by category')
+    .option('--search <text>', 'Filter by title (case-insensitive substring)')
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
@@ -104,6 +107,9 @@ export function createTaskCommands(): Command {
         const result = listTasks(svc.db, projectResult.data, {
           workstream: opts.workstream,
           status: opts.status,
+          priority: opts.priority,
+          category: opts.category,
+          search: opts.search,
         });
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');

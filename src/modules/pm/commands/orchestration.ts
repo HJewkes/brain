@@ -25,6 +25,7 @@ export function createOrchestrationCommands(): Command[] {
   const nextCmd = new Command('next')
     .description('Show eligible tasks (pending with all deps done)')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
+    .option('--limit <n>', 'Max tasks to show (default: 10)', '10')
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
@@ -35,39 +36,49 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
         const prefix = projectResult.data;
+        const limit = parseInt(opts.limit, 10);
 
         const eligibleIds = computeEligible(svc.db, prefix);
 
+        const priorityOrder = ['critical', 'high', 'medium', 'low'];
+        const resolved = eligibleIds
+          .map((id) => {
+            const r = getTask(svc.db, id);
+            if (!r.ok) return { display_id: id, title: undefined, priority: 'low' as const, workstream: 0, virtualStates: [] as string[] };
+            return r.data;
+          })
+          .sort((a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority));
+
+        const limited = resolved.slice(0, limit);
+
         if (opts.json) {
-          const tasks = eligibleIds.map((id) => {
-            const result = getTask(svc.db, id);
-            if (!result.ok) return { display_id: id };
-            return {
-              display_id: result.data.display_id,
-              title: result.data.title,
-              priority: result.data.priority,
-              virtualStates: result.data.virtualStates,
-            };
-          });
-          process.stdout.write(JSON.stringify(tasks, null, 2) + '\n');
+          process.stdout.write(JSON.stringify(limited, null, 2) + '\n');
           return;
         }
 
-        if (eligibleIds.length === 0) {
+        if (limited.length === 0) {
           process.stdout.write('No eligible tasks.\n');
           return;
         }
 
-        for (const id of eligibleIds) {
-          const result = getTask(svc.db, id);
-          if (!result.ok) {
-            process.stdout.write(`${id}\n`);
-            continue;
+        const byWorkstream = new Map<number, typeof limited>();
+        for (const t of limited) {
+          const ws = t.workstream;
+          if (!byWorkstream.has(ws)) byWorkstream.set(ws, []);
+          byWorkstream.get(ws)!.push(t);
+        }
+
+        for (const [ws, tasks] of byWorkstream) {
+          process.stdout.write(`Workstream ${ws}:\n`);
+          for (const t of tasks) {
+            const title = t.title ? ` ${t.title}` : '';
+            const vs = t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
+            process.stdout.write(`  ${t.display_id}${title}  [${t.priority}]${vs}\n`);
           }
-          const t = result.data;
-          const title = t.title ? ` ${t.title}` : '';
-          const vs = t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
-          process.stdout.write(`${t.display_id}${title}  ${t.priority}${vs}\n`);
+        }
+
+        if (eligibleIds.length > limit) {
+          process.stdout.write(`\n... and ${eligibleIds.length - limit} more eligible tasks\n`);
         }
       });
     });
