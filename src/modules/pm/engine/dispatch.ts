@@ -39,7 +39,7 @@ function readTaskSummary(note: { contentDir: string | null }): string | undefine
   return readFileSync(summaryPath, 'utf-8').trim();
 }
 
-function readTaskBody(note: { filePath: string }): string {
+export function readTaskBody(note: { filePath: string }): string {
   if (!existsSync(note.filePath)) return '';
   const content = readFileSync(note.filePath, 'utf-8');
   const fmEnd = content.indexOf('\n---', 4);

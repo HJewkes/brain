@@ -19,6 +19,7 @@ import {
 import { getPmNotes, resolveProject } from '../data/queries.js';
 import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
+import { readTaskBody } from '../engine/dispatch.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -452,17 +453,7 @@ export function createTaskCommands(): Command {
 function readTaskBodyFromDb(db: BrainDB, displayId: string): string {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) return '';
-  const note = notes[0];
-  if (!existsSync(note.filePath)) return '';
-  const content = readFileSync(note.filePath, 'utf-8');
-  const fmEnd = content.indexOf('\n---', 4);
-  if (fmEnd === -1) return '';
-  let body = content.slice(fmEnd + 4).trim();
-  const headingEnd = body.indexOf('\n');
-  if (headingEnd !== -1 && body.startsWith('#')) {
-    body = body.slice(headingEnd + 1).trim();
-  }
-  return body;
+  return readTaskBody(notes[0]);
 }
 
 function replaceFrontmatterField(content: string, field: string, value: string): string {

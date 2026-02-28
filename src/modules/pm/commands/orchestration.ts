@@ -42,10 +42,9 @@ export function createOrchestrationCommands(): Command[] {
 
         const priorityOrder = ['critical', 'high', 'medium', 'low'];
         const resolved = eligibleIds
-          .map((id) => {
+          .flatMap((id) => {
             const r = getTask(svc.db, id);
-            if (!r.ok) return { display_id: id, title: undefined, priority: 'low' as const, workstream: 0, virtualStates: [] as string[] };
-            return r.data;
+            return r.ok ? [r.data] : [];
           })
           .sort((a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority));
 
@@ -237,7 +236,6 @@ export function createOrchestrationCommands(): Command[] {
             return;
           }
           if (!opts.json) process.stdout.write(`${displayId}: claimed → in-progress\n`);
-          currentStatus = 'in-progress';
         }
 
         if (opts.token) {
