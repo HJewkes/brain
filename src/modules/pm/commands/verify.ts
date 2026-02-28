@@ -14,7 +14,7 @@ export interface VerificationPlan {
   steps: string[];
 }
 
-function suggestVerificationSteps(category: TaskCategory): string[] {
+export function suggestVerificationSteps(category: TaskCategory): string[] {
   switch (category) {
     case 'implementation':
       return [
@@ -63,6 +63,12 @@ function suggestVerificationSteps(category: TaskCategory): string[] {
         'Verify design document covers all requirements',
         'Check for consistency with existing architecture',
         'Review trade-offs and alternatives considered',
+      ];
+    default:
+      return [
+        'Verify implementation matches task description',
+        'Run relevant tests',
+        'Check for regressions',
       ];
   }
 }
