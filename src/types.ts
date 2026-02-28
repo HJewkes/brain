@@ -173,6 +173,7 @@ export interface SearchOptions {
   minScore?: number;
   rerank?: boolean;
   dropoff?: number;
+  includePm?: boolean;
 }
 
 // === Graph Types ===

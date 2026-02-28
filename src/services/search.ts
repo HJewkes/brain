@@ -232,7 +232,7 @@ export async function search(
   });
 
   // Module visibility: exclude private module notes from general search
-  if (moduleRegistry) {
+  if (moduleRegistry && !options.includePm) {
     const privateModuleNoteIds = getPrivateModuleNoteIds(db, moduleRegistry);
     if (privateModuleNoteIds.size > 0) {
       if (allowedNoteIds) {

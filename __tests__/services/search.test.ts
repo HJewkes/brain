@@ -4,6 +4,7 @@ import { search, searchMemories, checkAndPromote } from '../../src/services/sear
 import { unlinkSync } from 'node:fs';
 import type { Chunk, NoteRecord, SearchResult } from '../../src/types.js';
 import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
+import { ModuleRegistry } from '../../src/modules/registry.js';
 
 vi.mock('../../src/services/reranker.js', () => ({
   rerank: vi.fn(async (_query: string, results: SearchResult[]) => results.reverse()),
@@ -708,6 +709,134 @@ describe('search service', () => {
       const promoted = checkAndPromote(ctx.db, 'nonexistent', 1);
       expect(promoted).toBe(false);
     });
+  });
+});
+
+describe('search with PM note inclusion', () => {
+  let db: BrainDB;
+  let dbPath: string;
+  let embedder: Embedder;
+  let registry: ModuleRegistry;
+
+  function createRegistryWithPmPrivate(): ModuleRegistry {
+    const reg = new ModuleRegistry();
+    reg.registerFilter('pm', { visibility: 'private' });
+    return reg;
+  }
+
+  beforeEach(() => {
+    dbPath = tmpDbPath();
+    db = new BrainDB(dbPath);
+    embedder = createMockEmbedder();
+    registry = createRegistryWithPmPrivate();
+
+    const regularNote = makeNote({
+      id: 'regular-note',
+      filePath: '/notes/regular.md',
+      title: 'Regular TypeScript Note',
+      tier: 'slow',
+      summary: 'A regular note about TypeScript',
+    });
+    db.upsertNote(regularNote);
+    db.upsertNoteFTS(
+      'regular-note',
+      'Regular TypeScript Note',
+      'A regular note about TypeScript',
+      'TypeScript is a typed superset of JavaScript'
+    );
+
+    const pmNote = makeNote({
+      id: 'pm-task-note',
+      filePath: '/notes/pm/task-1.md',
+      title: 'PM Task TypeScript Migration',
+      tier: 'slow',
+      summary: 'Migrate codebase to TypeScript',
+      module: 'pm',
+    });
+    db.upsertNote(pmNote);
+    db.upsertNoteFTS(
+      'pm-task-note',
+      'PM Task TypeScript Migration',
+      'Migrate codebase to TypeScript',
+      'TypeScript migration task for the project'
+    );
+
+    const chunkData = [
+      { id: 'regular-note', content: 'TypeScript is a typed superset of JavaScript' },
+      { id: 'pm-task-note', content: 'TypeScript migration task for the project' },
+    ];
+
+    for (const { id, content } of chunkData) {
+      const chunk: Chunk = {
+        id: `${id}:chunk:0`,
+        noteId: id,
+        heading: null,
+        headingAncestry: null,
+        content,
+        tokenCount: content.split(/\s+/).length,
+        chunkType: 'section',
+        cutType: 'heading_boundary',
+        position: 0,
+      };
+
+      const vec = new Array<number>(384).fill(0);
+      for (let i = 0; i < content.length; i++) {
+        vec[i % 384] += content.charCodeAt(i) / 1000;
+      }
+      const magnitude = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
+      if (magnitude > 0) {
+        for (let i = 0; i < vec.length; i++) {
+          vec[i] /= magnitude;
+        }
+      }
+      db.upsertChunks(id, [chunk], [new Float32Array(vec)]);
+    }
+  });
+
+  afterEach(() => {
+    db.close();
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      // ignore
+    }
+  });
+
+  it('excludes PM notes by default when moduleRegistry is provided', async () => {
+    const results = await search(
+      db,
+      embedder,
+      'TypeScript',
+      { limit: 10 },
+      { bm25: 0.3, vector: 0.7 },
+      registry
+    );
+
+    const noteIds = results.map((r) => r.noteId);
+    expect(noteIds).toContain('regular-note');
+    expect(noteIds).not.toContain('pm-task-note');
+  });
+
+  it('includes PM notes when includePm option is true', async () => {
+    const results = await search(
+      db,
+      embedder,
+      'TypeScript',
+      { limit: 10, includePm: true },
+      { bm25: 0.3, vector: 0.7 },
+      registry
+    );
+
+    const noteIds = results.map((r) => r.noteId);
+    expect(noteIds).toContain('regular-note');
+    expect(noteIds).toContain('pm-task-note');
+  });
+
+  it('includes PM notes when no moduleRegistry is provided', async () => {
+    const results = await search(db, embedder, 'TypeScript', { limit: 10 });
+
+    const noteIds = results.map((r) => r.noteId);
+    expect(noteIds).toContain('pm-task-note');
   });
 });
 

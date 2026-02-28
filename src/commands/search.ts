@@ -17,6 +17,7 @@ export const searchCommand = new Command('search')
   .option('--min-score <score>', 'minimum relevance score (0-1)')
   .option('--dropoff <pct>', 'cut results when score drops by this percentage (e.g. 30)')
   .option('--rerank', 'apply cross-encoder reranking for better relevance')
+  .option('--include-tasks', 'include PM task notes in search results')
   .option('--expand', 'include graph-connected notes')
   .option('--memories', 'also search extracted memories')
   .option('--container <tag>', 'filter memories by container tag')
@@ -32,6 +33,7 @@ export const searchCommand = new Command('search')
         minScore: opts.minScore ? parseFloat(opts.minScore) : undefined,
         dropoff: opts.dropoff ? parseFloat(opts.dropoff) / 100 : undefined,
         rerank: opts.rerank,
+        includePm: opts.includeTasks,
       };
 
       const results = await search(db, embedder, query, searchOpts, config.fusionWeights);
