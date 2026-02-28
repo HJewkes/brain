@@ -110,10 +110,48 @@ export function resolveProject(
   if (explicit) return ok(explicit.toUpperCase());
   const active = getActiveProject(db);
   if (active) return ok(active);
+
+  // Auto-resolve when exactly one project exists
+  const projects = getPmNotes(db, 'project');
+  if (projects.length === 1) {
+    const meta = JSON.parse(projects[0].metadata!) as Record<string, unknown>;
+    const prefix = meta.prefix as string;
+    setActiveProject(db, prefix);
+    return ok(prefix);
+  }
+
+  if (projects.length > 1) {
+    const prefixes = projects.map((p) => {
+      const m = JSON.parse(p.metadata!) as Record<string, unknown>;
+      return m.prefix as string;
+    });
+    return fail(
+      'INVALID_INPUT',
+      `Multiple projects found: ${prefixes.join(', ')}. Use --project <prefix> or "brain pm use <prefix>".`
+    );
+  }
+
   return fail(
     'INVALID_INPUT',
-    'No project specified and no active project set. Use "brain pm use <prefix>" first.'
+    'No projects found. Run "brain pm onboard <name>" to create one.'
   );
+}
+
+export function enrichNotFoundError(
+  db: BrainDB,
+  displayId: string
+): Result<never> {
+  // Check if it's a workstream display ID (PREFIX-NN without .MM)
+  if (/^[A-Z]+-\d{2}$/.test(displayId)) {
+    const wsNotes = getPmNotes(db, 'workstream', { display_id: displayId });
+    if (wsNotes.length > 0) {
+      return fail(
+        'NOT_FOUND',
+        `"${displayId}" is a workstream, not a task. Try: brain pm workstream show ${displayId}`
+      );
+    }
+  }
+  return fail('NOT_FOUND', `Task "${displayId}" not found`);
 }
 
 export function getPmNotes(

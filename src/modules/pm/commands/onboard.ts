@@ -11,7 +11,7 @@ import { detectComponents } from '../engine/detect.js';
 import { discoverDocs } from '../engine/doc-scanner.js';
 import { createProject } from '../data/project-ops.js';
 import { createWorkstream } from '../data/workstream-ops.js';
-import { getPmNotes } from '../data/queries.js';
+import { getPmNotes, setActiveProject } from '../data/queries.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { slugify } from '../../../utils.js';
 import { withBrain } from '../../../services/brain-service.js';
@@ -64,6 +64,7 @@ export async function runOnboard(
     });
     if (!projectResult.ok) return projectResult as Result<never>;
     projectCreated = true;
+    setActiveProject(db, opts.prefix);
   }
   const createPhase = { completedAt: now(), projectCreated };
 

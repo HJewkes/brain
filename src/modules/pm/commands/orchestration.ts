@@ -339,7 +339,9 @@ export function createOrchestrationCommands(): Command[] {
 
         const eligible = computeEligible(svc.db, prefix);
         const inProgress = allTasks.filter((t) => t.status === 'in-progress');
-        const blocked = allTasks.filter((t) => t.status === 'blocked');
+        const blocked = allTasks.filter(
+          (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
+        );
         const done = allTasks.filter((t) => t.status === 'done');
         const pending = allTasks.filter((t) => t.status === 'pending');
 
@@ -396,7 +398,9 @@ export function createOrchestrationCommands(): Command[] {
               pending: wsTasks.filter((t) => t.status === 'pending').length,
               inProgress: wsTasks.filter((t) => t.status === 'in-progress').length,
               done: wsTasks.filter((t) => t.status === 'done').length,
-              blocked: wsTasks.filter((t) => t.status === 'blocked').length,
+              blocked: wsTasks.filter(
+                (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
+              ).length,
             };
           });
 

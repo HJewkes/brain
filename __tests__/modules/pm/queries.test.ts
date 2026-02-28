@@ -303,7 +303,7 @@ describe('resolveProject', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('INVALID_INPUT');
-      expect(result.error.message).toContain('pm use');
+      expect(result.error.message).toContain('No projects found');
     }
   });
 
