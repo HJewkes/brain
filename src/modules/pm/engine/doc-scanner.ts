@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { resolve, basename, relative, dirname, join } from 'node:path';
 import type { ScoredDoc } from '../data/onboard-types.js';
 
@@ -50,6 +50,25 @@ function scoreDoc(filePath: string, rootDir: string): number {
   return score;
 }
 
+function hasBrainModuleFrontmatter(filePath: string): boolean {
+  try {
+    const fd = openSync(filePath, 'r');
+    const buf = Buffer.alloc(500);
+    const bytesRead = readSync(fd, buf, 0, 500, 0);
+    closeSync(fd);
+    const header = buf.toString('utf-8', 0, bytesRead);
+
+    if (!header.trimStart().startsWith('---')) return false;
+    const endIdx = header.indexOf('\n---', 4);
+    if (endIdx === -1) return false;
+
+    const frontmatter = header.slice(0, endIdx);
+    return /^module:/m.test(frontmatter);
+  } catch {
+    return false;
+  }
+}
+
 function walkForDocs(dir: string): string[] {
   const docs: string[] = [];
 
@@ -68,6 +87,8 @@ function walkForDocs(dir: string): string[] {
       } else if (entry.endsWith('.md')) {
         // Exclude oversized files
         if (stat.size > MAX_FILE_SIZE) continue;
+        // Skip brain module notes (have module: in frontmatter)
+        if (hasBrainModuleFrontmatter(full)) continue;
         docs.push(full);
       }
     }
