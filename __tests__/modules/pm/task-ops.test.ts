@@ -189,13 +189,50 @@ describe('listTasks', () => {
   it('lists tasks filtered by status', async () => {
     await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
     await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 2' });
-    await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'blocked');
+    await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'claimed');
+
+    const claimedResult = listTasks(db, 'WEB', { status: 'claimed' });
+    expect(claimedResult.ok).toBe(true);
+    if (claimedResult.ok) {
+      expect(claimedResult.data).toHaveLength(1);
+      expect(claimedResult.data[0].display_id).toBe('WEB-01.01');
+    }
+  });
+
+  it('filters by virtual state blocked', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dep task' });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Blocked task', dependsOn: ['WEB-01.01'],
+    });
 
     const blockedResult = listTasks(db, 'WEB', { status: 'blocked' });
     expect(blockedResult.ok).toBe(true);
     if (blockedResult.ok) {
       expect(blockedResult.data).toHaveLength(1);
-      expect(blockedResult.data[0].display_id).toBe('WEB-01.01');
+      expect(blockedResult.data[0].display_id).toBe('WEB-01.02');
+      expect(blockedResult.data[0].virtualStates).toContain('+BLOCKED');
+    }
+  });
+
+  it('filters by virtual state ready', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
+
+    const readyResult = listTasks(db, 'WEB', { status: 'ready' });
+    expect(readyResult.ok).toBe(true);
+    if (readyResult.ok) {
+      expect(readyResult.data).toHaveLength(1);
+      expect(readyResult.data[0].virtualStates).toContain('+READY');
+    }
+  });
+
+  it('includes virtualStates in listed tasks', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
+
+    const result = listTasks(db, 'WEB');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data[0].virtualStates).toBeDefined();
+      expect(result.data[0].virtualStates).toContain('+READY');
     }
   });
 

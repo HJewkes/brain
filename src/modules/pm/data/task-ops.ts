@@ -194,23 +194,49 @@ export function listTasks(
     category?: string;
     search?: string;
   }
-): Result<TaskMetadata[]> {
+): Result<(TaskMetadata & { virtualStates: VirtualState[] })[]> {
+  const VIRTUAL_STATE_FILTERS: Record<string, VirtualState> = {
+    blocked: '+BLOCKED',
+    ready: '+READY',
+    eligible: '+ELIGIBLE',
+  };
+
+  const virtualStateFilter = filters?.status
+    ? VIRTUAL_STATE_FILTERS[filters.status.toLowerCase()]
+    : undefined;
+
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
-  if (filters?.status !== undefined) filterObj.status = filters.status;
+  if (filters?.status !== undefined && !virtualStateFilter) filterObj.status = filters.status;
   if (filters?.mode !== undefined) filterObj.mode = filters.mode;
   if (filters?.priority !== undefined) filterObj.priority = filters.priority;
   if (filters?.category !== undefined) filterObj.category = filters.category;
 
   const notes = getPmNotes(db, 'task', filterObj);
-  let tasks: TaskMetadata[] = notes.map((note) => {
+  let tasks = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    return taskMetaFromRecord(meta);
+    const taskMeta = taskMetaFromRecord(meta);
+
+    const hasDependencies = !!(taskMeta.depends_on && taskMeta.depends_on.length > 0);
+    const dependenciesComplete = areDependenciesComplete(db, taskMeta.depends_on);
+
+    const virtualStates = computeVirtualState({
+      status: taskMeta.status,
+      hasDependencies,
+      dependenciesComplete,
+      claimedAt: taskMeta.claimed_at,
+    });
+
+    return { ...taskMeta, virtualStates };
   });
 
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase();
     tasks = tasks.filter((t) => t.title?.toLowerCase().includes(searchLower));
+  }
+
+  if (virtualStateFilter) {
+    tasks = tasks.filter((t) => t.virtualStates.includes(virtualStateFilter));
   }
 
   return ok(tasks);
