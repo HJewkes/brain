@@ -5,7 +5,7 @@ import { ok, fail } from '../errors.js';
 const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending: ['claimed', 'blocked', 'cancelled'],
   claimed: ['in-progress', 'pending', 'cancelled'],
-  'in-progress': ['done', 'blocked', 'cancelled'],
+  'in-progress': ['done', 'blocked', 'cancelled', 'pending'],
   done: [],
   blocked: ['pending', 'cancelled'],
   cancelled: [],
@@ -18,7 +18,20 @@ export function validateTransition(from: TaskStatus, to: TaskStatus): Result<voi
   if (allowed.includes(to)) {
     return ok(undefined);
   }
-  return fail('INVALID_TRANSITION', `Cannot transition from '${from}' to '${to}'`, { from, to });
+  const validList = allowed.length > 0 ? allowed.join(', ') : 'none (terminal state)';
+  const hint = buildTransitionHint(from, to);
+  const message = `Cannot transition from '${from}' to '${to}'. Valid: ${validList}.${hint}`;
+  return fail('INVALID_TRANSITION', message, { from, to });
+}
+
+function buildTransitionHint(from: TaskStatus, to: TaskStatus): string {
+  if (from === 'pending' && to === 'done') {
+    return " Hint: run 'brain pm task claim <id>' first, then start and complete.";
+  }
+  if (from === 'pending' && to === 'in-progress') {
+    return " Hint: run 'brain pm task claim <id>' first.";
+  }
+  return '';
 }
 
 export interface VirtualStateInput {
