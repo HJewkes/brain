@@ -24,6 +24,7 @@ import { installHooksCommand } from './commands/install-hooks.js';
 import { doctorCommand } from './commands/doctor.js';
 import { lineageCommand } from './commands/lineage.js';
 import { resetCommand } from './commands/reset.js';
+import { notesCommand } from './commands/notes.js';
 import { loadModules } from './modules/loader.js';
 import { pmModule } from './modules/pm/index.js';
 
@@ -57,6 +58,7 @@ program.addCommand(installHooksCommand);
 program.addCommand(doctorCommand);
 program.addCommand(lineageCommand);
 program.addCommand(resetCommand);
+program.addCommand(notesCommand);
 
 async function main(): Promise<void> {
   const { registry } = await loadModules({ modules: [pmModule] });
