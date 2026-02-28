@@ -45,6 +45,7 @@ export interface ProjectMetadata {
 
 export interface WorkstreamMetadata {
   title?: string;
+  description?: string;
   display_id: string;
   project: string;
   number: number;

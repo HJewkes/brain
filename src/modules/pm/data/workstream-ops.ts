@@ -67,9 +67,36 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   return frontmatter + `\n${field}: ${quoted}` + rest;
 }
 
-function workstreamMetaFromRecord(meta: Record<string, unknown>): WorkstreamMetadata {
+function extractDescription(filePath: string): string | undefined {
+  if (!existsSync(filePath)) return undefined;
+
+  const content = readFileSync(filePath, 'utf-8');
+  const fmEnd = content.indexOf('\n---', 4);
+  if (fmEnd === -1) return undefined;
+
+  const afterFm = content.slice(fmEnd + 4).trim();
+  const lines = afterFm.split('\n');
+  const headingIdx = lines.findIndex(l => l.startsWith('# '));
+  if (headingIdx === -1) return undefined;
+
+  const descLines: string[] = [];
+  for (let i = headingIdx + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line === '' && descLines.length > 0) break;
+    if (line === '') continue;
+    descLines.push(line);
+  }
+
+  return descLines.length > 0 ? descLines.join(' ') : undefined;
+}
+
+function workstreamMetaFromRecord(
+  meta: Record<string, unknown>,
+  description?: string,
+): WorkstreamMetadata {
   return {
     title: (meta.title as string) ?? undefined,
+    description,
     display_id: meta.display_id as string,
     project: meta.project as string,
     number: meta.number as number,
@@ -117,7 +144,8 @@ export function listWorkstreams(db: BrainDB, prefix: string): Result<WorkstreamM
   const notes = getPmNotes(db, 'workstream', { project: prefix });
   const workstreams: WorkstreamMetadata[] = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    return workstreamMetaFromRecord(meta);
+    const description = extractDescription(note.filePath);
+    return workstreamMetaFromRecord(meta, description);
   });
 
   return ok(workstreams);
@@ -130,7 +158,8 @@ export function getWorkstream(db: BrainDB, displayId: string): Result<Workstream
   }
 
   const meta = JSON.parse(notes[0].metadata!) as Record<string, unknown>;
-  return ok(workstreamMetaFromRecord(meta));
+  const description = extractDescription(notes[0].filePath);
+  return ok(workstreamMetaFromRecord(meta, description));
 }
 
 export async function updateWorkstream(
