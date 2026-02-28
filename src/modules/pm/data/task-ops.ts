@@ -236,7 +236,10 @@ export function listTasks(
   }
 
   if (virtualStateFilter) {
-    tasks = tasks.filter((t) => t.virtualStates.includes(virtualStateFilter));
+    const filterName = filters!.status!.toLowerCase();
+    tasks = tasks.filter((t) =>
+      t.virtualStates.includes(virtualStateFilter) || t.status === filterName
+    );
   }
 
   return ok(tasks);

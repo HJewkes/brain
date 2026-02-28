@@ -187,12 +187,12 @@ describe('Wave 3: Task CRUD integration', () => {
     expect(ws1Result.ok).toBe(true);
     if (ws1Result.ok) expect(ws1Result.data).toHaveLength(2);
 
-    await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
-    const claimedResult = listTasks(db, 'TST', { status: 'claimed' });
-    expect(claimedResult.ok).toBe(true);
-    if (claimedResult.ok) {
-      expect(claimedResult.data).toHaveLength(1);
-      expect(claimedResult.data[0].display_id).toBe('TST-01.01');
+    await updateTaskStatus(db, config, embedder, 'TST-01.01', 'blocked');
+    const blockedResult = listTasks(db, 'TST', { status: 'blocked' });
+    expect(blockedResult.ok).toBe(true);
+    if (blockedResult.ok) {
+      expect(blockedResult.data).toHaveLength(1);
+      expect(blockedResult.data[0].display_id).toBe('TST-01.01');
     }
   });
 
