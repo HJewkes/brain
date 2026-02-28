@@ -146,22 +146,45 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
 
-        process.stdout.write(`Task: ${bundle.task.display_id}\n`);
-        process.stdout.write(`Status: ${bundle.task.status}\n`);
+        const lines: string[] = [];
+        const title = bundle.task.title ?? bundle.task.display_id;
+        lines.push(`Task: ${bundle.task.display_id} - ${title}`);
+        lines.push(`Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`);
+
+        if (bundle.workstream) {
+          lines.push(`Workstream: ${bundle.workstream.displayId} - ${bundle.workstream.title}`);
+        }
+
+        if (bundle.body) {
+          lines.push('');
+          lines.push('--- Description ---');
+          lines.push(bundle.body);
+        }
+
         if (bundle.prompt) {
-          process.stdout.write(`Prompt: ${bundle.prompt}\n`);
+          lines.push('');
+          lines.push('--- Prompt ---');
+          lines.push(bundle.prompt);
         }
+
         if (bundle.dependencies.length > 0) {
-          process.stdout.write(
-            `Dependencies: ${bundle.dependencies.map((d) => d.displayId).join(', ')}\n`
-          );
+          lines.push('');
+          lines.push('--- Dependencies ---');
+          for (const dep of bundle.dependencies) {
+            const summary = dep.summary ? ` - ${dep.summary}` : '';
+            lines.push(`  ${dep.displayId} [${dep.status}] ${dep.name}${summary}`);
+          }
         }
+
         if (bundle.decisions.length > 0) {
-          process.stdout.write(
-            `Decisions: ${bundle.decisions.map((d) => d.displayId).join(', ')}\n`
-          );
+          lines.push('');
+          lines.push('--- Decisions ---');
+          for (const dec of bundle.decisions) {
+            lines.push(`  ${dec.displayId} [${dec.status}] ${dec.content}`);
+          }
         }
-        process.stdout.write(`Context hash: ${bundle.contextHash}\n`);
+
+        process.stdout.write(lines.join('\n') + '\n');
       });
     });
 
@@ -180,6 +203,30 @@ export function createOrchestrationCommands(): Command[] {
           process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
+        }
+
+        let currentStatus = taskResult.data.status;
+
+        if (currentStatus === 'pending') {
+          const claimResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'claimed' as TaskStatus);
+          if (!claimResult.ok) {
+            process.stderr.write(formatError(claimResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          if (!opts.json) process.stdout.write(`${displayId}: pending → claimed\n`);
+          currentStatus = 'claimed';
+        }
+
+        if (currentStatus === 'claimed') {
+          const startResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus);
+          if (!startResult.ok) {
+            process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          if (!opts.json) process.stdout.write(`${displayId}: claimed → in-progress\n`);
+          currentStatus = 'in-progress';
         }
 
         if (opts.token) {

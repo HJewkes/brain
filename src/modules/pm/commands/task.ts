@@ -121,13 +121,40 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
-        const result = getTask(svc.db, id.toUpperCase());
+        const displayId = id.toUpperCase();
+        const result = getTask(svc.db, displayId);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+
+        const task = result.data;
+
+        if (opts.json) {
+          const body = readTaskBodyFromDb(svc.db, displayId);
+          process.stdout.write(JSON.stringify({ ...task, body }, null, 2) + '\n');
+          return;
+        }
+
+        const lines: string[] = [];
+        lines.push(formatTaskLine(task));
+        lines.push(`  Status: ${task.status} | Priority: ${task.priority} | Category: ${task.category}`);
+        if (task.mode) lines.push(`  Mode: ${task.mode}`);
+        if (task.depends_on && task.depends_on.length > 0) {
+          lines.push(`  Depends on: ${task.depends_on.join(', ')}`);
+        }
+        if (task.virtualStates.length > 0) {
+          lines.push(`  Virtual states: ${task.virtualStates.join(' ')}`);
+        }
+
+        const body = readTaskBodyFromDb(svc.db, displayId);
+        if (body) {
+          lines.push('');
+          lines.push(body);
+        }
+
+        process.stdout.write(lines.join('\n') + '\n');
       });
     });
 
@@ -257,6 +284,7 @@ export function createTaskCommands(): Command {
     .command('claim')
     .description('Claim an eligible task (pending → claimed)')
     .argument('<id>', 'Task display ID')
+    .option('--start', 'Also start the task (claim + start atomically)')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
@@ -296,8 +324,34 @@ export function createTaskCommands(): Command {
           return;
         }
 
-        const output = { ...metaResult.data, token: claim.token };
-        outputResult(output, !!opts.json);
+        if (opts.start) {
+          const startResult = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            'in-progress' as TaskStatus
+          );
+          if (!startResult.ok) {
+            process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+
+          if (opts.json) {
+            process.stdout.write(JSON.stringify({ ...startResult.data, token: claim.token }, null, 2) + '\n');
+          } else {
+            process.stdout.write(`${displayId} claimed and started (in-progress)\n`);
+          }
+          return;
+        }
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify({ ...metaResult.data, token: claim.token }, null, 2) + '\n');
+        } else {
+          process.stdout.write(`${displayId} claimed. Token: ${claim.token}\n`);
+          process.stdout.write(`Start: brain pm task start ${displayId} --token ${claim.token}\n`);
+        }
       });
     });
 
@@ -387,6 +441,22 @@ export function createTaskCommands(): Command {
     });
 
   return cmd;
+}
+
+function readTaskBodyFromDb(db: BrainDB, displayId: string): string {
+  const notes = getPmNotes(db, 'task', { display_id: displayId });
+  if (notes.length === 0) return '';
+  const note = notes[0];
+  if (!existsSync(note.filePath)) return '';
+  const content = readFileSync(note.filePath, 'utf-8');
+  const fmEnd = content.indexOf('\n---', 4);
+  if (fmEnd === -1) return '';
+  let body = content.slice(fmEnd + 4).trim();
+  const headingEnd = body.indexOf('\n');
+  if (headingEnd !== -1 && body.startsWith('#')) {
+    body = body.slice(headingEnd + 1).trim();
+  }
+  return body;
 }
 
 function replaceFrontmatterField(content: string, field: string, value: string): string {
