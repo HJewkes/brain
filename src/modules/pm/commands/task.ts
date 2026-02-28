@@ -105,6 +105,8 @@ export function createTaskCommands(): Command {
     .option('--category <cat>', 'Filter by category')
     .option('--search <text>', 'Filter by title (case-insensitive substring)')
     .option('--json', 'Output JSON')
+    .option('--sort <field>', 'Sort by: priority, workstream, status, created')
+    .option('--limit <n>', 'Limit number of results', parseInt)
     .action(async (opts) => {
       await withBrain(async (svc) => {
         const projectResult = resolveProject(svc.db, opts.project);
@@ -138,6 +140,30 @@ export function createTaskCommands(): Command {
           return;
         }
 
+        let tasks = result.data;
+
+        if (opts.sort) {
+          const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+          const STATUS_ORDER: Record<string, number> = { pending: 0, claimed: 1, 'in-progress': 2, blocked: 3, done: 4 };
+
+          tasks = [...tasks].sort((a, b) => {
+            switch (opts.sort) {
+              case 'priority':
+                return (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
+              case 'workstream':
+                return a.workstream - b.workstream;
+              case 'status':
+                return (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
+              default:
+                return 0;
+            }
+          });
+        }
+
+        if (opts.limit && opts.limit > 0) {
+          tasks = tasks.slice(0, opts.limit);
+        }
+
         const activeFilters: Record<string, string> = {};
         if (opts.workstream) activeFilters.workstream = opts.workstream;
         if (opts.status) activeFilters.status = opts.status;
@@ -145,7 +171,7 @@ export function createTaskCommands(): Command {
         if (opts.category) activeFilters.category = opts.category;
         if (opts.search) activeFilters.search = opts.search;
 
-        outputResult(result.data, !!opts.json, activeFilters);
+        outputResult(tasks, !!opts.json, activeFilters);
       });
     });
 
