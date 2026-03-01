@@ -26,6 +26,8 @@ export interface CreateTaskInput {
   category?: TaskCategory;
   priority?: TaskPriority;
   dependsOn?: string[];
+  dueDate?: string;
+  milestone?: string;
 }
 
 function taskFilePath(config: BrainConfig, prefix: string, displayId: string): string {
@@ -63,8 +65,19 @@ function buildTaskMarkdown(input: CreateTaskInput, displayId: string, number: nu
     lines.push(`depends_on: [${input.dependsOn.join(', ')}]`);
   }
 
+  if (input.dueDate) {
+    lines.push(`due_date: "${input.dueDate}"`);
+  }
+  if (input.milestone) {
+    lines.push(`milestone: ${input.milestone}`);
+  }
+
   lines.push(`created: ${now}`, `modified: ${now}`, '---', '', `# ${input.name}`, '');
   return lines.join('\n');
+}
+
+function needsQuoting(value: string): boolean {
+  return value.includes(' ') || /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function replaceFrontmatterField(content: string, field: string, value: string): string {
@@ -74,12 +87,19 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   const frontmatter = content.slice(0, endOfFrontmatter);
   const rest = content.slice(endOfFrontmatter);
   const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = value.includes(' ') ? `"${value}"` : value;
+  const quoted = needsQuoting(value) ? `"${value}"` : value;
 
   if (fieldRegex.test(frontmatter)) {
     return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
   }
   return frontmatter + `\n${field}: ${quoted}` + rest;
+}
+
+function coerceDateField(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'string') return value;
+  return String(value);
 }
 
 function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
@@ -96,6 +116,8 @@ function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
     depends_on: meta.depends_on as string[] | undefined,
     claim_token: meta.claim_token as string | undefined,
     claimed_at: meta.claimed_at as string | undefined,
+    due_date: coerceDateField(meta.due_date),
+    milestone: meta.milestone as string | undefined,
   };
 }
 
@@ -159,12 +181,17 @@ export async function createTask(
   const hash = createHash('sha256').update(markdown).digest('hex');
   const noteId = await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
 
-  if (resolvedDepIds.length > 0) {
-    const relations: Relation[] = resolvedDepIds.map((dep) => ({
-      sourceId: noteId,
-      targetId: dep.noteId,
-      type: 'depends_on',
-    }));
+  const relations: Relation[] = resolvedDepIds.map((dep) => ({
+    sourceId: noteId,
+    targetId: dep.noteId,
+    type: 'depends_on',
+  }));
+
+  if (wsNotes.length > 0) {
+    relations.push({ sourceId: wsNotes[0].id, targetId: noteId, type: 'parent' });
+  }
+
+  if (relations.length > 0) {
     db.upsertRelations(noteId, relations);
   }
 
@@ -178,6 +205,8 @@ export async function createTask(
     category: input.category ?? 'implementation',
     priority: input.priority ?? 'medium',
     depends_on: input.dependsOn,
+    due_date: input.dueDate,
+    milestone: input.milestone,
   };
 
   return ok(metadata);
@@ -209,6 +238,8 @@ export function listTasks(
     priority?: string;
     category?: string;
     search?: string;
+    dueBefore?: string;
+    milestone?: string;
   }
 ): Result<(TaskMetadata & { virtualStates: VirtualState[] })[]> {
   const VIRTUAL_STATE_FILTERS: Record<string, VirtualState> = {
@@ -241,10 +272,21 @@ export function listTasks(
       hasDependencies,
       dependenciesComplete,
       claimedAt: taskMeta.claimed_at,
+      dueDate: taskMeta.due_date,
     });
 
     return { ...taskMeta, virtualStates };
   });
+
+  if (filters?.dueBefore) {
+    const cutoff = filters.dueBefore;
+    tasks = tasks.filter((t) => t.due_date && t.due_date <= cutoff);
+  }
+
+  if (filters?.milestone) {
+    const ms = filters.milestone;
+    tasks = tasks.filter((t) => t.milestone === ms);
+  }
 
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase();
@@ -300,6 +342,7 @@ export function getTask(
     hasDependencies,
     dependenciesComplete,
     claimedAt: taskMeta.claimed_at,
+    dueDate: taskMeta.due_date,
   });
 
   return ok({ ...taskMeta, virtualStates });
@@ -356,7 +399,7 @@ export async function updateTask(
   config: BrainConfig,
   embedder: Embedder,
   displayId: string,
-  updates: Partial<Pick<TaskMetadata, 'mode' | 'category' | 'priority'>>
+  updates: Partial<Pick<TaskMetadata, 'mode' | 'category' | 'priority' | 'due_date' | 'milestone'>>
 ): Promise<Result<TaskMetadata>> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
@@ -380,6 +423,12 @@ export async function updateTask(
   }
   if (updates.priority !== undefined) {
     content = replaceFrontmatterField(content, 'priority', updates.priority);
+  }
+  if (updates.due_date !== undefined) {
+    content = replaceFrontmatterField(content, 'due_date', updates.due_date);
+  }
+  if (updates.milestone !== undefined) {
+    content = replaceFrontmatterField(content, 'milestone', updates.milestone);
   }
 
   const now = new Date().toISOString().slice(0, 10);

@@ -65,6 +65,8 @@ export interface TaskMetadata {
   depends_on?: string[];
   claim_token?: string;
   claimed_at?: string;
+  due_date?: string;
+  milestone?: string;
 }
 
 export interface DecisionMetadata {

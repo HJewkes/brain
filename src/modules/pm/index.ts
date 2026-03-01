@@ -104,6 +104,8 @@ export const pmModule: BrainModule = {
             enum: ['critical', 'high', 'medium', 'low'],
             description: 'Task priority',
           },
+          due_date: { type: 'string', description: 'Due date (YYYY-MM-DD)' },
+          milestone: { type: 'string', description: 'Milestone name' },
         },
         required: ['project', 'workstream', 'number', 'status', 'mode', 'category', 'priority'],
       },

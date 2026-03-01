@@ -39,13 +39,14 @@ export interface VirtualStateInput {
   dependenciesComplete: boolean;
   hasDependencies: boolean;
   claimedAt?: string;
+  dueDate?: string;
   now?: Date;
   staleThresholdMs?: number;
 }
 
 export function computeVirtualState(input: VirtualStateInput): VirtualState[] {
   const states: VirtualState[] = [];
-  const { status, dependenciesComplete, hasDependencies, claimedAt } = input;
+  const { status, dependenciesComplete, hasDependencies, claimedAt, dueDate } = input;
 
   if (status === 'pending') {
     if (!hasDependencies || dependenciesComplete) {
@@ -65,6 +66,14 @@ export function computeVirtualState(input: VirtualStateInput): VirtualState[] {
     const claimedTime = new Date(claimedAt).getTime();
     if (now.getTime() - claimedTime > threshold) {
       states.push('+STALE');
+    }
+  }
+
+  if (dueDate && !['done', 'cancelled'].includes(status)) {
+    const now = input.now ?? new Date();
+    const due = new Date(dueDate + 'T23:59:59');
+    if (due < now) {
+      states.push('+OVERDUE');
     }
   }
 

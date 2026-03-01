@@ -67,6 +67,8 @@ export function createTaskCommands(): Command {
     .option('--category <cat>', 'Task category')
     .option('--priority <pri>', 'Task priority (critical|high|medium|low)')
     .option('--depends-on <ids...>', 'Display IDs this task depends on')
+    .option('--due <date>', 'Due date (YYYY-MM-DD)')
+    .option('--milestone <name>', 'Milestone name')
     .option('--json', 'Output JSON')
     .action(async (name, opts) => {
       await withBrain(async (svc) => {
@@ -85,6 +87,8 @@ export function createTaskCommands(): Command {
           category: opts.category as never,
           priority: opts.priority as never,
           dependsOn: opts.dependsOn,
+          dueDate: opts.due,
+          milestone: opts.milestone,
         });
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -104,6 +108,8 @@ export function createTaskCommands(): Command {
     .option('--priority <level>', 'Filter by priority (critical|high|medium|low)')
     .option('--category <cat>', 'Filter by category')
     .option('--search <text>', 'Filter by title (case-insensitive substring)')
+    .option('--due-before <date>', 'Filter tasks due before date (YYYY-MM-DD)')
+    .option('--milestone <name>', 'Filter by milestone')
     .option('--json', 'Output JSON')
     .option('--sort <field>', 'Sort by: priority, workstream, status, created')
     .option('--limit <n>', 'Limit number of results', parseInt)
@@ -133,6 +139,8 @@ export function createTaskCommands(): Command {
           priority: opts.priority,
           category: opts.category,
           search: opts.search,
+          dueBefore: opts.dueBefore,
+          milestone: opts.milestone,
         });
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -175,6 +183,8 @@ export function createTaskCommands(): Command {
         if (opts.priority) activeFilters.priority = opts.priority;
         if (opts.category) activeFilters.category = opts.category;
         if (opts.search) activeFilters.search = opts.search;
+        if (opts.dueBefore) activeFilters.dueBefore = opts.dueBefore;
+        if (opts.milestone) activeFilters.milestone = opts.milestone;
 
         outputResult(tasks, !!opts.json, activeFilters);
       });
@@ -231,6 +241,8 @@ export function createTaskCommands(): Command {
     .option('--mode <mode>', 'New mode')
     .option('--category <cat>', 'New category')
     .option('--priority <pri>', 'New priority')
+    .option('--due <date>', 'Due date (YYYY-MM-DD)')
+    .option('--milestone <name>', 'Milestone name')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
@@ -238,6 +250,8 @@ export function createTaskCommands(): Command {
         if (opts.mode) updates.mode = opts.mode;
         if (opts.category) updates.category = opts.category;
         if (opts.priority) updates.priority = opts.priority;
+        if (opts.due) updates.due_date = opts.due;
+        if (opts.milestone) updates.milestone = opts.milestone;
 
         const result = await updateTask(
           svc.db,
@@ -515,6 +529,10 @@ function readTaskBodyFromDb(db: BrainDB, displayId: string): string {
   return readTaskBody(notes[0]);
 }
 
+function needsQuoting(value: string): boolean {
+  return value.includes(' ') || /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 function replaceFrontmatterField(content: string, field: string, value: string): string {
   const endOfFrontmatter = content.indexOf('\n---', 4);
   if (endOfFrontmatter === -1) return content;
@@ -522,7 +540,7 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   const frontmatter = content.slice(0, endOfFrontmatter);
   const rest = content.slice(endOfFrontmatter);
   const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = value.includes(' ') ? `"${value}"` : value;
+  const quoted = needsQuoting(value) ? `"${value}"` : value;
 
   if (fieldRegex.test(frontmatter)) {
     if (!value) {
