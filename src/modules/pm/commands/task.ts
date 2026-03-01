@@ -68,6 +68,7 @@ export function createTaskCommands(): Command {
     .option('--category <cat>', 'Task category')
     .option('--priority <pri>', 'Task priority (critical|high|medium|low)')
     .option('--depends-on <ids...>', 'Display IDs this task depends on')
+    .option('--description <text>', 'Task description/body content')
     .option('--due <date>', 'Due date (YYYY-MM-DD)')
     .option('--milestone <name>', 'Milestone name')
     .option('--json', 'Output JSON')
@@ -103,6 +104,7 @@ export function createTaskCommands(): Command {
           category: opts.category as never,
           priority: opts.priority as never,
           dependsOn: opts.dependsOn,
+          description: opts.description,
           dueDate: opts.due,
           milestone: opts.milestone,
         });
@@ -306,9 +308,16 @@ export function createTaskCommands(): Command {
     .command('done')
     .description('Mark task as done')
     .argument('<id>', 'Task display ID')
+    .option('--token <token>', 'Claim token for verification')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        if (opts.token) {
+          const taskResult = getTask(svc.db, id.toUpperCase());
+          if (taskResult.ok && taskResult.data.claim_token && taskResult.data.claim_token !== opts.token) {
+            process.stderr.write(`Warning: Token mismatch (expected ${taskResult.data.claim_token}, got ${opts.token})\n`);
+          }
+        }
         const result = await updateTaskStatus(
           svc.db,
           svc.config,
@@ -329,6 +338,7 @@ export function createTaskCommands(): Command {
     .command('block')
     .description('Mark task as blocked')
     .argument('<id>', 'Task display ID')
+    .option('--reason <text>', 'Reason for blocking')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
@@ -343,6 +353,15 @@ export function createTaskCommands(): Command {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
+        }
+        if (opts.reason) {
+          await updateTaskMetadataFields(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            id.toUpperCase(),
+            { block_reason: opts.reason }
+          );
         }
         outputResult(result.data, !!opts.json);
       });

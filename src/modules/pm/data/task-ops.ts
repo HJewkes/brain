@@ -43,6 +43,7 @@ export interface CreateTaskInput {
   dependsOn?: string[];
   dueDate?: string;
   milestone?: string;
+  description?: string;
 }
 
 function taskFilePath(config: BrainConfig, prefix: string, displayId: string): string {
@@ -88,7 +89,12 @@ function buildTaskMarkdown(input: CreateTaskInput, displayId: string, number: nu
   }
 
   lines.push(`created: ${now}`, `modified: ${now}`, '---', '', `# ${input.name}`, '');
-  return lines.join('\n');
+
+  let content = lines.join('\n');
+  if (input.description) {
+    content += '\n' + input.description.replace(/\\n/g, '\n') + '\n';
+  }
+  return content;
 }
 
 function needsQuoting(value: string): boolean {
