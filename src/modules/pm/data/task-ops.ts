@@ -17,6 +17,18 @@ import { nextTaskNumber, formatDisplayId, parseDisplayId } from '../ids.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { getPmNotes, resolveDisplayId } from './queries.js';
 import { validateTransition, computeVirtualState } from '../engine/state-machine.js';
+import { readTaskBody } from '../engine/dispatch.js';
+import { buildDependencyGraph } from '../engine/dependency.js';
+
+export type ListMode = 'default' | 'full' | 'short';
+
+export interface EnrichedTaskFields {
+  description?: string;
+  acceptance_criteria?: string[];
+  blocked_by?: string[];
+  created?: string | null;
+  modified?: string | null;
+}
 
 export interface CreateTaskInput {
   project: string;
@@ -240,8 +252,9 @@ export function listTasks(
     search?: string;
     dueBefore?: string;
     milestone?: string;
-  }
-): Result<(TaskMetadata & { virtualStates: VirtualState[] })[]> {
+  },
+  listMode: ListMode = 'default'
+): Result<(TaskMetadata & EnrichedTaskFields & { virtualStates: VirtualState[] })[]> {
   const VIRTUAL_STATE_FILTERS: Record<string, VirtualState> = {
     blocked: '+BLOCKED',
     ready: '+READY',
@@ -252,14 +265,21 @@ export function listTasks(
     ? VIRTUAL_STATE_FILTERS[filters.status.toLowerCase()]
     : undefined;
 
+  const isSearch = !!filters?.search;
+
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
+  // When searching, query all statuses by default (unless explicit --status)
   if (filters?.status !== undefined && !virtualStateFilter) filterObj.status = filters.status;
   if (filters?.mode !== undefined) filterObj.mode = filters.mode;
   if (filters?.priority !== undefined) filterObj.priority = filters.priority;
   if (filters?.category !== undefined) filterObj.category = filters.category;
 
   const notes = getPmNotes(db, 'task', filterObj);
+
+  // Build reverse dependency graph once (cache per list call)
+  const depGraph = listMode !== 'short' ? buildDependencyGraph(db, prefix) : null;
+
   let tasks = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
     const taskMeta = taskMetaFromRecord(meta);
@@ -275,7 +295,38 @@ export function listTasks(
       dueDate: taskMeta.due_date,
     });
 
-    return { ...taskMeta, virtualStates };
+    const enriched: EnrichedTaskFields = {};
+
+    // Read body when enriching or when searching (need body for search matching)
+    const needsBody = listMode !== 'short' || isSearch;
+    const body = needsBody ? readTaskBody(note) : '';
+
+    if (listMode !== 'short') {
+      enriched.description = listMode === 'full' ? body : body.slice(0, 500);
+
+      const acMatch = body.match(/acceptance criteria[:\s]*\n((?:[-*]\s+.+\n?)+)/i);
+      enriched.acceptance_criteria = acMatch
+        ? acMatch[1]
+            .split('\n')
+            .filter((l) => l.trim().startsWith('-') || l.trim().startsWith('*'))
+            .map((l) => l.replace(/^[\s]*[-*]\s+/, '').trim())
+        : [];
+
+      // Compute blocked_by from reverse graph
+      const blockedBy: string[] = [];
+      if (depGraph) {
+        for (const [from, tos] of depGraph) {
+          if (from === taskMeta.display_id) continue;
+          if (tos.includes(taskMeta.display_id)) blockedBy.push(from);
+        }
+      }
+      enriched.blocked_by = blockedBy;
+
+      enriched.created = note.createdAt ?? (meta.created as string) ?? null;
+      enriched.modified = note.modifiedAt ?? (meta.modified as string) ?? null;
+    }
+
+    return { ...taskMeta, ...enriched, virtualStates, _body: body };
   });
 
   if (filters?.dueBefore) {
@@ -291,7 +342,9 @@ export function listTasks(
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase();
     tasks = tasks.filter((t) => {
-      return !!t.title?.toLowerCase().includes(searchLower);
+      const titleMatch = !!t.title?.toLowerCase().includes(searchLower);
+      const bodyMatch = !!t._body?.toLowerCase().includes(searchLower);
+      return titleMatch || bodyMatch;
     });
   }
 
@@ -302,7 +355,9 @@ export function listTasks(
     );
   }
 
-  return ok(tasks);
+  // Strip internal _body field before returning
+  const cleaned = tasks.map(({ _body, ...rest }) => rest);
+  return ok(cleaned);
 }
 
 function didYouMeanTask(db: BrainDB, displayId: string): string | undefined {

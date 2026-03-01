@@ -17,6 +17,7 @@ import {
   updateTaskStatus,
   deleteTask,
 } from '../data/task-ops.js';
+import type { ListMode } from '../data/task-ops.js';
 import { getPmNotes, resolveProject } from '../data/queries.js';
 import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
@@ -111,6 +112,8 @@ export function createTaskCommands(): Command {
     .option('--due-before <date>', 'Filter tasks due before date (YYYY-MM-DD)')
     .option('--milestone <name>', 'Filter by milestone')
     .option('--json', 'Output JSON')
+    .option('--full', 'Include complete task body in JSON output')
+    .option('--short', 'Minimal output — structural fields only, no descriptions')
     .option('--sort <field>', 'Sort by: priority, workstream, status, created')
     .option('--limit <n>', 'Limit number of results', parseInt)
     .action(async (opts) => {
@@ -133,6 +136,7 @@ export function createTaskCommands(): Command {
           workstreamNumber = wsResult.data;
         }
 
+        const mode: ListMode = opts.full ? 'full' : opts.short ? 'short' : 'default';
         const result = listTasks(svc.db, projectResult.data, {
           workstream: workstreamNumber,
           status: opts.status,
@@ -141,7 +145,7 @@ export function createTaskCommands(): Command {
           search: opts.search,
           dueBefore: opts.dueBefore,
           milestone: opts.milestone,
-        });
+        }, mode);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;

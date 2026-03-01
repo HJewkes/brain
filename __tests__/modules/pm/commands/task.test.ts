@@ -1,10 +1,12 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { BrainDB } from '../../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createTaskCommands } from '../../../../src/modules/pm/commands/task.js';
-import { createTask } from '../../../../src/modules/pm/data/task-ops.js';
+import { createTask, updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
 
 let db: BrainDB;
 const embedder = createMockEmbedder();
@@ -665,5 +667,122 @@ describe('task delete', () => {
     const out = stdout();
     expect(out).toContain('Deleted');
     expect(out).toContain('TEST-01.01');
+  });
+});
+
+function appendTaskBody(displayId: string, bodyText: string): void {
+  const filePath = join(config.notesDir, 'modules', 'pm', 'TEST', `${displayId}.md`);
+  if (!existsSync(filePath)) throw new Error(`Task file not found: ${filePath}`);
+  const content = readFileSync(filePath, 'utf-8');
+  writeFileSync(filePath, content + '\n' + bodyText, 'utf-8');
+}
+
+describe('task list enrichment', () => {
+  it('--json includes description field truncated to 500 chars', async () => {
+    const longBody = 'A'.repeat(600);
+    appendTaskBody('TEST-01.01', longBody);
+
+    await run('list', '--project', 'TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const task = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.01');
+    expect(task).toHaveProperty('description');
+    expect(task.description.length).toBeLessThanOrEqual(500);
+  });
+
+  it('--json includes depends_on array', async () => {
+    await run('list', '--project', 'TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const task = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.02');
+    expect(task).toHaveProperty('depends_on');
+    expect(task.depends_on).toContain('TEST-01.01');
+  });
+
+  it('--json includes blocked_by array', async () => {
+    // TEST-01.02 depends on TEST-01.01, so TEST-01.01 blocked_by should contain TEST-01.02
+    await run('list', '--project', 'TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const task01 = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.01');
+    expect(task01).toHaveProperty('blocked_by');
+    expect(task01.blocked_by).toContain('TEST-01.02');
+  });
+
+  it('--json includes created and modified timestamps', async () => {
+    await run('list', '--project', 'TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const task = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.01');
+    expect(task).toHaveProperty('created');
+    expect(task).toHaveProperty('modified');
+    expect(task.created).toBeTruthy();
+    expect(task.modified).toBeTruthy();
+  });
+
+  it('--full --json includes complete body not truncated', async () => {
+    const longBody = 'B'.repeat(600);
+    appendTaskBody('TEST-01.01', longBody);
+
+    await run('list', '--project', 'TEST', '--full', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const task = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.01');
+    expect(task.description.length).toBeGreaterThan(500);
+    expect(task.description).toContain('B'.repeat(600));
+  });
+
+  it('--short --json omits description', async () => {
+    await run('list', '--project', 'TEST', '--short', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const task = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.01');
+    expect(task).not.toHaveProperty('description');
+    expect(task).not.toHaveProperty('acceptance_criteria');
+    expect(task).not.toHaveProperty('blocked_by');
+  });
+});
+
+describe('task list search fixes', () => {
+  it('--search matches body content', async () => {
+    appendTaskBody('TEST-01.01', 'This task involves vector search implementation');
+
+    await run('list', '--project', 'TEST', '--search', 'vector', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBe(1);
+    expect(parsed[0].display_id).toBe('TEST-01.01');
+  });
+
+  it('--search queries all statuses by default', async () => {
+    // Move TEST-01.01 to done: pending -> claimed -> in-progress -> done
+    await run('claim', 'TEST-01.01', '--start');
+    stdoutChunks = [];
+    stderrChunks = [];
+    await run('done', 'TEST-01.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('list', '--project', 'TEST', '--search', '01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBe(1);
+    expect(parsed[0].display_id).toBe('TEST-01.01');
+    expect(parsed[0].status).toBe('done');
+  });
+
+  it('--search --status pending restricts to pending', async () => {
+    // Move TEST-01.01 to done
+    await run('claim', 'TEST-01.01', '--start');
+    stdoutChunks = [];
+    stderrChunks = [];
+    await run('done', 'TEST-01.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('list', '--project', 'TEST', '--search', '01.01', '--status', 'pending', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBe(0);
   });
 });

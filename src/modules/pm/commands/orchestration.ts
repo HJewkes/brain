@@ -412,8 +412,9 @@ export function createOrchestrationCommands(): Command[] {
           orphans.length + brokenDeps.length + blockedNoCause.length + cancelledDeps.length;
 
         const nextActions: string[] = [];
-        if (eligible.length > 0) {
-          nextActions.push(`Pick up eligible task: ${eligible[0]}`);
+        const topEligible = eligible.slice(0, 5);
+        for (const taskId of topEligible) {
+          nextActions.push(`Pick up eligible task: ${taskId}`);
         }
         if (stalePrompts.length > 0) {
           nextActions.push(`Update ${stalePrompts.length} stale prompt(s)`);
