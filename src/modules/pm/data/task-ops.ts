@@ -248,13 +248,8 @@ export function listTasks(
 
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase();
-    const wsMap = buildWorkstreamMap(db, prefix);
     tasks = tasks.filter((t) => {
-      if (t.title?.toLowerCase().includes(searchLower)) return true;
-      const ws = wsMap.get(t.workstream);
-      if (ws?.title.toLowerCase().includes(searchLower)) return true;
-      if (ws?.description?.toLowerCase().includes(searchLower)) return true;
-      return false;
+      return !!t.title?.toLowerCase().includes(searchLower);
     });
   }
 
@@ -268,13 +263,30 @@ export function listTasks(
   return ok(tasks);
 }
 
+function didYouMeanTask(db: BrainDB, displayId: string): string | undefined {
+  const parsed = parseDisplayId(displayId);
+  if (!parsed || parsed.workstream === undefined || parsed.task === undefined) return undefined;
+
+  const allTasks = getPmNotes(db, 'task');
+  for (const note of allTasks) {
+    if (!note.metadata) continue;
+    const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+    if (meta.workstream === parsed.workstream && meta.number === parsed.task) {
+      return meta.display_id as string;
+    }
+  }
+  return undefined;
+}
+
 export function getTask(
   db: BrainDB,
   displayId: string
 ): Result<TaskMetadata & { virtualStates: VirtualState[] }> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
-    return fail('NOT_FOUND', `Task "${displayId}" not found`);
+    const suggestion = didYouMeanTask(db, displayId);
+    const hint = suggestion ? ` Did you mean "${suggestion}"?` : '';
+    return fail('NOT_FOUND', `Task "${displayId}" not found.${hint}`);
   }
 
   const meta = JSON.parse(notes[0].metadata!) as Record<string, unknown>;

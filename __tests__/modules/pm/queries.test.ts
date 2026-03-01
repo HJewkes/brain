@@ -286,6 +286,15 @@ describe('getActiveProject / setActiveProject', () => {
 
 describe('resolveProject', () => {
   it('returns explicit project when provided', () => {
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+
     const result = resolveProject(db, 'WEB');
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.data).toBe('WEB');
@@ -308,6 +317,23 @@ describe('resolveProject', () => {
   });
 
   it('prefers explicit over active', () => {
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'api-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'API', prefix: 'API', status: 'active' }),
+      })
+    );
+
     setActiveProject(db, 'WEB');
     const result = resolveProject(db, 'API');
     expect(result.ok).toBe(true);
@@ -315,9 +341,55 @@ describe('resolveProject', () => {
   });
 
   it('uppercases explicit project', () => {
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+
     const result = resolveProject(db, 'web');
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.data).toBe('WEB');
+  });
+
+  it('returns NOT_FOUND with available prefixes when explicit project does not exist (O-59)', () => {
+    db.upsertNote(
+      makeNote({
+        id: 'web-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'WEB', prefix: 'WEB', status: 'active' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'api-project',
+        module: 'pm',
+        type: 'project',
+        metadata: JSON.stringify({ display_id: 'API', prefix: 'API', status: 'active' }),
+      })
+    );
+
+    const result = resolveProject(db, 'VOLT');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).toContain('VOLT');
+      expect(result.error.message).toContain('API');
+      expect(result.error.message).toContain('WEB');
+    }
+  });
+
+  it('returns NOT_FOUND when explicit project given but no projects exist (O-59)', () => {
+    const result = resolveProject(db, 'VOLT');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).toContain('No projects exist yet');
+    }
   });
 });
 

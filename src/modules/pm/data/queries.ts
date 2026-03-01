@@ -107,7 +107,25 @@ export function resolveProject(
   db: BrainDB,
   explicit: string | undefined
 ): Result<string> {
-  if (explicit) return ok(explicit.toUpperCase());
+  if (explicit) {
+    const upper = explicit.toUpperCase();
+    const projectNotes = getPmNotes(db, 'project', { prefix: upper });
+    if (projectNotes.length === 0) {
+      const allProjects = getPmNotes(db, 'project');
+      if (allProjects.length > 0) {
+        const available = allProjects.map((p) => {
+          const m = JSON.parse(p.metadata!) as Record<string, unknown>;
+          return m.prefix as string;
+        });
+        return fail(
+          'NOT_FOUND',
+          `Project "${upper}" not found. Available projects: ${available.sort().join(', ')}.`
+        );
+      }
+      return fail('NOT_FOUND', `Project "${upper}" not found. No projects exist yet.`);
+    }
+    return ok(upper);
+  }
   const active = getActiveProject(db);
   if (active) return ok(active);
 

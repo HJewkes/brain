@@ -314,6 +314,22 @@ describe('listTasks', () => {
     if (!result.ok) return;
     expect(result.data).toHaveLength(0);
   });
+
+  it('search matches task title only, not workstream name (O-63)', async () => {
+    await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Integration' });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 2, name: 'Setup CI',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 2, name: 'Integration test harness',
+    });
+
+    const result = listTasks(db, 'WEB', { search: 'integration' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].title).toBe('Integration test harness');
+  });
 });
 
 describe('getTask', () => {
@@ -350,6 +366,26 @@ describe('getTask', () => {
     const result = getTask(db, 'WEB-01.99');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('NOT_FOUND');
+  });
+
+  it('suggests correct prefix when task ID has wrong prefix (O-58)', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Real task' });
+
+    const result = getTask(db, 'VLT-01.01');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).toContain('Did you mean "WEB-01.01"');
+    }
+  });
+
+  it('returns plain NOT_FOUND when no matching numeric portion exists', () => {
+    const result = getTask(db, 'WEB-99.99');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).not.toContain('Did you mean');
+    }
   });
 });
 
