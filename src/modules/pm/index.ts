@@ -242,7 +242,7 @@ export const pmModule: BrainModule = {
       .action(async () => {
         const idx = process.argv.indexOf('tasks');
         const tail = process.argv.slice(idx + 1);
-        await pmCmd.parseAsync(['node', 'brain-pm', 'task', 'list', ...tail], { from: 'user' });
+        await pmCmd.parseAsync(['node', 'brain-pm', 'task', 'list', ...tail], { from: 'node' });
       });
     pmCmd.addCommand(tasksAlias);
 
@@ -252,7 +252,7 @@ export const pmModule: BrainModule = {
       .action(async () => {
         const idx = process.argv.indexOf('workstreams');
         const tail = process.argv.slice(idx + 1);
-        await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', 'list', ...tail], { from: 'user' });
+        await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', 'list', ...tail], { from: 'node' });
       });
     pmCmd.addCommand(workstreamsAlias);
 
