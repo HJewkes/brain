@@ -63,6 +63,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('memories default action (O-130 regression)', () => {
+  it('does not crash with stack overflow when no subcommand given', async () => {
+    await run();
+
+    const out = stdout();
+    expect(out).toContain('TypeScript is typed');
+    expect(out).toContain('Total:');
+  });
+});
+
 describe('memories list', () => {
   it('displays memories as text', async () => {
     await run('list');
