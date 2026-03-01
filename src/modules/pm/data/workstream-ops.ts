@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
-import type { BrainConfig, Embedder } from '../../../types.js';
+import type { BrainConfig, Embedder, Relation } from '../../../types.js';
 import type { Result } from '../errors.js';
 import type { WorkstreamMetadata } from '../types.js';
 import { ok, fail } from '../errors.js';
@@ -128,7 +128,14 @@ export async function createWorkstream(
   writeFileSync(filePath, markdown, 'utf-8');
 
   const hash = createHash('sha256').update(markdown).digest('hex');
-  await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
+  const noteId = await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
+
+  if (projectNotes.length > 0) {
+    const parentRelation: Relation[] = [
+      { sourceId: projectNotes[0].id, targetId: noteId, type: 'parent' },
+    ];
+    db.upsertRelations(noteId, parentRelation);
+  }
 
   const metadata: WorkstreamMetadata = {
     display_id: displayId,
