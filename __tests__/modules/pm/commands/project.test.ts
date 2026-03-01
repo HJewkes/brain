@@ -290,3 +290,118 @@ describe('project delete', () => {
     expect(process.exitCode).toBe(1);
   });
 });
+
+describe('project show', () => {
+  it('displays project metadata', async () => {
+    await createProject(db, config, embedder, { name: 'ViewApp', prefix: 'VW', phase: 'alpha' });
+
+    const output = captureOutput();
+    const { createProjectCommands } = await loadCommand();
+    const cmd = createProjectCommands();
+    await cmd.parseAsync(['show', 'VW'], { from: 'user' });
+
+    const out = output.stdout();
+    expect(out).toContain('VW');
+    expect(out).toContain('active');
+    expect(out).toContain('alpha');
+    expect(out).toContain('Workstreams:');
+    expect(out).toContain('Tasks:');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('returns structured JSON with --json flag', async () => {
+    await createProject(db, config, embedder, { name: 'ViewApp', prefix: 'VW', phase: 'beta' });
+
+    const output = captureOutput();
+    const { createProjectCommands } = await loadCommand();
+    const cmd = createProjectCommands();
+    await cmd.parseAsync(['show', 'VW', '--json'], { from: 'user' });
+
+    const parsed = JSON.parse(output.stdout());
+    expect(parsed.prefix).toBe('VW');
+    expect(parsed.name).toBeDefined();
+    expect(parsed.status).toBe('active');
+    expect(parsed.phase).toBe('beta');
+    expect(parsed.workstreams).toBeDefined();
+    expect(Array.isArray(parsed.workstreams)).toBe(true);
+    expect(parsed.taskCounts).toBeDefined();
+    expect(parsed.taskCounts.total).toBe(0);
+  });
+
+  it('displays description when project note has body content', async () => {
+    const { writeFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+
+    await createProject(db, config, embedder, { name: 'Described', prefix: 'DSC' });
+
+    // Add body content to the project file
+    const filePath = join(config.notesDir, 'modules', 'pm', 'DSC', 'project.md');
+    const { readFileSync } = await import('node:fs');
+    const content = readFileSync(filePath, 'utf-8');
+    const withDesc = content.replace('# Described\n', '# Described\nThis is the project description.\n');
+    writeFileSync(filePath, withDesc, 'utf-8');
+
+    const output = captureOutput();
+    const { createProjectCommands } = await loadCommand();
+    const cmd = createProjectCommands();
+    await cmd.parseAsync(['show', 'DSC'], { from: 'user' });
+
+    expect(output.stdout()).toContain('This is the project description');
+  });
+
+  it('errors with invalid prefix and shows available projects', async () => {
+    await createProject(db, config, embedder, { name: 'ExistApp', prefix: 'EXI' });
+
+    const output = captureOutput();
+    const { createProjectCommands } = await loadCommand();
+    const cmd = createProjectCommands();
+    await cmd.parseAsync(['show', 'NOPE'], { from: 'user' });
+
+    expect(output.stderr()).toContain('NOT_FOUND');
+    expect(output.stderr()).toContain('EXI');
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('project list', () => {
+  it('outputs all projects', async () => {
+    await createProject(db, config, embedder, { name: 'Alpha', prefix: 'ALP' });
+    await createProject(db, config, embedder, { name: 'Beta', prefix: 'BET' });
+
+    const output = captureOutput();
+    const { createProjectCommands } = await loadCommand();
+    const cmd = createProjectCommands();
+    await cmd.parseAsync(['list'], { from: 'user' });
+
+    const out = output.stdout();
+    expect(out).toContain('ALP');
+    expect(out).toContain('BET');
+    expect(out).toContain('active');
+  });
+
+  it('returns JSON array with --json flag', async () => {
+    await createProject(db, config, embedder, { name: 'Alpha', prefix: 'ALP' });
+    await createProject(db, config, embedder, { name: 'Beta', prefix: 'BET' });
+
+    const output = captureOutput();
+    const { createProjectCommands } = await loadCommand();
+    const cmd = createProjectCommands();
+    await cmd.parseAsync(['list', '--json'], { from: 'user' });
+
+    const parsed = JSON.parse(output.stdout());
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].prefix).toBeDefined();
+    expect(parsed[0].name).toBeDefined();
+    expect(parsed[0].status).toBeDefined();
+  });
+
+  it('shows "No projects found" when empty', async () => {
+    const output = captureOutput();
+    const { createProjectCommands } = await loadCommand();
+    const cmd = createProjectCommands();
+    await cmd.parseAsync(['list'], { from: 'user' });
+
+    expect(output.stdout()).toContain('No projects found');
+  });
+});
