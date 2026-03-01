@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { parseMarkdown } from './markdown-parser.js';
+import { parseMarkdown, extractNoteLinks } from './markdown-parser.js';
 import type { BrainDB } from './brain-db.js';
-import type { Chunk, Embedder, InboxItem, NoteRecord, RawChunk } from '../types.js';
+import type { Chunk, Embedder, InboxItem, NoteRecord, RawChunk, Relation } from '../types.js';
 import { scanForChanges } from './file-scanner.js';
 import { readIndexableContent } from './content-dir.js';
 import { slugify } from '../utils.js';
@@ -149,6 +149,18 @@ export async function indexSingleFile(
 
   if (parsed.relations.length > 0) {
     db.upsertRelations(parsed.id, parsed.relations);
+  }
+
+  const noteLinks = extractNoteLinks(parsed.content);
+  const linkRelations: Relation[] = [];
+  for (const targetSlug of noteLinks) {
+    const targetNote = db.getNoteById(targetSlug);
+    if (targetNote && targetSlug !== parsed.id) {
+      linkRelations.push({ sourceId: parsed.id, targetId: targetSlug, type: 'related-to' });
+    }
+  }
+  if (linkRelations.length > 0) {
+    db.upsertRelations(parsed.id, linkRelations);
   }
 
   db.upsertFile({

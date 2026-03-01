@@ -374,6 +374,18 @@ function splitParagraphsProtectingFences(text: string): string[] {
   return paragraphs;
 }
 
+export function extractNoteLinks(content: string): string[] {
+  const linkPattern = /\[([^\]]*)\]\(([^)]+)\)/g;
+  const links: string[] = [];
+  for (const match of content.matchAll(linkPattern)) {
+    const target = match[2];
+    if (target.startsWith('http') || target.startsWith('#') || target.startsWith('mailto:')) continue;
+    const slug = target.replace(/\.md$/, '').split('/').pop() ?? target;
+    if (slug.length > 0) links.push(slug);
+  }
+  return [...new Set(links)];
+}
+
 function extractRelations(sourceId: string, data: Record<string, unknown>): Relation[] {
   const relations: Relation[] = [];
 
