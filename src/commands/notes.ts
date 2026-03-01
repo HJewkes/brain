@@ -55,8 +55,8 @@ notesCommand
       }
 
       if (notes.length > limit) {
-        process.stdout.write(
-          `\n... ${notes.length - limit} more notes (use --limit to see more)\n`,
+        process.stderr.write(
+          `Showing ${limit} of ${notes.length} notes. Use --limit to see more.\n`,
         );
       }
     });

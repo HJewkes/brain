@@ -1,6 +1,8 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 
+const listSubcommands = new Set(['list', 'history', 'stats']);
+
 export const memoriesCommand = new Command('memories')
   .description('View and manage extracted memories')
   .addCommand(
@@ -126,3 +128,18 @@ export const memoriesCommand = new Command('memories')
         });
       })
   );
+
+memoriesCommand
+  .helpOption(false)
+  .allowUnknownOption()
+  .allowExcessArguments(true)
+  .action(async () => {
+    const idx = process.argv.indexOf('memories');
+    const tail = process.argv.slice(idx + 1);
+    const hasSubcommand = tail.length > 0 && listSubcommands.has(tail[0]);
+    const prefix = hasSubcommand ? [] : ['list'];
+    await memoriesCommand.parseAsync(
+      ['node', 'brain', 'memories', ...prefix, ...tail],
+      { from: 'node' },
+    );
+  });

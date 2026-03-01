@@ -63,7 +63,7 @@ export function createTaskCommands(): Command {
     .description('Create a new task')
     .argument('<name>', 'Task name')
     .option('--project <prefix>', 'Project prefix (uses active if omitted)')
-    .requiredOption('--workstream <id>', 'Workstream number or display ID (e.g. 1 or VW-01)')
+    .requiredOption('--workstream <id>', 'Workstream number or display ID (e.g. 1 or PROJ-01)')
     .option('--mode <mode>', 'Task mode (auto|interactive|review)')
     .option('--category <cat>', 'Task category')
     .option('--priority <pri>', 'Task priority (critical|high|medium|low)')
@@ -80,7 +80,7 @@ export function createTaskCommands(): Command {
           return;
         }
         const project = projectResult.data;
-        // Parse workstream: accept integer or display ID (e.g. VW-01)
+        // Parse workstream: accept integer or display ID (e.g. PROJ-01)
         let workstreamNum: number;
         const wsStr = String(opts.workstream);
         if (/^\d+$/.test(wsStr)) {
@@ -119,7 +119,7 @@ export function createTaskCommands(): Command {
     .command('list')
     .description('List tasks')
     .option('--project <prefix>', 'Filter by project prefix')
-    .option('--workstream <n>', 'Filter by workstream number or display ID (e.g. 6 or VOLT-06)')
+    .option('--workstream <n>', 'Filter by workstream number or display ID (e.g. 6 or PROJ-06)')
     .option('--status <status>', 'Filter by status')
     .option('--priority <level>', 'Filter by priority (critical|high|medium|low)')
     .option('--category <cat>', 'Filter by category')

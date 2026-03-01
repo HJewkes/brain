@@ -213,7 +213,7 @@ function availableProjects(
 export function createContextCommand(): Command {
   const cmd = new Command('context')
     .description('Assemble rich context for a project, workstream, or task')
-    .argument('<id>', 'Display ID (project: VW, workstream: VW-01, task: VW-01.03)')
+    .argument('<id>', 'Display ID (project: PROJ, workstream: PROJ-01, task: PROJ-01.03)')
     .option('--decisions', 'Include decisions (default: true)')
     .option('--deps', 'Include dependencies (default: true)')
     .option('--since <timestamp>', 'Filter to activities/decisions after timestamp')

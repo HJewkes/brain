@@ -13,9 +13,14 @@ vi.mock('../../src/services/brain-service.js', () => ({
 import { notesCommand } from '../../src/commands/notes.js';
 
 let stdoutChunks: string[];
+let stderrChunks: string[];
 
 function stdout(): string {
   return stdoutChunks.join('');
+}
+
+function stderr(): string {
+  return stderrChunks.join('');
 }
 
 async function run(...args: string[]): Promise<void> {
@@ -32,11 +37,15 @@ beforeEach(() => {
   };
 
   stdoutChunks = [];
+  stderrChunks = [];
   vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
     stdoutChunks.push(String(chunk));
     return true;
   });
-  vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+    stderrChunks.push(String(chunk));
+    return true;
+  });
   process.exitCode = undefined;
 });
 
@@ -94,8 +103,8 @@ describe('notes list', () => {
       db.upsertNote(makeNote({ title: `Note ${i}` }));
     }
     await run('list', '--limit', '2');
-    const out = stdout();
-    expect(out).toContain('more notes');
+    const err = stderr();
+    expect(err).toContain('Showing 2 of 5 notes');
   });
 
   it('--json outputs valid JSON array', async () => {
