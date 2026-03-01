@@ -11,7 +11,7 @@ import { listDecisions } from '../data/decision-ops.js';
 import { detectStalePrompts } from '../data/prompt-ops.js';
 import { getProject } from '../data/project-ops.js';
 import { computeEligible, computeWaves, computeImpact } from '../engine/dependency.js';
-import { assembleContext } from '../engine/dispatch.js';
+import { assembleContext, assembleDispatch } from '../engine/dispatch.js';
 import { validateClaimToken } from '../engine/claims.js';
 import {
   findOrphanedDecisions,
@@ -150,13 +150,13 @@ export function createOrchestrationCommands(): Command[] {
     });
 
   const dispatchCmd = new Command('dispatch')
-    .description('Assemble and output context bundle for a task')
+    .description('Assemble and output enriched context bundle for a task')
     .argument('<id>', 'Task display ID')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
-        const result = assembleContext(svc.db, displayId);
+        const result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
 
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -179,6 +179,10 @@ export function createOrchestrationCommands(): Command[] {
           lines.push(`Workstream: ${bundle.workstream.displayId} - ${bundle.workstream.title}`);
         }
 
+        if (bundle.workstreamDescription) {
+          lines.push(`  ${bundle.workstreamDescription}`);
+        }
+
         if (bundle.body) {
           lines.push('');
           lines.push('--- Description ---');
@@ -197,6 +201,34 @@ export function createOrchestrationCommands(): Command[] {
           for (const dep of bundle.dependencies) {
             const summary = dep.summary ? ` - ${dep.summary}` : '';
             lines.push(`  ${dep.displayId} [${dep.status}] ${dep.name}${summary}`);
+          }
+        }
+
+        if (bundle.peerTasks.length > 0) {
+          lines.push('');
+          lines.push('--- Peer Tasks (same workstream) ---');
+          for (const peer of bundle.peerTasks) {
+            lines.push(`  ${peer.displayId} [${peer.status}] ${peer.title}`);
+          }
+        }
+
+        if (bundle.downstreamDependents.length > 0) {
+          lines.push('');
+          lines.push('--- Downstream (blocked by this task) ---');
+          for (const dep of bundle.downstreamDependents) {
+            lines.push(`  ${dep.displayId} ${dep.title}`);
+          }
+        }
+
+        if (bundle.relatedNotes.length > 0) {
+          lines.push('');
+          lines.push('--- Related Notes ---');
+          for (const note of bundle.relatedNotes) {
+            const score = note.score.toFixed(2);
+            lines.push(`  [${score}] ${note.title}`);
+            if (note.excerpt) {
+              lines.push(`    ${note.excerpt.slice(0, 120)}`);
+            }
           }
         }
 

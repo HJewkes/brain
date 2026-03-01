@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
+import type { Embedder, BrainConfig } from '../../../types.js';
 import type { Result } from '../errors.js';
 import type { TaskMetadata, DecisionMetadata, PromptMetadata } from '../types.js';
 import { ok, fail } from '../errors.js';
 import { getPmNotes } from '../data/queries.js';
+import { search } from '../../../services/search.js';
+import { listTasks } from '../data/task-ops.js';
 
 export interface DependencySummary {
   displayId: string;
@@ -18,6 +21,12 @@ export interface DecisionSummary {
   displayId: string;
   status: string;
   content: string;
+}
+
+export interface DispatchBundle extends ContextBundle {
+  peerTasks: Array<{ displayId: string; title: string; status: string }>;
+  workstreamDescription: string;
+  downstreamDependents: Array<{ displayId: string; title: string }>;
 }
 
 export interface ContextBundle {
@@ -158,6 +167,84 @@ export function assembleContext(db: BrainDB, taskDisplayId: string): Result<Cont
     constraints: [],
     contextHash,
   });
+}
+
+export async function assembleDispatch(
+  db: BrainDB,
+  embedder: Embedder,
+  config: BrainConfig,
+  taskDisplayId: string
+): Promise<Result<DispatchBundle>> {
+  const ctxResult = assembleContext(db, taskDisplayId);
+  if (!ctxResult.ok) return ctxResult as Result<DispatchBundle>;
+  const ctx = ctxResult.data;
+
+  // Semantic search for related notes
+  const searchQuery = [ctx.task.title, ctx.body].filter(Boolean).join(' ').trim();
+  if (searchQuery) {
+    try {
+      const results = await search(
+        db,
+        embedder,
+        searchQuery,
+        { limit: 5 },
+        config.fusionWeights ?? { bm25: 0.4, vector: 0.6 }
+      );
+      ctx.relatedNotes = results.map((r) => ({
+        title: r.heading ?? r.filePath,
+        excerpt: r.excerpt ?? '',
+        score: r.score,
+      }));
+    } catch {
+      // Search failure is non-fatal — proceed with empty related notes
+    }
+  }
+
+  // Peer tasks in same workstream
+  const peersResult = listTasks(db, ctx.task.project, {
+    workstream: ctx.task.workstream,
+  });
+  const peerTasks = peersResult.ok
+    ? peersResult.data
+        .filter((t) => t.display_id !== taskDisplayId)
+        .map((t) => ({
+          displayId: t.display_id,
+          title: t.title ?? t.display_id,
+          status: t.status as string,
+        }))
+    : [];
+
+  // Workstream description
+  const wsDescription = ctx.workstream
+    ? findWorkstreamDescription(db, ctx.task.project, ctx.task.workstream)
+    : '';
+
+  // Downstream dependents (who depends on this task)
+  const allTasksResult = listTasks(db, ctx.task.project);
+  const downstreamDependents = allTasksResult.ok
+    ? allTasksResult.data
+        .filter((t) => t.depends_on?.includes(taskDisplayId))
+        .map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id }))
+    : [];
+
+  return ok({
+    ...ctx,
+    peerTasks,
+    workstreamDescription: wsDescription,
+    downstreamDependents,
+  });
+}
+
+function findWorkstreamDescription(
+  db: BrainDB,
+  project: string,
+  workstreamNum: number
+): string {
+  const wsDisplayId = `${project}-${String(workstreamNum).padStart(2, '0')}`;
+  const wsNotes = getPmNotes(db, 'workstream', { display_id: wsDisplayId });
+  if (wsNotes.length === 0) return '';
+  const meta = JSON.parse(wsNotes[0].metadata!) as Record<string, unknown>;
+  return (meta.description as string) ?? '';
 }
 
 export function isContextStale(bundle: ContextBundle, db: BrainDB): boolean {
