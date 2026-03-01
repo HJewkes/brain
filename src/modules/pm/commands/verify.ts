@@ -14,6 +14,16 @@ export interface VerificationPlan {
   steps: string[];
 }
 
+export function extractAcceptanceCriteria(body: string): string[] {
+  const acMatch = body.match(/acceptance criteria[:\s]*\n((?:[-*]\s+.+\n?)+)/i);
+  if (!acMatch) return [];
+  return acMatch[1]
+    .split('\n')
+    .filter((l) => l.trim().startsWith('-') || l.trim().startsWith('*'))
+    .map((l) => l.replace(/^[\s]*[-*]\s+/, '').trim())
+    .filter((l) => l.length > 0);
+}
+
 export function suggestVerificationSteps(category: TaskCategory): string[] {
   switch (category) {
     case 'implementation':
@@ -137,6 +147,8 @@ export function createVerifyCommand(): Command {
         const bundle = contextResult.data;
         const task = taskResult.data;
 
+        const acSteps = extractAcceptanceCriteria(bundle.body);
+
         const plan: VerificationPlan = {
           taskId: displayId,
           category: task.category,
@@ -149,7 +161,7 @@ export function createVerifyCommand(): Command {
             displayId: d.displayId,
             content: d.content,
           })),
-          steps: suggestVerificationSteps(task.category),
+          steps: acSteps.length > 0 ? acSteps : suggestVerificationSteps(task.category),
         };
 
         if (opts.json) {
