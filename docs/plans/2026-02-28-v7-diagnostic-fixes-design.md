@@ -268,7 +268,7 @@ export async function assembleDispatch(
 }
 ```
 
-Update the dispatch command in `orchestration.ts` to call `assembleDispatch` instead of `assembleContext`. The dispatch command handler already uses `withBrain` which provides access to the embedder.
+Update both the `dispatch` command in `orchestration.ts` and the `context` command in `context.ts` to call `assembleDispatch` instead of `assembleContext`. Both command handlers use `withBrain` which provides access to the embedder.
 
 Update `formatHuman` in context.ts (or create `formatDispatchHuman` in orchestration.ts) to render the new sections:
 - `--- Peer Tasks ---` — other tasks in the same workstream
@@ -276,9 +276,12 @@ Update `formatHuman` in context.ts (or create `formatDispatchHuman` in orchestra
 - `--- Downstream ---` — tasks that depend on this one
 - `--- Related Notes ---` (already in template, now populated)
 
+**Note:** The V7 implementation only updated `orchestration.ts` (dispatch), leaving `context.ts` still calling `assembleContext` with empty `relatedNotes`. This was fixed in V8 (commit `5723c9e`).
+
 ### Files changed
 - `src/modules/pm/engine/dispatch.ts` — add `assembleDispatch`, `DispatchBundle` type
 - `src/modules/pm/commands/orchestration.ts` — dispatch command uses `assembleDispatch`, format new sections
+- `src/modules/pm/commands/context.ts` — context command uses `assembleDispatch` (fixed in V8)
 
 ---
 

@@ -30,14 +30,27 @@ The PM module has regressed twice on the same feature (plural aliases) because t
 
 ### Fix
 
-Change `from: 'user'` to `from: 'node'` on lines 245 and 255 of `src/modules/pm/index.ts`. `from: 'node'` strips `argv[0]` (node binary) and `argv[1]` (script path), leaving `['task', 'list', ...tail]` which routes correctly.
+Two changes needed in `src/modules/pm/index.ts`:
+
+1. Change `from: 'user'` to `from: 'node'` — fixes Commander argv stripping on subcommands.
+2. Add `.allowUnknownOption().allowExcessArguments(true)` to both alias Commands — prevents Commander from rejecting flags like `--json` or `--priority high` before the action handler can re-parse them through the real subcommand.
 
 ```typescript
 // Before (broken)
-await pmCmd.parseAsync(['node', 'brain-pm', 'task', 'list', ...tail], { from: 'user' });
+const tasksAlias = new Command('tasks')
+  .helpOption(false)
+  .action(async () => {
+    await pmCmd.parseAsync([...], { from: 'user' });
+  });
 
 // After (fixed)
-await pmCmd.parseAsync(['node', 'brain-pm', 'task', 'list', ...tail], { from: 'node' });
+const tasksAlias = new Command('tasks')
+  .helpOption(false)
+  .allowUnknownOption()
+  .allowExcessArguments(true)
+  .action(async () => {
+    await pmCmd.parseAsync([...], { from: 'node' });
+  });
 ```
 
 Same change for the `workstreams` alias.
