@@ -66,7 +66,7 @@ export const searchCommand = new Command('search')
         : [];
 
       if (opts.json) {
-        const output = opts.memories ? { notes: allResults, memories: memoryResults } : allResults;
+        const output = { notes: allResults, memories: memoryResults };
         process.stdout.write(JSON.stringify(output) + '\n');
       } else {
         if (allResults.length === 0 && memoryResults.length === 0) {

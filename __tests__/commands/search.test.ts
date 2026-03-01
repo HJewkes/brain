@@ -72,14 +72,18 @@ describe('search command', () => {
     expect(out).toMatch(/\[\d+\.\d+\]/);
   });
 
-  it('--json outputs JSON array of results', async () => {
+  it('--json always returns { notes, memories } shape (O-112)', async () => {
     await run('TypeScript', '--json');
 
     const parsed = JSON.parse(stdout());
-    expect(Array.isArray(parsed)).toBe(true);
-    expect(parsed.length).toBeGreaterThan(0);
-    expect(parsed[0]).toHaveProperty('score');
-    expect(parsed[0]).toHaveProperty('filePath');
+    expect(parsed).toHaveProperty('notes');
+    expect(parsed).toHaveProperty('memories');
+    expect(Array.isArray(parsed.notes)).toBe(true);
+    expect(Array.isArray(parsed.memories)).toBe(true);
+    expect(parsed.notes.length).toBeGreaterThan(0);
+    expect(parsed.notes[0]).toHaveProperty('score');
+    expect(parsed.notes[0]).toHaveProperty('filePath');
+    expect(parsed.memories).toEqual([]);
   });
 
   it('shows "No results found" when database is empty', async () => {
@@ -96,7 +100,7 @@ describe('search command', () => {
     await run('TypeScript', '--limit', '1', '--json');
 
     const parsed = JSON.parse(stdout());
-    expect(parsed.length).toBeLessThanOrEqual(1);
+    expect(parsed.notes.length).toBeLessThanOrEqual(1);
   });
 
   it('--json with --memories outputs object with notes and memories keys', async () => {
