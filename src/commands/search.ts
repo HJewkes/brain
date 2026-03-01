@@ -21,6 +21,9 @@ export const searchCommand = new Command('search')
   .option('--expand', 'include graph-connected notes')
   .option('--memories', 'also search extracted memories')
   .option('--container <tag>', 'filter memories by container tag')
+  .option('--workstream <id>', 'filter by workstream (number or display ID)')
+  .option('--type <type>', 'filter by note type (e.g. task, project, note)')
+  .option('--module <module>', 'filter by module (e.g. pm)')
   .action(async (query, opts) => {
     await withBrain(async ({ db, embedder, config, modules }) => {
       const searchOpts: SearchOptions = {
@@ -59,7 +62,27 @@ export const searchCommand = new Command('search')
         }
       }
 
-      const allResults = [...results, ...expanded];
+      let allResults = [...results, ...expanded];
+
+      if (opts.type || opts.module || opts.workstream) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return false;
+          if (opts.type && note.type !== opts.type) return false;
+          if (opts.module && note.module !== opts.module) return false;
+          if (opts.workstream) {
+            const meta = note.metadata ? JSON.parse(note.metadata) : null;
+            if (!meta) return false;
+            const wsNum = parseInt(opts.workstream, 10);
+            if (!isNaN(wsNum)) {
+              if (meta.workstream !== wsNum) return false;
+            } else {
+              if (meta.workstream_display_id !== opts.workstream.toUpperCase()) return false;
+            }
+          }
+          return true;
+        });
+      }
 
       const memoryResults = opts.memories
         ? await searchMemories(db, embedder, query, parseInt(opts.limit, 10), opts.container)
