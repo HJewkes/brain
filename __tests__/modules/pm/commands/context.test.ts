@@ -184,3 +184,107 @@ describe('context command', () => {
     expect(out).toContain('Use REST API');
   });
 });
+
+describe('project context', () => {
+  it('returns project briefing for project prefix', async () => {
+    await run('TEST');
+
+    const out = stdout();
+    expect(out).toContain('Project: TEST');
+    expect(out).toContain('Workstreams');
+    expect(out).toContain('TEST-01');
+    expect(out).toContain('TEST-02');
+  });
+
+  it('shows task distribution for project', async () => {
+    await run('TEST');
+
+    const out = stdout();
+    expect(out).toContain('Task Distribution');
+    expect(out).toContain('pending');
+  });
+
+  it('--json returns ProjectContext object', async () => {
+    await run('TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed).toHaveProperty('project');
+    expect(parsed).toHaveProperty('workstreams');
+    expect(parsed).toHaveProperty('statusDistribution');
+    expect(parsed.project.prefix).toBe('TEST');
+    expect(parsed.workstreams).toHaveLength(2);
+  });
+
+  it('unknown project shows error', async () => {
+    await run('NOPE');
+
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain('NOT_FOUND');
+    expect(stderr()).toContain('Available projects: TEST');
+  });
+});
+
+describe('workstream context', () => {
+  it('returns workstream briefing for workstream ID', async () => {
+    await run('TEST-01');
+
+    const out = stdout();
+    expect(out).toContain('Workstream: TEST-01');
+    expect(out).toContain('Tasks');
+    expect(out).toContain('TEST-01.01');
+    expect(out).toContain('TEST-01.02');
+    expect(out).toContain('TEST-01.03');
+  });
+
+  it('shows status distribution for workstream', async () => {
+    await run('TEST-01');
+
+    const out = stdout();
+    expect(out).toContain('Status Distribution');
+    expect(out).toContain('pending');
+  });
+
+  it('shows eligible tasks for workstream', async () => {
+    await run('TEST-01');
+
+    const out = stdout();
+    expect(out).toContain('Eligible Tasks');
+    expect(out).toContain('TEST-01.01');
+  });
+
+  it('--json returns WorkstreamContext object', async () => {
+    await run('TEST-01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed).toHaveProperty('workstream');
+    expect(parsed).toHaveProperty('tasks');
+    expect(parsed).toHaveProperty('statusDistribution');
+    expect(parsed).toHaveProperty('eligibleTasks');
+    expect(parsed.workstream.displayId).toBe('TEST-01');
+    expect(parsed.tasks.length).toBe(3);
+  });
+
+  it('unknown workstream shows did-you-mean', async () => {
+    await run('TEST-99');
+
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain('NOT_FOUND');
+  });
+});
+
+describe('did-you-mean suggestions', () => {
+  it('suggests correct task ID on not-found', async () => {
+    await run('TEST-99.99');
+
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain('NOT_FOUND');
+  });
+
+  it('shows available projects on error', async () => {
+    await run('NOPE');
+
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain('Available projects');
+    expect(stderr()).toContain('TEST');
+  });
+});
