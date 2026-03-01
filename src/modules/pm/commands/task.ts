@@ -90,7 +90,7 @@ export function createTaskCommands(): Command {
           if (parsed?.workstream !== undefined) {
             workstreamNum = parsed.workstream;
           } else {
-            process.stderr.write(formatError(`Invalid workstream: ${wsStr}. Use a number (e.g. 1) or display ID (e.g. ${project}-01)`, !!opts.json) + '\n');
+            process.stderr.write(formatError(pmError('INVALID_INPUT', `Invalid workstream: ${wsStr}. Use a number (e.g. 1) or display ID (e.g. ${project}-01)`), !!opts.json) + '\n');
             process.exitCode = 1;
             return;
           }
