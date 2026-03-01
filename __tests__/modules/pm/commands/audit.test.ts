@@ -275,4 +275,64 @@ describe('audit performance', () => {
     expect(parsed.completionRate).toBe(0);
     expect(parsed.avgDurationMs).toBe(0);
   });
+
+  it('handles activities without completedAt in duration calc', async () => {
+    db.addActivity(
+      makeActivity({
+        id: 'act-noend',
+        module: 'pm',
+        activityType: 'task-create',
+        startedAt: '2026-02-20T10:00:00Z',
+        completedAt: null,
+      })
+    );
+
+    await run('performance', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.total).toBe(1);
+    expect(parsed.completed).toBe(0);
+  });
+
+  it('text mode with mixed durations shows avg duration', async () => {
+    seedActivities();
+
+    await run('performance');
+
+    const out = stdout();
+    expect(out).toContain('Avg duration:');
+    expect(out).toContain('ms');
+  });
+});
+
+describe('audit enrich', () => {
+  it('enriches an activity with token metadata', async () => {
+    seedActivities();
+
+    await run('enrich', 'act-1', '--tokens', '5000', '--model', 'opus');
+
+    const out = stdout();
+    expect(out).toContain('Enriched activity act-1');
+    expect(out).toContain('5000 tokens');
+    expect(out).toContain('opus');
+  });
+
+  it('--json returns updated activity', async () => {
+    seedActivities();
+
+    await run('enrich', 'act-1', '--tokens', '5000', '--model', 'opus', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.id).toBe('act-1');
+    const meta = JSON.parse(parsed.metadata);
+    expect(meta.tokens).toBe(5000);
+    expect(meta.model).toBe('opus');
+  });
+
+  it('not-found sets exitCode=1', async () => {
+    await run('enrich', 'nonexistent-id', '--tokens', '100', '--model', 'haiku');
+
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain('NOT_FOUND');
+  });
 });

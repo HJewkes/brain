@@ -71,6 +71,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('capture process (error paths)', () => {
+  function getProcessCmd() {
+    const cmds = createCaptureCommands();
+    return cmds[2];
+  }
+
+  async function runProcess2(...args: string[]): Promise<void> {
+    await getProcessCmd().parseAsync(['node', 'process', ...args], { from: 'node' });
+  }
+
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('capture-proc-noproj'));
+
+    await runProcess2('some-id', '--task-name', 'T', '--workstream', '1');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
 describe('capture add', () => {
   it('creates a capture with text', async () => {
     await runCapture('Remember to refactor the parser');
@@ -143,5 +163,57 @@ describe('capture list (inbox)', () => {
     for (const c of parsed) {
       expect(c.project).toBe('TEST');
     }
+  });
+
+  it('--all includes processed captures', async () => {
+    await runCapture('A capture');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await runInbox('--all', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('capture process', () => {
+  function getProcessCmd() {
+    const cmds = createCaptureCommands();
+    return cmds[2]; // process command
+  }
+
+  async function runProcess(...args: string[]): Promise<void> {
+    await getProcessCmd().parseAsync(['node', 'process', ...args], { from: 'node' });
+  }
+
+  it('processes a capture into a task', async () => {
+    await runCapture('Needs to be a task', '--project', 'TEST', '--json');
+    const capture = JSON.parse(stdout());
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await runProcess(capture.noteId, '--task-name', 'New task from capture', '--workstream', '1', '--project', 'TEST');
+
+    const out = stdout();
+    expect(out).toContain('Processed capture into task');
+  });
+
+  it('--json outputs processed result', async () => {
+    await runCapture('JSON process', '--project', 'TEST', '--json');
+    const capture = JSON.parse(stdout());
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await runProcess(capture.noteId, '--task-name', 'JSON task', '--workstream', '1', '--project', 'TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed).toHaveProperty('display_id');
+  });
+
+  it('errors on invalid capture ID', async () => {
+    await runProcess('nonexistent-id', '--task-name', 'Bad', '--workstream', '1', '--project', 'TEST');
+
+    expect(process.exitCode).toBe(1);
   });
 });

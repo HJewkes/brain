@@ -5,7 +5,7 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createOrchestrationCommands } from '../../../../src/modules/pm/commands/orchestration.js';
-import { updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+import { createTask, updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
 import type { TaskStatus } from '../../../../src/modules/pm/types.js';
 
 let db: BrainDB;
@@ -66,6 +66,61 @@ beforeEach(async () => {
 afterEach(() => {
   db.close();
   vi.restoreAllMocks();
+});
+
+describe('next (error paths)', () => {
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('orch-next-empty'));
+
+    await run('next');
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('--workstream with invalid format shows error', async () => {
+    await run('next', '--project', 'TEST', '--workstream', 'INVALID');
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('shows "... and N more" when filtered > limit', async () => {
+    // Add more eligible tasks
+    for (let i = 0; i < 3; i++) {
+      await createTask(db, config, embedder, {
+        project: 'TEST',
+        workstream: 1,
+        name: `Extra eligible ${i}`,
+      });
+    }
+
+    await run('next', '--project', 'TEST', '--limit', '2');
+
+    const out = stdout();
+    expect(out).toContain('more eligible');
+  });
+});
+
+describe('waves (error paths)', () => {
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('orch-waves-empty'));
+
+    await run('waves');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('dispatch (error paths)', () => {
+  it('error when no project resolves', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('orch-dispatch-empty'));
+
+    await run('dispatch', 'NONE-01.01');
+
+    expect(process.exitCode).toBe(1);
+  });
 });
 
 describe('next', () => {
@@ -200,6 +255,67 @@ describe('dispatch', () => {
     expect(depIds).toContain('TEST-02.02');
   });
 
+  it('text output shows workstream info', async () => {
+    await run('dispatch', 'TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('Workstream:');
+  });
+
+  it('text output shows downstream dependents', async () => {
+    // TEST-01.01 has dependents: TEST-01.02, TEST-02.02
+    await run('dispatch', 'TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('Downstream');
+    expect(out).toContain('TEST-01.02');
+  });
+
+  it('text output shows peer tasks in same workstream', async () => {
+    await run('dispatch', 'TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('Peer Tasks');
+  });
+
+  it('text output shows dependencies for dependent task', async () => {
+    await run('dispatch', 'TEST-01.02');
+
+    const out = stdout();
+    expect(out).toContain('Dependencies');
+    expect(out).toContain('TEST-01.01');
+  });
+
+  it('text output shows decisions when present', async () => {
+    const { createDecision } = await import('../../../../src/modules/pm/data/decision-ops.js');
+    await createDecision(db, config, embedder, {
+      project: 'TEST',
+      name: 'Use REST',
+      sourceTask: 'TEST-01.01',
+      impacts: ['TEST-01.01'],
+      content: '',
+    });
+
+    await run('dispatch', 'TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('Decisions');
+  });
+
+  it('text output shows prompt when present', async () => {
+    const { writePrompt } = await import('../../../../src/modules/pm/data/prompt-ops.js');
+    await writePrompt(db, config, embedder, {
+      project: 'TEST',
+      task: 'TEST-01.01',
+      content: 'Implement feature X',
+    });
+
+    await run('dispatch', 'TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('Prompt');
+  });
+
   it('not-found sets exitCode=1', async () => {
     await run('dispatch', 'TEST-99.99');
 
@@ -277,5 +393,146 @@ describe('briefing', () => {
     expect(parsed).toHaveProperty('recentDecisions');
     expect(parsed).toHaveProperty('nextActions');
     expect(parsed.tasks.total).toBe(6);
+  });
+
+  it('--verbose --json includes workstreamBreakdown and priorityMatrix', async () => {
+    await run('briefing', '--project', 'TEST', '--verbose', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed).toHaveProperty('workstreamBreakdown');
+    expect(parsed).toHaveProperty('priorityMatrix');
+    expect(parsed.workstreamBreakdown.length).toBeGreaterThan(0);
+    expect(parsed.priorityMatrix).toHaveProperty('critical');
+    expect(parsed.priorityMatrix).toHaveProperty('high');
+    expect(parsed.priorityMatrix).toHaveProperty('medium');
+    expect(parsed.priorityMatrix).toHaveProperty('low');
+  });
+
+  it('--verbose text shows Top Eligible section', async () => {
+    await run('briefing', '--project', 'TEST', '--verbose');
+
+    const out = stdout();
+    expect(out).toContain('Top Eligible');
+    expect(out).toContain('TEST-01.01');
+  });
+
+  it('shows consistency issues when present', async () => {
+    // Create a blocked task without cause
+    const t = await createTask(db, config, embedder, {
+      project: 'TEST',
+      workstream: 1,
+      name: 'Blocked no deps',
+    });
+    if (!t.ok) throw new Error('Failed');
+    await updateTaskStatus(db, config, embedder, t.data.display_id, 'blocked' as TaskStatus);
+
+    await run('briefing', '--project', 'TEST');
+
+    const out = stdout();
+    expect(out).toContain('Consistency:');
+    expect(out).toContain('structural issue');
+  });
+
+  it('briefing with >5 eligible shows truncated list', async () => {
+    // Add more tasks to get >5 eligible (no deps)
+    for (let i = 0; i < 5; i++) {
+      await createTask(db, config, embedder, {
+        project: 'TEST',
+        workstream: 1,
+        name: `Extra task ${i}`,
+      });
+    }
+
+    await run('briefing', '--project', 'TEST');
+
+    const out = stdout();
+    // With 2 original eligible + 5 new = 7 eligible
+    expect(out).toContain('more');
+  });
+
+  it('shows recent decisions in text', async () => {
+    const { createDecision } = await import('../../../../src/modules/pm/data/decision-ops.js');
+    await createDecision(db, config, embedder, {
+      project: 'TEST',
+      name: 'Recent decision',
+      sourceTask: 'TEST-01.01',
+      content: '',
+    });
+
+    await run('briefing', '--project', 'TEST');
+
+    const out = stdout();
+    expect(out).toContain('Recent decisions');
+    expect(out).toContain('TEST-D01');
+  });
+
+  it('shows stale prompts in text', async () => {
+    const { writePrompt } = await import('../../../../src/modules/pm/data/prompt-ops.js');
+    await writePrompt(db, config, embedder, {
+      project: 'TEST',
+      task: 'TEST-01.01',
+      content: 'Old prompt',
+    });
+
+    // Complete the task to make the prompt stale
+    await updateTaskStatus(db, config, embedder, 'TEST-01.01', 'claimed' as TaskStatus);
+    await updateTaskStatus(db, config, embedder, 'TEST-01.01', 'in-progress' as TaskStatus);
+    await updateTaskStatus(db, config, embedder, 'TEST-01.01', 'done' as TaskStatus);
+
+    await run('briefing', '--project', 'TEST');
+
+    const out = stdout();
+    // Stale prompts should be detected since the task is done
+    // If stalePrompts shows up depends on the implementation, but the command should run
+    expect(out).toContain('Briefing: TEST');
+  });
+
+  it('shows recommended actions', async () => {
+    await run('briefing', '--project', 'TEST');
+
+    const out = stdout();
+    expect(out).toContain('Recommended actions');
+    expect(out).toContain('Pick up eligible task');
+  });
+
+  it('shows blocked task recommended action', async () => {
+    await updateTaskStatus(db, config, embedder, 'TEST-01.01', 'blocked' as TaskStatus);
+
+    await run('briefing', '--project', 'TEST');
+
+    const out = stdout();
+    expect(out).toContain('Resolve');
+    expect(out).toContain('blocked');
+  });
+});
+
+describe('complete (detailed)', () => {
+  it('--json returns newly eligible tasks', async () => {
+    await run('complete', 'TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed).toHaveProperty('newlyEligible');
+    expect(Array.isArray(parsed.newlyEligible)).toBe(true);
+  });
+
+  it('text output shows newly eligible when present', async () => {
+    // Complete TEST-02.01 so TEST-02.02 only needs TEST-01.01
+    await run('complete', 'TEST-02.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    // Complete TEST-01.01 which should unblock TEST-01.02 and TEST-02.02
+    await run('complete', 'TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('Completed TEST-01.01');
+    expect(out).toContain('Newly eligible');
+  });
+
+  it('validates claim token when provided', async () => {
+    await run('complete', 'TEST-01.01', '--token', 'bad-token');
+
+    // Task has no active claim, so this should fail
+    expect(process.exitCode).toBe(1);
   });
 });

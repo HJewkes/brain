@@ -75,6 +75,38 @@ async function run(args: string[]): Promise<void> {
   await cmd.parseAsync(args, { from: 'user' });
 }
 
+describe('workstream add (error paths)', () => {
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('ws-add-noproj'));
+
+    const { withBrain } = await import('../../../../src/services/brain-service.js');
+    vi.mocked(withBrain).mockImplementation(async (fn) => {
+      return fn({ db, config, embedder, modules: {} as never, close: () => {} });
+    });
+
+    await run(['add', 'Backend', '--project', 'NONEXIST']);
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('workstream list (error paths)', () => {
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('ws-list-noproj'));
+
+    const { withBrain } = await import('../../../../src/services/brain-service.js');
+    vi.mocked(withBrain).mockImplementation(async (fn) => {
+      return fn({ db, config, embedder, modules: {} as never, close: () => {} });
+    });
+
+    await run(['list']);
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
 describe('workstream add', () => {
   it('creates workstream with name', async () => {
     await run(['add', 'Backend']);

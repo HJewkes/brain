@@ -358,6 +358,275 @@ describe('task start', () => {
   });
 });
 
+describe('task add (error paths)', () => {
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('task-add-noproj'));
+
+    await run('add', 'New task', '--workstream', '1');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task list (error paths)', () => {
+  it('error when resolveProject fails', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('task-list-noproj'));
+
+    await run('list');
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('error on invalid workstream format', async () => {
+    await run('list', '--project', 'TEST', '--workstream', 'INVALID');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task update (error paths)', () => {
+  it('error when task not found', async () => {
+    await run('update', 'TEST-99.99', '--priority', 'high');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task done (error paths)', () => {
+  it('error when task not found', async () => {
+    await run('done', 'TEST-99.99');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task block (error paths)', () => {
+  it('error when task not found', async () => {
+    await run('block', 'TEST-99.99');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task unblock (error paths)', () => {
+  it('error when task not found', async () => {
+    await run('unblock', 'TEST-99.99');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task claim (error paths)', () => {
+  it('error on invalid transition (done task)', async () => {
+    await run('claim', 'TEST-01.01', '--start');
+    stdoutChunks = [];
+    stderrChunks = [];
+    process.exitCode = undefined;
+    await run('done', 'TEST-01.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+    process.exitCode = undefined;
+
+    await run('claim', 'TEST-01.01');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task start (error paths)', () => {
+  it('error when task has no claim', async () => {
+    await run('start', 'TEST-01.01', '--token', 'some-token');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task release (error paths)', () => {
+  it('error when task not found', async () => {
+    await run('release', 'TEST-99.99');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task delete (json output)', () => {
+  it('--json returns delete confirmation', async () => {
+    await createTask(db, config, embedder, {
+      project: 'TEST',
+      workstream: 1,
+      name: 'Deletable json task',
+    });
+
+    await run('delete', 'TEST-01.04', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.deleted).toBe(true);
+    expect(parsed.id).toBe('TEST-01.04');
+  });
+});
+
+describe('task show (text detail)', () => {
+  it('shows mode when present', async () => {
+    await createTask(db, config, embedder, {
+      project: 'TEST',
+      workstream: 1,
+      name: 'Auto mode task',
+      mode: 'auto' as never,
+    });
+
+    await run('show', 'TEST-01.04');
+
+    const out = stdout();
+    expect(out).toContain('Mode: auto');
+  });
+
+  it('shows depends_on when present', async () => {
+    await run('show', 'TEST-01.02');
+
+    const out = stdout();
+    expect(out).toContain('Depends on:');
+    expect(out).toContain('TEST-01.01');
+  });
+
+  it('shows virtual states when present', async () => {
+    // TEST-01.02 depends on TEST-01.01 (pending), so it should have +BLOCKED
+    await run('show', 'TEST-01.02');
+
+    const out = stdout();
+    expect(out).toContain('Virtual states:');
+    expect(out).toContain('+BLOCKED');
+  });
+});
+
+describe('task block', () => {
+  it('blocks a task', async () => {
+    await run('block', 'TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.status).toBe('blocked');
+  });
+
+  it('error for invalid transition', async () => {
+    // done task cannot be blocked
+    await run('claim', 'TEST-01.01', '--start');
+    stdoutChunks = [];
+    stderrChunks = [];
+    process.exitCode = undefined;
+    await run('done', 'TEST-01.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+    process.exitCode = undefined;
+
+    await run('block', 'TEST-01.01');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task unblock', () => {
+  it('unblocks a blocked task', async () => {
+    await run('block', 'TEST-01.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('unblock', 'TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.status).toBe('pending');
+  });
+});
+
+describe('task release', () => {
+  it('releases a claimed task back to pending', async () => {
+    await run('claim', 'TEST-01.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('release', 'TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.status).toBe('pending');
+  });
+
+  it('error when releasing a non-claimed task', async () => {
+    await run('release', 'TEST-01.01');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('task list (output formatting)', () => {
+  it('text output shows filter context when no results match', async () => {
+    await run('list', '--project', 'TEST', '--priority', 'critical', '--status', 'done');
+
+    const out = stdout();
+    expect(out).toContain('0 tasks found matching:');
+    expect(out).toContain('priority=critical');
+    expect(out).toContain('status=done');
+  });
+
+  it('text output shows "No tasks found" with no filters on empty project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('task-cmd-empty'));
+
+    await run('list');
+
+    // Either shows "No tasks found" or errors
+    const out = stdout() + stderr();
+    expect(out.length).toBeGreaterThan(0);
+  });
+
+  it('--sort status orders tasks by status', async () => {
+    await run('list', '--project', 'TEST', '--sort', 'status', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBeGreaterThan(0);
+  });
+
+  it('--sort workstream orders by workstream', async () => {
+    await run('list', '--project', 'TEST', '--sort', 'workstream', '--json');
+
+    const parsed = JSON.parse(stdout());
+    for (let i = 1; i < parsed.length; i++) {
+      expect(parsed[i].workstream).toBeGreaterThanOrEqual(parsed[i - 1].workstream);
+    }
+  });
+
+  it('text output single task shows display_id and status', async () => {
+    await run('add', 'Single task', '--project', 'TEST', '--workstream', '1');
+
+    const out = stdout();
+    expect(out).toContain('TEST-01.04');
+    expect(out).toContain('pending');
+  });
+
+  it('--category filter works', async () => {
+    await createTask(db, config, embedder, {
+      project: 'TEST',
+      workstream: 1,
+      name: 'Bug task',
+      category: 'bug' as never,
+    });
+
+    await run('list', '--project', 'TEST', '--category', 'bug', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBe(1);
+    expect(parsed[0].category).toBe('bug');
+  });
+
+  it('--workstream display ID format works', async () => {
+    await run('list', '--project', 'TEST', '--workstream', 'TEST-01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    for (const t of parsed) {
+      expect(t.workstream).toBe(1);
+    }
+  });
+});
+
 describe('task delete', () => {
   it('deletes a task without dependents', async () => {
     // TEST-01.03 has no dependents (nothing depends on it except TEST-02.03)

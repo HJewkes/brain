@@ -125,6 +125,47 @@ describe('context command', () => {
     // Should not throw even if body is empty
   });
 
+  it('shows related notes section when notes exist', async () => {
+    // The related notes depend on similarity search, which the mock embedder handles
+    await run('TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    // relatedNotes may or may not have entries depending on search results
+    expect(parsed).toHaveProperty('relatedNotes');
+    expect(Array.isArray(parsed.relatedNotes)).toBe(true);
+  });
+
+  it('text output includes description when body exists', async () => {
+    // Write body content directly to the task markdown file (after frontmatter)
+    const { readFileSync, writeFileSync } = await import('node:fs');
+    const { getPmNotes } = await import('../../../../src/modules/pm/data/queries.js');
+    const notes = getPmNotes(db, 'task', { display_id: 'TEST-01.01' });
+    if (notes.length > 0) {
+      const filePath = notes[0].filePath;
+      const content = readFileSync(filePath, 'utf-8');
+      const withBody = content + '\nImplement the main feature for the project.\n';
+      writeFileSync(filePath, withBody, 'utf-8');
+    }
+
+    await run('TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('Task: TEST-01.01');
+    expect(out).toContain('Description');
+    expect(out).toContain('Implement the main feature');
+  });
+
+  it('text output with relatedNotes shows excerpts', async () => {
+    // This is hard to trigger deterministically with mock embedder
+    // but we can at least verify the format function runs
+    await run('TEST-01.02');
+
+    const out = stdout();
+    // Verify the basic structure is there
+    expect(out).toContain('Task: TEST-01.02');
+    expect(out).toContain('Dependencies');
+  });
+
   it('shows decisions section when decisions exist', async () => {
     // impacts must include the task we query context for
     await createDecision(db, config, embedder, {

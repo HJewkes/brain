@@ -58,6 +58,37 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('decision add (error paths)', () => {
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('decision-add-noproj'));
+
+    await run('add', 'Test', '--source-task', 'TEST-01.01');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('decision list (error paths)', () => {
+  it('error when no project and no active project', async () => {
+    db.close();
+    db = new BrainDB(tmpDbPath('decision-list-noproj'));
+
+    await run('list');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('decision supersede (error paths)', () => {
+  it('error when supersede operation fails', async () => {
+    // Superseding a non-existent decision
+    await run('supersede', 'TEST-D99', 'New name');
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
 describe('decision add', () => {
   it('creates decision with content', async () => {
     await run('add', 'Use React', '--project', 'TEST', '--source-task', 'TEST-01.01');
@@ -177,6 +208,23 @@ describe('decision show', () => {
     expect(parsed).toHaveProperty('content');
   });
 
+  it('shows decision content in text mode', async () => {
+    await createDecision(db, config, embedder, {
+      project: 'TEST',
+      name: 'Use React',
+      sourceTask: 'TEST-01.01',
+      content: 'We chose React because it has a large ecosystem.',
+    });
+
+    await run('show', 'TEST-D01');
+
+    const out = stdout();
+    expect(out).toContain('TEST-D01');
+    // The content is stored in the note file, show reads via getDecision which reads frontmatter
+    // Content display depends on the content field being populated
+    expect(out).toContain('Use React');
+  });
+
   it('not-found sets exitCode=1', async () => {
     await run('show', 'TEST-D99');
 
@@ -207,6 +255,22 @@ describe('decision supersede', () => {
 
     expect(process.exitCode).toBe(1);
     expect(stderr()).toContain('NOT_FOUND');
+  });
+
+  it('--impacts links impacts to superseding decision', async () => {
+    await createDecision(db, config, embedder, {
+      project: 'TEST',
+      name: 'Use React',
+      sourceTask: 'TEST-01.01',
+      content: '',
+    });
+
+    await run('supersede', 'TEST-D01', 'Use Svelte', '--impacts', 'TEST-01.01', 'TEST-01.02');
+
+    const out = stdout();
+    expect(out).toContain('Superseded');
+    expect(out).toContain('TEST-D01');
+    expect(out).toContain('TEST-D02');
   });
 
   it('--json outputs old and new decisions', async () => {

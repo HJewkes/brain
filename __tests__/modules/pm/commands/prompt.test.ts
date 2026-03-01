@@ -143,4 +143,73 @@ describe('prompt list', () => {
     expect(parsed.length).toBe(1);
     expect(parsed[0]).toHaveProperty('display_id');
   });
+
+  it('--status filters by prompt status', async () => {
+    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'Active prompt');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('list', '--project', 'TEST', '--status', 'current', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBe(1);
+  });
+
+  it('empty state shows "No prompts found"', async () => {
+    await run('list', '--project', 'TEST');
+
+    const out = stdout();
+    expect(out).toContain('No prompts found');
+  });
+});
+
+describe('prompt history', () => {
+  it('shows version history for a task', async () => {
+    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'V1');
+    stdoutChunks = [];
+    stderrChunks = [];
+    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'V2');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('history', 'TEST-01.01');
+
+    const out = stdout();
+    expect(out).toContain('TEST-P01');
+  });
+
+  it('--json returns array of prompt versions', async () => {
+    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'V1');
+    stdoutChunks = [];
+    stderrChunks = [];
+    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'V2');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('history', 'TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.length).toBe(2);
+  });
+
+  it('returns error for task with no prompts', async () => {
+    await run('history', 'TEST-99.99');
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('show --version retrieves specific version', async () => {
+    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'Version 1');
+    stdoutChunks = [];
+    stderrChunks = [];
+    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'Version 2');
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('show', 'TEST-01.01', '--version', '1');
+
+    const out = stdout();
+    expect(out).toContain('TEST-P01');
+  });
 });
