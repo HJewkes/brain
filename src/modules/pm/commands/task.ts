@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import type { BrainDB } from '../../../services/brain-db.js';
-import type { BrainConfig, Embedder } from '../../../types.js';
+import type { BrainConfig, Embedder, Relation } from '../../../types.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { formatError, fail, pmError } from '../errors.js';
 import type { Result } from '../errors.js';
@@ -18,7 +18,7 @@ import {
   deleteTask,
 } from '../data/task-ops.js';
 import type { ListMode } from '../data/task-ops.js';
-import { getPmNotes, resolveProject } from '../data/queries.js';
+import { getPmNotes, resolveProject, resolveDisplayId } from '../data/queries.js';
 import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
@@ -278,6 +278,7 @@ export function createTaskCommands(): Command {
     .option('--priority <pri>', 'New priority')
     .option('--due <date>', 'Due date (YYYY-MM-DD)')
     .option('--milestone <name>', 'Milestone name')
+    .option('--depends-on <ids...>', 'Display IDs this task depends on')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
@@ -300,6 +301,26 @@ export function createTaskCommands(): Command {
           process.exitCode = 1;
           return;
         }
+
+        if (opts.dependsOn && opts.dependsOn.length > 0) {
+          const taskResolved = resolveDisplayId(svc.db, id.toUpperCase());
+          if (taskResolved.ok) {
+            const taskNoteId = taskResolved.data;
+            const relations: Relation[] = [];
+            for (const depId of opts.dependsOn as string[]) {
+              const depResolved = resolveDisplayId(svc.db, depId.toUpperCase());
+              if (depResolved.ok) {
+                relations.push({ sourceId: taskNoteId, targetId: depResolved.data, type: 'depends_on' });
+              } else {
+                process.stderr.write(`Warning: dependency "${depId}" not found, skipping\n`);
+              }
+            }
+            if (relations.length > 0) {
+              svc.db.upsertRelations(taskNoteId, relations);
+            }
+          }
+        }
+
         outputResult(result.data, !!opts.json);
       });
     });

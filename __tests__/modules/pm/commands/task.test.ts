@@ -279,6 +279,64 @@ describe('task update', () => {
     const parsed = JSON.parse(stdout());
     expect(parsed.priority).toBe('critical');
   });
+
+  it('update --depends-on adds dependency relations (O-44)', async () => {
+    // TEST-02.01 has no dependencies initially
+    await run('update', 'TEST-02.01', '--depends-on', 'TEST-01.01', '--json');
+
+    expect(process.exitCode).not.toBe(1);
+
+    // Verify the relation was created by checking relations from the note
+    const notes = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+    const taskNote = notes
+      .map((id) => db.getNoteById(id))
+      .find((n) => {
+        const meta = JSON.parse(n!.metadata!) as Record<string, unknown>;
+        return meta.display_id === 'TEST-02.01';
+      });
+    expect(taskNote).toBeDefined();
+
+    const relations = db.getRelationsFrom(taskNote!.id);
+    const depRelations = relations.filter((r) => r.type === 'depends_on');
+    expect(depRelations.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('update --depends-on with multiple IDs adds all relations (O-44)', async () => {
+    // Create a fresh task with no deps
+    await createTask(db, config, embedder, {
+      project: 'TEST',
+      workstream: 1,
+      name: 'No deps task',
+    });
+
+    stdoutChunks = [];
+    stderrChunks = [];
+
+    await run('update', 'TEST-01.04', '--depends-on', 'TEST-01.01', 'TEST-01.02', '--json');
+
+    expect(process.exitCode).not.toBe(1);
+
+    const notes = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+    const taskNote = notes
+      .map((id) => db.getNoteById(id))
+      .find((n) => {
+        const meta = JSON.parse(n!.metadata!) as Record<string, unknown>;
+        return meta.display_id === 'TEST-01.04';
+      });
+    expect(taskNote).toBeDefined();
+
+    const relations = db.getRelationsFrom(taskNote!.id);
+    const depRelations = relations.filter((r) => r.type === 'depends_on');
+    expect(depRelations.length).toBe(2);
+  });
+
+  it('update --depends-on with invalid ID warns but does not fail (O-44)', async () => {
+    await run('update', 'TEST-01.01', '--depends-on', 'TEST-99.99', '--json');
+
+    expect(process.exitCode).not.toBe(1);
+    expect(stderr()).toContain('Warning');
+    expect(stderr()).toContain('TEST-99.99');
+  });
 });
 
 describe('task done', () => {
