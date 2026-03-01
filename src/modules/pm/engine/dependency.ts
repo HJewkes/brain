@@ -1,8 +1,10 @@
 import type { BrainDB } from '../../../services/brain-db.js';
+import type { Relation } from '../../../types.js';
 import type { Result } from '../errors.js';
 import type { TaskStatus } from '../types.js';
 import { ok, fail } from '../errors.js';
 import { getPmNotes } from '../data/queries.js';
+import { listTasks } from '../data/task-ops.js';
 
 interface TaskInfo {
   noteId: string;
@@ -258,4 +260,99 @@ export function computeImpact(db: BrainDB, prefix: string, taskDisplayId: string
   }
 
   return newlyEligible.sort();
+}
+
+/**
+ * Infer intra-workstream dependencies from task categories.
+ * Rules:
+ *   - testing -> implementation (same workstream)
+ *   - docs -> implementation (same workstream)
+ *   - review -> implementation + testing (same workstream)
+ *   - research is never auto-depended-upon
+ *
+ * Only creates edges within the same workstream. Skips if edge already exists.
+ * Returns count of new edges created.
+ */
+export function inferDependencies(db: BrainDB, prefix: string): number {
+  const CATEGORY_DEPS: Record<string, string[]> = {
+    testing: ['implementation'],
+    documentation: ['implementation'],
+    review: ['implementation', 'testing'],
+  };
+
+  const result = listTasks(db, prefix);
+  if (!result.ok) return 0;
+
+  const tasks = result.data;
+
+  const byWorkstream = new Map<number, typeof tasks>();
+  for (const t of tasks) {
+    const ws = t.workstream;
+    if (!byWorkstream.has(ws)) byWorkstream.set(ws, []);
+    byWorkstream.get(ws)!.push(t);
+  }
+
+  const existingEdges = new Set<string>();
+  const graph = buildDependencyGraph(db, prefix);
+  for (const [from, tos] of graph) {
+    for (const to of tos) {
+      existingEdges.add(`${from}->${to}`);
+    }
+  }
+
+  // Build noteId lookup: display_id -> noteId
+  const displayToNoteId = new Map<string, string>();
+  for (const t of tasks) {
+    const notes = getPmNotes(db, 'task', { display_id: t.display_id });
+    if (notes.length > 0) displayToNoteId.set(t.display_id, notes[0].id);
+  }
+
+  // Collect new edges per source task, preserving existing relations
+  const newEdgesBySource = new Map<string, Relation[]>();
+  let created = 0;
+
+  for (const [, wsTasks] of byWorkstream) {
+    for (const task of wsTasks) {
+      const depCategories = CATEGORY_DEPS[task.category];
+      if (!depCategories) continue;
+
+      const sourceNoteId = displayToNoteId.get(task.display_id);
+      if (!sourceNoteId) continue;
+
+      for (const depCat of depCategories) {
+        const targets = wsTasks.filter(
+          (t) => t.category === depCat && t.display_id !== task.display_id
+        );
+
+        for (const target of targets) {
+          const edgeKey = `${task.display_id}->${target.display_id}`;
+          if (existingEdges.has(edgeKey)) continue;
+
+          const targetNoteId = displayToNoteId.get(target.display_id);
+          if (!targetNoteId) continue;
+
+          if (!newEdgesBySource.has(task.display_id)) {
+            newEdgesBySource.set(task.display_id, []);
+          }
+          newEdgesBySource.get(task.display_id)!.push({
+            sourceId: sourceNoteId,
+            targetId: targetNoteId,
+            type: 'depends_on',
+          });
+          existingEdges.add(edgeKey);
+          created++;
+        }
+      }
+    }
+  }
+
+  // Upsert once per source task, merging existing + new relations
+  for (const [displayId, newRelations] of newEdgesBySource) {
+    const sourceNoteId = displayToNoteId.get(displayId)!;
+    const existing = db.getRelationsFrom(sourceNoteId);
+    const merged = [...existing, ...newRelations];
+    db.upsertRelations(sourceNoteId, merged);
+  }
+
+  return created;
 }
