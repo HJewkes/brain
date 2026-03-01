@@ -362,7 +362,16 @@ export function createOrchestrationCommands(): Command[] {
         } else {
           process.stdout.write(`Completed ${displayId}\n`);
           if (impact.length > 0) {
-            process.stdout.write(`Newly eligible: ${impact.join(', ')}\n`);
+            process.stderr.write('\nNewly eligible tasks:\n');
+            for (const impactId of impact) {
+              const impactTask = getTask(svc.db, impactId);
+              if (impactTask.ok) {
+                const title = impactTask.data.title ? ` ${impactTask.data.title}` : '';
+                process.stderr.write(`  ${impactId} [${impactTask.data.priority}]${title}\n`);
+              } else {
+                process.stderr.write(`  ${impactId}\n`);
+              }
+            }
           }
         }
       });

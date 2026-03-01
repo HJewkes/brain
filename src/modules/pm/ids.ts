@@ -71,7 +71,7 @@ export function resolveWorkstreamFilter(input: string): Result<number> {
 
   return fail(
     'INVALID_INPUT',
-    `Invalid workstream filter "${input}". Use a number (6) or display ID (VOLT-06). Run "brain pm workstream list" to see options.`
+    `Invalid workstream filter "${input}". Use a number (6) or display ID (PREFIX-NN). Run "brain pm workstream list" to see options.`
   );
 }
 

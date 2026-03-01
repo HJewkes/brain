@@ -237,16 +237,23 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createCheckCommand());
     pmCmd.addCommand(createOnboardCommand());
 
-    // Plural aliases — delegate to list subcommand
+    // Plural aliases — delegate to subcommand
+    const taskSubcommands = new Set([
+      'add', 'list', 'show', 'update', 'done', 'block', 'unblock',
+      'delete', 'claim', 'start', 'release',
+    ]);
     const tasksAlias = new Command('tasks')
-      .description('List tasks (alias for "task list")')
+      .description('Task management (alias for "task")')
       .helpOption(false)
       .allowUnknownOption()
       .allowExcessArguments(true)
       .action(async () => {
         const idx = process.argv.indexOf('tasks');
         const tail = process.argv.slice(idx + 1);
-        await pmCmd.parseAsync(['node', 'brain-pm', 'task', 'list', ...tail], { from: 'node' });
+        // Default to 'list' when no subcommand recognized
+        const hasSubcommand = tail.length > 0 && taskSubcommands.has(tail[0]);
+        const prefix = hasSubcommand ? [] : ['list'];
+        await pmCmd.parseAsync(['node', 'brain-pm', 'task', ...prefix, ...tail], { from: 'node' });
       });
     pmCmd.addCommand(tasksAlias);
 
@@ -261,6 +268,18 @@ export const pmModule: BrainModule = {
         await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', 'list', ...tail], { from: 'node' });
       });
     pmCmd.addCommand(workstreamsAlias);
+
+    const lsAlias = new Command('ls')
+      .description('List projects (alias for "list")')
+      .helpOption(false)
+      .allowUnknownOption()
+      .allowExcessArguments(true)
+      .action(async () => {
+        const idx = process.argv.indexOf('ls');
+        const tail = process.argv.slice(idx + 1);
+        await pmCmd.parseAsync(['node', 'brain-pm', 'list', ...tail], { from: 'node' });
+      });
+    pmCmd.addCommand(lsAlias);
 
     ctx.registerCommand(pmCmd);
   },

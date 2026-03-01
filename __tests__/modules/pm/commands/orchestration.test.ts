@@ -526,7 +526,8 @@ describe('complete (detailed)', () => {
 
     const out = stdout();
     expect(out).toContain('Completed TEST-01.01');
-    expect(out).toContain('Newly eligible');
+    const err = stderr();
+    expect(err).toContain('Newly eligible');
   });
 
   it('validates claim token when provided', async () => {
