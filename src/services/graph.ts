@@ -2,7 +2,7 @@ import type { BrainDB } from './brain-db.js';
 import type { Relation, GraphNode, GraphResult } from '../types.js';
 
 const MAX_DEPTH = 3;
-const BIDIRECTIONAL_TYPES = new Set(['related-to']);
+const BIDIRECTIONAL_TYPES = new Set(['related-to', 'parent', 'depends_on']);
 
 export function getDirectRelations(db: BrainDB, noteId: string): Relation[] {
   const outgoing = db.getRelationsFrom(noteId);
