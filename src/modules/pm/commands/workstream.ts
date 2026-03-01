@@ -9,6 +9,8 @@ import {
   deleteWorkstream,
 } from '../data/workstream-ops.js';
 import { resolveProject } from '../data/queries.js';
+import { listTasks } from '../data/task-ops.js';
+import { parseDisplayId } from '../ids.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -107,7 +109,79 @@ export function createWorkstreamCommands(): Command {
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+        const wsMeta = result.data;
+        const parsed = parseDisplayId(id.toUpperCase());
+        const prefix = parsed?.prefix ?? wsMeta.project;
+        const wsNumber = parsed?.workstream ?? wsMeta.number;
+
+        const tasksResult = listTasks(svc.db, prefix, { workstream: wsNumber });
+        const taskList = tasksResult.ok ? tasksResult.data : [];
+
+        const byStatus: Record<string, number> = {};
+        const byPriority: Record<string, number> = {};
+        for (const t of taskList) {
+          byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
+          byPriority[t.priority] = (byPriority[t.priority] ?? 0) + 1;
+        }
+
+        const PRIORITY_ORDER: Record<string, number> = {
+          critical: 0, high: 1, medium: 2, low: 3,
+        };
+        const eligible = taskList
+          .filter(t => t.virtualStates.includes('+ELIGIBLE'))
+          .sort((a, b) =>
+            (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)
+          )
+          .slice(0, 3);
+
+        if (opts.json) {
+          const jsonData = {
+            ...wsMeta,
+            taskSummary: {
+              total: taskList.length,
+              byStatus,
+              byPriority,
+            },
+            eligibleTasks: eligible.map(t => ({
+              display_id: t.display_id,
+              title: t.title,
+              priority: t.priority,
+              status: t.status,
+            })),
+          };
+          process.stdout.write(JSON.stringify(jsonData, null, 2) + '\n');
+        } else {
+          const lines: string[] = [];
+          const name = wsMeta.title?.replace(/^Workstream\s+/i, '') || `#${wsMeta.number}`;
+          lines.push(`${wsMeta.display_id} - ${name} (${wsMeta.status})`);
+
+          if (wsMeta.description) {
+            lines.push(`  ${wsMeta.description}`);
+          }
+
+          if (taskList.length > 0) {
+            lines.push('');
+            lines.push('Tasks:');
+            for (const [status, count] of Object.entries(byStatus)) {
+              lines.push(`  ${status}: ${count}`);
+            }
+            lines.push('');
+            lines.push('Priority:');
+            for (const [priority, count] of Object.entries(byPriority)) {
+              lines.push(`  ${priority}: ${count}`);
+            }
+          }
+
+          if (eligible.length > 0) {
+            lines.push('');
+            lines.push('Eligible:');
+            for (const t of eligible) {
+              lines.push(`  ${t.display_id} - ${t.title ?? '(untitled)'} [${t.priority}]`);
+            }
+          }
+
+          process.stdout.write(lines.join('\n') + '\n');
+        }
       });
     });
 

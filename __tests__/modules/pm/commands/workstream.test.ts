@@ -8,6 +8,7 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { setActiveProject } from '../../../../src/modules/pm/data/queries.js';
+import { createTask } from '../../../../src/modules/pm/data/task-ops.js';
 
 vi.mock('../../../../src/services/brain-service.js', () => ({
   withBrain: vi.fn(),
@@ -185,6 +186,90 @@ describe('workstream show', () => {
     const parsed = JSON.parse(stdoutData);
     expect(parsed.display_id).toBe('TST-01');
     expect(parsed.status).toBe('active');
+  });
+
+  it('shows description from note body', async () => {
+    await run(['add', 'Backend', '--description', 'Core API services']);
+    stdoutData = '';
+
+    await run(['show', 'TST-01']);
+
+    expect(stdoutData).toContain('Core API services');
+  });
+
+  it('shows task counts by status', async () => {
+    await run(['add', 'Backend']);
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+    });
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+    });
+    stdoutData = '';
+
+    await run(['show', 'TST-01']);
+
+    expect(stdoutData).toContain('pending');
+    expect(stdoutData).toMatch(/2/);
+  });
+
+  it('shows task counts by priority', async () => {
+    await run(['add', 'Backend']);
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+    });
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+    });
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Task C', priority: 'high',
+    });
+    stdoutData = '';
+
+    await run(['show', 'TST-01']);
+
+    expect(stdoutData).toContain('high');
+    expect(stdoutData).toContain('medium');
+  });
+
+  it('shows top eligible tasks', async () => {
+    await run(['add', 'Backend']);
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Eligible One', priority: 'high',
+    });
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Eligible Two', priority: 'medium',
+    });
+    stdoutData = '';
+
+    await run(['show', 'TST-01']);
+
+    expect(stdoutData).toContain('Eligible One');
+    expect(stdoutData).toContain('Eligible Two');
+  });
+
+  it('--json includes enriched fields', async () => {
+    await run(['add', 'Backend', '--description', 'Core API services']);
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+    });
+    await createTask(db, config, embedder, {
+      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+    });
+    stdoutData = '';
+
+    await run(['show', 'TST-01', '--json']);
+
+    const parsed = JSON.parse(stdoutData);
+    expect(parsed.description).toBe('Core API services');
+    expect(parsed.taskSummary).toBeDefined();
+    expect(parsed.taskSummary.byStatus).toBeDefined();
+    expect(parsed.taskSummary.byStatus.pending).toBe(2);
+    expect(parsed.taskSummary.byPriority).toBeDefined();
+    expect(parsed.taskSummary.byPriority.high).toBe(1);
+    expect(parsed.taskSummary.byPriority.medium).toBe(1);
+    expect(parsed.eligibleTasks).toBeDefined();
+    expect(parsed.eligibleTasks).toHaveLength(2);
   });
 
   it('reports not-found error', async () => {
