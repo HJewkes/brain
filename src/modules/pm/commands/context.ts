@@ -21,17 +21,6 @@ function formatHuman(bundle: ContextBundle): string {
     lines.push('');
   }
 
-  if (bundle.relatedNotes.length > 0) {
-    lines.push('--- Related Notes ---');
-    for (const note of bundle.relatedNotes) {
-      lines.push(`  [${note.score.toFixed(2)}] ${note.title}`);
-      if (note.excerpt) {
-        lines.push(`    ${note.excerpt.slice(0, 200)}`);
-      }
-    }
-    lines.push('');
-  }
-
   if (bundle.prompt) {
     lines.push('--- Prompt ---');
     lines.push(bundle.prompt);
