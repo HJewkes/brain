@@ -156,6 +156,7 @@ export const initCommand = new Command('init')
   .option('--notes-dir <path>', 'path to notes directory')
   .option('--embedder <type>', 'embedding backend (local, ollama, remote)')
   .option('--json', 'output result as JSON')
+  .option('--verbose', 'show technical details')
   .action(async (opts) => {
     const overrides: Record<string, unknown> = {};
     if (opts.notesDir) overrides.notesDir = opts.notesDir;
@@ -245,19 +246,32 @@ export const initCommand = new Command('init')
     if (opts.json) {
       process.stdout.write(JSON.stringify(summary) + '\n');
     } else {
-      process.stderr.write(`Initialized brain at ${config.notesDir}\n`);
-      process.stderr.write(`Database: ${config.dbPath}\n`);
-      process.stderr.write(`Embedder: ${config.embedder} (${embInfo.model})\n`);
+      process.stderr.write('Brain initialized successfully!\n\n');
+      process.stderr.write(`Notes directory: ${config.notesDir}\n`);
+      process.stderr.write('Search: ready (hybrid BM25 + vector)\n');
       if (llmReady) {
-        process.stderr.write(`LLM: ollama (${llmModel})\n`);
+        process.stderr.write('Memory extraction: ready\n');
       } else {
-        process.stderr.write('LLM: not configured (extract, tidy unavailable)\n');
+        process.stderr.write('Memory extraction: not configured (needs Ollama)\n');
       }
-      process.stderr.write(
-        `Features: search ${features.search ? '+' : '-'}  extract ${features.extract ? '+' : '-'}  tidy ${features.tidy ? '+' : '-'}\n`
-      );
-      if (created.length > 0) {
-        process.stderr.write(`Created directories: ${created.join(', ')}\n`);
+
+      if (opts.verbose) {
+        process.stderr.write(`\nDatabase: ${config.dbPath}\n`);
+        process.stderr.write(`Embedder: ${config.embedder} (${embInfo.model})\n`);
+        if (llmReady) {
+          process.stderr.write(`LLM: ollama (${llmModel})\n`);
+        }
+        process.stderr.write(
+          `Features: search ${features.search ? '+' : '-'}  extract ${features.extract ? '+' : '-'}  tidy ${features.tidy ? '+' : '-'}\n`
+        );
+        if (created.length > 0) {
+          process.stderr.write(`Created directories: ${created.join(', ')}\n`);
+        }
       }
+
+      process.stderr.write('\nNext steps:\n');
+      process.stderr.write('  brain index          Index your existing notes\n');
+      process.stderr.write('  brain quick "idea"   Capture a thought\n');
+      process.stderr.write('  brain pm init        Set up project management\n');
     }
   });

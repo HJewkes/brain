@@ -106,13 +106,28 @@ describe('init command', () => {
     expect(parsed.features).toHaveProperty('search', true);
   });
 
-  it('reports embedder in text output', async () => {
+  it('default output shows welcoming message with next steps (O-02)', async () => {
     const { initCommand } = await import('../../src/commands/init.js');
     await initCommand.parseAsync(['node', 'init', '--embedder', 'local'], { from: 'node' });
 
     const err = stderr();
-    expect(err).toContain('Initialized brain');
+    expect(err).toContain('Brain initialized');
+    expect(err).toContain('Notes directory:');
+    expect(err).toContain('Next steps:');
+    expect(err).toContain('brain index');
+    expect(err).not.toContain('Embedder:');
+    expect(err).not.toContain('Features:');
+  });
+
+  it('--verbose shows technical details', async () => {
+    const { initCommand } = await import('../../src/commands/init.js');
+    await initCommand.parseAsync(['node', 'init', '--embedder', 'local', '--verbose'], { from: 'node' });
+
+    const err = stderr();
+    expect(err).toContain('Brain initialized');
     expect(err).toContain('Embedder:');
+    expect(err).toContain('Features:');
+    expect(err).toContain('Database:');
   });
 
   it('closes the database after init', async () => {
