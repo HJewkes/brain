@@ -151,6 +151,20 @@ export function createTaskCommands(): Command {
           workstreamNumber = wsResult.data;
         }
 
+        const validStatuses = ['pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled'];
+        const validPriorities = ['critical', 'high', 'medium', 'low'];
+
+        if (opts.status && !validStatuses.includes(opts.status)) {
+          process.stderr.write(formatError(pmError('INVALID_INPUT', `Invalid status "${opts.status}". Valid values: ${validStatuses.join(', ')}`), !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        if (opts.priority && !validPriorities.includes(opts.priority)) {
+          process.stderr.write(formatError(pmError('INVALID_INPUT', `Invalid priority "${opts.priority}". Valid values: ${validPriorities.join(', ')}`), !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
         const mode: ListMode = opts.full ? 'full' : opts.short ? 'short' : 'default';
         const result = listTasks(svc.db, projectResult.data, {
           workstream: workstreamNumber,

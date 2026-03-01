@@ -127,6 +127,9 @@ export function createOrchestrationCommands(): Command[] {
                 display_id: r.data.display_id,
                 title: r.data.title,
                 status: r.data.status,
+                workstream: r.data.workstream,
+                priority: r.data.priority,
+                category: r.data.category,
                 depends_on: r.data.depends_on ?? [],
               };
             }),
@@ -140,18 +143,22 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
 
+        let totalTasks = 0;
         for (const w of waves) {
           process.stdout.write(`Wave ${w.wave}:\n`);
           for (const id of w.taskIds) {
             const r = getTask(svc.db, id);
             if (!r.ok) {
               process.stdout.write(`  ${id}\n`);
-              continue;
+            } else {
+              const title = r.data.title ? ` ${r.data.title}` : '';
+              const ws = r.data.workstream !== undefined ? ` [WS-${String(r.data.workstream).padStart(2, '0')}]` : '';
+              process.stdout.write(`  ${id}${ws}${title}\n`);
             }
-            const title = r.data.title ? ` ${r.data.title}` : '';
-            process.stdout.write(`  ${id}${title}\n`);
+            totalTasks++;
           }
         }
+        process.stdout.write(`\n${totalTasks} tasks across ${waves.length} waves\n`);
       });
     });
 
@@ -502,7 +509,7 @@ export function createOrchestrationCommands(): Command[] {
           );
         }
         lines.push(
-          `  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.join(', ')})` : ''}`
+          `  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.map((t) => t.display_id).join(', ')})` : ''}`
         );
         lines.push(`  Pending: ${pending.length}`);
         lines.push('');

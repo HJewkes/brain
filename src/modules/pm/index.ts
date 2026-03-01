@@ -257,15 +257,18 @@ export const pmModule: BrainModule = {
       });
     pmCmd.addCommand(tasksAlias);
 
+    const wsSubcommands = new Set(['list', 'show', 'add']);
     const workstreamsAlias = new Command('workstreams')
-      .description('List workstreams (alias for "workstream list")')
+      .description('Workstream management (alias for "workstream")')
       .helpOption(false)
       .allowUnknownOption()
       .allowExcessArguments(true)
       .action(async () => {
         const idx = process.argv.indexOf('workstreams');
         const tail = process.argv.slice(idx + 1);
-        await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', 'list', ...tail], { from: 'node' });
+        const hasSubcommand = tail.length > 0 && wsSubcommands.has(tail[0]);
+        const prefix = hasSubcommand ? [] : ['list'];
+        await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', ...prefix, ...tail], { from: 'node' });
       });
     pmCmd.addCommand(workstreamsAlias);
 

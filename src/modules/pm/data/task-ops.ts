@@ -18,6 +18,7 @@ import { indexSingleFile } from '../../../services/indexing.js';
 import { getPmNotes, resolveDisplayId } from './queries.js';
 import { validateTransition, computeVirtualState } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
+import { listWorkstreams } from './workstream-ops.js';
 import { buildDependencyGraph } from '../engine/dependency.js';
 
 export type ListMode = 'default' | 'full' | 'short';
@@ -28,6 +29,8 @@ export interface EnrichedTaskFields {
   blocked_by?: string[];
   created?: string | null;
   modified?: string | null;
+  workstream_name?: string;
+  workstream_display_id?: string;
 }
 
 export interface CreateTaskInput {
@@ -280,6 +283,17 @@ export function listTasks(
   // Build reverse dependency graph once (cache per list call)
   const depGraph = listMode !== 'short' ? buildDependencyGraph(db, prefix) : null;
 
+  // Build workstream lookup for name/display_id enrichment
+  const wsMap = new Map<number, { name: string; display_id: string }>();
+  if (listMode !== 'short') {
+    const wsResult = listWorkstreams(db, prefix);
+    if (wsResult.ok) {
+      for (const ws of wsResult.data) {
+        wsMap.set(ws.number, { name: ws.title ?? '', display_id: ws.display_id });
+      }
+    }
+  }
+
   let tasks = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
     const taskMeta = taskMetaFromRecord(meta);
@@ -324,6 +338,12 @@ export function listTasks(
 
       enriched.created = note.createdAt ?? (meta.created as string) ?? null;
       enriched.modified = note.modifiedAt ?? (meta.modified as string) ?? null;
+
+      const wsInfo = taskMeta.workstream !== undefined ? wsMap.get(taskMeta.workstream) : undefined;
+      if (wsInfo) {
+        enriched.workstream_name = wsInfo.name;
+        enriched.workstream_display_id = wsInfo.display_id;
+      }
     }
 
     return { ...taskMeta, ...enriched, virtualStates, _body: body };
