@@ -15,6 +15,61 @@ import { getPmNotes, setActiveProject } from '../data/queries.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { slugify } from '../../../utils.js';
 import { withBrain } from '../../../services/brain-service.js';
+import type { DetectedComponent, ScoredDoc } from '../data/onboard-types.js';
+
+export function onboardSlug(title: string, component?: string, usedSlugs?: Set<string>): string {
+  const base = slugify(title);
+  let slug: string;
+
+  if (!component || slugify(component) === base) {
+    slug = base;
+  } else {
+    slug = `${slugify(component)}-${base}`;
+  }
+
+  if (usedSlugs) {
+    if (usedSlugs.has(slug)) {
+      let suffix = 2;
+      while (usedSlugs.has(`${slug}-${suffix}`)) suffix++;
+      slug = `${slug}-${suffix}`;
+    }
+    usedSlugs.add(slug);
+  }
+
+  return slug;
+}
+
+export function synthesizeProjectBody(
+  name: string,
+  components: DetectedComponent[],
+  docs: ScoredDoc[],
+): string {
+  const lines: string[] = [];
+  lines.push(`## Overview`);
+  lines.push(`${name} — ${components.length} component(s), ${docs.length} doc(s) discovered`);
+  lines.push('');
+
+  if (components.length > 0) {
+    lines.push('## Components');
+    for (const c of components) {
+      lines.push(`- **${c.name}** (${c.type}) — ${c.docCount} docs`);
+    }
+    lines.push('');
+  }
+
+  if (docs.length > 0) {
+    lines.push('## Key Documentation');
+    const top = docs.slice(0, 10);
+    for (const d of top) {
+      const title = basename(d.path, '.md');
+      const component = d.component ? ` (${d.component})` : '';
+      lines.push(`- ${title}${component}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
 
 export interface OnboardOptions {
   projectName: string;
@@ -55,7 +110,25 @@ export async function runOnboard(
   const components = detectComponents(opts.cwd);
   const detectPhase = { completedAt: now(), componentCount: components.length };
 
-  // Phase 2: Create project
+  // Phase 2: Discover docs (moved before create so we have data for body)
+  const componentPaths = components.map(c =>
+    c.path === '.' ? opts.cwd : join(opts.cwd, c.path)
+  );
+  const scoredDocs = discoverDocs(componentPaths, { maxDocs: opts.maxDocs ?? 20 });
+
+  // Assign component names to discovered docs
+  for (const doc of scoredDocs) {
+    for (const comp of components) {
+      const compDir = comp.path === '.' ? opts.cwd : join(opts.cwd, comp.path);
+      if (doc.path.startsWith(compDir + '/') || doc.path === compDir) {
+        doc.component = comp.name;
+        break;
+      }
+    }
+  }
+  const discoverPhase = { completedAt: now(), docsFound: scoredDocs.length };
+
+  // Phase 3: Create project (with synthesized body)
   let projectCreated = false;
   if (existing.length === 0) {
     const projectResult = await createProject(db, config, embedder, {
@@ -65,19 +138,24 @@ export async function runOnboard(
     if (!projectResult.ok) return projectResult as Result<never>;
     projectCreated = true;
     setActiveProject(db, opts.prefix);
+
+    // Append synthesized body to project note
+    const projectFilePath = join(config.notesDir, 'modules', 'pm', opts.prefix, 'project.md');
+    if (existsSync(projectFilePath)) {
+      const existing = readFileSync(projectFilePath, 'utf-8');
+      const body = synthesizeProjectBody(opts.projectName, components, scoredDocs);
+      const updated = existing + body + '\n';
+      writeFileSync(projectFilePath, updated, 'utf-8');
+      const hash = createHash('sha256').update(updated).digest('hex');
+      await indexSingleFile(db, embedder, projectFilePath, updated, hash, Date.now());
+    }
   }
   const createPhase = { completedAt: now(), projectCreated };
-
-  // Phase 3: Discover docs
-  const componentPaths = components.map(c =>
-    c.path === '.' ? opts.cwd : join(opts.cwd, c.path)
-  );
-  const scoredDocs = discoverDocs(componentPaths, { maxDocs: opts.maxDocs ?? 20 });
-  const discoverPhase = { completedAt: now(), docsFound: scoredDocs.length };
 
   // Phase 4: Ingest
   let ingestedCount = 0;
   const ingestErrors: string[] = [];
+  const usedSlugs = new Set<string>();
   if (!opts.skipIngest) {
     const outDir = join(config.notesDir, 'modules', 'pm', opts.prefix, 'docs');
     if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
@@ -86,7 +164,7 @@ export async function runOnboard(
       try {
         let content = readFileSync(doc.path, 'utf-8');
         const title = basename(doc.path, '.md');
-        const slug = slugify(title);
+        const slug = onboardSlug(title, doc.component, usedSlugs);
 
         // Add frontmatter if missing
         if (!content.trimStart().startsWith('---')) {

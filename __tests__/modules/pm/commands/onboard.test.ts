@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
-import { runOnboard } from '../../../../src/modules/pm/commands/onboard.js';
+import { runOnboard, onboardSlug, synthesizeProjectBody } from '../../../../src/modules/pm/commands/onboard.js';
 import { getPmNotes } from '../../../../src/modules/pm/data/queries.js';
+import type { DetectedComponent, ScoredDoc } from '../../../../src/modules/pm/data/onboard-types.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -214,5 +215,172 @@ describe('runOnboard', () => {
 
     expect(result.data.docs.discovered).toBeGreaterThanOrEqual(1);
     expect(result.data.docs.ingested).toBe(0);
+  });
+
+  it('component-aware slug includes component prefix', async () => {
+    const slug = onboardSlug('README', 'node-sdk');
+    expect(slug).toBe('node-sdk-readme');
+  });
+
+  it('doc without component keeps simple slug', () => {
+    const slug = onboardSlug('architecture');
+    expect(slug).toBe('architecture');
+  });
+
+  it('doc where title equals component name uses simple slug', () => {
+    const slug = onboardSlug('node-sdk', 'node-sdk');
+    expect(slug).toBe('node-sdk');
+  });
+
+  it('collision within batch appends suffix', () => {
+    const used = new Set<string>();
+    const slug1 = onboardSlug('readme', 'api', used);
+    const slug2 = onboardSlug('readme', 'api', used);
+    expect(slug1).toBe('api-readme');
+    expect(slug2).toBe('api-readme-2');
+  });
+
+  it('project note body includes component inventory', async () => {
+    // Set up monorepo with two components
+    writeFileSync(join(projectDir, 'package.json'), JSON.stringify({
+      name: 'mono',
+      workspaces: ['packages/*'],
+    }));
+    const pkgA = join(projectDir, 'packages', 'api');
+    const pkgB = join(projectDir, 'packages', 'web');
+    mkdirSync(pkgA, { recursive: true });
+    mkdirSync(pkgB, { recursive: true });
+    writeFileSync(join(pkgA, 'package.json'), JSON.stringify({ name: 'api' }));
+    writeFileSync(join(pkgB, 'package.json'), JSON.stringify({ name: 'web' }));
+
+    const result = await runOnboard(db, config, embedder, {
+      projectName: 'Mono',
+      prefix: 'MON',
+      cwd: projectDir,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Read the project note body
+    const projectNotes = getPmNotes(db, 'project', { prefix: 'MON' });
+    expect(projectNotes).toHaveLength(1);
+    const noteRecord = db.getNoteById(projectNotes[0].id);
+    expect(noteRecord).toBeDefined();
+    const content = readFileSync(noteRecord!.filePath, 'utf-8');
+    expect(content).toContain('## Components');
+    expect(content).toContain('api');
+    expect(content).toContain('web');
+  });
+
+  it('project note body includes doc list', async () => {
+    writeFileSync(join(projectDir, 'package.json'), JSON.stringify({ name: 'testapp' }));
+    writeFileSync(join(projectDir, 'README.md'), '# Test App\n\n' + 'x'.repeat(600));
+    writeFileSync(join(projectDir, 'ARCHITECTURE.md'), '# Arch\n\n' + 'x'.repeat(600));
+
+    const result = await runOnboard(db, config, embedder, {
+      projectName: 'TestApp',
+      prefix: 'TST',
+      cwd: projectDir,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const projectNotes = getPmNotes(db, 'project', { prefix: 'TST' });
+    const noteRecord = db.getNoteById(projectNotes[0].id);
+    const content = readFileSync(noteRecord!.filePath, 'utf-8');
+    expect(content).toContain('## Key Documentation');
+    expect(content).toContain('README');
+  });
+
+  it('multiple READMEs from different components get unique slugs', async () => {
+    // Set up monorepo with two components each having a README
+    writeFileSync(join(projectDir, 'package.json'), JSON.stringify({
+      name: 'mono',
+      workspaces: ['packages/*'],
+    }));
+    const pkgA = join(projectDir, 'packages', 'api');
+    const pkgB = join(projectDir, 'packages', 'web');
+    mkdirSync(pkgA, { recursive: true });
+    mkdirSync(pkgB, { recursive: true });
+    writeFileSync(join(pkgA, 'package.json'), JSON.stringify({ name: 'api' }));
+    writeFileSync(join(pkgB, 'package.json'), JSON.stringify({ name: 'web' }));
+    writeFileSync(join(pkgA, 'README.md'), '# API Readme\n\n' + 'x'.repeat(600));
+    writeFileSync(join(pkgB, 'README.md'), '# Web Readme\n\n' + 'x'.repeat(600));
+
+    const result = await runOnboard(db, config, embedder, {
+      projectName: 'Mono',
+      prefix: 'MON',
+      cwd: projectDir,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const ingestedDocs = result.data.docs.items.filter(d => d.ingested);
+    const slugs = ingestedDocs.map(d => d.noteSlug);
+    // All slugs should be unique
+    expect(new Set(slugs).size).toBe(slugs.length);
+    // Both should have been ingested
+    expect(ingestedDocs.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('onboardSlug', () => {
+  it('returns base slug for undefined component', () => {
+    expect(onboardSlug('getting-started')).toBe('getting-started');
+  });
+
+  it('prefixes with component when different from title', () => {
+    expect(onboardSlug('README', 'core')).toBe('core-readme');
+  });
+
+  it('avoids redundant prefix when component matches title', () => {
+    expect(onboardSlug('Core', 'core')).toBe('core');
+  });
+
+  it('handles collision suffixes correctly', () => {
+    const used = new Set<string>();
+    expect(onboardSlug('readme', undefined, used)).toBe('readme');
+    expect(onboardSlug('readme', undefined, used)).toBe('readme-2');
+    expect(onboardSlug('readme', undefined, used)).toBe('readme-3');
+  });
+});
+
+describe('synthesizeProjectBody', () => {
+  it('includes component list', () => {
+    const components: DetectedComponent[] = [
+      { name: 'api', path: 'packages/api', type: 'node', entryPoints: [], docPaths: [], docCount: 3 },
+      { name: 'web', path: 'packages/web', type: 'node', entryPoints: [], docPaths: [], docCount: 1 },
+    ];
+    const body = synthesizeProjectBody('Mono', components, []);
+    expect(body).toContain('## Components');
+    expect(body).toContain('**api**');
+    expect(body).toContain('**web**');
+    expect(body).toContain('2 component(s)');
+  });
+
+  it('includes doc list', () => {
+    const docs: ScoredDoc[] = [
+      { path: '/tmp/README.md', score: 50, ingested: false },
+      { path: '/tmp/ARCHITECTURE.md', score: 40, ingested: false },
+    ];
+    const body = synthesizeProjectBody('App', [], docs);
+    expect(body).toContain('## Key Documentation');
+    expect(body).toContain('README');
+    expect(body).toContain('ARCHITECTURE');
+  });
+
+  it('limits to top 10 docs', () => {
+    const docs: ScoredDoc[] = Array.from({ length: 15 }, (_, i) => ({
+      path: `/tmp/doc-${i}.md`,
+      score: 100 - i,
+      ingested: false,
+    }));
+    const body = synthesizeProjectBody('App', [], docs);
+    expect(body).toContain('doc-0');
+    expect(body).toContain('doc-9');
+    expect(body).not.toContain('doc-10');
   });
 });
