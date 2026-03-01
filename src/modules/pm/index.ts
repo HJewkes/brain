@@ -239,6 +239,8 @@ export const pmModule: BrainModule = {
     const tasksAlias = new Command('tasks')
       .description('List tasks (alias for "task list")')
       .helpOption(false)
+      .allowUnknownOption()
+      .allowExcessArguments(true)
       .action(async () => {
         const idx = process.argv.indexOf('tasks');
         const tail = process.argv.slice(idx + 1);
@@ -249,6 +251,8 @@ export const pmModule: BrainModule = {
     const workstreamsAlias = new Command('workstreams')
       .description('List workstreams (alias for "workstream list")')
       .helpOption(false)
+      .allowUnknownOption()
+      .allowExcessArguments(true)
       .action(async () => {
         const idx = process.argv.indexOf('workstreams');
         const tail = process.argv.slice(idx + 1);
