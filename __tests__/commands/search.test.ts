@@ -9,7 +9,7 @@ const embedder = createMockEmbedder();
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder, config, modules: {}, close: () => {} })),
+  withBrain: vi.fn(async (fn) => fn({ db, embedder, config, modules: { getFilters: () => [] }, close: () => {} })),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 

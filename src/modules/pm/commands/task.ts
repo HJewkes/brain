@@ -146,10 +146,15 @@ export function createTaskCommands(): Command {
           const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
           const STATUS_ORDER: Record<string, number> = { pending: 0, claimed: 1, 'in-progress': 2, blocked: 3, done: 4 };
 
+          const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
           tasks = [...tasks].sort((a, b) => {
             switch (opts.sort) {
-              case 'priority':
+              case 'priority': {
+                const aTerminal = TERMINAL_STATUSES.has(a.status) ? 1 : 0;
+                const bTerminal = TERMINAL_STATUSES.has(b.status) ? 1 : 0;
+                if (aTerminal !== bTerminal) return aTerminal - bTerminal;
                 return (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
+              }
               case 'workstream':
                 return a.workstream - b.workstream;
               case 'status':

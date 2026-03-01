@@ -48,7 +48,13 @@ export function createOrchestrationCommands(): Command[] {
             const r = getTask(svc.db, id);
             return r.ok ? [r.data] : [];
           })
-          .sort((a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority));
+          .sort((a, b) => {
+            const priDiff = priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority);
+            if (priDiff !== 0) return priDiff;
+            const wsDiff = a.workstream - b.workstream;
+            if (wsDiff !== 0) return wsDiff;
+            return a.display_id.localeCompare(b.display_id);
+          });
 
         let filtered = resolved;
         if (opts.workstream) {

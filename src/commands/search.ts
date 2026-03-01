@@ -22,7 +22,7 @@ export const searchCommand = new Command('search')
   .option('--memories', 'also search extracted memories')
   .option('--container <tag>', 'filter memories by container tag')
   .action(async (query, opts) => {
-    await withBrain(async ({ db, embedder, config }) => {
+    await withBrain(async ({ db, embedder, config, modules }) => {
       const searchOpts: SearchOptions = {
         limit: parseInt(opts.limit, 10),
         tier: opts.tier as SearchOptions['tier'],
@@ -36,7 +36,7 @@ export const searchCommand = new Command('search')
         includePm: opts.includeTasks,
       };
 
-      const results = await search(db, embedder, query, searchOpts, config.fusionWeights);
+      const results = await search(db, embedder, query, searchOpts, config.fusionWeights, modules);
 
       const expanded: SearchResult[] = [];
       if (opts.expand && results.length > 0) {
