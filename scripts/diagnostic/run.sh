@@ -107,6 +107,7 @@ run_setup() {
   env -u CLAUDECODE claude -p \
     --model sonnet \
     --permission-mode bypassPermissions \
+    --no-session-persistence \
     "$prompt"
 
   # Find the session log written by the setup agent
