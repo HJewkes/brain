@@ -7,7 +7,7 @@ import type { BrainConfig, Embedder } from '../../../types.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { formatError, fail, pmError } from '../errors.js';
 import type { Result } from '../errors.js';
-import { resolveWorkstreamFilter } from '../ids.js';
+import { resolveWorkstreamFilter, parseDisplayId } from '../ids.js';
 import type { TaskMetadata, TaskStatus } from '../types.js';
 import {
   createTask,
@@ -63,7 +63,7 @@ export function createTaskCommands(): Command {
     .description('Create a new task')
     .argument('<name>', 'Task name')
     .option('--project <prefix>', 'Project prefix (uses active if omitted)')
-    .requiredOption('--workstream <n>', 'Workstream number', parseInt)
+    .requiredOption('--workstream <id>', 'Workstream number or display ID (e.g. 1 or VW-01)')
     .option('--mode <mode>', 'Task mode (auto|interactive|review)')
     .option('--category <cat>', 'Task category')
     .option('--priority <pri>', 'Task priority (critical|high|medium|low)')
@@ -80,9 +80,24 @@ export function createTaskCommands(): Command {
           return;
         }
         const project = projectResult.data;
+        // Parse workstream: accept integer or display ID (e.g. VW-01)
+        let workstreamNum: number;
+        const wsStr = String(opts.workstream);
+        if (/^\d+$/.test(wsStr)) {
+          workstreamNum = parseInt(wsStr, 10);
+        } else {
+          const parsed = parseDisplayId(wsStr.toUpperCase());
+          if (parsed?.workstream !== undefined) {
+            workstreamNum = parsed.workstream;
+          } else {
+            process.stderr.write(formatError(`Invalid workstream: ${wsStr}. Use a number (e.g. 1) or display ID (e.g. ${project}-01)`, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+        }
         const result = await createTask(svc.db, svc.config, svc.embedder, {
           project,
-          workstream: opts.workstream,
+          workstream: workstreamNum,
           name,
           mode: opts.mode as never,
           category: opts.category as never,
