@@ -34,7 +34,7 @@ export interface ContextBundle {
   task: TaskMetadata;
   body: string;
   workstream?: { displayId: string; title: string };
-  relatedNotes: Array<{ title: string; excerpt: string; score: number }>;
+  relatedNotes: Array<{ title: string; excerpt: string; score: number; source: 'graph' | 'semantic' }>;
   prompt?: string;
   dependencies: DependencySummary[];
   decisions: DecisionSummary[];
@@ -195,6 +195,7 @@ export async function assembleDispatch(
         title: r.heading ?? r.filePath,
         excerpt: r.excerpt ?? '',
         score: r.score,
+        source: 'semantic' as const,
       }));
     } catch {
       // Search failure is non-fatal — proceed with empty related notes

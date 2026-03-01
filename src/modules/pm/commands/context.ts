@@ -11,6 +11,7 @@ import {
 } from '../engine/dispatch.js';
 import { parseDisplayId } from '../ids.js';
 import { getPmNotes } from '../data/queries.js';
+import { search } from '../../../services/search.js';
 
 function formatHuman(bundle: ContextBundle): string {
   const lines: string[] = [];
@@ -33,7 +34,8 @@ function formatHuman(bundle: ContextBundle): string {
   if (bundle.relatedNotes.length > 0) {
     lines.push('--- Related Notes ---');
     for (const note of bundle.relatedNotes) {
-      lines.push(`  [${note.score.toFixed(2)}] ${note.title}`);
+      const sourceLabel = note.source === 'semantic' ? ' [semantic]' : '';
+      lines.push(`  [${note.score.toFixed(2)}]${sourceLabel} ${note.title}`);
       if (note.excerpt) {
         lines.push(`    ${note.excerpt.slice(0, 200)}`);
       }
@@ -243,10 +245,49 @@ export function createContextCommand(): Command {
             process.exitCode = 1;
             return;
           }
+          // Semantic fallback: when graph context has no edges, search by content
+          const bundle = result.data;
+          const hasGraphContext =
+            bundle.dependencies.length > 0 ||
+            bundle.decisions.length > 0 ||
+            bundle.relatedNotes.length > 0;
+
+          if (!hasGraphContext) {
+            const query = [bundle.task.title, bundle.body]
+              .filter(Boolean)
+              .join(' ')
+              .trim()
+              .slice(0, 300);
+
+            if (query) {
+              try {
+                const semanticResults = await search(
+                  svc.db,
+                  svc.embedder,
+                  query,
+                  { limit: 6, includePm: true },
+                  svc.config.fusionWeights ?? { bm25: 0.4, vector: 0.6 }
+                );
+                const taskNoteId = getPmNotes(svc.db, 'task', { display_id: displayId })[0]?.id;
+                bundle.relatedNotes = semanticResults
+                  .filter((r) => r.noteId !== taskNoteId)
+                  .slice(0, 5)
+                  .map((r) => ({
+                    title: r.heading ?? r.filePath,
+                    excerpt: r.excerpt ?? '',
+                    score: r.score,
+                    source: 'semantic' as const,
+                  }));
+              } catch {
+                // Semantic fallback failure is non-fatal
+              }
+            }
+          }
+
           if (opts.json) {
-            process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
+            process.stdout.write(JSON.stringify(bundle, null, 2) + '\n');
           } else {
-            process.stdout.write(formatHuman(result.data) + '\n');
+            process.stdout.write(formatHuman(bundle) + '\n');
           }
         } else if (parsed.workstream !== undefined) {
           const result = assembleWorkstreamContext(svc.db, displayId);
