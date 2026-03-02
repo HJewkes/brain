@@ -27,6 +27,7 @@ export interface EnrichedTaskFields {
   description?: string;
   acceptance_criteria?: string[];
   blocked_by?: string[];
+  blocks?: string[];
   created?: string | null;
   modified?: string | null;
   workstream_name?: string;
@@ -362,15 +363,23 @@ export function listTasks(
             .map((l) => l.replace(/^[\s]*[-*]\s+/, '').trim())
         : [];
 
-      // Compute blocked_by from reverse graph
-      const blockedBy: string[] = [];
-      if (depGraph) {
-        for (const [from, tos] of depGraph) {
-          if (from === taskMeta.display_id) continue;
-          if (tos.includes(taskMeta.display_id)) blockedBy.push(from);
+      // blocked_by = upstream prerequisites (tasks I wait on)
+      const blockedBy = getDependencyDisplayIds(db, note.id);
+      enriched.blocked_by = blockedBy.length > 0 ? blockedBy : undefined;
+
+      // blocks = downstream dependents (tasks waiting on me)
+      const blocksMe: string[] = [];
+      const reverseRelations = db.getRelationsTo(note.id);
+      for (const rel of reverseRelations) {
+        if (rel.type === 'depends_on') {
+          const sourceNote = db.getNoteById(rel.sourceId);
+          if (sourceNote?.metadata) {
+            const meta2 = JSON.parse(sourceNote.metadata) as Record<string, unknown>;
+            if (meta2.display_id) blocksMe.push(meta2.display_id as string);
+          }
         }
       }
-      enriched.blocked_by = blockedBy;
+      enriched.blocks = blocksMe.length > 0 ? blocksMe : undefined;
 
       enriched.created = note.createdAt ?? (meta.created as string) ?? null;
       enriched.modified = note.modifiedAt ?? (meta.modified as string) ?? null;

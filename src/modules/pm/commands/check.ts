@@ -3,6 +3,7 @@ import { withBrain } from '../../../services/brain-service.js';
 import { getActiveProject } from '../data/queries.js';
 import { formatError } from '../errors.js';
 import { runConsistencyCheck, type ConsistencyReport } from '../engine/consistency.js';
+import { buildDependencyGraph, detectCycles } from '../engine/dependency.js';
 
 function resolvePrefix(explicit: string | undefined, active: string | null): string | undefined {
   if (explicit) return explicit.toUpperCase();
@@ -86,6 +87,7 @@ export function createCheckCommand(): Command {
     .description('Run consistency checks on a PM project')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
     .option('--deep', 'Include semantic analysis and source document clustering')
+    .option('--deps', 'Check dependency graph for cycles')
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
@@ -97,6 +99,25 @@ export function createCheckCommand(): Command {
             formatError({ error: true, code: 'INVALID_INPUT', message: msg }, true) + '\n'
           );
           process.exitCode = 1;
+          return;
+        }
+
+        if (opts.deps) {
+          const graph = buildDependencyGraph(svc.db, prefix);
+          const cycles = detectCycles(graph);
+          if (opts.json) {
+            process.stdout.write(JSON.stringify({ project: prefix, cycles }, null, 2) + '\n');
+            return;
+          }
+          if (cycles.length === 0) {
+            process.stdout.write(`Project ${prefix}: no dependency cycles found.\n`);
+          } else {
+            process.stdout.write(`Project ${prefix}: ${cycles.length} cycle(s) detected:\n`);
+            for (const cycle of cycles) {
+              process.stdout.write(`  ${cycle.join(' → ')}\n`);
+            }
+            process.exitCode = 1;
+          }
           return;
         }
 

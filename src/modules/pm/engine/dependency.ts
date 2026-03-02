@@ -96,6 +96,36 @@ export function computeEligible(db: BrainDB, prefix: string): string[] {
   return eligible.sort();
 }
 
+/** Full-graph cycle detection using DFS with back-edge detection. */
+export function detectCycles(graph: Map<string, string[]>): string[][] {
+  const cycles: string[][] = [];
+  const visited = new Set<string>();
+  const inStack = new Set<string>();
+  const path: string[] = [];
+
+  function dfs(node: string): void {
+    if (inStack.has(node)) {
+      const cycleStart = path.indexOf(node);
+      cycles.push(path.slice(cycleStart).concat(node));
+      return;
+    }
+    if (visited.has(node)) return;
+    visited.add(node);
+    inStack.add(node);
+    path.push(node);
+    for (const neighbor of graph.get(node) ?? []) {
+      dfs(neighbor);
+    }
+    path.pop();
+    inStack.delete(node);
+  }
+
+  for (const node of graph.keys()) {
+    dfs(node);
+  }
+  return cycles;
+}
+
 /**
  * Incremental cycle detection: check if adding "fromId depends_on toId"
  * would create a cycle. DFS from toId following existing depends_on edges;
