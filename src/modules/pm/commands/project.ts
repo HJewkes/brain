@@ -13,6 +13,7 @@ import {
 import { getActiveProject, setActiveProject, resolveProject, getPmNotes } from '../data/queries.js';
 import { listTasks } from '../data/task-ops.js';
 import { listWorkstreams } from '../data/workstream-ops.js';
+import { projectDeleteWithActivity } from './activity.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -101,24 +102,58 @@ export function createProjectCommands(): Command {
 
   cmd
     .command('delete')
-    .description('Delete a project')
-    .argument('<prefix>', 'Project prefix')
-    .option('--force', 'Force delete even with dependent notes')
+    .description('Delete a project and all its notes')
+    .argument('<prefix>', 'Project prefix to delete')
+    .option('--confirm', 'Confirm deletion (required)')
+    .option('--all', 'Delete all notes under prefix, not just activity-tracked ones')
+    .option('--force', 'Force delete even with dependent notes (legacy)')
     .option('--json', 'Output JSON')
     .action(async (prefix, opts) => {
       await withBrain(async (svc) => {
-        const result = await deleteProject(svc.db, svc.config, prefix.toUpperCase(), opts.force);
+        const upper = prefix.toUpperCase();
+
+        // Legacy path: no --confirm flag uses old deleteProject behavior
+        if (!opts.confirm) {
+          const result = await deleteProject(svc.db, svc.config, upper, opts.force);
+          if (!result.ok) {
+            process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          if (opts.json) {
+            process.stdout.write(JSON.stringify({ deleted: true, prefix: upper }) + '\n');
+          } else {
+            process.stdout.write(`Deleted project ${upper}\n`);
+          }
+          return;
+        }
+
+        // Activity-aware delete path with --confirm
+        const result = projectDeleteWithActivity(svc.db, svc.config, upper, {
+          confirm: true,
+          all: opts.all,
+        });
+
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
+
         if (opts.json) {
-          process.stdout.write(
-            JSON.stringify({ deleted: true, prefix: prefix.toUpperCase() }) + '\n'
-          );
+          process.stdout.write(JSON.stringify({
+            deleted: true,
+            prefix: upper,
+            deletedCount: result.data.deletedCount,
+            untrackedCount: result.data.untrackedCount,
+          }, null, 2) + '\n');
         } else {
-          process.stdout.write(`Deleted project ${prefix.toUpperCase()}\n`);
+          process.stdout.write(`Deleted project ${upper} (${result.data.deletedCount} notes removed)\n`);
+          if (result.data.untrackedCount > 0) {
+            process.stderr.write(
+              `Warning: ${result.data.untrackedCount} note(s) were not in activity lineage\n`
+            );
+          }
         }
       });
     });

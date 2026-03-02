@@ -17,6 +17,7 @@ import { createSetupCommand } from './commands/setup.js';
 import { createCheckCommand } from './commands/check.js';
 import { createOnboardCommand } from './commands/onboard.js';
 import { createRelateCommand } from './commands/relate.js';
+import { createActivityCommand } from './commands/activity.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -180,6 +181,32 @@ export const pmModule: BrainModule = {
       },
     });
 
+    ctx.registerNoteType({
+      name: 'activity',
+      description: 'Tracks actions performed on a project (onboard, import, delete)',
+      tier: 'slow',
+      schema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project prefix' },
+          activity_type: {
+            type: 'string',
+            enum: ['onboard', 'import', 'delete'],
+            description: 'Type of activity',
+          },
+          created_notes: {
+            type: 'array',
+            description: 'Note IDs created by this activity',
+          },
+          created_relations: {
+            type: 'number',
+            description: 'Number of relations created',
+          },
+        },
+        required: ['project', 'activity_type'],
+      },
+    });
+
     ctx.registerRelationType({
       name: 'depends_on',
       description: 'Task dependency',
@@ -238,6 +265,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createCheckCommand());
     pmCmd.addCommand(createOnboardCommand());
     pmCmd.addCommand(createRelateCommand());
+    pmCmd.addCommand(createActivityCommand());
 
     // Plural aliases — delegate to subcommand
     const taskSubcommands = new Set([
