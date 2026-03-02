@@ -276,16 +276,17 @@ describe('check command', () => {
     expect(out).toContain('TEST');
   });
 
-  it('text report shows broken dependencies section', async () => {
-    // Remove a dependency target by deleting the task
-    // TEST-01.02 depends on TEST-01.01. Delete TEST-01.01
+  it('text report shows no broken dependencies when deps use relations', async () => {
+    // With relations as single source of truth and cascading deletes,
+    // broken dependencies (dangling display_id references) can no longer occur.
+    // Deleting a target note also removes the relation edge.
     const { deleteTask } = await import('../../../../src/modules/pm/data/task-ops.js');
     await deleteTask(db, config, 'TEST-01.01', true);
 
     await run('--project', 'TEST');
 
     const out = stdout();
-    expect(out).toContain('Broken dependencies');
+    expect(out).not.toContain('Broken dependencies');
   });
 
   it('--deep text report shows supersession gaps when present', async () => {

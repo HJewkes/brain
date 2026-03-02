@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
-import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -9,7 +9,8 @@ import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel } from '../services/ollama.js';
 import { slugify } from '../utils.js';
-import type { BrainConfig, EmbedderBackend } from '../types.js';
+import { indexSingleFile } from '../services/indexing.js';
+import type { BrainConfig, Embedder, EmbedderBackend } from '../types.js';
 
 const SUBDIRS = [
   'notes',
@@ -153,40 +154,59 @@ async function promptEmbedderChoice(): Promise<'ollama' | 'local' | null> {
   }
 }
 
-export async function ingestBrainReferenceDocs(config: BrainConfig): Promise<void> {
-  const pmDocsDir = join(
-    dirname(new URL(import.meta.url).pathname),
-    '..', 'modules', 'pm', 'docs'
-  );
+export async function ingestBrainReferenceDocs(
+  config: BrainConfig,
+  db?: BrainDB,
+  embedder?: Embedder
+): Promise<void> {
+  // Stub: golden dataset path (V14)
+  // if (goldenDatasetExists(config)) return seedFromGolden(db, config);
 
-  // Fallback: try the source tree path (docs/pm-module)
   const sourceDocsDir = join(
     dirname(new URL(import.meta.url).pathname),
     '..', '..', 'docs', 'pm-module'
   );
+  const commandsDir = join(sourceDocsDir, 'commands');
 
-  const docsDir = existsSync(pmDocsDir) ? pmDocsDir : existsSync(sourceDocsDir) ? sourceDocsDir : null;
-  if (!docsDir) return;
+  const refDocs: Array<{ slug: string; sourcePath: string; title: string }> = [];
 
-  const refDocs = ['commands.md', 'architecture.md'];
+  // Decomposed command files
+  if (existsSync(commandsDir)) {
+    const files = readdirSync(commandsDir).filter(f => f.endsWith('.md'));
+    for (const file of files) {
+      const name = basename(file, '.md');
+      const slug = `pm-ref-${name === '_index' ? 'overview' : name}`;
+      const title = name === '_index' ? 'PM Commands Overview' : `PM Commands: ${name}`;
+      refDocs.push({ slug, sourcePath: join(commandsDir, file), title });
+    }
+  }
 
-  for (const refDoc of refDocs) {
-    const refPath = join(docsDir, refDoc);
-    if (!existsSync(refPath)) continue;
+  // Also ingest architecture.md if it exists
+  const archPath = join(sourceDocsDir, 'architecture.md');
+  if (existsSync(archPath)) {
+    refDocs.push({ slug: 'pm-ref-architecture', sourcePath: archPath, title: 'PM Architecture' });
+  }
 
-    let content = readFileSync(refPath, 'utf-8');
-    const title = basename(refPath, '.md');
-    const slug = `pm-ref-${slugify(title)}`;
+  if (refDocs.length === 0) return;
+
+  const outDir = join(config.notesDir, 'modules', 'pm', 'reference');
+  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+
+  const createdNoteIds: string[] = [];
+
+  for (const doc of refDocs) {
+    let content = readFileSync(doc.sourcePath, 'utf-8');
 
     if (!content.trimStart().startsWith('---')) {
       const fmNow = new Date().toISOString().slice(0, 10);
       const fm = [
         '---',
-        `id: ${slug}`,
-        `title: "PM Reference: ${title}"`,
-        'type: research',
+        `id: ${doc.slug}`,
+        `title: "${doc.title}"`,
+        'type: reference',
         'tier: slow',
         'module: pm',
+        'embed_status: queued',
         `created: ${fmNow}`,
         `modified: ${fmNow}`,
         '---',
@@ -194,17 +214,40 @@ export async function ingestBrainReferenceDocs(config: BrainConfig): Promise<voi
       content = fm + '\n\n' + content;
     }
 
-    const outDir = join(config.notesDir, 'modules', 'pm', 'reference');
-    if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-    const outPath = join(outDir, `${slug}.md`);
-
+    const outPath = join(outDir, `${doc.slug}.md`);
     const hash = createHash('sha256').update(content).digest('hex');
+
+    // Skip if unchanged
     if (existsSync(outPath)) {
       const existing = readFileSync(outPath, 'utf-8');
       if (createHash('sha256').update(existing).digest('hex') === hash) continue;
     }
 
     writeFileSync(outPath, content, 'utf-8');
+
+    // Index into SQLite (THE BUG FIX)
+    if (db && embedder) {
+      try {
+        const noteId = await indexSingleFile(db, embedder, outPath, content, hash, Date.now());
+        createdNoteIds.push(noteId);
+      } catch {
+        // Auto-link may hit unique constraint with similar reference docs;
+        // note/FTS/chunks are already persisted, just track the slug
+        createdNoteIds.push(doc.slug);
+      }
+    }
+  }
+
+  // Create relations between reference notes (overview -> children)
+  if (db && createdNoteIds.length > 1) {
+    const overviewId = createdNoteIds.find(id => id.includes('pm-ref-overview'));
+    if (overviewId) {
+      const existingRelations = db.getRelationsFrom(overviewId);
+      const newRelations = createdNoteIds
+        .filter(id => id !== overviewId)
+        .map(targetId => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
+      db.upsertRelations(overviewId, [...existingRelations, ...newRelations]);
+    }
   }
 }
 
@@ -270,10 +313,18 @@ export const initCommand = new Command('init')
     const db = new BrainDB(config.dbPath);
     const info = getEmbedderInfo(config.embedder);
     db.setEmbeddingModel(info.model, info.dimensions);
-    db.close();
 
-    // Ingest brain's own PM reference docs (best-effort)
-    await ingestBrainReferenceDocs(config);
+    // Ingest brain's own PM reference docs (best-effort, with indexing)
+    try {
+      const { createEmbedder } = await import('../adapters/index.js');
+      const embedder = createEmbedder(config);
+      await ingestBrainReferenceDocs(config, db, embedder);
+    } catch {
+      // Fall back to write-only (no indexing) if embedder fails
+      await ingestBrainReferenceDocs(config);
+    }
+
+    db.close();
 
     // LLM setup — reuses the Ollama health check from above
     const llmModel = config.ollamaModel ?? 'qwen2.5:3b';

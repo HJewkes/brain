@@ -802,12 +802,42 @@ describe('search with PM note inclusion', () => {
     }
   });
 
-  it('excludes PM notes by default when moduleRegistry is provided', async () => {
+  it('includes PM notes by default when moduleRegistry is provided', async () => {
     const results = await search(
       db,
       embedder,
       'TypeScript',
       { limit: 10 },
+      { bm25: 0.3, vector: 0.7 },
+      registry
+    );
+
+    const noteIds = results.map((r) => r.noteId);
+    expect(noteIds).toContain('regular-note');
+    expect(noteIds).toContain('pm-task-note');
+  });
+
+  it('excludes PM notes when excludePm option is true', async () => {
+    const results = await search(
+      db,
+      embedder,
+      'TypeScript',
+      { limit: 10, excludePm: true },
+      { bm25: 0.3, vector: 0.7 },
+      registry
+    );
+
+    const noteIds = results.map((r) => r.noteId);
+    expect(noteIds).toContain('regular-note');
+    expect(noteIds).not.toContain('pm-task-note');
+  });
+
+  it('excludes PM notes when includePm is explicitly false (backward compat)', async () => {
+    const results = await search(
+      db,
+      embedder,
+      'TypeScript',
+      { limit: 10, includePm: false },
       { bm25: 0.3, vector: 0.7 },
       registry
     );

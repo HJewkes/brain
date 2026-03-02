@@ -19,7 +19,9 @@ import { getPmNotes, resolveDisplayId } from './queries.js';
 import { validateTransition, computeVirtualState } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
 import { listWorkstreams } from './workstream-ops.js';
-import { buildDependencyGraph } from '../engine/dependency.js';
+import { buildDependencyGraph, computeNewlyEligible } from '../engine/dependency.js';
+import { createActivityNote } from '../engine/activity.js';
+import type { ActivityType } from '../types.js';
 
 export type ListMode = 'default' | 'full' | 'short';
 
@@ -80,10 +82,6 @@ function buildTaskMarkdown(input: CreateTaskInput, displayId: string, number: nu
     `category: ${category}`,
     `priority: ${priority}`,
   ];
-
-  if (input.dependsOn && input.dependsOn.length > 0) {
-    lines.push(`depends_on: [${input.dependsOn.join(', ')}]`);
-  }
 
   if (input.dueDate) {
     lines.push(`due_date: "${input.dueDate}"`);
@@ -195,11 +193,9 @@ export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string
   return displayIds;
 }
 
-function mergeDependsOn(db: BrainDB, noteId: string, frontmatterDeps: string[] | undefined): string[] | undefined {
+function mergeDependsOn(db: BrainDB, noteId: string, _frontmatterDeps: string[] | undefined): string[] | undefined {
   const relationDeps = getDependencyDisplayIds(db, noteId);
-  const fmDeps = frontmatterDeps ?? [];
-  const allDeps = [...new Set([...fmDeps, ...relationDeps])];
-  return allDeps.length > 0 ? allDeps : undefined;
+  return relationDeps.length > 0 ? relationDeps : undefined;
 }
 
 export async function createTask(
@@ -275,7 +271,7 @@ export async function createTask(
     mode: input.mode ?? 'auto',
     category: input.category ?? 'implementation',
     priority: input.priority ?? 'medium',
-    depends_on: input.dependsOn,
+    depends_on: getDependencyDisplayIds(db, noteId) || undefined,
     due_date: input.dueDate,
     milestone: input.milestone,
     done_when: input.doneWhen,
@@ -549,6 +545,36 @@ export async function updateTaskStatus(
 
   const refreshedNote = db.getNoteById(noteId);
   const refreshedMeta = JSON.parse(refreshedNote!.metadata!) as Record<string, unknown>;
+
+  // Map status transitions to activity types
+  const activityTypeMap: Record<string, ActivityType> = {
+    claimed: 'claim',
+    'in-progress': 'start',
+    done: 'complete',
+    blocked: 'block',
+    cancelled: 'cancel',
+  };
+
+  // Unblock is: blocked -> pending
+  const activityType = currentStatus === 'blocked' && newStatus === 'pending'
+    ? 'unblock'
+    : activityTypeMap[newStatus];
+
+  if (activityType) {
+    const newlyEligible = activityType === 'complete'
+      ? computeNewlyEligible(db, noteId)
+      : undefined;
+
+    await createActivityNote(db, config, embedder, {
+      project: refreshedMeta.project as string,
+      activityType,
+      taskDisplayId: displayId,
+      taskNoteId: noteId,
+      fromState: currentStatus,
+      toState: newStatus,
+      newlyEligible,
+    });
+  }
 
   return ok(taskMetaFromRecord(refreshedMeta));
 }

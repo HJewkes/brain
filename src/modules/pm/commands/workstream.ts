@@ -11,6 +11,7 @@ import {
 import { resolveProject } from '../data/queries.js';
 import { listTasks } from '../data/task-ops.js';
 import { parseDisplayId } from '../ids.js';
+import { checkNamespaceMismatch } from '../engine/routing.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -103,6 +104,12 @@ export function createWorkstreamCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'workstream');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const result = getWorkstream(svc.db, id.toUpperCase());
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');

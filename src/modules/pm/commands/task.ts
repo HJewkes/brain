@@ -22,6 +22,7 @@ import { getPmNotes, resolveProject, resolveDisplayId } from '../data/queries.js
 import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
+import { checkNamespaceMismatch } from '../engine/routing.js';
 
 function outputResult(data: unknown, json: boolean, filters?: Record<string, string>): void {
   if (json) {
@@ -239,6 +240,12 @@ export function createTaskCommands(): Command {
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
+        const redirectMsg = checkNamespaceMismatch(displayId, 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const result = getTask(svc.db, displayId);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -288,6 +295,12 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const updates: Record<string, unknown> = {};
         if (opts.mode) updates.mode = opts.mode;
         if (opts.category) updates.category = opts.category;
@@ -339,6 +352,12 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         if (opts.token) {
           const taskResult = getTask(svc.db, id.toUpperCase());
           if (taskResult.ok && taskResult.data.claim_token && taskResult.data.claim_token !== opts.token) {
@@ -369,6 +388,12 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const result = await updateTaskStatus(
           svc.db,
           svc.config,
@@ -401,6 +426,12 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const result = await updateTaskStatus(
           svc.db,
           svc.config,
@@ -425,6 +456,12 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const result = await deleteTask(svc.db, svc.config, id.toUpperCase(), opts.force);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -448,6 +485,12 @@ export function createTaskCommands(): Command {
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
+        const redirectMsg = checkNamespaceMismatch(displayId, 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const taskResult = getTask(svc.db, displayId);
         if (!taskResult.ok) {
           process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');

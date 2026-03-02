@@ -293,6 +293,23 @@ export function computeImpact(db: BrainDB, prefix: string, taskDisplayId: string
 }
 
 /**
+ * Impact analysis by noteId: what tasks become newly eligible when
+ * the given task (identified by its DB note ID) is completed.
+ * Returns display IDs of tasks that would become eligible.
+ */
+export function computeNewlyEligible(db: BrainDB, completedTaskNoteId: string): string[] {
+  const completedNote = db.getNoteById(completedTaskNoteId);
+  if (!completedNote?.metadata) return [];
+
+  const completedMeta = JSON.parse(completedNote.metadata) as Record<string, unknown>;
+  const prefix = completedMeta.project as string;
+  const displayId = completedMeta.display_id as string;
+  if (!prefix || !displayId) return [];
+
+  return computeImpact(db, prefix, displayId);
+}
+
+/**
  * Infer intra-workstream dependencies from task categories.
  * Rules:
  *   - testing -> implementation (same workstream)

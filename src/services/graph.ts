@@ -1,5 +1,5 @@
 import type { BrainDB } from './brain-db.js';
-import type { Relation, GraphNode, GraphResult } from '../types.js';
+import type { Relation, GraphNode, GraphResult, RelationType } from '../types.js';
 
 const MAX_DEPTH = 3;
 const BIDIRECTIONAL_TYPES = new Set(['related-to', 'related', 'parent', 'depends_on']);
@@ -142,6 +142,45 @@ export function expandResults(
   return Array.from(scoreMap.entries())
     .map(([noteId, decayedScore]) => ({ noteId, decayedScore }))
     .sort((a, b) => b.decayedScore - a.decayedScore);
+}
+
+export interface GraphScore {
+  noteId: string;
+  score: number;
+  relationType: RelationType;
+  depth: number;
+}
+
+export function computeGraphScores(
+  db: BrainDB,
+  rootId: string,
+  maxDepth: number = 3
+): Map<string, GraphScore> {
+  const result = traverseGraph(db, rootId, maxDepth);
+  const scores = new Map<string, GraphScore>();
+
+  // Build a map from node id to its nearest edge type
+  const edgeTypeByTarget = new Map<string, RelationType>();
+  for (const edge of result.edges) {
+    const neighbor = edge.sourceId === rootId ? edge.targetId : edge.sourceId;
+    if (!edgeTypeByTarget.has(neighbor)) {
+      edgeTypeByTarget.set(neighbor, edge.type);
+    }
+  }
+
+  for (const node of result.nodes) {
+    if (node.id === rootId) continue;
+    const depth = node.depth;
+    const score = 1.0 / Math.pow(2, depth);
+    const relationType = edgeTypeByTarget.get(node.id) ?? 'related';
+
+    const existing = scores.get(node.id);
+    if (!existing || score > existing.score) {
+      scores.set(node.id, { noteId: node.id, score, relationType, depth });
+    }
+  }
+
+  return scores;
 }
 
 function deduplicateEdges(edges: Relation[]): Relation[] {

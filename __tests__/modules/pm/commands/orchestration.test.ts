@@ -215,7 +215,7 @@ describe('waves', () => {
 
     await run('waves', '--project', 'TEST');
 
-    expect(stdout()).toContain('No active tasks');
+    expect(stdout()).toContain('No tasks in waves');
   });
 });
 

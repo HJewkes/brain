@@ -33,6 +33,12 @@ export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
 // Note visibility for search scoping
 export type NoteVisibility = 'public' | 'contextual' | 'private';
 
+// Embedding lifecycle states
+export type EmbedStatus = 'queued' | 'embedding' | 'embedded' | 'stale' | 'failed';
+
+// Activity types for state transition tracking
+export type ActivityType = 'onboard' | 'import' | 'delete' | 'complete' | 'claim' | 'start' | 'block' | 'unblock' | 'cancel';
+
 // PM metadata interfaces (stored in notes.metadata JSON)
 export interface ProjectMetadata {
   title?: string;

@@ -117,8 +117,8 @@ describe('--project excludes brain reference docs', () => {
   });
 });
 
-describe('private-visibility PM notes excluded from default search', () => {
-  it('excludes private notes from default search', async () => {
+describe('private-visibility PM notes included in default search', () => {
+  it('includes private PM notes in default search', async () => {
     await indexNote(
       { id: 'private-task', module: 'pm', metadata: JSON.stringify({ visibility: 'private' }) },
       'TypeScript private task details',
@@ -129,6 +129,24 @@ describe('private-visibility PM notes excluded from default search', () => {
     );
 
     await run('TypeScript', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const noteIds = parsed.notes.map((n: { noteId: string }) => n.noteId);
+    expect(noteIds).toContain('public-note');
+    expect(noteIds).toContain('private-task');
+  });
+
+  it('excludes private PM notes with --exclude-pm', async () => {
+    await indexNote(
+      { id: 'private-task', module: 'pm', metadata: JSON.stringify({ visibility: 'private' }) },
+      'TypeScript private task details',
+    );
+    await indexNote(
+      { id: 'public-note' },
+      'TypeScript public note content',
+    );
+
+    await run('TypeScript', '--json', '--exclude-pm');
 
     const parsed = JSON.parse(stdout());
     const noteIds = parsed.notes.map((n: { noteId: string }) => n.noteId);

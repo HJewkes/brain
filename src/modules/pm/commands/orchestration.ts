@@ -49,6 +49,7 @@ export function createOrchestrationCommands(): Command[] {
   const nextCmd = new Command('next')
     .description('Show eligible tasks (pending with all deps done)')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
+    .option('--all', 'Show all eligible tasks (no truncation)')
     .option('--limit <n>', 'Max tasks to show (default: 10)', '10')
     .option('--workstream <ws>', 'Filter by workstream number, display ID, or name')
     .option('--json', 'Output JSON')
@@ -61,7 +62,7 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
         const prefix = projectResult.data;
-        const limit = parseInt(opts.limit, 10);
+        const limit = opts.all ? Infinity : parseInt(opts.limit, 10);
 
         const eligibleIds = computeEligible(svc.db, prefix);
 
@@ -126,11 +127,13 @@ export function createOrchestrationCommands(): Command[] {
 
   const wavesCmd = new Command('waves')
     .description('Show topological wave grouping of remaining tasks')
-    .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
+    .argument('[prefix]', 'Project prefix (uses active project if omitted)')
+    .option('--project <prefix>', 'Project prefix (alternative to positional)')
+    .option('--workstream <id>', 'Filter to specific workstream (e.g., TST-01)')
     .option('--json', 'Output JSON')
-    .action(async (opts) => {
+    .action(async (prefixArg, opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, opts.project);
+        const projectResult = resolveProject(svc.db, prefixArg ?? opts.project);
         if (!projectResult.ok) {
           process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
@@ -140,17 +143,39 @@ export function createOrchestrationCommands(): Command[] {
 
         const waves = computeWaves(svc.db, prefix);
 
+        let filteredWaves = waves;
+        if (opts.workstream) {
+          filteredWaves = waves.map(w => ({
+            ...w,
+            taskIds: w.taskIds.filter(id => id.startsWith(opts.workstream!)),
+          })).filter(w => w.taskIds.length > 0);
+        }
+
+        if (filteredWaves.length === 0) {
+          const msg = opts.workstream
+            ? `No tasks in waves for workstream ${opts.workstream}.`
+            : 'No tasks in waves. All tasks are done or cancelled.';
+          if (opts.json) {
+            process.stdout.write(JSON.stringify({ waves: [], summary: msg }, null, 2) + '\n');
+          } else {
+            process.stdout.write(msg + '\n');
+          }
+          return;
+        }
+
         if (opts.json) {
-          const result = waves.map((w) => ({
+          const result = filteredWaves.map((w) => ({
             wave: w.wave,
             tasks: w.taskIds.map((id) => {
               const r = getTask(svc.db, id);
               if (!r.ok) return { display_id: id, title: undefined, status: 'unknown' };
+              const wsNum = r.data.workstream;
+              const wsDisplayId = `${prefix}-${String(wsNum).padStart(2, '0')}`;
               return {
                 display_id: r.data.display_id,
                 title: r.data.title,
                 status: r.data.status,
-                workstream: r.data.workstream,
+                workstream: wsDisplayId,
                 priority: r.data.priority,
                 category: r.data.category,
                 depends_on: r.data.depends_on ?? [],
@@ -161,13 +186,8 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
 
-        if (waves.length === 0) {
-          process.stdout.write('No active tasks.\n');
-          return;
-        }
-
         let totalTasks = 0;
-        for (const w of waves) {
+        for (const w of filteredWaves) {
           process.stdout.write(`Wave ${w.wave}:\n`);
           for (const id of w.taskIds) {
             const r = getTask(svc.db, id);
@@ -181,7 +201,7 @@ export function createOrchestrationCommands(): Command[] {
             totalTasks++;
           }
         }
-        process.stdout.write(`\n${totalTasks} tasks across ${waves.length} waves\n`);
+        process.stdout.write(`\n${totalTasks} tasks across ${filteredWaves.length} waves\n`);
       });
     });
 

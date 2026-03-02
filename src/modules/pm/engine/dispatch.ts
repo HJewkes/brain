@@ -10,6 +10,8 @@ import { getPmNotes } from '../data/queries.js';
 import { search } from '../../../services/search.js';
 import { listTasks } from '../data/task-ops.js';
 import { computeEligible } from './dependency.js';
+import { computeGraphScores } from '../../../services/graph.js';
+import type { GraphScore } from '../../../services/graph.js';
 
 export interface DependencySummary {
   displayId: string;
@@ -39,7 +41,7 @@ export interface ContextBundle {
   task: TaskMetadata;
   body: string;
   workstream?: { displayId: string; title: string };
-  relatedNotes: Array<{ title: string; excerpt: string; score: number; source: 'graph' | 'semantic' }>;
+  relatedNotes: Array<{ title: string; excerpt: string; score: number; source: 'linked' | 'graph' | 'semantic'; relationType?: string; depth?: number }>;
   prompt?: string;
   dependencies: DependencySummary[];
   decisions: DecisionSummary[];
@@ -234,7 +236,21 @@ export async function assembleDispatch(
   if (!ctxResult.ok) return ctxResult as Result<DispatchBundle>;
   const ctx = ctxResult.data;
 
-  // Semantic search for related notes
+  // Hybrid related notes: graph + semantic fusion
+  const GRAPH_WEIGHT = 0.6;
+  const SEMANTIC_WEIGHT = 0.4;
+
+  // Find the task note for graph traversal
+  const taskNotes = getPmNotes(db, 'task', { display_id: taskDisplayId });
+  const taskNote = taskNotes.length > 0 ? taskNotes[0] : undefined;
+
+  // Graph pass: BFS traversal with distance-decayed scoring
+  const graphScores = taskNote
+    ? computeGraphScores(db, taskNote.id, 3)
+    : new Map<string, GraphScore>();
+
+  // Semantic pass: search with includePm for cross-module relevance
+  const semanticScores = new Map<string, { score: number; title: string; excerpt: string }>();
   const searchQuery = [ctx.task.title, ctx.body].filter(Boolean).join(' ').trim();
   if (searchQuery) {
     try {
@@ -242,19 +258,63 @@ export async function assembleDispatch(
         db,
         embedder,
         searchQuery,
-        { limit: 5 },
+        { limit: 15, includePm: true },
         config.fusionWeights ?? { bm25: 0.4, vector: 0.6 }
       );
-      ctx.relatedNotes = results.map((r) => ({
-        title: r.heading ?? r.filePath,
-        excerpt: r.excerpt ?? '',
-        score: r.score,
-        source: 'semantic' as const,
-      }));
+      const maxScore = results.length > 0 ? Math.max(...results.map((r) => r.score)) : 1;
+      for (const r of results) {
+        if (r.noteId === taskNote?.id) continue;
+        const normalized = maxScore > 0 ? r.score / maxScore : 0;
+        semanticScores.set(r.noteId, {
+          score: normalized,
+          title: r.heading ?? r.filePath,
+          excerpt: r.excerpt ?? '',
+        });
+      }
     } catch {
-      // Search failure is non-fatal — proceed with empty related notes
+      // Search failure is non-fatal
     }
   }
+
+  // Fusion: combine graph and semantic scores
+  const allNoteIds = new Set([...graphScores.keys(), ...semanticScores.keys()]);
+  const fused: Array<{
+    noteId: string;
+    title: string;
+    excerpt: string;
+    score: number;
+    source: 'linked' | 'graph' | 'semantic';
+    relationType?: string;
+    depth?: number;
+  }> = [];
+
+  for (const noteId of allNoteIds) {
+    const gs = graphScores.get(noteId);
+    const ss = semanticScores.get(noteId);
+    const graphScore = gs?.score ?? 0;
+    const semanticScore = ss?.score ?? 0;
+    const finalScore = (GRAPH_WEIGHT * graphScore) + (SEMANTIC_WEIGHT * semanticScore);
+
+    const source = gs && ss ? 'linked' : gs ? 'graph' : 'semantic';
+    const title = ss?.title ?? db.getNoteById(noteId)?.title ?? noteId;
+    const excerpt = ss?.excerpt ?? '';
+
+    fused.push({
+      noteId, title, excerpt, score: finalScore, source,
+      relationType: gs?.relationType,
+      depth: gs?.depth,
+    });
+  }
+
+  fused.sort((a, b) => b.score - a.score);
+  ctx.relatedNotes = fused.slice(0, 10).map((f) => ({
+    title: f.title,
+    excerpt: f.excerpt,
+    score: f.score,
+    source: f.source,
+    relationType: f.relationType,
+    depth: f.depth,
+  }));
 
   // Peer tasks in same workstream
   const peersResult = listTasks(db, ctx.task.project, {

@@ -18,6 +18,7 @@ export const searchCommand = new Command('search')
   .option('--dropoff <pct>', 'cut results when score drops by this percentage (e.g. 30)')
   .option('--rerank', 'apply cross-encoder reranking for better relevance')
   .option('--include-tasks', 'include PM task notes in search results')
+  .option('--exclude-pm', 'exclude project management notes from results')
   .option('--expand', 'include graph-connected notes')
   .option('--memories', 'also search extracted memories')
   .option('--container <tag>', 'filter memories by container tag')
@@ -39,6 +40,7 @@ export const searchCommand = new Command('search')
         dropoff: opts.dropoff ? parseFloat(opts.dropoff) / 100 : undefined,
         rerank: opts.rerank,
         includePm: opts.includeTasks,
+        excludePm: opts.excludePm,
       };
 
       const results = await search(db, embedder, query, searchOpts, config.fusionWeights, modules);
@@ -66,7 +68,7 @@ export const searchCommand = new Command('search')
 
       let allResults = [...results, ...expanded];
 
-      if (!opts.includeTasks) {
+      if (opts.excludePm && !opts.includeTasks) {
         allResults = allResults.filter((r) => {
           const note = db.getNoteById(r.noteId);
           if (!note) return true;

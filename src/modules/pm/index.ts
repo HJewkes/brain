@@ -19,6 +19,14 @@ import { createOnboardCommand } from './commands/onboard.js';
 import { createRelateCommand } from './commands/relate.js';
 import { createActivityCommand } from './commands/activity.js';
 
+export type EntityType = 'task' | 'workstream' | 'project';
+
+export function detectEntityType(id: string): EntityType {
+  if (id.includes('.')) return 'task';
+  if (id.includes('-')) return 'workstream';
+  return 'project';
+}
+
 export const pmModule: BrainModule = {
   name: 'pm',
   version: '1.0.0',
@@ -191,7 +199,7 @@ export const pmModule: BrainModule = {
           project: { type: 'string', description: 'Project prefix' },
           activity_type: {
             type: 'string',
-            enum: ['onboard', 'import', 'delete'],
+            enum: ['onboard', 'import', 'delete', 'complete', 'claim', 'start', 'block', 'unblock', 'cancel'],
             description: 'Type of activity',
           },
           created_notes: {
@@ -224,6 +232,14 @@ export const pmModule: BrainModule = {
     ctx.registerRelationType({
       name: 'supersedes',
       description: 'Decision supersedes another',
+    });
+    ctx.registerRelationType({
+      name: 'recorded_for',
+      description: 'Activity recorded for a task',
+    });
+    ctx.registerRelationType({
+      name: 'unblocked',
+      description: 'Activity unblocked a downstream task',
     });
 
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
@@ -267,6 +283,56 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createRelateCommand());
     pmCmd.addCommand(createActivityCommand());
 
+    // Catch unknown commands with intelligent resolution
+    pmCmd.on('command:*', async (operands: string[]) => {
+      const unknown = operands[0];
+      if (!unknown) return;
+
+      const { resolveUnknownCommand } = await import('./engine/command-resolution.js');
+
+      let resolution;
+      try {
+        const { withBrain } = await import('../../services/brain-service.js');
+        resolution = await withBrain(async (svc) => {
+          return resolveUnknownCommand(unknown, svc.db, svc.embedder);
+        });
+      } catch {
+        resolution = await resolveUnknownCommand(unknown);
+      }
+
+      process.stderr.write(`Error: ${resolution.message}\n`);
+      process.exitCode = 1;
+    });
+
+    const showCmd = new Command('show')
+      .description('Show details for any PM entity (task, workstream, or project)')
+      .argument('<id>', 'Display ID (e.g., VOLT, VOLT-01, VOLT-01.03)')
+      .option('--json', 'Output JSON')
+      .option('--format <format>', 'Output format')
+      .action(async (id: string, opts: { json?: boolean; format?: string }) => {
+        if (opts.format === 'json') opts.json = true;
+        const entityType = detectEntityType(id);
+        const args = ['node', 'brain-pm', entityType, 'show', id];
+        if (opts.json) args.push('--json');
+        await pmCmd.parseAsync(args, { from: 'node' });
+      });
+    pmCmd.addCommand(showCmd);
+
+    const claimCmd = new Command('claim')
+      .description('Claim a task')
+      .argument('<id>', 'Task display ID (e.g., VOLT-01.03)')
+      .option('--start', 'Start working immediately after claiming')
+      .option('--json', 'Output JSON')
+      .option('--format <format>', 'Output format')
+      .action(async (id: string, opts: { json?: boolean; start?: boolean; format?: string }) => {
+        if (opts.format === 'json') opts.json = true;
+        const args = ['node', 'brain-pm', 'task', 'claim', id];
+        if (opts.start) args.push('--start');
+        if (opts.json) args.push('--json');
+        await pmCmd.parseAsync(args, { from: 'node' });
+      });
+    pmCmd.addCommand(claimCmd);
+
     // Plural aliases — delegate to subcommand
     const taskSubcommands = new Set([
       'add', 'list', 'show', 'update', 'done', 'block', 'unblock',
@@ -280,9 +346,15 @@ export const pmModule: BrainModule = {
       .action(async () => {
         const idx = process.argv.indexOf('tasks');
         const tail = process.argv.slice(idx + 1);
-        // Default to 'list' when no subcommand recognized
         const hasSubcommand = tail.length > 0 && taskSubcommands.has(tail[0]);
-        const prefix = hasSubcommand ? [] : ['list'];
+        let prefix: string[];
+        if (hasSubcommand) {
+          prefix = [];
+        } else if (tail.length > 0 && tail[0].includes('.')) {
+          prefix = ['show'];
+        } else {
+          prefix = ['list'];
+        }
         await pmCmd.parseAsync(['node', 'brain-pm', 'task', ...prefix, ...tail], { from: 'node' });
       });
     pmCmd.addCommand(tasksAlias);
