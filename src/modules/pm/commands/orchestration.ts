@@ -5,6 +5,8 @@ import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
 import { resolveWorkstreamFilter } from '../ids.js';
+import type { Result } from '../errors.js';
+import { ok, fail } from '../errors.js';
 import { getActiveProject, getPmNotes, resolveProject } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
@@ -20,14 +22,35 @@ import {
   findCancelledDependencies,
 } from '../engine/consistency.js';
 import { listWorkstreams } from '../data/workstream-ops.js';
+import type { BrainDB } from '../../../services/brain-db.js';
 import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
+
+/** Resolve workstream by number, display ID, or name (case-insensitive substring). */
+export function resolveWorkstreamByName(db: BrainDB, prefix: string, input: string): Result<number> {
+  const idResult = resolveWorkstreamFilter(input);
+  if (idResult.ok) return idResult;
+
+  const wsResult = listWorkstreams(db, prefix);
+  if (!wsResult.ok) return fail('NOT_FOUND', `Could not list workstreams: ${wsResult.error.message}`);
+
+  const lower = input.toLowerCase();
+  for (const ws of wsResult.data) {
+    const name = ws.title?.replace(/^Workstream\s+/i, '') ?? '';
+    if (name.toLowerCase().includes(lower)) return ok(ws.number);
+  }
+
+  return fail(
+    'INVALID_INPUT',
+    `No workstream matching "${input}". Use a number, display ID, or name. Run "brain pm workstream list" to see options.`
+  );
+}
 
 export function createOrchestrationCommands(): Command[] {
   const nextCmd = new Command('next')
     .description('Show eligible tasks (pending with all deps done)')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
     .option('--limit <n>', 'Max tasks to show (default: 10)', '10')
-    .option('--workstream <ws>', 'Filter by workstream number or display ID')
+    .option('--workstream <ws>', 'Filter by workstream number, display ID, or name')
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
@@ -58,7 +81,7 @@ export function createOrchestrationCommands(): Command[] {
 
         let filtered = resolved;
         if (opts.workstream) {
-          const wsResult = resolveWorkstreamFilter(opts.workstream);
+          const wsResult = resolveWorkstreamByName(svc.db, prefix, opts.workstream);
           if (!wsResult.ok) {
             process.stderr.write(formatError(wsResult.error, !!opts.json) + '\n');
             process.exitCode = 1;
