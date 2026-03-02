@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
-import type { BrainConfig, Embedder } from '../../../types.js';
+import type { BrainConfig, Embedder, Relation } from '../../../types.js';
 import type { Result } from '../errors.js';
 import type { OnboardManifest } from '../data/onboard-types.js';
 import { ok, fail, formatError } from '../errors.js';
@@ -205,6 +205,9 @@ export async function runOnboard(
   }
   const ingestPhase = { completedAt: now(), docsIngested: ingestedCount };
 
+  // Sync project→workstream parent edges for any workstreams that exist
+  syncProjectHierarchyEdges(db, opts.prefix);
+
   // Build manifest
   const manifest: OnboardManifest = {
     version: 1,
@@ -238,6 +241,29 @@ export async function runOnboard(
   await indexSingleFile(db, embedder, manifestPath, manifestMd, manifestHash, Date.now());
 
   return ok(manifest);
+}
+
+export function syncProjectHierarchyEdges(db: BrainDB, prefix: string): void {
+  const projectNotes = getPmNotes(db, 'project', { prefix });
+  if (projectNotes.length === 0) return;
+
+  const projectNoteId = projectNotes[0].id;
+  const wsNotes = getPmNotes(db, 'workstream', { project: prefix });
+  if (wsNotes.length === 0) return;
+
+  const existingRels = db.getRelationsFrom(projectNoteId);
+  const existingTargets = new Set(existingRels.map((r) => r.targetId));
+
+  const relations: Relation[] = [...existingRels];
+  for (const ws of wsNotes) {
+    if (!existingTargets.has(ws.id)) {
+      relations.push({ sourceId: projectNoteId, targetId: ws.id, type: 'parent' });
+    }
+  }
+
+  if (relations.length > existingRels.length) {
+    db.upsertRelations(projectNoteId, relations);
+  }
 }
 
 function buildManifestNote(manifest: OnboardManifest, slug: string, projectName: string): string {
