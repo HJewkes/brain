@@ -241,6 +241,10 @@ export const pmModule: BrainModule = {
       name: 'unblocked',
       description: 'Activity unblocked a downstream task',
     });
+    ctx.registerRelationType({
+      name: 'references',
+      description: 'Task references a source document',
+    });
 
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
 

@@ -256,6 +256,15 @@ export async function createTask(
     relations.push({ sourceId: wsNotes[0].id, targetId: noteId, type: 'parent' });
   }
 
+  if (input.references?.length) {
+    for (const ref of input.references) {
+      const target = db.getNoteById(ref);
+      if (target) {
+        relations.push({ sourceId: noteId, targetId: target.id, type: 'references' });
+      }
+    }
+  }
+
   if (relations.length > 0) {
     db.upsertRelations(noteId, relations);
   }
