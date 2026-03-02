@@ -30,11 +30,14 @@ export function computeAutoLinks(
   const existingTargets = new Set(existing.map((r) => r.targetId));
 
   const links: Relation[] = [];
+  const seen = new Set<string>();
   for (const result of vectorResults) {
     if (result.noteId === noteId) continue;
+    if (seen.has(result.noteId)) continue;
     const cosineSim = distanceToCosineSim(result.distance);
     if (cosineSim < threshold) continue;
     if (existingTargets.has(result.noteId)) continue;
+    seen.add(result.noteId);
     links.push({
       sourceId: noteId,
       targetId: result.noteId,
