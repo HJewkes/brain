@@ -133,7 +133,11 @@ export const searchCommand = new Command('search')
         process.stdout.write(JSON.stringify(output) + '\n');
       } else {
         if (allResults.length === 0 && memoryResults.length === 0) {
-          process.stderr.write('No results found.\n');
+          process.stderr.write(`No results found for "${query}".\n\n`);
+          process.stderr.write('Suggestions:\n');
+          process.stderr.write('  - Try broader search terms\n');
+          process.stderr.write('  - Use brain pm task list --search "<term>" for PM task search\n');
+          process.stderr.write('  - Use brain pm status <prefix> for project overview\n');
           return;
         }
         for (const r of allResults) {

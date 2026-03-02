@@ -282,8 +282,15 @@ export async function search(
       : fuseByRRF(filteredFts, bestVectorByNote, fusionWeights);
 
   scored.sort((a, b) => b.score - a.score);
+  const DEFAULT_MIN_SCORE = 0.25;
+  const effectiveMinScore =
+    options.minScore != null
+      ? options.minScore
+      : strategy === 'score'
+        ? DEFAULT_MIN_SCORE
+        : null;
   const filtered =
-    options.minScore != null ? scored.filter((s) => s.score >= options.minScore!) : scored;
+    effectiveMinScore != null ? scored.filter((s) => s.score >= effectiveMinScore) : scored;
   const afterDropoff =
     options.dropoff != null ? applyDropoffFilter(filtered, options.dropoff) : filtered;
   const topResults = afterDropoff.slice(0, limit);
