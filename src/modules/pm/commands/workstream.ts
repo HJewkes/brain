@@ -77,11 +77,12 @@ export function createWorkstreamCommands(): Command {
   cmd
     .command('list')
     .description('List workstreams')
+    .argument('[prefix]', 'Project prefix (uses active project if omitted)')
     .option('--project <prefix>', 'Filter by project prefix')
     .option('--json', 'Output JSON')
-    .action(async (opts) => {
+    .action(async (prefix, opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, opts.project);
+        const projectResult = resolveProject(svc.db, prefix ?? opts.project);
         if (!projectResult.ok) {
           process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;

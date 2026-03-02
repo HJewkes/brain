@@ -48,14 +48,15 @@ export function resolveWorkstreamByName(db: BrainDB, prefix: string, input: stri
 export function createOrchestrationCommands(): Command[] {
   const nextCmd = new Command('next')
     .description('Show eligible tasks (pending with all deps done)')
-    .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
+    .argument('[prefix]', 'Project prefix (uses active project if omitted)')
+    .option('--project <prefix>', 'Project prefix (alternative to positional)')
     .option('--all', 'Show all eligible tasks (no truncation)')
     .option('--limit <n>', 'Max tasks to show (default: 10)', '10')
     .option('--workstream <ws>', 'Filter by workstream number, display ID, or name')
     .option('--json', 'Output JSON')
-    .action(async (opts) => {
+    .action(async (prefixArg, opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, opts.project);
+        const projectResult = resolveProject(svc.db, prefixArg ?? opts.project);
         if (!projectResult.ok) {
           process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;

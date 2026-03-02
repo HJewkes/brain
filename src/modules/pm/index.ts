@@ -337,6 +337,7 @@ export const pmModule: BrainModule = {
     const taskSubcommands = new Set([
       'add', 'list', 'show', 'update', 'done', 'block', 'unblock',
       'delete', 'claim', 'start', 'release',
+      'complete',
     ]);
     const tasksAlias = new Command('tasks')
       .description('Task management (alias for "task")')
@@ -349,6 +350,11 @@ export const pmModule: BrainModule = {
         const hasSubcommand = tail.length > 0 && taskSubcommands.has(tail[0]);
         let prefix: string[];
         if (hasSubcommand) {
+          if (tail[0] === 'complete') {
+            // Route "tasks complete <id>" to "pm complete <id>"
+            await pmCmd.parseAsync(['node', 'brain-pm', 'complete', ...tail.slice(1)], { from: 'node' });
+            return;
+          }
           prefix = [];
         } else if (tail.length > 0 && tail[0].includes('.')) {
           prefix = ['show'];

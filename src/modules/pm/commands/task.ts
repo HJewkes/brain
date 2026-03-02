@@ -132,7 +132,7 @@ export function createTaskCommands(): Command {
     .option('--status <status>', 'Filter by status')
     .option('--priority <level>', 'Filter by priority (critical|high|medium|low)')
     .option('--category <cat>', 'Filter by category')
-    .option('--search <text>', 'Filter by title (case-insensitive substring)')
+    .option('--search <text>', 'Filter by keyword (searches title, body, and display ID)')
     .option('--due-before <date>', 'Filter tasks due before date (YYYY-MM-DD)')
     .option('--milestone <name>', 'Filter by milestone')
     .option('--json', 'Output JSON')
