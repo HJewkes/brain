@@ -10,7 +10,7 @@ import {
   updateProject,
   deleteProject,
 } from '../data/project-ops.js';
-import { getActiveProject, setActiveProject, resolveProject, getPmNotes } from '../data/queries.js';
+import { setActiveProject, resolveProject, getPmNotes } from '../data/queries.js';
 import { listTasks } from '../data/task-ops.js';
 import { listWorkstreams } from '../data/workstream-ops.js';
 import { projectDeleteWithActivity } from './activity.js';
@@ -327,16 +327,13 @@ export function createPmCommand(): Command {
     .option('--json', 'Output JSON')
     .action(async (prefix, opts) => {
       await withBrain(async (svc) => {
-        const targetPrefix = prefix?.toUpperCase() ?? getActiveProject(svc.db);
-        if (!targetPrefix) {
-          const msg =
-            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
-          process.stderr.write(
-            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
-          );
+        const projectResult = resolveProject(svc.db, prefix?.toUpperCase());
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
+        const targetPrefix = projectResult.data;
 
         const result = getProject(svc.db, targetPrefix);
         if (!result.ok) {

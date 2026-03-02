@@ -184,7 +184,7 @@ describe('pm status', () => {
     const cmd = createPmCommand();
     await cmd.parseAsync(['status'], { from: 'user' });
 
-    expect(output.stderr()).toContain('No project specified');
+    expect(output.stderr()).toContain('No projects found');
     expect(process.exitCode).toBe(1);
   });
 });
