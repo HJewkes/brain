@@ -757,14 +757,19 @@ describe('task list enrichment', () => {
     expect(task.depends_on).toContain('TEST-01.01');
   });
 
-  it('--json includes blocked_by array', async () => {
-    // TEST-01.02 depends on TEST-01.01, so TEST-01.01 blocked_by should contain TEST-01.02
+  it('--json includes blocked_by array (upstream prerequisites)', async () => {
+    // TEST-01.02 depends on TEST-01.01, so TEST-01.02.blocked_by = [TEST-01.01]
     await run('list', '--project', 'TEST', '--json');
 
     const parsed = JSON.parse(stdout());
+    const task02 = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.02');
+    expect(task02).toHaveProperty('blocked_by');
+    expect(task02.blocked_by).toContain('TEST-01.01');
+
+    // And TEST-01.01.blocks = [TEST-01.02] (downstream dependents)
     const task01 = parsed.find((t: { display_id: string }) => t.display_id === 'TEST-01.01');
-    expect(task01).toHaveProperty('blocked_by');
-    expect(task01.blocked_by).toContain('TEST-01.02');
+    expect(task01).toHaveProperty('blocks');
+    expect(task01.blocks).toContain('TEST-01.02');
   });
 
   it('--json includes created and modified timestamps', async () => {
