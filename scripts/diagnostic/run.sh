@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: ./scripts/diagnostic/run.sh <version> [options]
 #   --skip-setup       Skip reset/build/onboarding (re-run tests only)
 #   --phase <name>     Run only: test-bench, audits, assemble, observations
-#   --concurrency <n>  Parallel test agents (default: 4)
+#   --concurrency <n>  Parallel test agents (default: 6)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -17,7 +17,7 @@ shift
 
 SKIP_SETUP=false
 PHASE="all"
-CONCURRENCY=4
+CONCURRENCY=6
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -184,18 +184,16 @@ run_test_bench() {
 
   local total=0
   local failed=0
+  local running=0
+  local next_i=1
 
-  for batch_start in $(seq 1 "$CONCURRENCY" 30); do
-    local pids=()
-    local batch_ids=()
-
-    for i in $(seq "$batch_start" $((batch_start + CONCURRENCY - 1))); do
-      [[ $i -gt 30 ]] && break
-
+  start_next_agent() {
+    while [[ $next_i -le 30 && $running -lt $CONCURRENCY ]]; do
       local num
-      num=$(printf "%02d" "$i")
+      num=$(printf "%02d" "$next_i")
       local prompt_file="${PROMPTS_DIR}/test-bench/P-${num}.md"
       local output_file="${RESULTS_DIR}/test-bench/P-${num}.json"
+      ((next_i++))
 
       if [[ ! -f "$prompt_file" ]]; then
         echo "  SKIP: ${prompt_file} not found"
@@ -203,19 +201,20 @@ run_test_bench() {
       fi
 
       run_agent "$prompt_file" "$output_file" sonnet "--output-format json" &
-      pids+=($!)
-      batch_ids+=("P-${num}")
+      echo "  Started P-${num} (pid $!)"
       ((total++))
+      ((running++))
     done
+  }
 
-    if [[ ${#pids[@]} -gt 0 ]]; then
-      echo "  Running: ${batch_ids[*]}"
-      for pid in "${pids[@]}"; do
-        if ! wait "$pid"; then
-          ((failed++))
-        fi
-      done
+  start_next_agent
+
+  while [[ $running -gt 0 ]]; do
+    if ! wait -n; then
+      ((failed++))
     fi
+    ((running--))
+    start_next_agent
   done
 
   echo "  Test bench complete: ${total} prompts, ${failed} failures"
@@ -273,8 +272,13 @@ case "$PHASE" in
     run_audits
     run_test_bench
     run_assemble
-    run_observations
-    run_summary
+    echo ""
+    echo "── Phase 5: Observations + Summary (parallel) ──"
+    run_observations &
+    pid_obs=$!
+    run_summary &
+    pid_sum=$!
+    wait "$pid_obs" "$pid_sum"
     ;;
   test-bench)
     run_test_bench
