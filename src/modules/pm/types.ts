@@ -68,6 +68,9 @@ export interface TaskMetadata {
   claimed_at?: string;
   due_date?: string;
   milestone?: string;
+  done_when?: string;
+  acceptance_criteria?: string[];
+  references?: string[];
 }
 
 export interface DecisionMetadata {

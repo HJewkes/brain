@@ -71,6 +71,9 @@ export function createTaskCommands(): Command {
     .option('--description <text>', 'Task description/body content')
     .option('--due <date>', 'Due date (YYYY-MM-DD)')
     .option('--milestone <name>', 'Milestone name')
+    .option('--done-when <text>', 'Completion definition (1-2 sentences)')
+    .option('--ac <criterion>', 'Acceptance criterion (repeatable)', (val: string, prev: string[]) => [...prev, val], [] as string[])
+    .option('--refs <refs>', 'Comma-separated file/doc references')
     .option('--json', 'Output JSON')
     .action(async (name, opts) => {
       await withBrain(async (svc) => {
@@ -107,6 +110,9 @@ export function createTaskCommands(): Command {
           description: opts.description,
           dueDate: opts.due,
           milestone: opts.milestone,
+          doneWhen: opts.doneWhen,
+          acceptanceCriteria: opts.ac && opts.ac.length > 0 ? opts.ac : undefined,
+          references: opts.refs ? opts.refs.split(',').map((r: string) => r.trim()) : undefined,
         });
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');

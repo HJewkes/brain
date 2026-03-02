@@ -45,6 +45,9 @@ export interface CreateTaskInput {
   dueDate?: string;
   milestone?: string;
   description?: string;
+  doneWhen?: string;
+  acceptanceCriteria?: string[];
+  references?: string[];
 }
 
 function taskFilePath(config: BrainConfig, prefix: string, displayId: string): string {
@@ -87,6 +90,22 @@ function buildTaskMarkdown(input: CreateTaskInput, displayId: string, number: nu
   }
   if (input.milestone) {
     lines.push(`milestone: ${input.milestone}`);
+  }
+
+  if (input.doneWhen) {
+    lines.push(`done_when: "${input.doneWhen.replace(/"/g, '\\"')}"`);
+  }
+  if (input.acceptanceCriteria && input.acceptanceCriteria.length > 0) {
+    lines.push('acceptance_criteria:');
+    for (const ac of input.acceptanceCriteria) {
+      lines.push(`  - "${ac.replace(/"/g, '\\"')}"`);
+    }
+  }
+  if (input.references && input.references.length > 0) {
+    lines.push('references:');
+    for (const ref of input.references) {
+      lines.push(`  - "${ref.replace(/"/g, '\\"')}"`);
+    }
   }
 
   lines.push(`created: ${now}`, `modified: ${now}`, '---', '', `# ${input.name}`, '');
@@ -141,6 +160,9 @@ function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
     claimed_at: meta.claimed_at as string | undefined,
     due_date: coerceDateField(meta.due_date),
     milestone: meta.milestone as string | undefined,
+    done_when: meta.done_when as string | undefined,
+    acceptance_criteria: meta.acceptance_criteria as string[] | undefined,
+    references: meta.references as string[] | undefined,
   };
 }
 
@@ -256,6 +278,9 @@ export async function createTask(
     depends_on: input.dependsOn,
     due_date: input.dueDate,
     milestone: input.milestone,
+    done_when: input.doneWhen,
+    acceptance_criteria: input.acceptanceCriteria,
+    references: input.references,
   };
 
   return ok(metadata);
@@ -358,13 +383,19 @@ export function listTasks(
     if (listMode !== 'short') {
       enriched.description = listMode === 'full' ? body : body.slice(0, 500);
 
-      const acMatch = body.match(/acceptance criteria[:\s]*\n((?:[-*]\s+.+\n?)+)/i);
-      enriched.acceptance_criteria = acMatch
-        ? acMatch[1]
-            .split('\n')
-            .filter((l) => l.trim().startsWith('-') || l.trim().startsWith('*'))
-            .map((l) => l.replace(/^[\s]*[-*]\s+/, '').trim())
-        : [];
+      // Prefer structured frontmatter over regex parsing
+      if (taskMeta.acceptance_criteria && taskMeta.acceptance_criteria.length > 0) {
+        enriched.acceptance_criteria = taskMeta.acceptance_criteria;
+      } else {
+        // Fallback: regex parse from body (legacy tasks)
+        const acMatch = body.match(/acceptance criteria[:\s]*\n((?:[-*]\s+.+\n?)+)/i);
+        enriched.acceptance_criteria = acMatch
+          ? acMatch[1]
+              .split('\n')
+              .filter((l) => l.trim().startsWith('-') || l.trim().startsWith('*'))
+              .map((l) => l.replace(/^[\s]*[-*]\s+/, '').trim())
+          : [];
+      }
 
       // blocked_by = upstream prerequisites (tasks I wait on)
       const blockedBy = getDependencyDisplayIds(db, note.id);
