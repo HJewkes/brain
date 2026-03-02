@@ -1,5 +1,7 @@
 I just installed brain (npm install -g @titan-design/brain). Help me set up project management for ~/Documents/projects/voltras-workspace
 
+Use `brain pm onboard "voltras-workspace" --prefix VOLT` — always pass `--prefix VOLT` explicitly. Do not omit the --prefix flag or let it auto-derive.
+
 ## Important Quality Requirements
 
 ### Task Bodies Are Required

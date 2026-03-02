@@ -10,6 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_DIR"
+WORKSPACE_DIR="${HOME}/Documents/projects/voltras-workspace"
 
 VERSION="${1:?Usage: run.sh <version> [--skip-setup] [--phase <name>] [--concurrency <n>]}"
 shift
@@ -108,6 +109,7 @@ run_setup() {
     --model sonnet \
     --permission-mode bypassPermissions \
     --no-session-persistence \
+    --cwd "$WORKSPACE_DIR" \
     "$prompt"
 
   # Find the session log written by the setup agent
