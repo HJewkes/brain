@@ -1,7 +1,18 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
 
-export const notesCommand = new Command('notes').description('List and browse notes');
+export const notesCommand = new Command('notes')
+  .description('List and browse notes')
+  .enablePositionalOptions()
+  .option('--module <name>', 'Filter by module (shorthand for "notes list --module")')
+  .action(async (opts) => {
+    if (opts.module) {
+      const listCmd = notesCommand.commands.find((c) => c.name() === 'list')!;
+      await listCmd.parseAsync(['node', 'brain', 'notes', 'list', '--module', opts.module], { from: 'node' });
+    } else {
+      notesCommand.outputHelp();
+    }
+  });
 
 notesCommand
   .command('list')

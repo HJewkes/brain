@@ -327,7 +327,7 @@ export function createTaskCommands(): Command {
 
   cmd
     .command('done')
-    .description('Mark task as done')
+    .description('Mark task as done (low-level — use "brain pm complete" for full impact tracking)')
     .argument('<id>', 'Task display ID')
     .option('--token <token>', 'Claim token for verification')
     .option('--json', 'Output JSON')
