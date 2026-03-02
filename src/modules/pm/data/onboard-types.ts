@@ -38,5 +38,6 @@ export interface OnboardManifest {
     create?: OnboardPhaseResult & { projectCreated: boolean };
     discover?: OnboardPhaseResult & { docsFound: number };
     ingest?: OnboardPhaseResult & { docsIngested: number };
+    autoLink?: OnboardPhaseResult & { edgesCreated: number };
   };
 }

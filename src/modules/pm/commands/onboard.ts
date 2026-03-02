@@ -15,6 +15,7 @@ import { getPmNotes, setActiveProject } from '../data/queries.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { slugify } from '../../../utils.js';
 import { withBrain } from '../../../services/brain-service.js';
+import { computeAutoLinks } from '../../../services/graph.js';
 import type { DetectedComponent, ScoredDoc } from '../data/onboard-types.js';
 
 export function onboardSlug(title: string, component?: string, usedSlugs?: Set<string>): string {
@@ -92,6 +93,23 @@ export async function runOnboard(
   const existing = getPmNotes(db, 'project', { prefix: opts.prefix });
   if (existing.length > 0 && !opts.reset) {
     return fail('PROJECT_EXISTS', `Project "${opts.prefix}" already exists. Use --reset to re-onboard.`);
+  }
+
+  // Check for duplicate project name (different prefix, same name)
+  const allProjects = getPmNotes(db, 'project');
+  for (const projNote of allProjects) {
+    const projMeta = JSON.parse(projNote.metadata ?? '{}') as Record<string, unknown>;
+    const projTitle = ((projMeta.title as string) ?? '').replace(/^Project\s+/i, '');
+    if (
+      projTitle.toLowerCase() === opts.projectName.toLowerCase() &&
+      (projMeta.prefix as string) !== opts.prefix
+    ) {
+      return fail(
+        'PROJECT_EXISTS',
+        `A project named "${opts.projectName}" already exists as ${projMeta.prefix}. ` +
+        `Use --prefix ${projMeta.prefix} --reset to re-onboard, or brain pm use ${projMeta.prefix}.`
+      );
+    }
   }
 
   // If --reset, delete existing onboard-manifest note
@@ -208,6 +226,79 @@ export async function runOnboard(
   // Sync project→workstream parent edges for any workstreams that exist
   syncProjectHierarchyEdges(db, opts.prefix);
 
+  // Phase 5: Two-pass auto-linking (all docs now in vector store)
+  const AUTO_LINK_THRESHOLD = 0.75;
+  let autoLinkCount = 0;
+  const createdNoteIds: string[] = [];
+
+  // Collect all ingested note IDs
+  for (const doc of scoredDocs) {
+    if (doc.ingested && doc.noteSlug) {
+      createdNoteIds.push(doc.noteSlug);
+    }
+  }
+
+  // Also include project note ID
+  if (projectCreated) {
+    const projectNotes = getPmNotes(db, 'project', { prefix: opts.prefix });
+    if (projectNotes.length > 0) {
+      createdNoteIds.push(projectNotes[0].id);
+    }
+  }
+
+  // Run auto-linking for each ingested note
+  for (const noteId of createdNoteIds) {
+    const autoLinks = computeAutoLinks(db, noteId, AUTO_LINK_THRESHOLD, 5);
+    if (autoLinks.length > 0) {
+      const existingRels = db.getRelationsFrom(noteId);
+      const newLinks = autoLinks.filter(
+        link => !existingRels.some(e => e.targetId === link.targetId && e.type === link.type)
+      );
+      if (newLinks.length > 0) {
+        db.upsertRelations(noteId, [...existingRels, ...newLinks]);
+        autoLinkCount += newLinks.length;
+      }
+    }
+  }
+
+  const autoLinkPhase = { completedAt: now(), edgesCreated: autoLinkCount };
+  process.stderr.write(`  Auto-linked: ${autoLinkCount} edges across ${createdNoteIds.length} notes (threshold: ${AUTO_LINK_THRESHOLD})\n`);
+
+  // Create activity note
+  const activitySlug = `${opts.prefix.toLowerCase()}-onboard-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
+  const activityPath = join(config.notesDir, 'modules', 'pm', opts.prefix, `${activitySlug}.md`);
+  const activityDir = dirname(activityPath);
+  if (!existsSync(activityDir)) mkdirSync(activityDir, { recursive: true });
+
+  const activityFm = [
+    '---',
+    `id: ${activitySlug}`,
+    `title: "Onboard: ${opts.projectName} → ${opts.prefix}"`,
+    'type: activity',
+    'tier: slow',
+    'module: pm',
+    `project: ${opts.prefix}`,
+    'activity_type: onboard',
+    `created: ${now()}`,
+    `modified: ${now()}`,
+    `created_notes:`,
+    ...createdNoteIds.map(id => `  - "${id}"`),
+    `created_relations: ${autoLinkCount}`,
+    '---',
+    '',
+    `# Onboard Activity: ${opts.projectName}`,
+    '',
+    `- **Source:** ${opts.cwd}`,
+    `- **Components:** ${components.length}`,
+    `- **Docs ingested:** ${ingestedCount}`,
+    `- **Auto-link edges:** ${autoLinkCount} (threshold: ${AUTO_LINK_THRESHOLD})`,
+    `- **Notes created:** ${createdNoteIds.length}`,
+  ].join('\n');
+
+  writeFileSync(activityPath, activityFm, 'utf-8');
+  const activityHash = createHash('sha256').update(activityFm).digest('hex');
+  await indexSingleFile(db, embedder, activityPath, activityFm, activityHash, Date.now());
+
   // Build manifest
   const manifest: OnboardManifest = {
     version: 1,
@@ -225,6 +316,7 @@ export async function runOnboard(
       create: createPhase,
       discover: discoverPhase,
       ingest: ingestPhase,
+      autoLink: autoLinkPhase,
     },
   };
 
@@ -309,6 +401,7 @@ function buildManifestNote(manifest: OnboardManifest, slug: string, projectName:
   if (manifest.phases.create) lines.push(`- **Create:** Project ${manifest.phases.create.projectCreated ? 'created' : 'already existed'}`);
   if (manifest.phases.discover) lines.push(`- **Discover:** ${manifest.phases.discover.docsFound} docs found`);
   if (manifest.phases.ingest) lines.push(`- **Ingest:** ${manifest.phases.ingest.docsIngested} docs ingested`);
+  if (manifest.phases.autoLink) lines.push(`- **Auto-link:** ${manifest.phases.autoLink.edgesCreated} edges created`);
   lines.push('');
 
   return lines.join('\n');
