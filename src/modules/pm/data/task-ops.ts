@@ -154,6 +154,30 @@ function areDependenciesComplete(db: BrainDB, dependsOn: string[] | undefined): 
   return true;
 }
 
+export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string[] {
+  const relations = db.getRelationsFrom(taskNoteId);
+  const depNoteIds = relations
+    .filter((r) => r.type === 'depends_on')
+    .map((r) => r.targetId);
+
+  const displayIds: string[] = [];
+  for (const noteId of depNoteIds) {
+    const note = db.getNoteById(noteId);
+    if (note?.metadata) {
+      const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+      if (meta.display_id) displayIds.push(meta.display_id as string);
+    }
+  }
+  return displayIds;
+}
+
+function mergeDependsOn(db: BrainDB, noteId: string, frontmatterDeps: string[] | undefined): string[] | undefined {
+  const relationDeps = getDependencyDisplayIds(db, noteId);
+  const fmDeps = frontmatterDeps ?? [];
+  const allDeps = [...new Set([...fmDeps, ...relationDeps])];
+  return allDeps.length > 0 ? allDeps : undefined;
+}
+
 export async function createTask(
   db: BrainDB,
   config: BrainConfig,
@@ -304,6 +328,9 @@ export function listTasks(
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
     const taskMeta = taskMetaFromRecord(meta);
 
+    // Merge depends_on from relations table (single source of truth)
+    taskMeta.depends_on = mergeDependsOn(db, note.id, taskMeta.depends_on);
+
     const hasDependencies = !!(taskMeta.depends_on && taskMeta.depends_on.length > 0);
     const dependenciesComplete = areDependenciesComplete(db, taskMeta.depends_on);
 
@@ -412,8 +439,12 @@ export function getTask(
     return fail('NOT_FOUND', `Task "${displayId}" not found.${hint}`);
   }
 
-  const meta = JSON.parse(notes[0].metadata!) as Record<string, unknown>;
+  const taskNote = notes[0];
+  const meta = JSON.parse(taskNote.metadata!) as Record<string, unknown>;
   const taskMeta = taskMetaFromRecord(meta);
+
+  // Merge depends_on from relations table (single source of truth)
+  taskMeta.depends_on = mergeDependsOn(db, taskNote.id, taskMeta.depends_on);
 
   const hasDependencies = !!(taskMeta.depends_on && taskMeta.depends_on.length > 0);
   const dependenciesComplete = areDependenciesComplete(db, taskMeta.depends_on);

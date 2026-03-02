@@ -162,7 +162,7 @@ describe('O-131 + O-132: relation-only dependencies via inferDependencies', () =
   // getTask() returns depends_on as undefined, and virtualStates incorrectly shows
   // +ELIGIBLE instead of +BLOCKED.
 
-  it.skip('O-132: inferred-dep task has +BLOCKED virtualState (not +ELIGIBLE)', async () => {
+  it('O-132: inferred-dep task has +BLOCKED virtualState (not +ELIGIBLE)', async () => {
     // Create a testing task and an implementation task in same workstream.
     // inferDependencies should add testing->implementation dep via relations only.
     const implTask = await createTask(db, config, embedder, {
@@ -197,7 +197,7 @@ describe('O-131 + O-132: relation-only dependencies via inferDependencies', () =
     }
   });
 
-  it.skip('O-131: inferred-dep task has populated depends_on in waves JSON', async () => {
+  it('O-131: inferred-dep task has populated depends_on in waves JSON', async () => {
     const implTask = await createTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
