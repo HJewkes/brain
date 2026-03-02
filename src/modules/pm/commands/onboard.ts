@@ -184,6 +184,15 @@ export async function runOnboard(
         const title = basename(doc.path, '.md');
         const slug = onboardSlug(title, doc.component, usedSlugs);
 
+        // Dedup: check if note with this slug already exists
+        const existingNote = db.getNoteById(slug);
+        if (existingNote) {
+          doc.ingested = true;
+          doc.noteSlug = slug;
+          ingestedCount++;
+          continue;
+        }
+
         // Add frontmatter if missing
         if (!content.trimStart().startsWith('---')) {
           const fmNow = new Date().toISOString().slice(0, 10);
@@ -227,7 +236,7 @@ export async function runOnboard(
   syncProjectHierarchyEdges(db, opts.prefix);
 
   // Phase 5: Two-pass auto-linking (all docs now in vector store)
-  const AUTO_LINK_THRESHOLD = 0.75;
+  const AUTO_LINK_THRESHOLD = 0.60;
   let autoLinkCount = 0;
   const createdNoteIds: string[] = [];
 

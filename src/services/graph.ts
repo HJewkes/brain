@@ -11,7 +11,7 @@ function distanceToCosineSim(distance: number): number {
 export function computeAutoLinks(
   db: BrainDB,
   noteId: string,
-  threshold = 0.85,
+  threshold = 0.65,
   maxLinks = 5,
   embedding?: Float32Array,
 ): Relation[] {
