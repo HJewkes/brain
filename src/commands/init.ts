@@ -1,13 +1,15 @@
 import { Command } from '@commander-js/extra-typings';
-import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { join, dirname, basename } from 'node:path';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel } from '../services/ollama.js';
-import type { EmbedderBackend } from '../types.js';
+import { slugify } from '../utils.js';
+import type { BrainConfig, EmbedderBackend } from '../types.js';
 
 const SUBDIRS = [
   'notes',
@@ -151,6 +153,61 @@ async function promptEmbedderChoice(): Promise<'ollama' | 'local' | null> {
   }
 }
 
+export async function ingestBrainReferenceDocs(config: BrainConfig): Promise<void> {
+  const pmDocsDir = join(
+    dirname(new URL(import.meta.url).pathname),
+    '..', 'modules', 'pm', 'docs'
+  );
+
+  // Fallback: try the source tree path (docs/pm-module)
+  const sourceDocsDir = join(
+    dirname(new URL(import.meta.url).pathname),
+    '..', '..', 'docs', 'pm-module'
+  );
+
+  const docsDir = existsSync(pmDocsDir) ? pmDocsDir : existsSync(sourceDocsDir) ? sourceDocsDir : null;
+  if (!docsDir) return;
+
+  const refDocs = ['commands.md', 'architecture.md'];
+
+  for (const refDoc of refDocs) {
+    const refPath = join(docsDir, refDoc);
+    if (!existsSync(refPath)) continue;
+
+    let content = readFileSync(refPath, 'utf-8');
+    const title = basename(refPath, '.md');
+    const slug = `pm-ref-${slugify(title)}`;
+
+    if (!content.trimStart().startsWith('---')) {
+      const fmNow = new Date().toISOString().slice(0, 10);
+      const fm = [
+        '---',
+        `id: ${slug}`,
+        `title: "PM Reference: ${title}"`,
+        'type: research',
+        'tier: slow',
+        'module: pm',
+        `created: ${fmNow}`,
+        `modified: ${fmNow}`,
+        '---',
+      ].join('\n');
+      content = fm + '\n\n' + content;
+    }
+
+    const outDir = join(config.notesDir, 'modules', 'pm', 'reference');
+    if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+    const outPath = join(outDir, `${slug}.md`);
+
+    const hash = createHash('sha256').update(content).digest('hex');
+    if (existsSync(outPath)) {
+      const existing = readFileSync(outPath, 'utf-8');
+      if (createHash('sha256').update(existing).digest('hex') === hash) continue;
+    }
+
+    writeFileSync(outPath, content, 'utf-8');
+  }
+}
+
 export const initCommand = new Command('init')
   .description('Initialize a new brain workspace')
   .option('--notes-dir <path>', 'path to notes directory')
@@ -214,6 +271,9 @@ export const initCommand = new Command('init')
     const info = getEmbedderInfo(config.embedder);
     db.setEmbeddingModel(info.model, info.dimensions);
     db.close();
+
+    // Ingest brain's own PM reference docs (best-effort)
+    await ingestBrainReferenceDocs(config);
 
     // LLM setup — reuses the Ollama health check from above
     const llmModel = config.ollamaModel ?? 'qwen2.5:3b';

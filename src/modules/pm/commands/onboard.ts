@@ -205,58 +205,6 @@ export async function runOnboard(
   }
   const ingestPhase = { completedAt: now(), docsIngested: ingestedCount };
 
-  // Phase 4b: Ingest PM reference docs
-  if (!opts.skipIngest) {
-    const pmDocsDir = join(dirname(new URL(import.meta.url).pathname), '..', '..', '..', '..', 'docs', 'pm-module');
-    const refDocs = ['commands.md', 'architecture.md'];
-
-    for (const refDoc of refDocs) {
-      const refPath = join(pmDocsDir, refDoc);
-      if (!existsSync(refPath)) continue;
-
-      try {
-        let content = readFileSync(refPath, 'utf-8');
-        const title = basename(refPath, '.md');
-        const slug = `pm-ref-${slugify(title)}`;
-
-        // Add frontmatter if missing
-        if (!content.trimStart().startsWith('---')) {
-          const fmNow = new Date().toISOString().slice(0, 10);
-          const fm = [
-            '---',
-            `id: ${slug}`,
-            `title: "PM Reference: ${title}"`,
-            'type: research',
-            'tier: slow',
-            'module: pm',
-            `project: ${opts.prefix}`,
-            `created: ${fmNow}`,
-            `modified: ${fmNow}`,
-            '---',
-          ].join('\n');
-          content = fm + '\n\n' + content;
-        }
-
-        const outDir = join(config.notesDir, 'modules', 'pm', opts.prefix, 'docs');
-        if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-        const outPath = join(outDir, `${slug}.md`);
-
-        // Skip if already ingested (same hash)
-        const hash = createHash('sha256').update(content).digest('hex');
-        if (existsSync(outPath)) {
-          const existing = readFileSync(outPath, 'utf-8');
-          const existingHash = createHash('sha256').update(existing).digest('hex');
-          if (hash === existingHash) continue;
-        }
-
-        writeFileSync(outPath, content, 'utf-8');
-        await indexSingleFile(db, embedder, outPath, content, hash, Date.now());
-      } catch {
-        // Reference doc ingestion is best-effort — don't fail onboard
-      }
-    }
-  }
-
   // Build manifest
   const manifest: OnboardManifest = {
     version: 1,
