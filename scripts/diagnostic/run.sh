@@ -279,6 +279,12 @@ case "$PHASE" in
     run_summary &
     pid_sum=$!
     wait "$pid_obs" "$pid_sum"
+
+    echo ""
+    echo "── Ingesting diagnostic outputs ──────────────"
+    brain add "${RESULTS_DIR}/summary.md" --type note --tier fast 2>/dev/null || echo "  SKIP: summary.md ingest failed"
+    brain add "${RESULTS_DIR}/gap-analysis.md" --type note --tier fast 2>/dev/null || echo "  SKIP: gap-analysis.md ingest failed"
+    echo "  Diagnostic outputs ingested for future reference."
     ;;
   test-bench)
     run_test_bench
