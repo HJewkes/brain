@@ -190,7 +190,14 @@ export function getPmNotes(
   for (const [, note] of notes) {
     if (!note.metadata) continue;
     const meta = JSON.parse(note.metadata) as Record<string, unknown>;
-    const matches = Object.entries(filters).every(([key, value]) => meta[key] === value);
+    const matches = Object.entries(filters).every(([key, value]) => {
+      const stored = meta[key];
+      if (stored === value) return true;
+      // Coerce for numeric fields stored as strings
+      if (typeof value === 'number' && String(stored) === String(value)) return true;
+      if (typeof stored === 'number' && String(stored) === String(value)) return true;
+      return false;
+    });
     if (matches) {
       results.push(note);
     }

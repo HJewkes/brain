@@ -304,10 +304,13 @@ export function listTasks(
 
   const isSearch = !!filters?.search;
 
+  const isStatusAll = filters?.status?.toLowerCase() === 'all';
+
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
   // When searching, query all statuses by default (unless explicit --status)
-  if (filters?.status !== undefined && !virtualStateFilter) filterObj.status = filters.status;
+  // 'all' means no status filter; virtual state filters are handled post-hoc
+  if (filters?.status !== undefined && !virtualStateFilter && !isStatusAll) filterObj.status = filters.status;
   if (filters?.mode !== undefined) filterObj.mode = filters.mode;
   if (filters?.priority !== undefined) filterObj.priority = filters.priority;
   if (filters?.category !== undefined) filterObj.category = filters.category;
@@ -409,7 +412,8 @@ export function listTasks(
     tasks = tasks.filter((t) => {
       const titleMatch = !!t.title?.toLowerCase().includes(searchLower);
       const bodyMatch = !!t._body?.toLowerCase().includes(searchLower);
-      return titleMatch || bodyMatch;
+      const displayIdMatch = !!t.display_id?.toLowerCase().includes(searchLower);
+      return titleMatch || bodyMatch || displayIdMatch;
     });
   }
 

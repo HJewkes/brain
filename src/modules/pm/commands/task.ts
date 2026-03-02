@@ -153,7 +153,7 @@ export function createTaskCommands(): Command {
           workstreamNumber = wsResult.data;
         }
 
-        const validStatuses = ['pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled'];
+        const validStatuses = ['pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled', 'eligible', 'ready', 'all'];
         const validPriorities = ['critical', 'high', 'medium', 'low'];
 
         if (opts.status && !validStatuses.includes(opts.status)) {
