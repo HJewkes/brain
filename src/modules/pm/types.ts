@@ -53,6 +53,7 @@ export interface WorkstreamMetadata {
 }
 
 export interface TaskMetadata {
+  id?: string;
   title?: string;
   display_id: string;
   project: string;

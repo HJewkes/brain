@@ -272,6 +272,21 @@ export const pmModule: BrainModule = {
       });
     pmCmd.addCommand(workstreamsAlias);
 
+    const projectSubcommands = new Set(['list', 'show', 'add']);
+    const projectsAlias = new Command('projects')
+      .description('Project management (alias for "project")')
+      .helpOption(false)
+      .allowUnknownOption()
+      .allowExcessArguments(true)
+      .action(async () => {
+        const idx = process.argv.indexOf('projects');
+        const tail = process.argv.slice(idx + 1);
+        const hasSubcommand = tail.length > 0 && projectSubcommands.has(tail[0]);
+        const prefix = hasSubcommand ? [] : ['list'];
+        await pmCmd.parseAsync(['node', 'brain-pm', 'project', ...prefix, ...tail], { from: 'node' });
+      });
+    pmCmd.addCommand(projectsAlias);
+
     const lsAlias = new Command('ls')
       .description('List projects (alias for "list")')
       .helpOption(false)

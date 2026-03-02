@@ -90,7 +90,7 @@ describe('O-143: task JSON id vs display_id', () => {
   // identifier. TaskMetadata intentionally has no `id` field — only
   // `display_id` — so JSON output exposes `display_id` but `id` is absent.
   // When serialized via outputResult with --json, the object has no `id` key.
-  it.skip('task JSON output has a non-null id field', async () => {
+  it('task JSON output has a non-null id field', async () => {
     await createStandardProject(db, config, embedder);
     const result = await createTask(db, config, embedder, {
       project: 'TEST',
@@ -127,7 +127,7 @@ describe('O-152: task add produces human-readable output', () => {
   // TaskMetadata has no `title` field set (it's undefined). formatTaskLine
   // still produces a line, but the `add` action does call outputResult.
   // Let's verify that title is actually returned so the output is meaningful.
-  it.skip('createTask result includes title for human-readable output', async () => {
+  it('createTask result includes title for human-readable output', async () => {
     await createStandardProject(db, config, embedder);
     const result = await createTask(db, config, embedder, {
       project: 'TEST',
@@ -179,7 +179,7 @@ describe('O-163: projects plural alias', () => {
 
   // O-163: `brain pm projects list` (plural) fails. There is no "projects"
   // alias registered — only "tasks" and "workstreams" have plural aliases.
-  it.skip('pm module registers "projects" plural alias', () => {
+  it('pm module registers "projects" plural alias', () => {
     const registered: Command[] = [];
     const mockCtx = {
       registerNoteType: () => {},

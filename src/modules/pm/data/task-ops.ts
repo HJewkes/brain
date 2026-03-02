@@ -125,6 +125,7 @@ function coerceDateField(value: unknown): string | undefined {
 
 function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
   return {
+    id: meta.display_id as string,
     title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     project: meta.project as string,
@@ -241,6 +242,8 @@ export async function createTask(
   }
 
   const metadata: TaskMetadata = {
+    id: displayId,
+    title: input.name,
     display_id: displayId,
     project: input.project,
     workstream: input.workstream,
