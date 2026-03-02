@@ -299,8 +299,7 @@ function findWorkstreamDescription(
   const wsDisplayId = `${project}-${String(workstreamNum).padStart(2, '0')}`;
   const wsNotes = getPmNotes(db, 'workstream', { display_id: wsDisplayId });
   if (wsNotes.length === 0) return '';
-  const meta = JSON.parse(wsNotes[0].metadata!) as Record<string, unknown>;
-  return (meta.description as string) ?? '';
+  return readNoteBody(wsNotes[0]);
 }
 
 export interface ProjectContext {
