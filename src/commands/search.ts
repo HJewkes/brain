@@ -24,6 +24,7 @@ export const searchCommand = new Command('search')
   .option('--workstream <id>', 'filter by workstream (number or display ID)')
   .option('--type <type>', 'filter by note type (e.g. task, project, note)')
   .option('--module <module>', 'filter by module (e.g. pm)')
+  .option('--title', 'Search titles only (excludes body matches)')
   .action(async (query, opts) => {
     await withBrain(async ({ db, embedder, config, modules }) => {
       const searchOpts: SearchOptions = {
@@ -81,6 +82,23 @@ export const searchCommand = new Command('search')
             }
           }
           return true;
+        });
+      }
+
+      if (opts.title) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return false;
+          return note.title?.toLowerCase().includes(query.toLowerCase());
+        });
+      } else {
+        allResults.sort((a, b) => {
+          const noteA = db.getNoteById(a.noteId);
+          const noteB = db.getNoteById(b.noteId);
+          const aTitle = noteA?.title?.toLowerCase().includes(query.toLowerCase()) ? 1 : 0;
+          const bTitle = noteB?.title?.toLowerCase().includes(query.toLowerCase()) ? 1 : 0;
+          if (aTitle !== bTitle) return bTitle - aTitle;
+          return (b.score ?? 0) - (a.score ?? 0);
         });
       }
 

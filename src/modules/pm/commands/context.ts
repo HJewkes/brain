@@ -168,7 +168,7 @@ function formatWorkstreamHuman(ctx: WorkstreamContext): string {
   return lines.join('\n');
 }
 
-function didYouMeanSuggestion(
+export function didYouMeanSuggestion(
   db: Parameters<typeof getPmNotes>[0],
   displayId: string
 ): string | undefined {
@@ -222,7 +222,7 @@ export function createContextCommand(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
-        const displayId = id.toUpperCase();
+        let displayId = id.toUpperCase();
         const parsed = parseDisplayId(displayId);
 
         if (!parsed) {
@@ -232,18 +232,24 @@ export function createContextCommand(): Command {
         }
 
         if (parsed.task !== undefined) {
-          const result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
+          let result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
           if (!result.ok) {
             const suggestion = didYouMeanSuggestion(svc.db, displayId);
-            const projects = availableProjects(svc.db);
-            let msg = formatError(result.error, !!opts.json);
-            if (!opts.json) {
-              if (suggestion) msg += `\n  Did you mean: ${suggestion}?`;
-              if (projects.length > 0) msg += `\n  Available projects: ${projects.join(', ')}`;
+            if (suggestion) {
+              process.stderr.write(`Corrected ${displayId} → ${suggestion}\n`);
+              displayId = suggestion;
+              result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
             }
-            process.stderr.write(msg + '\n');
-            process.exitCode = 1;
-            return;
+            if (!result.ok) {
+              const projects = availableProjects(svc.db);
+              let msg = formatError(result.error, !!opts.json);
+              if (!opts.json && projects.length > 0) {
+                msg += `\n  Available projects: ${projects.join(', ')}`;
+              }
+              process.stderr.write(msg + '\n');
+              process.exitCode = 1;
+              return;
+            }
           }
           // Semantic fallback: when graph context has no edges, search by content
           const bundle = result.data;
@@ -290,18 +296,24 @@ export function createContextCommand(): Command {
             process.stdout.write(formatHuman(bundle) + '\n');
           }
         } else if (parsed.workstream !== undefined) {
-          const result = assembleWorkstreamContext(svc.db, displayId);
+          let result = assembleWorkstreamContext(svc.db, displayId);
           if (!result.ok) {
             const suggestion = didYouMeanSuggestion(svc.db, displayId);
-            const projects = availableProjects(svc.db);
-            let msg = formatError(result.error, !!opts.json);
-            if (!opts.json) {
-              if (suggestion) msg += `\n  Did you mean: ${suggestion}?`;
-              if (projects.length > 0) msg += `\n  Available projects: ${projects.join(', ')}`;
+            if (suggestion) {
+              process.stderr.write(`Corrected ${displayId} → ${suggestion}\n`);
+              displayId = suggestion;
+              result = assembleWorkstreamContext(svc.db, displayId);
             }
-            process.stderr.write(msg + '\n');
-            process.exitCode = 1;
-            return;
+            if (!result.ok) {
+              const projects = availableProjects(svc.db);
+              let msg = formatError(result.error, !!opts.json);
+              if (!opts.json && projects.length > 0) {
+                msg += `\n  Available projects: ${projects.join(', ')}`;
+              }
+              process.stderr.write(msg + '\n');
+              process.exitCode = 1;
+              return;
+            }
           }
           if (opts.json) {
             process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
