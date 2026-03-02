@@ -105,12 +105,11 @@ run_setup() {
   local prompt
   prompt="$(apply_template "${PROMPTS_DIR}/setup.md")"
 
-  env -u CLAUDECODE claude -p \
+  (cd "$WORKSPACE_DIR" && env -u CLAUDECODE claude -p \
     --model sonnet \
     --permission-mode bypassPermissions \
     --no-session-persistence \
-    --cwd "$WORKSPACE_DIR" \
-    "$prompt"
+    "$prompt")
 
   # Find the session log written by the setup agent
   local project_hash_dir
