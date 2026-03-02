@@ -2,7 +2,47 @@ import type { BrainDB } from './brain-db.js';
 import type { Relation, GraphNode, GraphResult } from '../types.js';
 
 const MAX_DEPTH = 3;
-const BIDIRECTIONAL_TYPES = new Set(['related-to', 'parent', 'depends_on']);
+const BIDIRECTIONAL_TYPES = new Set(['related-to', 'related', 'parent', 'depends_on']);
+
+function distanceToCosineSim(distance: number): number {
+  return 1 - (distance * distance) / 2;
+}
+
+export function computeAutoLinks(
+  db: BrainDB,
+  noteId: string,
+  threshold = 0.85,
+  maxLinks = 5,
+  embedding?: Float32Array,
+): Relation[] {
+  let queryEmbedding = embedding;
+  if (!queryEmbedding) {
+    const chunks = db.getChunksForNote(noteId);
+    if (chunks.length === 0) return [];
+    const stored = db.getChunkEmbedding(chunks[0].id);
+    if (!stored) return [];
+    queryEmbedding = stored;
+  }
+
+  const vectorResults = db.searchVector(queryEmbedding, maxLinks + 1);
+
+  const existing = db.getRelationsFrom(noteId);
+  const existingTargets = new Set(existing.map((r) => r.targetId));
+
+  const links: Relation[] = [];
+  for (const result of vectorResults) {
+    if (result.noteId === noteId) continue;
+    const cosineSim = distanceToCosineSim(result.distance);
+    if (cosineSim < threshold) continue;
+    if (existingTargets.has(result.noteId)) continue;
+    links.push({
+      sourceId: noteId,
+      targetId: result.noteId,
+      type: 'related',
+    });
+  }
+  return links;
+}
 
 export function getDirectRelations(db: BrainDB, noteId: string): Relation[] {
   const outgoing = db.getRelationsFrom(noteId);

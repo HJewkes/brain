@@ -16,6 +16,7 @@ import { createInstallHooksCommand } from './commands/install-hooks.js';
 import { createSetupCommand } from './commands/setup.js';
 import { createCheckCommand } from './commands/check.js';
 import { createOnboardCommand } from './commands/onboard.js';
+import { createRelateCommand } from './commands/relate.js';
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -236,6 +237,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createSetupCommand());
     pmCmd.addCommand(createCheckCommand());
     pmCmd.addCommand(createOnboardCommand());
+    pmCmd.addCommand(createRelateCommand());
 
     // Plural aliases — delegate to subcommand
     const taskSubcommands = new Set([

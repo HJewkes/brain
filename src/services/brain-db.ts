@@ -529,6 +529,9 @@ export class BrainDB {
   getChunkHeading(chunkId: string | null, noteId: string): string | null {
     return this.noteRepo.getChunkHeading(chunkId, noteId);
   }
+  getChunkEmbedding(chunkId: string): Float32Array | null {
+    return this.noteRepo.getChunkEmbedding(chunkId);
+  }
 
   // --- Relation Delegates ---
 
