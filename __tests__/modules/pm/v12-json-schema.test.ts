@@ -41,7 +41,7 @@ describe('O-138: workstreamDescription in context JSON', () => {
       description: 'This workstream covers UI design tasks.',
     });
 
-    const result = assembleWorkstreamContext(db, 'SCH-01');
+    const result = await assembleWorkstreamContext(db, 'SCH-01');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 

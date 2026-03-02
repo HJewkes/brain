@@ -323,6 +323,7 @@ export interface WorkstreamContext {
   statusDistribution: Record<string, number>;
   eligibleTasks: string[];
   recentDecisions: DecisionSummary[];
+  relatedNotes: Array<{ title: string; excerpt: string; score: number }>;
 }
 
 export function assembleProjectContext(
@@ -384,10 +385,12 @@ export function assembleProjectContext(
   });
 }
 
-export function assembleWorkstreamContext(
+export async function assembleWorkstreamContext(
   db: BrainDB,
-  wsDisplayId: string
-): Result<WorkstreamContext> {
+  wsDisplayId: string,
+  embedder?: Embedder,
+  config?: BrainConfig
+): Promise<Result<WorkstreamContext>> {
   const wsNotes = getPmNotes(db, 'workstream', { display_id: wsDisplayId });
   if (wsNotes.length === 0) {
     return fail('NOT_FOUND', `Workstream "${wsDisplayId}" not found`);
@@ -419,6 +422,33 @@ export function assembleWorkstreamContext(
 
   const decisions = findProjectDecisions(db, prefix);
 
+  // Semantic search for related knowledge base notes
+  let relatedNotes: WorkstreamContext['relatedNotes'] = [];
+  if (embedder && config) {
+    const wsTitle = (wsMeta.title as string) ?? '';
+    const taskTitles = taskList.slice(0, 3).map((t) => t.title ?? '').join(' ');
+    const searchQuery = `${wsTitle} ${taskTitles}`.trim();
+
+    if (searchQuery) {
+      try {
+        const results = await search(
+          db,
+          embedder,
+          searchQuery,
+          { limit: 5 },
+          config.fusionWeights ?? { bm25: 0.4, vector: 0.6 }
+        );
+        relatedNotes = results.map((r) => ({
+          title: r.heading ?? r.filePath,
+          excerpt: r.excerpt ?? '',
+          score: r.score,
+        }));
+      } catch {
+        // Search failure is non-fatal
+      }
+    }
+  }
+
   return ok({
     workstream: {
       displayId: wsDisplayId,
@@ -431,6 +461,7 @@ export function assembleWorkstreamContext(
     statusDistribution: dist,
     eligibleTasks: eligible,
     recentDecisions: decisions,
+    relatedNotes,
   });
 }
 

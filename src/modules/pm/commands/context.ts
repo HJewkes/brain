@@ -158,6 +158,17 @@ function formatWorkstreamHuman(ctx: WorkstreamContext): string {
     lines.push('');
   }
 
+  if (ctx.relatedNotes.length > 0) {
+    lines.push('--- Related Notes ---');
+    for (const note of ctx.relatedNotes) {
+      lines.push(`  [${note.score.toFixed(2)}] ${note.title}`);
+      if (note.excerpt) {
+        lines.push(`    ${note.excerpt.slice(0, 200)}`);
+      }
+    }
+    lines.push('');
+  }
+
   if (ctx.recentDecisions.length > 0) {
     lines.push('--- Decisions ---');
     for (const dec of ctx.recentDecisions) {
@@ -298,13 +309,13 @@ export function createContextCommand(): Command {
             process.stdout.write(formatHuman(bundle) + '\n');
           }
         } else if (parsed.workstream !== undefined) {
-          let result = assembleWorkstreamContext(svc.db, displayId);
+          let result = await assembleWorkstreamContext(svc.db, displayId, svc.embedder, svc.config);
           if (!result.ok) {
             const suggestion = didYouMeanSuggestion(svc.db, displayId);
             if (suggestion) {
               process.stderr.write(`Corrected ${displayId} → ${suggestion}\n`);
               displayId = suggestion;
-              result = assembleWorkstreamContext(svc.db, displayId);
+              result = await assembleWorkstreamContext(svc.db, displayId, svc.embedder, svc.config);
             }
             if (!result.ok) {
               const projects = availableProjects(svc.db);
