@@ -25,6 +25,7 @@ export const searchCommand = new Command('search')
   .option('--type <type>', 'filter by note type (e.g. task, project, note)')
   .option('--module <module>', 'filter by module (e.g. pm)')
   .option('--title', 'Search titles only (excludes body matches)')
+  .option('--project <prefix>', 'Filter results to a specific project')
   .action(async (query, opts) => {
     await withBrain(async ({ db, embedder, config, modules }) => {
       const searchOpts: SearchOptions = {
@@ -64,6 +65,25 @@ export const searchCommand = new Command('search')
       }
 
       let allResults = [...results, ...expanded];
+
+      if (!opts.includeTasks) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return true;
+          const meta = note.metadata ? JSON.parse(note.metadata) : null;
+          return meta?.visibility !== 'private';
+        });
+      }
+
+      if (opts.project) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return false;
+          const meta = note.metadata ? JSON.parse(note.metadata) : null;
+          const noteProject = meta?.project as string | undefined;
+          return noteProject?.toUpperCase() === opts.project!.toUpperCase();
+        });
+      }
 
       if (opts.type || opts.module || opts.workstream) {
         allResults = allResults.filter((r) => {
