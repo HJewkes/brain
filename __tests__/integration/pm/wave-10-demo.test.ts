@@ -224,9 +224,10 @@ describe('Wave 10: Demo Workflow Integration', () => {
     if (!ctx.ok) return;
 
     expect(ctx.data.task.display_id).toBe('DEMO-01.02');
-    expect(ctx.data.dependencies).toHaveLength(1);
-    expect(ctx.data.dependencies[0].displayId).toBe('DEMO-01.01');
-    expect(ctx.data.dependencies[0].status).toBe('done');
+    const upstreamDeps = ctx.data.dependencies.filter((d) => d.direction === 'upstream');
+    expect(upstreamDeps).toHaveLength(1);
+    expect(upstreamDeps[0].displayId).toBe('DEMO-01.01');
+    expect(upstreamDeps[0].status).toBe('done');
     expect(ctx.data.decisions).toHaveLength(1);
     expect(ctx.data.decisions[0].content).toBe('Use JSON storage');
     expect(ctx.data.contextHash).toBeDefined();

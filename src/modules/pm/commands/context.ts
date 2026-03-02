@@ -3,6 +3,7 @@ import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
 import {
   assembleDispatch,
+  assembleContext,
   assembleProjectContext,
   assembleWorkstreamContext,
   type ContextBundle,
@@ -217,7 +218,7 @@ export function createContextCommand(): Command {
     .description('Assemble rich context for a project, workstream, or task')
     .argument('<id>', 'Display ID (project: PROJ, workstream: PROJ-01, task: PROJ-01.03)')
     .option('--decisions', 'Include decisions (default: true)')
-    .option('--deps', 'Include dependencies (default: true)')
+    .option('--no-deps', 'Omit dependencies from context')
     .option('--since <timestamp>', 'Filter to activities/decisions after timestamp')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
@@ -232,13 +233,14 @@ export function createContextCommand(): Command {
         }
 
         if (parsed.task !== undefined) {
-          let result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
+          const ctxOpts = { deps: opts.deps };
+          let result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId, ctxOpts);
           if (!result.ok) {
             const suggestion = didYouMeanSuggestion(svc.db, displayId);
             if (suggestion) {
               process.stderr.write(`Corrected ${displayId} → ${suggestion}\n`);
               displayId = suggestion;
-              result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
+              result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId, ctxOpts);
             }
             if (!result.ok) {
               const projects = availableProjects(svc.db);

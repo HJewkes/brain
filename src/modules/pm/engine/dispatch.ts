@@ -16,6 +16,11 @@ export interface DependencySummary {
   name: string;
   status: string;
   summary?: string;
+  direction?: 'upstream' | 'downstream';
+}
+
+export interface ContextOptions {
+  deps?: boolean;
 }
 
 export interface DecisionSummary {
@@ -77,21 +82,62 @@ function findWorkstreamInfo(
   return { displayId: wsDisplayId, title };
 }
 
-function buildDependencySummaries(db: BrainDB, dependsOn: string[]): DependencySummary[] {
+function buildDependencySummaries(db: BrainDB, taskNoteId: string, dependsOn: string[]): DependencySummary[] {
   const summaries: DependencySummary[] = [];
+  const seen = new Set<string>();
+
+  // Upstream from relations table: tasks this task depends on
+  const upstreamRelations = db.getRelationsFrom(taskNoteId)
+    .filter((r) => r.type === 'depends_on');
+  for (const rel of upstreamRelations) {
+    const note = db.getNoteById(rel.targetId);
+    if (!note?.metadata) continue;
+    const meta = JSON.parse(note.metadata) as TaskMetadata;
+    if (!meta.display_id) continue;
+    seen.add(meta.display_id);
+    summaries.push({
+      displayId: meta.display_id,
+      name: note.title,
+      status: meta.status,
+      summary: readTaskSummary(note),
+      direction: 'upstream',
+    });
+  }
+
+  // Upstream from frontmatter depends_on (fallback for legacy data)
   for (const depId of dependsOn) {
+    if (seen.has(depId)) continue;
     const depNotes = getPmNotes(db, 'task', { display_id: depId });
     if (depNotes.length === 0) continue;
-
     const depNote = depNotes[0];
     const meta = JSON.parse(depNote.metadata!) as TaskMetadata;
+    seen.add(depId);
     summaries.push({
       displayId: depId,
       name: depNote.title,
       status: meta.status,
       summary: readTaskSummary(depNote),
+      direction: 'upstream',
     });
   }
+
+  // Downstream from relations table: tasks that depend on this task
+  const downstreamRelations = db.getRelationsTo(taskNoteId)
+    .filter((r) => r.type === 'depends_on');
+  for (const rel of downstreamRelations) {
+    const note = db.getNoteById(rel.sourceId);
+    if (!note?.metadata) continue;
+    const meta = JSON.parse(note.metadata) as TaskMetadata;
+    if (!meta.display_id) continue;
+    summaries.push({
+      displayId: meta.display_id,
+      name: note.title,
+      status: meta.status,
+      summary: readTaskSummary(note),
+      direction: 'downstream',
+    });
+  }
+
   return summaries;
 }
 
@@ -142,7 +188,11 @@ function computeHash(
   return createHash('sha256').update(payload).digest('hex');
 }
 
-export function assembleContext(db: BrainDB, taskDisplayId: string): Result<ContextBundle> {
+export function assembleContext(
+  db: BrainDB,
+  taskDisplayId: string,
+  options?: ContextOptions
+): Result<ContextBundle> {
   const taskNotes = getPmNotes(db, 'task', { display_id: taskDisplayId });
   if (taskNotes.length === 0) {
     return fail('NOT_FOUND', `Task "${taskDisplayId}" not found`);
@@ -152,7 +202,10 @@ export function assembleContext(db: BrainDB, taskDisplayId: string): Result<Cont
   const task = JSON.parse(taskNote.metadata!) as TaskMetadata;
   const body = readTaskBody(taskNote);
   const workstream = findWorkstreamInfo(db, task.project, task.workstream);
-  const dependencies = buildDependencySummaries(db, task.depends_on ?? []);
+  const includeDeps = options?.deps !== false;
+  const dependencies = includeDeps
+    ? buildDependencySummaries(db, taskNote.id, task.depends_on ?? [])
+    : [];
   const decisions = findImpactingDecisions(db, taskDisplayId, task.project);
   const prompt = findPromptContent(db, taskDisplayId, task.project);
   const contextHash = computeHash(task, dependencies, decisions, prompt);
@@ -174,9 +227,10 @@ export async function assembleDispatch(
   db: BrainDB,
   embedder: Embedder,
   config: BrainConfig,
-  taskDisplayId: string
+  taskDisplayId: string,
+  options?: ContextOptions
 ): Promise<Result<DispatchBundle>> {
-  const ctxResult = assembleContext(db, taskDisplayId);
+  const ctxResult = assembleContext(db, taskDisplayId, options);
   if (!ctxResult.ok) return ctxResult as Result<DispatchBundle>;
   const ctx = ctxResult.data;
 
@@ -412,7 +466,7 @@ export function isContextStale(bundle: ContextBundle, db: BrainDB): boolean {
   if (taskNotes.length === 0) return true;
 
   const task = JSON.parse(taskNotes[0].metadata!) as TaskMetadata;
-  const dependencies = buildDependencySummaries(db, task.depends_on ?? []);
+  const dependencies = buildDependencySummaries(db, taskNotes[0].id, task.depends_on ?? []);
   const decisions = findImpactingDecisions(db, bundle.task.display_id, task.project);
   const prompt = findPromptContent(db, bundle.task.display_id, task.project);
   const currentHash = computeHash(task, dependencies, decisions, prompt);

@@ -124,6 +124,7 @@ describe('assembleContext', () => {
       name: 'Dependency Task',
       status: 'done',
       summary: undefined,
+      direction: 'upstream',
     });
   });
 
