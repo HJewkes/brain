@@ -181,6 +181,68 @@ describe('O-69: --workstream filter', () => {
   });
 });
 
+describe('--filter and --facet flags', () => {
+  it('--filter flag parses field=value and filters results by frontmatter metadata field', async () => {
+    await indexNote(
+      { id: 'alpha-note', filePath: '/tmp/alpha.md', metadata: JSON.stringify({ env: 'alpha' }) },
+      'TypeScript alpha content',
+    );
+    await indexNote(
+      { id: 'beta-note', filePath: '/tmp/beta.md', metadata: JSON.stringify({ env: 'beta' }) },
+      'TypeScript beta content',
+    );
+
+    await run('TypeScript', '--json', '--filter', 'env=alpha');
+
+    const parsed = JSON.parse(stdout());
+    const noteIds = parsed.notes.map((n: { noteId: string }) => n.noteId);
+    expect(noteIds).toContain('alpha-note');
+    expect(noteIds).not.toContain('beta-note');
+  });
+
+  it('--facet flag includes facet counts in JSON output', async () => {
+    await indexNote(
+      { id: 'facet-task', filePath: '/tmp/facet-task.md', metadata: JSON.stringify({ env: 'prod' }) },
+      'TypeScript facet prod content',
+    );
+    await indexNote(
+      { id: 'facet-project', filePath: '/tmp/facet-project.md', metadata: JSON.stringify({ env: 'staging' }) },
+      'TypeScript facet staging content',
+    );
+
+    await run('TypeScript', '--json', '--facet', 'env');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed).toHaveProperty('facets');
+    expect(parsed.facets).toHaveProperty('env');
+    expect(Array.isArray(parsed.facets.env)).toBe(true);
+    expect(parsed.facets.env.length).toBeGreaterThan(0);
+    const envValues = parsed.facets.env.map((v: { value: string }) => v.value);
+    expect(envValues).toContain('prod');
+  });
+
+  it('--facet in text mode prints facet summary after results', async () => {
+    await indexNote(
+      { id: 'text-facet-note', filePath: '/tmp/text-facet.md', metadata: JSON.stringify({ env: 'dev' }) },
+      'TypeScript text facet content',
+    );
+
+    await run('TypeScript', '--facet', 'env');
+
+    expect(stdout()).toContain('Facets:');
+    expect(stdout()).toContain('env:');
+  });
+
+  it('--filter with missing = sign exits with error', async () => {
+    const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as (code?: number) => never);
+
+    await run('TypeScript', '--filter', 'invalidformat');
+
+    expect(stderr()).toContain('Invalid filter');
+    mockExit.mockRestore();
+  });
+});
+
 describe('O-107: --type and --module filters', () => {
   it('filters search results by note type', async () => {
     await indexNote(

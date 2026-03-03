@@ -1,8 +1,9 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
-import { search, searchMemories } from '../services/search.js';
+import { parentResolveOpts } from '../services/config.js';
+import { search, searchMemories, computeFacets } from '../services/search.js';
 import { expandResults } from '../services/graph.js';
-import type { SearchOptions, SearchResult } from '../types.js';
+import type { SearchOptions, SearchResult, FacetResult } from '../types.js';
 
 export const searchCommand = new Command('search')
   .description('Search notes with hybrid BM25 + vector search')
@@ -27,7 +28,9 @@ export const searchCommand = new Command('search')
   .option('--module <module>', 'filter by module (e.g. pm)')
   .option('--title', 'Search titles only (excludes body matches)')
   .option('--project <prefix>', 'Filter results to a specific project')
-  .action(async (query, opts) => {
+  .option('--filter <expr...>', 'Filter by frontmatter field (field=value, repeatable)')
+  .option('--facet <field...>', 'Show facet counts for a frontmatter field (repeatable)')
+  .action(async (query, opts, cmd) => {
     await withBrain(async ({ db, embedder, config, modules }) => {
       const searchOpts: SearchOptions = {
         limit: parseInt(opts.limit, 10),
@@ -42,6 +45,20 @@ export const searchCommand = new Command('search')
         includePm: opts.includeTasks,
         excludePm: opts.excludePm,
       };
+
+      if (opts.filter) {
+        searchOpts.filters = opts.filter.map((expr: string) => {
+          const eqIdx = expr.indexOf('=');
+          if (eqIdx === -1) {
+            process.stderr.write(`Invalid filter: "${expr}" (expected field=value)\n`);
+            process.exit(1);
+          }
+          return { field: expr.slice(0, eqIdx), value: expr.slice(eqIdx + 1) };
+        });
+      }
+      if (opts.facet) {
+        searchOpts.facets = opts.facet;
+      }
 
       const results = await search(db, embedder, query, searchOpts, config.fusionWeights, modules);
 
@@ -128,8 +145,18 @@ export const searchCommand = new Command('search')
         ? await searchMemories(db, embedder, query, parseInt(opts.limit, 10), opts.container)
         : [];
 
+      // Compute facets if requested
+      let facetResults: FacetResult[] = [];
+      if (opts.facet?.length && allResults.length > 0) {
+        const resultNoteIds = new Set(allResults.map((r) => r.noteId));
+        facetResults = computeFacets(db, opts.facet, resultNoteIds);
+      }
+
       if (opts.json) {
-        const output = { notes: allResults, memories: memoryResults };
+        const output: Record<string, unknown> = { notes: allResults, memories: memoryResults };
+        if (facetResults.length > 0) {
+          output.facets = Object.fromEntries(facetResults.map((f) => [f.field, f.values]));
+        }
         process.stdout.write(JSON.stringify(output) + '\n');
       } else {
         if (allResults.length === 0 && memoryResults.length === 0) {
@@ -159,6 +186,16 @@ export const searchCommand = new Command('search')
             process.stdout.write(`  source: ${m.sourceNoteId} | tag: ${m.containerTag}\n\n`);
           }
         }
+        if (facetResults.length > 0) {
+          process.stdout.write('Facets:\n');
+          for (const facet of facetResults) {
+            const summary = facet.values
+              .slice(0, 10)
+              .map((v) => `${v.value} (${v.count})`)
+              .join(', ');
+            process.stdout.write(`  ${facet.field}: ${summary}\n`);
+          }
+        }
       }
-    });
+    }, parentResolveOpts(cmd));
   });
