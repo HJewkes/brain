@@ -78,6 +78,7 @@ run_agent() {
     --model "$model"
     --permission-mode bypassPermissions
     --no-session-persistence
+    --setting-sources user
   )
 
   if [[ -n "$extra_flags" ]]; then
@@ -128,6 +129,7 @@ run_setup() {
     --model sonnet \
     --permission-mode bypassPermissions \
     --no-session-persistence \
+    --setting-sources user \
     "$prompt")
 
   # Find the session log written by the setup agent
@@ -177,6 +179,7 @@ run_audits() {
       --model sonnet
       --permission-mode bypassPermissions
       --no-session-persistence
+      --setting-sources user
     )
     "${cmd[@]}" "$prompt" > "${RESULTS_DIR}/session-audit.md" &
     pids+=($!)
