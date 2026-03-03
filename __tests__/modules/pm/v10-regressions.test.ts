@@ -7,7 +7,12 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
-import { createTask, listTasks, getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import {
+  createTask,
+  listTasks,
+  getTask,
+  updateTaskStatus,
+} from '../../../src/modules/pm/data/task-ops.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import { generateClaim } from '../../../src/modules/pm/engine/claims.js';

@@ -31,7 +31,10 @@ function taskMeta(displayId: string, project: string, overrides: Record<string, 
 
 function makeTaskFile(dir: string, displayId: string, title: string): string {
   const filePath = join(dir, `${displayId}.md`);
-  writeFileSync(filePath, `---\ntitle: ${title}\n---\n\n# ${title}\n\nTask body for ${displayId}\n`);
+  writeFileSync(
+    filePath,
+    `---\ntitle: ${title}\n---\n\n# ${title}\n\nTask body for ${displayId}\n`
+  );
   return filePath;
 }
 
@@ -44,7 +47,11 @@ beforeEach(() => {
 
 afterEach(() => {
   db.close();
-  try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  try {
+    rmSync(tempDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
 });
 
 describe('computeGraphScores', () => {
@@ -114,7 +121,13 @@ describe('hybrid context assembly', () => {
       title: 'Core',
       type: 'workstream',
       module: 'pm',
-      metadata: JSON.stringify({ display_id: 'TST-01', project: 'TST', number: 1, title: 'Core', status: 'active' }),
+      metadata: JSON.stringify({
+        display_id: 'TST-01',
+        project: 'TST',
+        number: 1,
+        title: 'Core',
+        status: 'active',
+      }),
     });
     db.upsertNote(wsNote);
 
@@ -160,7 +173,13 @@ describe('hybrid context assembly', () => {
       title: 'Core',
       type: 'workstream',
       module: 'pm',
-      metadata: JSON.stringify({ display_id: 'TST-01', project: 'TST', number: 1, title: 'Core', status: 'active' }),
+      metadata: JSON.stringify({
+        display_id: 'TST-01',
+        project: 'TST',
+        number: 1,
+        title: 'Core',
+        status: 'active',
+      }),
     });
     db.upsertNote(wsNote);
 
@@ -175,7 +194,9 @@ describe('hybrid context assembly', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const graphNotes = result.data.relatedNotes.filter((n) => n.source === 'graph' || n.source === 'linked');
+    const graphNotes = result.data.relatedNotes.filter(
+      (n) => n.source === 'graph' || n.source === 'linked'
+    );
     expect(graphNotes.length).toBeGreaterThanOrEqual(1);
     const task2Related = graphNotes.find((n) => n.title === 'Second task');
     expect(task2Related).toBeDefined();
@@ -199,7 +220,13 @@ describe('hybrid context assembly', () => {
       title: 'Core',
       type: 'workstream',
       module: 'pm',
-      metadata: JSON.stringify({ display_id: 'TST-01', project: 'TST', number: 1, title: 'Core', status: 'active' }),
+      metadata: JSON.stringify({
+        display_id: 'TST-01',
+        project: 'TST',
+        number: 1,
+        title: 'Core',
+        status: 'active',
+      }),
     });
     db.upsertNote(wsNote);
 
@@ -238,14 +265,22 @@ describe('hybrid context assembly', () => {
     });
     db.upsertNote(note1);
     db.upsertNote(note2);
-    db.upsertRelations('task-main', [{ sourceId: 'task-main', targetId: 'task-linked', type: 'depends_on' }]);
+    db.upsertRelations('task-main', [
+      { sourceId: 'task-main', targetId: 'task-linked', type: 'depends_on' },
+    ]);
 
     const wsNote = makeNote({
       id: 'ws-1',
       title: 'Core',
       type: 'workstream',
       module: 'pm',
-      metadata: JSON.stringify({ display_id: 'TST-01', project: 'TST', number: 1, title: 'Core', status: 'active' }),
+      metadata: JSON.stringify({
+        display_id: 'TST-01',
+        project: 'TST',
+        number: 1,
+        title: 'Core',
+        status: 'active',
+      }),
     });
     db.upsertNote(wsNote);
 

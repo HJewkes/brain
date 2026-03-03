@@ -202,7 +202,10 @@ describe('listTasks', () => {
   it('filters by virtual state blocked', async () => {
     await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dep task' });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Blocked task', dependsOn: ['WEB-01.01'],
+      project: 'WEB',
+      workstream: 1,
+      name: 'Blocked task',
+      dependsOn: ['WEB-01.01'],
     });
 
     const blockedResult = listTasks(db, 'WEB', { status: 'blocked' });
@@ -243,10 +246,16 @@ describe('listTasks', () => {
 
   it('filters by priority', async () => {
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'High task', priority: 'high',
+      project: 'WEB',
+      workstream: 1,
+      name: 'High task',
+      priority: 'high',
     });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Low task', priority: 'low',
+      project: 'WEB',
+      workstream: 1,
+      name: 'Low task',
+      priority: 'low',
     });
 
     const result = listTasks(db, 'WEB', { priority: 'high' });
@@ -258,10 +267,16 @@ describe('listTasks', () => {
 
   it('filters by category', async () => {
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Impl task', category: 'implementation',
+      project: 'WEB',
+      workstream: 1,
+      name: 'Impl task',
+      category: 'implementation',
     });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Test task', category: 'testing',
+      project: 'WEB',
+      workstream: 1,
+      name: 'Test task',
+      category: 'testing',
     });
 
     const result = listTasks(db, 'WEB', { category: 'testing' });
@@ -273,10 +288,14 @@ describe('listTasks', () => {
 
   it('filters by title search (case-insensitive)', async () => {
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Setup Auth',
+      project: 'WEB',
+      workstream: 1,
+      name: 'Setup Auth',
     });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Deploy Pipeline',
+      project: 'WEB',
+      workstream: 1,
+      name: 'Deploy Pipeline',
     });
 
     const result = listTasks(db, 'WEB', { search: 'auth' });
@@ -288,13 +307,25 @@ describe('listTasks', () => {
 
   it('combines multiple filters', async () => {
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'High impl', priority: 'high', category: 'implementation',
+      project: 'WEB',
+      workstream: 1,
+      name: 'High impl',
+      priority: 'high',
+      category: 'implementation',
     });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'High test', priority: 'high', category: 'testing',
+      project: 'WEB',
+      workstream: 1,
+      name: 'High test',
+      priority: 'high',
+      category: 'testing',
     });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Low impl', priority: 'low', category: 'implementation',
+      project: 'WEB',
+      workstream: 1,
+      name: 'Low impl',
+      priority: 'low',
+      category: 'implementation',
     });
 
     const result = listTasks(db, 'WEB', { priority: 'high', category: 'testing' });
@@ -306,7 +337,10 @@ describe('listTasks', () => {
 
   it('returns empty array when no tasks match filters', async () => {
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Medium task', priority: 'medium',
+      project: 'WEB',
+      workstream: 1,
+      name: 'Medium task',
+      priority: 'medium',
     });
 
     const result = listTasks(db, 'WEB', { priority: 'low' });
@@ -318,10 +352,14 @@ describe('listTasks', () => {
   it('search matches task title only, not workstream name (O-63)', async () => {
     await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Integration' });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 2, name: 'Setup CI',
+      project: 'WEB',
+      workstream: 2,
+      name: 'Setup CI',
     });
     await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 2, name: 'Integration test harness',
+      project: 'WEB',
+      workstream: 2,
+      name: 'Integration test harness',
     });
 
     const result = listTasks(db, 'WEB', { search: 'integration' });

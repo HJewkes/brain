@@ -8,7 +8,6 @@ import { loadConfig, saveConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel } from '../services/ollama.js';
-import { slugify } from '../utils.js';
 import { indexSingleFile } from '../services/indexing.js';
 import type { BrainConfig, Embedder, EmbedderBackend } from '../types.js';
 
@@ -164,7 +163,10 @@ export async function ingestBrainReferenceDocs(
 
   const sourceDocsDir = join(
     dirname(new URL(import.meta.url).pathname),
-    '..', '..', 'docs', 'pm-module'
+    '..',
+    '..',
+    'docs',
+    'pm-module'
   );
   const commandsDir = join(sourceDocsDir, 'commands');
 
@@ -172,7 +174,7 @@ export async function ingestBrainReferenceDocs(
 
   // Decomposed command files
   if (existsSync(commandsDir)) {
-    const files = readdirSync(commandsDir).filter(f => f.endsWith('.md'));
+    const files = readdirSync(commandsDir).filter((f) => f.endsWith('.md'));
     for (const file of files) {
       const name = basename(file, '.md');
       const slug = `pm-ref-${name === '_index' ? 'overview' : name}`;
@@ -240,12 +242,12 @@ export async function ingestBrainReferenceDocs(
 
   // Create relations between reference notes (overview -> children)
   if (db && createdNoteIds.length > 1) {
-    const overviewId = createdNoteIds.find(id => id.includes('pm-ref-overview'));
+    const overviewId = createdNoteIds.find((id) => id.includes('pm-ref-overview'));
     if (overviewId) {
       const existingRelations = db.getRelationsFrom(overviewId);
       const newRelations = createdNoteIds
-        .filter(id => id !== overviewId)
-        .map(targetId => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
+        .filter((id) => id !== overviewId)
+        .map((targetId) => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
       db.upsertRelations(overviewId, [...existingRelations, ...newRelations]);
     }
   }

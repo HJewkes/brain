@@ -116,15 +116,7 @@ describe('decision add', () => {
   });
 
   it('--json outputs created decision', async () => {
-    await run(
-      'add',
-      'Use React',
-      '--project',
-      'TEST',
-      '--source-task',
-      'TEST-01.01',
-      '--json'
-    );
+    await run('add', 'Use React', '--project', 'TEST', '--source-task', 'TEST-01.01', '--json');
 
     const parsed = JSON.parse(stdout());
     expect(parsed.display_id).toBe('TEST-D01');

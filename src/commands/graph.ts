@@ -75,7 +75,9 @@ export const graphCommand = new Command('graph')
         if (note) {
           resolvedId = note.id;
         } else {
-          process.stderr.write(`Warning: No note found at path "${noteId}", trying as note ID...\n`);
+          process.stderr.write(
+            `Warning: No note found at path "${noteId}", trying as note ID...\n`
+          );
         }
       }
 

@@ -8,10 +8,7 @@ export function detectEntityType(id: string): EntityType {
   return 'project';
 }
 
-export function checkNamespaceMismatch(
-  id: string,
-  expectedType: EntityType
-): string | null {
+export function checkNamespaceMismatch(id: string, expectedType: EntityType): string | null {
   const actualType = detectEntityType(id);
   if (actualType === expectedType) return null;
 

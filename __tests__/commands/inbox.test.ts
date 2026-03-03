@@ -61,7 +61,9 @@ describe('inbox command', () => {
   });
 
   it('lists inbox items with status and id', async () => {
-    db.addInboxItem(makeInboxItem({ id: 'item-1', content: 'My thought', source: 'cli', status: 'pending' }));
+    db.addInboxItem(
+      makeInboxItem({ id: 'item-1', content: 'My thought', source: 'cli', status: 'pending' })
+    );
     await run();
     const out = stdout();
     expect(out).toContain('[pending]');

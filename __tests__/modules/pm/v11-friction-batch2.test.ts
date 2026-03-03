@@ -34,7 +34,10 @@ beforeEach(async () => {
 
   const proj = await createProject(db, config, embedder, { name: 'Friction2', prefix: 'FR2' });
   if (!proj.ok) throw new Error(proj.error.message);
-  const ws = await createWorkstream(db, config, embedder, { project: 'FR2', name: 'SDK & Protocol' });
+  const ws = await createWorkstream(db, config, embedder, {
+    project: 'FR2',
+    name: 'SDK & Protocol',
+  });
   if (!ws.ok) throw new Error(ws.error.message);
 });
 
@@ -123,30 +126,24 @@ describe('O-60: workstream name-based lookup', () => {
 
 describe('O-135/O-145: --project flag on waves and briefing', () => {
   it('wavesCmd definition includes --project option', async () => {
-    const { createOrchestrationCommands } = await import(
-      '../../../src/modules/pm/commands/orchestration.js'
-    );
+    const { createOrchestrationCommands } =
+      await import('../../../src/modules/pm/commands/orchestration.js');
     const cmds = createOrchestrationCommands();
     const wavesCmd = cmds.find((c) => c.name() === 'waves');
     expect(wavesCmd).toBeDefined();
 
-    const projectOpt = wavesCmd!.options.find(
-      (o) => o.long === '--project'
-    );
+    const projectOpt = wavesCmd!.options.find((o) => o.long === '--project');
     expect(projectOpt).toBeDefined();
   });
 
   it('briefingCmd definition includes --project option', async () => {
-    const { createOrchestrationCommands } = await import(
-      '../../../src/modules/pm/commands/orchestration.js'
-    );
+    const { createOrchestrationCommands } =
+      await import('../../../src/modules/pm/commands/orchestration.js');
     const cmds = createOrchestrationCommands();
     const briefingCmd = cmds.find((c) => c.name() === 'briefing');
     expect(briefingCmd).toBeDefined();
 
-    const projectOpt = briefingCmd!.options.find(
-      (o) => o.long === '--project'
-    );
+    const projectOpt = briefingCmd!.options.find((o) => o.long === '--project');
     expect(projectOpt).toBeDefined();
   });
 });

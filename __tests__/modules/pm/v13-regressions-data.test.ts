@@ -8,7 +8,12 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject, getProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream, listWorkstreams } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks, deleteTask, updateTask } from '../../../src/modules/pm/data/task-ops.js';
+import {
+  createTask,
+  listTasks,
+  deleteTask,
+  updateTask,
+} from '../../../src/modules/pm/data/task-ops.js';
 import { computeWaves } from '../../../src/modules/pm/engine/dependency.js';
 
 let db: BrainDB;
@@ -35,17 +40,20 @@ describe('data regressions', () => {
   it('O-66: dependencies create relations', async () => {
     await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'A' });
     await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'B', dependsOn: ['VOLT-01.01'],
+      project: 'VOLT',
+      workstream: 1,
+      name: 'B',
+      dependsOn: ['VOLT-01.01'],
     });
     const notes = db.getAllNotes();
-    const bNote = notes.find(n => {
+    const bNote = notes.find((n) => {
       if (!n.metadata) return false;
       const meta = JSON.parse(n.metadata);
       return meta.display_id === 'VOLT-01.02';
     });
     expect(bNote).toBeDefined();
     const rels = db.getRelationsFrom(bNote!.id);
-    expect(rels.some(r => r.type === 'depends_on')).toBe(true);
+    expect(rels.some((r) => r.type === 'depends_on')).toBe(true);
   });
 
   // O-68: task update changes metadata
@@ -83,7 +91,10 @@ describe('data regressions', () => {
   it('O-80: waves respect dependency ordering', async () => {
     await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'A' });
     await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'B', dependsOn: ['VOLT-01.01'],
+      project: 'VOLT',
+      workstream: 1,
+      name: 'B',
+      dependsOn: ['VOLT-01.01'],
     });
     const waves = computeWaves(db, 'VOLT');
     expect(waves.length).toBe(2);
@@ -106,7 +117,9 @@ describe('data regressions', () => {
   // O-91: task with acceptance_criteria
   it('O-91: acceptance_criteria passed through', async () => {
     await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'AC test',
+      project: 'VOLT',
+      workstream: 1,
+      name: 'AC test',
       acceptanceCriteria: ['Must compile', 'Tests pass'],
     });
     const result = listTasks(db, 'VOLT');

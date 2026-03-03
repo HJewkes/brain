@@ -56,9 +56,7 @@ export function projectDeleteWithActivity(
   let untrackedCount = 0;
 
   if (!opts.all && activityNotes.length > 0) {
-    const untracked = allProjectNotes.filter(
-      (n) => !trackedIds.has(n.id) && n.type !== 'activity'
-    );
+    const untracked = allProjectNotes.filter((n) => !trackedIds.has(n.id) && n.type !== 'activity');
     untrackedCount = untracked.length;
     // Delete all notes anyway (tracked + untracked), but report untracked count
     notesToDelete = allProjectNotes;

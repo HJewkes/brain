@@ -37,7 +37,7 @@ describe('activity notes on state transitions', () => {
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
 
     const allNotes = db.getAllNotes();
-    const activities = allNotes.filter(n => {
+    const activities = allNotes.filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.activity_type === 'complete';
     });
@@ -55,14 +55,14 @@ describe('activity notes on state transitions', () => {
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'in-progress');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
 
-    const activities = db.getAllNotes().filter(n => {
+    const activities = db.getAllNotes().filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.activity_type === 'complete';
     });
     expect(activities.length).toBe(1);
 
     const rels = db.getRelationsFrom(activities[0].id);
-    const recorded = rels.find(r => r.type === 'recorded_for');
+    const recorded = rels.find((r) => r.type === 'recorded_for');
     expect(recorded).toBeDefined();
   });
 
@@ -70,7 +70,7 @@ describe('activity notes on state transitions', () => {
     await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Claim me' });
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
 
-    const activities = db.getAllNotes().filter(n => {
+    const activities = db.getAllNotes().filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.activity_type === 'claim';
     });
@@ -80,14 +80,17 @@ describe('activity notes on state transitions', () => {
   it('complete activity includes newly_eligible tasks', async () => {
     await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
+      project: 'TST',
+      workstream: 1,
+      name: 'Second',
+      dependsOn: ['TST-01.01'],
     });
 
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'in-progress');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
 
-    const activities = db.getAllNotes().filter(n => {
+    const activities = db.getAllNotes().filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.activity_type === 'complete';
     });
@@ -99,7 +102,7 @@ describe('activity notes on state transitions', () => {
     await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Test' });
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
 
-    const activities = db.getAllNotes().filter(n => {
+    const activities = db.getAllNotes().filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.activity_type === 'claim';
     });

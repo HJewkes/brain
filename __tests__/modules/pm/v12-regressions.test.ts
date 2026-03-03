@@ -8,7 +8,12 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject, listProjects } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { listTasks, getTask, createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import {
+  listTasks,
+  getTask,
+  createTask,
+  updateTaskStatus,
+} from '../../../src/modules/pm/data/task-ops.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import { traverseGraph } from '../../../src/services/graph.js';
 

@@ -34,7 +34,8 @@ describe('V14 integration', () => {
   it('search applies default min-score filtering', async () => {
     // Index a note
     const path = join(notesDir, 'test.md');
-    const content = '---\nid: test\ntitle: "Test Note"\ntype: note\ntier: fast\n---\n\nTypeScript programming.';
+    const content =
+      '---\nid: test\ntitle: "Test Note"\ntype: note\ntier: fast\n---\n\nTypeScript programming.';
     writeFileSync(path, content);
     const hash = createHash('sha256').update(content).digest('hex');
     await indexSingleFile(db, embedder, path, content, hash, Date.now());
@@ -52,26 +53,29 @@ describe('V14 integration', () => {
 
     // Index a source doc
     const docPath = join(notesDir, 'design-spec.md');
-    const docContent = '---\nid: design-spec\ntitle: "Design Spec"\ntype: research\ntier: slow\n---\n\nSystem design specification.';
+    const docContent =
+      '---\nid: design-spec\ntitle: "Design Spec"\ntype: research\ntier: slow\n---\n\nSystem design specification.';
     writeFileSync(docPath, docContent);
     const hash = createHash('sha256').update(docContent).digest('hex');
     await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());
 
     // Create task referencing that doc
     const result = await createTask(db, config, embedder, {
-      project: 'V14', workstream: 1, name: 'Implement design',
+      project: 'V14',
+      workstream: 1,
+      name: 'Implement design',
       references: ['design-spec'],
     });
     expect(result.ok).toBe(true);
 
     // Verify graph edge exists
-    const taskNote = db.getAllNotes().find(n => {
+    const taskNote = db.getAllNotes().find((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.display_id === 'V14-01.01';
     });
     expect(taskNote).toBeDefined();
     const relations = db.getRelationsFrom(taskNote!.id);
-    expect(relations.some(r => r.type === 'references')).toBe(true);
+    expect(relations.some((r) => r.type === 'references')).toBe(true);
   });
 
   it('end-to-end: create → reference → search → graph', async () => {
@@ -80,20 +84,23 @@ describe('V14 integration', () => {
 
     // Index source doc
     const docPath = join(notesDir, 'api-guide.md');
-    const docContent = '---\nid: api-guide\ntitle: "API Guide"\ntype: research\ntier: slow\n---\n\nComprehensive API development guide with REST patterns.';
+    const docContent =
+      '---\nid: api-guide\ntitle: "API Guide"\ntype: research\ntier: slow\n---\n\nComprehensive API development guide with REST patterns.';
     writeFileSync(docPath, docContent);
     const hash = createHash('sha256').update(docContent).digest('hex');
     await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());
 
     // Create task with reference
     await createTask(db, config, embedder, {
-      project: 'E2E', workstream: 1, name: 'Build REST API',
+      project: 'E2E',
+      workstream: 1,
+      name: 'Build REST API',
       references: ['api-guide'],
       description: 'Implement the REST API following the API guide patterns.',
     });
 
     // Task note should have chunks (searchable)
-    const taskNote = db.getAllNotes().find(n => {
+    const taskNote = db.getAllNotes().find((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.display_id === 'E2E-01.01';
     });
@@ -103,6 +110,6 @@ describe('V14 integration', () => {
 
     // Reference relation should exist
     const relations = db.getRelationsFrom(taskNote!.id);
-    expect(relations.some(r => r.type === 'references')).toBe(true);
+    expect(relations.some((r) => r.type === 'references')).toBe(true);
   });
 });

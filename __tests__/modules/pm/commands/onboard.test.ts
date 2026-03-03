@@ -6,9 +6,16 @@ import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
-import { runOnboard, onboardSlug, synthesizeProjectBody } from '../../../../src/modules/pm/commands/onboard.js';
+import {
+  runOnboard,
+  onboardSlug,
+  synthesizeProjectBody,
+} from '../../../../src/modules/pm/commands/onboard.js';
 import { getPmNotes } from '../../../../src/modules/pm/data/queries.js';
-import type { DetectedComponent, ScoredDoc } from '../../../../src/modules/pm/data/onboard-types.js';
+import type {
+  DetectedComponent,
+  ScoredDoc,
+} from '../../../../src/modules/pm/data/onboard-types.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -82,7 +89,10 @@ describe('runOnboard', () => {
 
   it('discovers and ingests docs', async () => {
     writeFileSync(join(projectDir, 'package.json'), JSON.stringify({ name: 'testapp' }));
-    writeFileSync(join(projectDir, 'README.md'), '# Test App\n\nA test application for onboarding.\n\n' + 'x'.repeat(600));
+    writeFileSync(
+      join(projectDir, 'README.md'),
+      '# Test App\n\nA test application for onboarding.\n\n' + 'x'.repeat(600)
+    );
 
     const result = await runOnboard(db, config, embedder, {
       projectName: 'TestApp',
@@ -97,7 +107,7 @@ describe('runOnboard', () => {
     expect(result.data.docs.ingested).toBeGreaterThanOrEqual(1);
 
     // Verify the doc was ingested as a research note
-    const ingestedItem = result.data.docs.items.find(d => d.ingested);
+    const ingestedItem = result.data.docs.items.find((d) => d.ingested);
     expect(ingestedItem).toBeDefined();
     expect(ingestedItem!.noteSlug).toBeDefined();
   });
@@ -242,10 +252,13 @@ describe('runOnboard', () => {
 
   it('project note body includes component inventory', async () => {
     // Set up monorepo with two components
-    writeFileSync(join(projectDir, 'package.json'), JSON.stringify({
-      name: 'mono',
-      workspaces: ['packages/*'],
-    }));
+    writeFileSync(
+      join(projectDir, 'package.json'),
+      JSON.stringify({
+        name: 'mono',
+        workspaces: ['packages/*'],
+      })
+    );
     const pkgA = join(projectDir, 'packages', 'api');
     const pkgB = join(projectDir, 'packages', 'web');
     mkdirSync(pkgA, { recursive: true });
@@ -296,10 +309,13 @@ describe('runOnboard', () => {
 
   it('multiple READMEs from different components get unique slugs', async () => {
     // Set up monorepo with two components each having a README
-    writeFileSync(join(projectDir, 'package.json'), JSON.stringify({
-      name: 'mono',
-      workspaces: ['packages/*'],
-    }));
+    writeFileSync(
+      join(projectDir, 'package.json'),
+      JSON.stringify({
+        name: 'mono',
+        workspaces: ['packages/*'],
+      })
+    );
     const pkgA = join(projectDir, 'packages', 'api');
     const pkgB = join(projectDir, 'packages', 'web');
     mkdirSync(pkgA, { recursive: true });
@@ -318,8 +334,8 @@ describe('runOnboard', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const ingestedDocs = result.data.docs.items.filter(d => d.ingested);
-    const slugs = ingestedDocs.map(d => d.noteSlug);
+    const ingestedDocs = result.data.docs.items.filter((d) => d.ingested);
+    const slugs = ingestedDocs.map((d) => d.noteSlug);
     // All slugs should be unique
     expect(new Set(slugs).size).toBe(slugs.length);
     // Both should have been ingested
@@ -351,8 +367,22 @@ describe('onboardSlug', () => {
 describe('synthesizeProjectBody', () => {
   it('includes component list', () => {
     const components: DetectedComponent[] = [
-      { name: 'api', path: 'packages/api', type: 'node', entryPoints: [], docPaths: [], docCount: 3 },
-      { name: 'web', path: 'packages/web', type: 'node', entryPoints: [], docPaths: [], docCount: 1 },
+      {
+        name: 'api',
+        path: 'packages/api',
+        type: 'node',
+        entryPoints: [],
+        docPaths: [],
+        docCount: 3,
+      },
+      {
+        name: 'web',
+        path: 'packages/web',
+        type: 'node',
+        entryPoints: [],
+        docPaths: [],
+        docCount: 1,
+      },
     ];
     const body = synthesizeProjectBody('Mono', components, []);
     expect(body).toContain('## Components');

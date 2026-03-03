@@ -17,17 +17,31 @@ afterEach(() => {
 
 describe('O-140: search title relevance', () => {
   test('--title filter removes body-only matches', () => {
-    db.upsertNote(
-      makeNote({ id: 'title-match', title: 'Deploy pipeline guide' })
-    );
-    db.upsertNote(
-      makeNote({ id: 'body-only', title: 'CI configuration' })
-    );
+    db.upsertNote(makeNote({ id: 'title-match', title: 'Deploy pipeline guide' }));
+    db.upsertNote(makeNote({ id: 'body-only', title: 'CI configuration' }));
 
     const query = 'deploy';
     const allResults: SearchResult[] = [
-      { noteId: 'title-match', score: 0.8, filePath: '/a.md', heading: null, excerpt: '', tier: 'slow', tags: [], confidence: null },
-      { noteId: 'body-only', score: 0.9, filePath: '/b.md', heading: null, excerpt: 'deploy stuff', tier: 'slow', tags: [], confidence: null },
+      {
+        noteId: 'title-match',
+        score: 0.8,
+        filePath: '/a.md',
+        heading: null,
+        excerpt: '',
+        tier: 'slow',
+        tags: [],
+        confidence: null,
+      },
+      {
+        noteId: 'body-only',
+        score: 0.9,
+        filePath: '/b.md',
+        heading: null,
+        excerpt: 'deploy stuff',
+        tier: 'slow',
+        tags: [],
+        confidence: null,
+      },
     ];
 
     // Simulate --title filter logic (same as implementation)
@@ -42,17 +56,31 @@ describe('O-140: search title relevance', () => {
   });
 
   test('title matches rank higher than body-only matches', () => {
-    db.upsertNote(
-      makeNote({ id: 'title-match', title: 'Kubernetes setup' })
-    );
-    db.upsertNote(
-      makeNote({ id: 'body-only', title: 'Infrastructure notes' })
-    );
+    db.upsertNote(makeNote({ id: 'title-match', title: 'Kubernetes setup' }));
+    db.upsertNote(makeNote({ id: 'body-only', title: 'Infrastructure notes' }));
 
     const query = 'kubernetes';
     const allResults: SearchResult[] = [
-      { noteId: 'body-only', score: 0.95, filePath: '/b.md', heading: null, excerpt: 'kubernetes stuff', tier: 'slow', tags: [], confidence: null },
-      { noteId: 'title-match', score: 0.7, filePath: '/a.md', heading: null, excerpt: '', tier: 'slow', tags: [], confidence: null },
+      {
+        noteId: 'body-only',
+        score: 0.95,
+        filePath: '/b.md',
+        heading: null,
+        excerpt: 'kubernetes stuff',
+        tier: 'slow',
+        tags: [],
+        confidence: null,
+      },
+      {
+        noteId: 'title-match',
+        score: 0.7,
+        filePath: '/a.md',
+        heading: null,
+        excerpt: '',
+        tier: 'slow',
+        tags: [],
+        confidence: null,
+      },
     ];
 
     // Simulate relevance boost sort (same as implementation)
@@ -99,9 +127,7 @@ describe('O-161: context auto-correct', () => {
       })
     );
 
-    const { didYouMeanSuggestion } = await import(
-      '../../../src/modules/pm/commands/context.js'
-    );
+    const { didYouMeanSuggestion } = await import('../../../src/modules/pm/commands/context.js');
 
     // Wrong prefix, same numbers — should find TST-01.03
     const suggestion = didYouMeanSuggestion(db, 'XYZ-01.03');
@@ -109,9 +135,7 @@ describe('O-161: context auto-correct', () => {
   });
 
   test('didYouMeanSuggestion returns undefined when no match exists', async () => {
-    const { didYouMeanSuggestion } = await import(
-      '../../../src/modules/pm/commands/context.js'
-    );
+    const { didYouMeanSuggestion } = await import('../../../src/modules/pm/commands/context.js');
 
     const suggestion = didYouMeanSuggestion(db, 'TST-99.99');
     expect(suggestion).toBeUndefined();
@@ -131,18 +155,14 @@ describe('O-161: context auto-correct', () => {
       })
     );
 
-    const { didYouMeanSuggestion } = await import(
-      '../../../src/modules/pm/commands/context.js'
-    );
+    const { didYouMeanSuggestion } = await import('../../../src/modules/pm/commands/context.js');
 
     // Typo'd prefix — auto-correct should find the single match
     const corrected = didYouMeanSuggestion(db, 'ZZZ-02.05');
     expect(corrected).toBe('ABC-02.05');
 
     // Verify the corrected ID resolves to the actual note
-    const { resolveDisplayId } = await import(
-      '../../../src/modules/pm/data/queries.js'
-    );
+    const { resolveDisplayId } = await import('../../../src/modules/pm/data/queries.js');
     const result = resolveDisplayId(db, corrected!);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -152,9 +172,7 @@ describe('O-161: context auto-correct', () => {
 
   test('no auto-correct when suggestion is undefined', async () => {
     // No tasks exist — suggestion should be undefined, command should error
-    const { didYouMeanSuggestion } = await import(
-      '../../../src/modules/pm/commands/context.js'
-    );
+    const { didYouMeanSuggestion } = await import('../../../src/modules/pm/commands/context.js');
 
     const suggestion = didYouMeanSuggestion(db, 'TST-01.01');
     expect(suggestion).toBeUndefined();

@@ -8,7 +8,9 @@ export const notesCommand = new Command('notes')
   .action(async (opts) => {
     if (opts.module) {
       const listCmd = notesCommand.commands.find((c) => c.name() === 'list')!;
-      await listCmd.parseAsync(['node', 'brain', 'notes', 'list', '--module', opts.module], { from: 'node' });
+      await listCmd.parseAsync(['node', 'brain', 'notes', 'list', '--module', opts.module], {
+        from: 'node',
+      });
     } else {
       notesCommand.outputHelp();
     }
@@ -67,7 +69,7 @@ notesCommand
 
       if (notes.length > limit) {
         process.stderr.write(
-          `Showing ${limit} of ${notes.length} notes. Use --limit to see more.\n`,
+          `Showing ${limit} of ${notes.length} notes. Use --limit to see more.\n`
         );
       }
     });

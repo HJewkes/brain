@@ -8,7 +8,9 @@ let db: BrainDB;
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })),
+  withBrain: vi.fn(async (fn) =>
+    fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })
+  ),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 
@@ -52,7 +54,11 @@ beforeEach(async () => {
   db.setEmbeddingModel(embedder.model, embedder.dimensions);
   db.upsertNote(makeNote({ id: 'test-note', title: 'Test Note' }));
 
-  const mem = makeMemoryEntry({ id: 'mem-1', memory: 'TypeScript is typed', sourceNoteId: 'test-note' });
+  const mem = makeMemoryEntry({
+    id: 'mem-1',
+    memory: 'TypeScript is typed',
+    sourceNoteId: 'test-note',
+  });
   db.addMemory(mem);
   const vec = await embedder.embed([mem.memory]);
   db.upsertMemoryVector(mem.id, new Float32Array(vec[0]));

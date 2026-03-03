@@ -33,7 +33,11 @@ afterEach(() => {
 describe('context regressions', () => {
   // O-50: context assembly returns task metadata
   it('O-50: assembleContext returns task metadata', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Context test' });
+    await createTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'Context test',
+    });
     const result = assembleContext(db, 'VOLT-01.01');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -56,7 +60,10 @@ describe('context regressions', () => {
   it('O-64: context includes dependency info', async () => {
     await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'First' });
     await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'Second', dependsOn: ['VOLT-01.01'],
+      project: 'VOLT',
+      workstream: 1,
+      name: 'Second',
+      dependsOn: ['VOLT-01.01'],
     });
     const result = assembleContext(db, 'VOLT-01.02');
     expect(result.ok).toBe(true);
@@ -76,7 +83,9 @@ describe('context regressions', () => {
   // O-75: context includes task body
   it('O-75: context includes task body', async () => {
     await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'With body',
+      project: 'VOLT',
+      workstream: 1,
+      name: 'With body',
       description: 'This is the body content',
     });
     const result = assembleContext(db, 'VOLT-01.01');

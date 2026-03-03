@@ -97,7 +97,9 @@ describe('init command', () => {
 
   it('--json outputs summary as JSON', async () => {
     const { initCommand } = await import('../../src/commands/init.js');
-    await initCommand.parseAsync(['node', 'init', '--embedder', 'local', '--json'], { from: 'node' });
+    await initCommand.parseAsync(['node', 'init', '--embedder', 'local', '--json'], {
+      from: 'node',
+    });
 
     const parsed = JSON.parse(stdout());
     expect(parsed).toHaveProperty('notesDir');
@@ -121,7 +123,9 @@ describe('init command', () => {
 
   it('--verbose shows technical details', async () => {
     const { initCommand } = await import('../../src/commands/init.js');
-    await initCommand.parseAsync(['node', 'init', '--embedder', 'local', '--verbose'], { from: 'node' });
+    await initCommand.parseAsync(['node', 'init', '--embedder', 'local', '--verbose'], {
+      from: 'node',
+    });
 
     const err = stderr();
     expect(err).toContain('Brain initialized');

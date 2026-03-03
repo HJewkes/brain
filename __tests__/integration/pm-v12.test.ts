@@ -82,7 +82,9 @@ beforeAll(() => {
   const ws2Raw = pm('task list --workstream 2 --json');
   const ws2Tasks = JSON.parse(ws2Raw) as { display_id: string; title: string }[];
   const ciTask = ws2Tasks.find((t) => t.title.includes('Setup CI') || t.title.includes('CI'));
-  const deployTask = ws2Tasks.find((t) => t.title.includes('Deploy') || t.title.includes('staging'));
+  const deployTask = ws2Tasks.find(
+    (t) => t.title.includes('Deploy') || t.title.includes('staging')
+  );
   if (ciTask && deployTask) {
     pm(`task update ${deployTask.display_id} --depends-on ${ciTask.display_id} --json`);
   }
@@ -187,9 +189,9 @@ describe('V12 Integration: Task creation template', { timeout: 60_000 }, () => {
   it('task add --done-when --ac --refs stores structured fields', () => {
     const output = pm(
       'task add "Templated task" --workstream 1 --priority medium ' +
-      '--done-when "All tests pass and coverage above 80%" ' +
-      '--ac "Unit tests cover edge cases" --ac "Integration test passes" ' +
-      '--refs "docs/api.md,src/handler.ts" --json'
+        '--done-when "All tests pass and coverage above 80%" ' +
+        '--ac "Unit tests cover edge cases" --ac "Integration test passes" ' +
+        '--refs "docs/api.md,src/handler.ts" --json'
     );
     const result = JSON.parse(output);
 
@@ -198,30 +200,25 @@ describe('V12 Integration: Task creation template', { timeout: 60_000 }, () => {
     expect(result.acceptance_criteria).toEqual(
       expect.arrayContaining(['Unit tests cover edge cases', 'Integration test passes'])
     );
-    expect(result.references).toEqual(
-      expect.arrayContaining(['docs/api.md', 'src/handler.ts'])
-    );
+    expect(result.references).toEqual(expect.arrayContaining(['docs/api.md', 'src/handler.ts']));
   });
 
   it('acceptance_criteria from frontmatter appears in task show', () => {
     const createOutput = pm(
-      'task add "AC frontmatter test" --workstream 1 ' +
-      '--ac "Criterion from flag" --json'
+      'task add "AC frontmatter test" --workstream 1 ' + '--ac "Criterion from flag" --json'
     );
     const created = JSON.parse(createOutput);
 
     const showOutput = pm(`task show ${created.display_id} --json`);
     const shown = JSON.parse(showOutput);
 
-    expect(shown.acceptance_criteria).toEqual(
-      expect.arrayContaining(['Criterion from flag'])
-    );
+    expect(shown.acceptance_criteria).toEqual(expect.arrayContaining(['Criterion from flag']));
   });
 
   it('done_when round-trips through task show', () => {
     const createOutput = pm(
       'task add "Done-when test" --workstream 1 ' +
-      '--done-when "Feature deployed to production" --json'
+        '--done-when "Feature deployed to production" --json'
     );
     const created = JSON.parse(createOutput);
 
@@ -429,7 +426,7 @@ describe('V12 Integration: O-139 and O-140 verification', { timeout: 60_000 }, (
 
     const createOutput = pm(
       'task add "O139 target" --workstream 1 --priority low ' +
-      '--description "Body content for O-139 verification" --json'
+        '--description "Body content for O-139 verification" --json'
     );
     const created = JSON.parse(createOutput);
 
@@ -449,16 +446,12 @@ describe('V12 Integration: O-139 and O-140 verification', { timeout: 60_000 }, (
   });
 
   it('modified field is valid date after --depends-on update', () => {
-    const createOutput = pm(
-      'task add "Timestamp test" --workstream 1 --priority low --json'
-    );
+    const createOutput = pm('task add "Timestamp test" --workstream 1 --priority low --json');
     const created = JSON.parse(createOutput);
 
     const listRaw = pm('task list --workstream 1 --json');
     const allTasks = JSON.parse(listRaw) as { display_id: string }[];
-    const otherTask = allTasks.find(
-      (t) => t.display_id !== created.display_id
-    );
+    const otherTask = allTasks.find((t) => t.display_id !== created.display_id);
     expect(otherTask).toBeDefined();
 
     pm(`task update ${created.display_id} --depends-on ${otherTask!.display_id} --json`);

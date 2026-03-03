@@ -45,7 +45,13 @@ describe('search guardrails', () => {
 
   it('explicit minScore overrides default', async () => {
     await indexNote('test-note', 'JavaScript programming basics');
-    const results = await search(db, embedder, 'JavaScript', { limit: 10, minScore: 0.01 }, weights);
+    const results = await search(
+      db,
+      embedder,
+      'JavaScript',
+      { limit: 10, minScore: 0.01 },
+      weights
+    );
     // With very low explicit threshold, results should still return
     expect(results.length).toBeGreaterThanOrEqual(0);
   });
@@ -53,7 +59,13 @@ describe('search guardrails', () => {
   it('returns empty array when all results below threshold', async () => {
     // Query something completely unrelated to indexed content
     await indexNote('cooking', 'Recipe for chocolate cake with vanilla frosting');
-    const results = await search(db, embedder, 'quantum physics relativity', { limit: 10, minScore: 0.9 }, weights);
+    const results = await search(
+      db,
+      embedder,
+      'quantum physics relativity',
+      { limit: 10, minScore: 0.9 },
+      weights
+    );
     expect(results).toHaveLength(0);
   });
 });

@@ -31,16 +31,21 @@ afterEach(() => {
 
 describe('relations as single source of truth', () => {
   it('createTask creates relation edges for depends_on', async () => {
-    const t1 = await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
     const t2 = await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
+      project: 'TST',
+      workstream: 1,
+      name: 'Second',
+      dependsOn: ['TST-01.01'],
     });
     expect(t2.ok).toBe(true);
 
     // Verify relation exists
-    const note = db.getAllNotes().find(n => JSON.parse(n.metadata ?? '{}').display_id === 'TST-01.02');
+    const note = db
+      .getAllNotes()
+      .find((n) => JSON.parse(n.metadata ?? '{}').display_id === 'TST-01.02');
     const rels = db.getRelationsFrom(note!.id);
-    expect(rels.some(r => r.type === 'depends_on')).toBe(true);
+    expect(rels.some((r) => r.type === 'depends_on')).toBe(true);
   });
 
   it('listTasks shows depends_on from relations even without frontmatter', async () => {
@@ -48,22 +53,25 @@ describe('relations as single source of truth', () => {
     await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Second' });
 
     // Add relation directly (simulating inferDependencies)
-    const notes = db.getAllNotes().filter(n => JSON.parse(n.metadata ?? '{}').module === 'pm');
-    const t1 = notes.find(n => JSON.parse(n.metadata ?? '{}').display_id === 'TST-01.01');
-    const t2 = notes.find(n => JSON.parse(n.metadata ?? '{}').display_id === 'TST-01.02');
+    const notes = db.getAllNotes().filter((n) => JSON.parse(n.metadata ?? '{}').module === 'pm');
+    const t1 = notes.find((n) => JSON.parse(n.metadata ?? '{}').display_id === 'TST-01.01');
+    const t2 = notes.find((n) => JSON.parse(n.metadata ?? '{}').display_id === 'TST-01.02');
     db.upsertRelations(t2!.id, [{ sourceId: t2!.id, targetId: t1!.id, type: 'depends_on' }]);
 
     const result = listTasks(db, 'TST');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const second = result.data.find(t => t.display_id === 'TST-01.02');
+    const second = result.data.find((t) => t.display_id === 'TST-01.02');
     expect(second?.depends_on).toContain('TST-01.01');
   });
 
   it('getTask shows depends_on from relations', async () => {
     await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
+      project: 'TST',
+      workstream: 1,
+      name: 'Second',
+      dependsOn: ['TST-01.01'],
     });
     const result = getTask(db, 'TST-01.02');
     expect(result.ok).toBe(true);
@@ -74,12 +82,15 @@ describe('relations as single source of truth', () => {
   it('virtual state +BLOCKED computed from relations', async () => {
     await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
+      project: 'TST',
+      workstream: 1,
+      name: 'Second',
+      dependsOn: ['TST-01.01'],
     });
     const result = listTasks(db, 'TST');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const second = result.data.find(t => t.display_id === 'TST-01.02');
+    const second = result.data.find((t) => t.display_id === 'TST-01.02');
     expect(second?.virtualStates).toContain('+BLOCKED');
   });
 });

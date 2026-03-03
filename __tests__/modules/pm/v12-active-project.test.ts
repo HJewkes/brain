@@ -7,7 +7,11 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
-import { getActiveProject, setActiveProject, resolveProject } from '../../../src/modules/pm/data/queries.js';
+import {
+  getActiveProject,
+  setActiveProject,
+  resolveProject,
+} from '../../../src/modules/pm/data/queries.js';
 
 let db: BrainDB;
 let dbPath: string;

@@ -7,7 +7,7 @@ export interface RenderOptions {
 }
 
 export function renderAgentPrompt(bundle: ContextBundle, options?: RenderOptions): string {
-  const { task, prompt, dependencies, decisions } = bundle;
+  const { task, dependencies, decisions } = bundle;
   const sections: string[] = [];
 
   sections.push(`# Task ${task.display_id}`);

@@ -20,10 +20,6 @@ function stdout(): string {
   return stdoutChunks.join('');
 }
 
-function stderr(): string {
-  return stderrChunks.join('');
-}
-
 function getCaptureCmd() {
   const cmds = createCaptureCommands();
   return cmds[0]; // capture command
@@ -193,7 +189,15 @@ describe('capture process', () => {
     stdoutChunks = [];
     stderrChunks = [];
 
-    await runProcess(capture.noteId, '--task-name', 'New task from capture', '--workstream', '1', '--project', 'TEST');
+    await runProcess(
+      capture.noteId,
+      '--task-name',
+      'New task from capture',
+      '--workstream',
+      '1',
+      '--project',
+      'TEST'
+    );
 
     const out = stdout();
     expect(out).toContain('Processed capture into task');
@@ -205,14 +209,31 @@ describe('capture process', () => {
     stdoutChunks = [];
     stderrChunks = [];
 
-    await runProcess(capture.noteId, '--task-name', 'JSON task', '--workstream', '1', '--project', 'TEST', '--json');
+    await runProcess(
+      capture.noteId,
+      '--task-name',
+      'JSON task',
+      '--workstream',
+      '1',
+      '--project',
+      'TEST',
+      '--json'
+    );
 
     const parsed = JSON.parse(stdout());
     expect(parsed).toHaveProperty('display_id');
   });
 
   it('errors on invalid capture ID', async () => {
-    await runProcess('nonexistent-id', '--task-name', 'Bad', '--workstream', '1', '--project', 'TEST');
+    await runProcess(
+      'nonexistent-id',
+      '--task-name',
+      'Bad',
+      '--workstream',
+      '1',
+      '--project',
+      'TEST'
+    );
 
     expect(process.exitCode).toBe(1);
   });

@@ -6,7 +6,11 @@ import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
-import { createProject, listProjects, getProject } from '../../../src/modules/pm/data/project-ops.js';
+import {
+  createProject,
+  listProjects,
+  getProject,
+} from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream, listWorkstreams } from '../../../src/modules/pm/data/workstream-ops.js';
 import { createTask, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
 
@@ -56,7 +60,11 @@ describe('navigation regressions', () => {
   });
 
   it('O-17: display_id follows PREFIX-WS.NUM format', async () => {
-    const result = await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
+    const result = await createTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'Test',
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.display_id).toMatch(/^VOLT-\d{2}\.\d{2}$/);
@@ -74,7 +82,11 @@ describe('navigation regressions', () => {
 
   it('O-39: task show includes all metadata fields', async () => {
     await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'Detailed', priority: 'high', category: 'implementation',
+      project: 'VOLT',
+      workstream: 1,
+      name: 'Detailed',
+      priority: 'high',
+      category: 'implementation',
     });
     const result = getTask(db, 'VOLT-01.01');
     expect(result.ok).toBe(true);
@@ -95,7 +107,7 @@ describe('navigation regressions', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.length).toBe(1);
-    expect(result.data.every(t => t.workstream === 1)).toBe(true);
+    expect(result.data.every((t) => t.workstream === 1)).toBe(true);
     expect(result.data[0].title).toBe('WS1 task');
   });
 
@@ -115,7 +127,7 @@ describe('navigation regressions', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.length).toBe(2);
-    expect(result.data.every(t => t.status === 'pending')).toBe(true);
+    expect(result.data.every((t) => t.status === 'pending')).toBe(true);
   });
 
   it('O-113: tasks auto-number sequentially within a workstream', async () => {
@@ -124,10 +136,10 @@ describe('navigation regressions', () => {
     const result = listTasks(db, 'VOLT');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const ids = result.data.map(t => t.display_id).sort();
+    const ids = result.data.map((t) => t.display_id).sort();
     expect(ids).toContain('VOLT-01.01');
     expect(ids).toContain('VOLT-01.02');
-    expect(result.data.find(t => t.display_id === 'VOLT-01.01')?.number).toBe(1);
-    expect(result.data.find(t => t.display_id === 'VOLT-01.02')?.number).toBe(2);
+    expect(result.data.find((t) => t.display_id === 'VOLT-01.01')?.number).toBe(1);
+    expect(result.data.find((t) => t.display_id === 'VOLT-01.02')?.number).toBe(2);
   });
 });
