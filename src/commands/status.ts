@@ -6,7 +6,7 @@ export const statusCommand = new Command('status')
   .description('Show database statistics')
   .option('--json', 'output as JSON')
   .action(async (opts) => {
-    await withDb(({ db }) => {
+    await withDb(({ db, instance }) => {
       const notes = db.getAllNotes();
       const embeddingModel = db.getEmbeddingModel();
 
@@ -40,6 +40,11 @@ export const statusCommand = new Command('status')
       const totalChunks = db.getChunkCount();
 
       const summary = {
+        instance: {
+          root: instance.root,
+          isLocal: instance.isLocal,
+          source: instance.source,
+        },
         totalNotes: notes.length,
         totalChunks,
         byTier,
@@ -54,6 +59,8 @@ export const statusCommand = new Command('status')
       if (opts.json) {
         process.stdout.write(JSON.stringify(summary) + '\n');
       } else {
+        const instanceLabel = instance.isLocal ? 'local' : 'global';
+        process.stderr.write(`Instance: ${instanceLabel} (${instance.root})\n`);
         process.stderr.write(`Notes: ${notes.length}\n`);
         process.stderr.write(`Chunks: ${totalChunks}\n`);
         process.stderr.write(`By tier: ${formatMap(byTier)}\n`);
