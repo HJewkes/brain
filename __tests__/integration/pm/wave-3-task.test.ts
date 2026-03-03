@@ -105,8 +105,8 @@ describe('Wave 3: Task CRUD integration', () => {
     });
 
     const relations = db.getRelationsFrom(taskBNoteId!);
-    expect(relations).toHaveLength(1);
-    expect(relations[0].type).toBe('depends_on');
+    const depRelations = relations.filter(r => r.type === 'depends_on');
+    expect(depRelations).toHaveLength(1);
   });
 
   it('shows task with virtual states (+READY for no deps)', async () => {

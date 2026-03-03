@@ -110,6 +110,11 @@ run_setup() {
   echo "Initializing brain..."
   brain init --notes-dir ~/brain --embedder local
 
+  echo "Ingesting command reference docs..."
+  for doc in docs/pm-module/commands/*.md; do
+    brain add "$doc" --type guide --tier fast 2>/dev/null || true
+  done
+
   echo "Spawning setup agent (with session persistence)..."
   local prompt
   prompt="$(apply_template "${PROMPTS_DIR}/setup.md")"

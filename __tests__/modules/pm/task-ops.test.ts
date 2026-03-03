@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { indexSingleFile } from '../../../src/services/indexing.js';
+import { createHash } from 'node:crypto';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
@@ -121,8 +123,8 @@ describe('createTask', () => {
     expect(noteB).toBeDefined();
 
     const relations = db.getRelationsFrom(noteB!);
-    expect(relations).toHaveLength(1);
-    expect(relations[0].type).toBe('depends_on');
+    const depRelations = relations.filter(r => r.type === 'depends_on');
+    expect(depRelations).toHaveLength(1);
   });
 
   it('returns NOT_FOUND for invalid dependency', async () => {
@@ -587,5 +589,104 @@ describe('depends_on in task list JSON', () => {
     if (!result.ok) return;
     const taskB = result.data.find(t => t.display_id === 'WEB-01.02');
     expect(taskB?.depends_on).toEqual(['WEB-01.01']);
+  });
+});
+
+describe('task auto-link preservation', () => {
+  it('preserves auto-link relations after createTask', async () => {
+    // Create a research note with content about bluetooth protocol
+    const researchContent = [
+      '---',
+      'id: bluetooth-protocol-research',
+      'title: Bluetooth Protocol Research',
+      'type: research',
+      'tier: slow',
+      '---',
+      '',
+      '# Bluetooth Protocol Research',
+      '',
+      'The bluetooth protocol adapter handles BLE communication between devices.',
+      'It manages connection state, handles reconnection logic, and provides',
+      'a reliable message transport layer for the node SDK.',
+    ].join('\n');
+    const researchPath = join(notesDir, 'research', 'bluetooth-protocol.md');
+    mkdirSync(join(notesDir, 'research'), { recursive: true });
+    writeFileSync(researchPath, researchContent, 'utf-8');
+    const researchHash = createHash('sha256').update(researchContent).digest('hex');
+    await indexSingleFile(db, embedder, researchPath, researchContent, researchHash, Date.now());
+
+    // Create a task with similar content — should auto-link to research note
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Implement bluetooth protocol adapter',
+      description: 'Build the bluetooth protocol adapter for BLE communication. Handle connection state and reconnection logic for the node SDK transport layer.',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Find the task note ID
+    const taskNotes = db.getAllNotes().filter(n => {
+      const meta = JSON.parse(n.metadata ?? '{}');
+      return meta.display_id === 'WEB-01.01';
+    });
+    expect(taskNotes.length).toBe(1);
+
+    // Task should have related edges (auto-links) preserved
+    const relations = db.getRelationsFrom(taskNotes[0].id);
+    const relatedEdges = relations.filter(r => r.type === 'related');
+    expect(relatedEdges.length).toBeGreaterThan(0);
+  });
+
+  it('preserves depends_on relations alongside auto-links', async () => {
+    // Create a research note
+    const researchContent = [
+      '---',
+      'id: api-design-notes',
+      'title: API Design Notes',
+      'type: research',
+      'tier: slow',
+      '---',
+      '',
+      '# API Design',
+      '',
+      'The REST API follows standard conventions for resource endpoints.',
+    ].join('\n');
+    const researchPath = join(notesDir, 'research', 'api-design.md');
+    mkdirSync(join(notesDir, 'research'), { recursive: true });
+    writeFileSync(researchPath, researchContent, 'utf-8');
+    const hash = createHash('sha256').update(researchContent).digest('hex');
+    await indexSingleFile(db, embedder, researchPath, researchContent, hash, Date.now());
+
+    // Create task A (dependency target)
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Design REST API endpoints',
+      description: 'Design the REST API resource endpoints following standard conventions.',
+    });
+
+    // Create task B depending on A
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Implement REST API endpoints',
+      description: 'Implement the REST API resource endpoints following the design conventions.',
+      dependsOn: ['WEB-01.01'],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const taskNotes = db.getAllNotes().filter(n => {
+      const meta = JSON.parse(n.metadata ?? '{}');
+      return meta.display_id === 'WEB-01.02';
+    });
+    expect(taskNotes.length).toBe(1);
+
+    const relations = db.getRelationsFrom(taskNotes[0].id);
+    const depEdges = relations.filter(r => r.type === 'depends_on');
+    expect(depEdges.length).toBe(1);
   });
 });

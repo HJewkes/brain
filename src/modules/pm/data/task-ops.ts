@@ -21,6 +21,7 @@ import { readTaskBody } from '../engine/dispatch.js';
 import { listWorkstreams } from './workstream-ops.js';
 import { buildDependencyGraph, computeNewlyEligible } from '../engine/dependency.js';
 import { createActivityNote } from '../engine/activity.js';
+import { computeAutoLinks } from '../../../services/graph.js';
 import type { ActivityType } from '../types.js';
 
 export type ListMode = 'default' | 'full' | 'short';
@@ -250,27 +251,36 @@ export async function createTask(
   const hash = createHash('sha256').update(markdown).digest('hex');
   const noteId = await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
 
-  const relations: Relation[] = resolvedDepIds.map((dep) => ({
+  // Lower-threshold auto-link pass for PM tasks (0.60 vs indexing's 0.85)
+  // to catch task↔research doc connections that short descriptions miss
+  const pmAutoLinks = computeAutoLinks(db, noteId, 0.60, 5);
+
+  // Preserve auto-links created by indexSingleFile (0.85 threshold)
+  const existingRelations = db.getRelationsFrom(noteId);
+
+  const newRelations: Relation[] = resolvedDepIds.map((dep) => ({
     sourceId: noteId,
     targetId: dep.noteId,
     type: 'depends_on',
   }));
 
   if (wsNotes.length > 0) {
-    relations.push({ sourceId: wsNotes[0].id, targetId: noteId, type: 'parent' });
+    newRelations.push({ sourceId: wsNotes[0].id, targetId: noteId, type: 'parent' });
   }
 
   if (input.references?.length) {
     for (const ref of input.references) {
       const target = db.getNoteById(ref);
       if (target) {
-        relations.push({ sourceId: noteId, targetId: target.id, type: 'references' });
+        newRelations.push({ sourceId: noteId, targetId: target.id, type: 'references' });
       }
     }
   }
 
-  if (relations.length > 0) {
-    db.upsertRelations(noteId, relations);
+  // Merge: existing auto-links + PM auto-links + dependency/parent/reference relations
+  const allRelations = [...existingRelations, ...pmAutoLinks, ...newRelations];
+  if (allRelations.length > 0) {
+    db.upsertRelations(noteId, allRelations);
   }
 
   const metadata: TaskMetadata = {
