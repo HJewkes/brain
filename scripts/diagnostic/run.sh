@@ -107,6 +107,9 @@ run_setup() {
   echo "Linking..."
   npm link --silent
 
+  echo "Initializing brain..."
+  brain init --notes-dir ~/brain --embedder local
+
   echo "Spawning setup agent (with session persistence)..."
   local prompt
   prompt="$(apply_template "${PROMPTS_DIR}/setup.md")"
