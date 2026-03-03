@@ -68,7 +68,11 @@ run_agent() {
   prompt="$(apply_template "$prompt_file")"
 
   local cmd=(
-    env -u CLAUDECODE claude -p
+    env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT
+        -u CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY
+        -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+        -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+    claude -p
     --model "$model"
     --permission-mode bypassPermissions
     --no-session-persistence
@@ -105,7 +109,11 @@ run_setup() {
   local prompt
   prompt="$(apply_template "${PROMPTS_DIR}/setup.md")"
 
-  (cd "$WORKSPACE_DIR" && env -u CLAUDECODE claude -p \
+  (cd "$WORKSPACE_DIR" && env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+    -u CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY \
+    -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \
+    -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS \
+    claude -p \
     --model sonnet \
     --permission-mode bypassPermissions \
     --no-session-persistence \
@@ -150,7 +158,11 @@ run_audits() {
     prompt="${prompt//\{\{SETUP_SESSION_LOG\}\}/${SETUP_SESSION_LOG}}"
 
     local cmd=(
-      env -u CLAUDECODE claude -p
+      env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT
+          -u CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY
+          -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+          -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+      claude -p
       --model sonnet
       --permission-mode bypassPermissions
       --no-session-persistence
