@@ -4,7 +4,8 @@ import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync } from 
 import { join, dirname, basename } from 'node:path';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { loadConfig, saveConfig } from '../services/config.js';
+import { loadConfig, saveConfig, GLOBAL_BRAIN_DIR } from '../services/config.js';
+import { registerInstance } from '../services/instance-registry.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel } from '../services/ollama.js';
@@ -251,13 +252,109 @@ export async function ingestBrainReferenceDocs(
   }
 }
 
+export interface InitLocalOptions {
+  projectDir: string;
+  globalDir?: string;
+  notesDir?: string;
+}
+
+export function initLocalBrain(opts: InitLocalOptions): void {
+  const brainDir = join(opts.projectDir, '.brain');
+
+  if (existsSync(brainDir) && existsSync(join(brainDir, 'config.json'))) {
+    throw new Error(`Local brain already exists at ${brainDir}`);
+  }
+
+  mkdirSync(brainDir, { recursive: true });
+  mkdirSync(join(brainDir, 'notes'), { recursive: true });
+
+  const localConfig: Record<string, unknown> = {};
+  if (opts.notesDir) {
+    localConfig.notesDir = opts.notesDir;
+    mkdirSync(opts.notesDir, { recursive: true });
+  }
+  writeFileSync(
+    join(brainDir, 'config.json'),
+    JSON.stringify(localConfig, null, 2) + '\n',
+    'utf-8'
+  );
+
+  const globalConfig = loadConfig();
+  const dbPath = join(brainDir, 'brain.db');
+  const db = new BrainDB(dbPath);
+  const info = getEmbedderInfo(globalConfig.embedder);
+  db.setEmbeddingModel(info.model, info.dimensions);
+  db.close();
+
+  const globalDir = opts.globalDir ?? GLOBAL_BRAIN_DIR;
+  const name = basename(opts.projectDir);
+  registerInstance(globalDir, brainDir, name);
+}
+
 export const initCommand = new Command('init')
   .description('Initialize a new brain workspace')
+  .option('--local', 'create a project-local brain instance in CWD')
   .option('--notes-dir <path>', 'path to notes directory')
   .option('--embedder <type>', 'embedding backend (local, ollama, remote)')
   .option('--json', 'output result as JSON')
   .option('--verbose', 'show technical details')
   .action(async (opts) => {
+    if (opts.local) {
+      try {
+        initLocalBrain({
+          projectDir: process.cwd(),
+          notesDir: opts.notesDir ? join(process.cwd(), opts.notesDir) : undefined,
+        });
+      } catch (err) {
+        process.stderr.write(`Error: ${(err as Error).message}\n`);
+        process.exitCode = 1;
+        return;
+      }
+
+      const brainDir = join(process.cwd(), '.brain');
+
+      if (!opts.json && existsSync(join(process.cwd(), '.git'))) {
+        const gitignorePath = join(process.cwd(), '.gitignore');
+        const gitignoreContent = existsSync(gitignorePath)
+          ? readFileSync(gitignorePath, 'utf-8')
+          : '';
+
+        if (!gitignoreContent.includes('.brain/')) {
+          if (process.stdin.isTTY) {
+            const rl = createInterface({ input: process.stdin, output: process.stderr });
+            const answer = await new Promise<string>((resolve) =>
+              rl.question('Add .brain/ to .gitignore? [Y/n] ', resolve)
+            );
+            rl.close();
+
+            if (!answer || answer.toLowerCase().startsWith('y')) {
+              const newContent = gitignoreContent.endsWith('\n') || gitignoreContent === ''
+                ? gitignoreContent + '.brain/\n'
+                : gitignoreContent + '\n.brain/\n';
+              writeFileSync(gitignorePath, newContent, 'utf-8');
+              process.stderr.write('Added .brain/ to .gitignore\n');
+            }
+          }
+        }
+      }
+
+      if (opts.json) {
+        process.stdout.write(JSON.stringify({
+          type: 'local',
+          brainDir,
+          notesDir: opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes'),
+          dbPath: join(brainDir, 'brain.db'),
+        }) + '\n');
+      } else {
+        process.stderr.write('Local brain initialized!\n\n');
+        process.stderr.write(`Instance: ${brainDir}\n`);
+        process.stderr.write(`Notes: ${opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes')}\n`);
+        process.stderr.write(`Database: ${join(brainDir, 'brain.db')}\n`);
+        process.stderr.write('\nAll brain commands in this directory will use the local instance.\n');
+      }
+      return;
+    }
+
     const overrides: Record<string, unknown> = {};
     if (opts.notesDir) overrides.notesDir = opts.notesDir;
     if (opts.embedder) overrides.embedder = opts.embedder as EmbedderBackend;
