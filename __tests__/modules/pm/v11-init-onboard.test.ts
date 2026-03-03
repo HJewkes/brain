@@ -53,7 +53,7 @@ describe('onboard does not ingest PM reference docs (O-133)', () => {
     const docsDir = join(notesDir, 'modules', 'pm', 'TST', 'docs');
     if (existsSync(docsDir)) {
       const files = readdirSync(docsDir);
-      const refFiles = files.filter(f => f.startsWith('pm-ref-'));
+      const refFiles = files.filter((f) => f.startsWith('pm-ref-'));
       expect(refFiles).toHaveLength(0);
     }
   });

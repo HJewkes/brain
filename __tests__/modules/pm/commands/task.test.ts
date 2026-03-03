@@ -212,7 +212,16 @@ describe('task add', () => {
   });
 
   it('--depends-on sets dependency', async () => {
-    await run('add', 'Dep task', '--project', 'TEST', '--workstream', '1', '--depends-on', 'TEST-01.01');
+    await run(
+      'add',
+      'Dep task',
+      '--project',
+      'TEST',
+      '--workstream',
+      '1',
+      '--depends-on',
+      'TEST-01.01'
+    );
 
     const out = stdout();
     expect(out).toContain('TEST-01.04');

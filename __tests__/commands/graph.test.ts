@@ -8,7 +8,9 @@ let db: BrainDB;
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })),
+  withBrain: vi.fn(async (fn) =>
+    fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })
+  ),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 
@@ -84,7 +86,9 @@ describe('graph command', () => {
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
     db.upsertNote(makeNote({ id: 'note-a', title: 'Note A' }));
     db.upsertNote(makeNote({ id: 'note-b', title: 'Note B' }));
-    db.upsertRelations('note-a', [{ sourceId: 'note-a', targetId: 'note-b', type: 'related-to', weight: 1 }]);
+    db.upsertRelations('note-a', [
+      { sourceId: 'note-a', targetId: 'note-b', type: 'related-to', weight: 1 },
+    ]);
 
     await run('note-a');
 

@@ -78,8 +78,12 @@ describe('stale command', () => {
 
   it('--tier filters by note tier', async () => {
     const longAgo = new Date(Date.now() - 200 * 86_400_000).toISOString();
-    db.upsertNote(makeNote({ id: 'slow-note', tier: 'slow', lastReviewed: longAgo, reviewInterval: '30d' }));
-    db.upsertNote(makeNote({ id: 'fast-note', tier: 'fast', lastReviewed: longAgo, reviewInterval: '30d' }));
+    db.upsertNote(
+      makeNote({ id: 'slow-note', tier: 'slow', lastReviewed: longAgo, reviewInterval: '30d' })
+    );
+    db.upsertNote(
+      makeNote({ id: 'fast-note', tier: 'fast', lastReviewed: longAgo, reviewInterval: '30d' })
+    );
 
     await run('--tier', 'slow');
     const out = stdout();

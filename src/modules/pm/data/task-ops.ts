@@ -178,9 +178,7 @@ function areDependenciesComplete(db: BrainDB, dependsOn: string[] | undefined): 
 
 export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string[] {
   const relations = db.getRelationsFrom(taskNoteId);
-  const depNoteIds = relations
-    .filter((r) => r.type === 'depends_on')
-    .map((r) => r.targetId);
+  const depNoteIds = relations.filter((r) => r.type === 'depends_on').map((r) => r.targetId);
 
   const displayIds: string[] = [];
   for (const noteId of depNoteIds) {
@@ -324,7 +322,8 @@ export function listTasks(
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
   // When searching, query all statuses by default (unless explicit --status)
   // 'all' means no status filter; virtual state filters are handled post-hoc
-  if (filters?.status !== undefined && !virtualStateFilter && !isStatusAll) filterObj.status = filters.status;
+  if (filters?.status !== undefined && !virtualStateFilter && !isStatusAll)
+    filterObj.status = filters.status;
   if (filters?.mode !== undefined) filterObj.mode = filters.mode;
   if (filters?.priority !== undefined) filterObj.priority = filters.priority;
   if (filters?.category !== undefined) filterObj.category = filters.category;
@@ -436,16 +435,18 @@ export function listTasks(
 
   if (virtualStateFilter) {
     const filterName = filters!.status!.toLowerCase();
-    tasks = tasks.filter((t) =>
-      t.virtualStates.includes(virtualStateFilter) || t.status === filterName
+    tasks = tasks.filter(
+      (t) => t.virtualStates.includes(virtualStateFilter) || t.status === filterName
     );
   }
 
   // Strip internal body field before returning
-  return ok(tasks.map((t) => {
-    delete (t as Record<string, unknown>).body;
-    return t;
-  }));
+  return ok(
+    tasks.map((t) => {
+      delete (t as Record<string, unknown>).body;
+      return t;
+    })
+  );
 }
 
 function didYouMeanTask(db: BrainDB, displayId: string): string | undefined {
@@ -548,14 +549,12 @@ export async function updateTaskStatus(
   };
 
   // Unblock is: blocked -> pending
-  const activityType = currentStatus === 'blocked' && newStatus === 'pending'
-    ? 'unblock'
-    : activityTypeMap[newStatus];
+  const activityType =
+    currentStatus === 'blocked' && newStatus === 'pending' ? 'unblock' : activityTypeMap[newStatus];
 
   if (activityType) {
-    const newlyEligible = activityType === 'complete'
-      ? computeNewlyEligible(db, noteId)
-      : undefined;
+    const newlyEligible =
+      activityType === 'complete' ? computeNewlyEligible(db, noteId) : undefined;
 
     await createActivityNote(db, config, embedder, {
       project: refreshedMeta.project as string,

@@ -8,11 +8,7 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import {
-  createTask,
-  listTasks,
-  getTask,
-} from '../../../src/modules/pm/data/task-ops.js';
+import { createTask, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
 
 let db: BrainDB;
 let dbPath: string;

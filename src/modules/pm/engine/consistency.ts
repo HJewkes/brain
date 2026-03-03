@@ -79,7 +79,7 @@ export function findBrokenDependencies(db: BrainDB, prefix: string): BrokenDep[]
   for (const task of tasks) {
     const meta = JSON.parse(task.metadata!) as Record<string, unknown>;
     // Read raw relation edges (not just resolved display_ids) to detect dangling targets
-    const depRelations = db.getRelationsFrom(task.id).filter(r => r.type === 'depends_on');
+    const depRelations = db.getRelationsFrom(task.id).filter((r) => r.type === 'depends_on');
     if (depRelations.length === 0) continue;
 
     for (const rel of depRelations) {

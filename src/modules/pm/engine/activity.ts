@@ -73,7 +73,7 @@ export async function createActivityNote(
   if (input.newlyEligible) {
     for (const eligibleId of input.newlyEligible) {
       const allNotes = db.getAllNotes();
-      const eligibleNote = allNotes.find(n => {
+      const eligibleNote = allNotes.find((n) => {
         const meta = JSON.parse(n.metadata ?? '{}');
         return meta.display_id === eligibleId;
       });

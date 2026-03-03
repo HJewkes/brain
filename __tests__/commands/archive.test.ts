@@ -78,7 +78,11 @@ describe('archive command', () => {
   });
 
   it('archives expired fast-tier notes', async () => {
-    const note = makeNote({ tier: 'fast', expires: '2020-01-01', filePath: '/tmp/test-notes/note.md' });
+    const note = makeNote({
+      tier: 'fast',
+      expires: '2020-01-01',
+      filePath: '/tmp/test-notes/note.md',
+    });
     db.upsertNote(note);
 
     await run();
@@ -87,7 +91,11 @@ describe('archive command', () => {
   });
 
   it('--dry-run lists files without moving them', async () => {
-    const note = makeNote({ tier: 'fast', expires: '2020-01-01', filePath: '/tmp/test-notes/note.md' });
+    const note = makeNote({
+      tier: 'fast',
+      expires: '2020-01-01',
+      filePath: '/tmp/test-notes/note.md',
+    });
     db.upsertNote(note);
 
     await run('--dry-run');
@@ -102,7 +110,11 @@ describe('archive command', () => {
       return true;
     });
 
-    const note = makeNote({ tier: 'fast', expires: '2020-01-01', filePath: '/tmp/test-notes/note.md' });
+    const note = makeNote({
+      tier: 'fast',
+      expires: '2020-01-01',
+      filePath: '/tmp/test-notes/note.md',
+    });
     db.upsertNote(note);
 
     await run();

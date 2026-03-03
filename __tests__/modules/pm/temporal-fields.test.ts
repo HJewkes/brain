@@ -191,9 +191,7 @@ describe('temporal fields', () => {
     expect(createResult.ok).toBe(true);
 
     // Transition through claim -> in-progress -> done
-    const { updateTaskStatus } = await import(
-      '../../../src/modules/pm/data/task-ops.js'
-    );
+    const { updateTaskStatus } = await import('../../../src/modules/pm/data/task-ops.js');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'in-progress');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
@@ -213,9 +211,7 @@ describe('temporal fields', () => {
       dueDate: '2020-01-01',
     });
 
-    const { updateTaskStatus } = await import(
-      '../../../src/modules/pm/data/task-ops.js'
-    );
+    const { updateTaskStatus } = await import('../../../src/modules/pm/data/task-ops.js');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'cancelled');
 
     const result = getTask(db, 'TST-01.01');

@@ -69,9 +69,8 @@ afterEach(() => {
 });
 
 async function run(args: string[]): Promise<void> {
-  const { createWorkstreamCommands } = await import(
-    '../../../../src/modules/pm/commands/workstream.js'
-  );
+  const { createWorkstreamCommands } =
+    await import('../../../../src/modules/pm/commands/workstream.js');
   const cmd = createWorkstreamCommands();
   await cmd.parseAsync(args, { from: 'user' });
 }
@@ -200,10 +199,16 @@ describe('workstream show', () => {
   it('shows task counts by status', async () => {
     await run(['add', 'Backend']);
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+      project: 'TST',
+      workstream: 1,
+      name: 'Task A',
+      priority: 'high',
     });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+      project: 'TST',
+      workstream: 1,
+      name: 'Task B',
+      priority: 'medium',
     });
     stdoutData = '';
 
@@ -216,13 +221,22 @@ describe('workstream show', () => {
   it('shows task counts by priority', async () => {
     await run(['add', 'Backend']);
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+      project: 'TST',
+      workstream: 1,
+      name: 'Task A',
+      priority: 'high',
     });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+      project: 'TST',
+      workstream: 1,
+      name: 'Task B',
+      priority: 'medium',
     });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task C', priority: 'high',
+      project: 'TST',
+      workstream: 1,
+      name: 'Task C',
+      priority: 'high',
     });
     stdoutData = '';
 
@@ -235,10 +249,16 @@ describe('workstream show', () => {
   it('shows top eligible tasks', async () => {
     await run(['add', 'Backend']);
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Eligible One', priority: 'high',
+      project: 'TST',
+      workstream: 1,
+      name: 'Eligible One',
+      priority: 'high',
     });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Eligible Two', priority: 'medium',
+      project: 'TST',
+      workstream: 1,
+      name: 'Eligible Two',
+      priority: 'medium',
     });
     stdoutData = '';
 
@@ -251,10 +271,16 @@ describe('workstream show', () => {
   it('--json includes enriched fields', async () => {
     await run(['add', 'Backend', '--description', 'Core API services']);
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+      project: 'TST',
+      workstream: 1,
+      name: 'Task A',
+      priority: 'high',
     });
     await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+      project: 'TST',
+      workstream: 1,
+      name: 'Task B',
+      priority: 'medium',
     });
     stdoutData = '';
 

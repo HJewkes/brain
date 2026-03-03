@@ -1,6 +1,9 @@
 import { describe, test, expect } from 'vitest';
 
-import { suggestVerificationSteps, extractAcceptanceCriteria } from '../../../src/modules/pm/commands/verify.js';
+import {
+  suggestVerificationSteps,
+  extractAcceptanceCriteria,
+} from '../../../src/modules/pm/commands/verify.js';
 import type { TaskCategory } from '../../../src/modules/pm/types.js';
 
 describe('suggestVerificationSteps', () => {
@@ -33,8 +36,15 @@ describe('suggestVerificationSteps', () => {
 
   test('all known categories return non-empty arrays', () => {
     const categories: TaskCategory[] = [
-      'implementation', 'testing', 'documentation', 'research',
-      'review', 'infrastructure', 'configuration', 'migration', 'design',
+      'implementation',
+      'testing',
+      'documentation',
+      'research',
+      'review',
+      'infrastructure',
+      'configuration',
+      'migration',
+      'design',
     ];
     for (const cat of categories) {
       const steps = suggestVerificationSteps(cat);
@@ -59,19 +69,11 @@ describe('extractAcceptanceCriteria', () => {
     ].join('\n');
 
     const ac = extractAcceptanceCriteria(body);
-    expect(ac).toEqual([
-      'All tests pass',
-      'No type errors',
-      'Feature X works correctly',
-    ]);
+    expect(ac).toEqual(['All tests pass', 'No type errors', 'Feature X works correctly']);
   });
 
   test('extracts AC items with asterisk bullets', () => {
-    const body = [
-      '## Acceptance Criteria',
-      '* First criterion',
-      '* Second criterion',
-    ].join('\n');
+    const body = ['## Acceptance Criteria', '* First criterion', '* Second criterion'].join('\n');
 
     const ac = extractAcceptanceCriteria(body);
     expect(ac).toEqual(['First criterion', 'Second criterion']);
@@ -88,11 +90,7 @@ describe('extractAcceptanceCriteria', () => {
   });
 
   test('handles AC heading without ## prefix', () => {
-    const body = [
-      'Acceptance Criteria:',
-      '- Step one',
-      '- Step two',
-    ].join('\n');
+    const body = ['Acceptance Criteria:', '- Step one', '- Step two'].join('\n');
 
     const ac = extractAcceptanceCriteria(body);
     expect(ac).toEqual(['Step one', 'Step two']);

@@ -62,9 +62,8 @@ afterEach(() => {
 });
 
 async function loadCommand() {
-  const { createPmCommand, createProjectCommands } = await import(
-    '../../../../src/modules/pm/commands/project.js'
-  );
+  const { createPmCommand, createProjectCommands } =
+    await import('../../../../src/modules/pm/commands/project.js');
   return { createPmCommand, createProjectCommands };
 }
 
@@ -338,7 +337,10 @@ describe('project show', () => {
     const filePath = join(config.notesDir, 'modules', 'pm', 'DSC', 'project.md');
     const { readFileSync } = await import('node:fs');
     const content = readFileSync(filePath, 'utf-8');
-    const withDesc = content.replace('# Described\n', '# Described\nThis is the project description.\n');
+    const withDesc = content.replace(
+      '# Described\n',
+      '# Described\nThis is the project description.\n'
+    );
     writeFileSync(filePath, withDesc, 'utf-8');
 
     const output = captureOutput();

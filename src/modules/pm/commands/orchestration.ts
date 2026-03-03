@@ -26,12 +26,17 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
 
 /** Resolve workstream by number, display ID, or name (case-insensitive substring). */
-export function resolveWorkstreamByName(db: BrainDB, prefix: string, input: string): Result<number> {
+export function resolveWorkstreamByName(
+  db: BrainDB,
+  prefix: string,
+  input: string
+): Result<number> {
   const idResult = resolveWorkstreamFilter(input);
   if (idResult.ok) return idResult;
 
   const wsResult = listWorkstreams(db, prefix);
-  if (!wsResult.ok) return fail('NOT_FOUND', `Could not list workstreams: ${wsResult.error.message}`);
+  if (!wsResult.ok)
+    return fail('NOT_FOUND', `Could not list workstreams: ${wsResult.error.message}`);
 
   const lower = input.toLowerCase();
   for (const ws of wsResult.data) {
@@ -115,7 +120,8 @@ export function createOrchestrationCommands(): Command[] {
           process.stdout.write(`Workstream ${ws}:\n`);
           for (const t of tasks) {
             const title = t.title ? ` ${t.title}` : '';
-            const vs = t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
+            const vs =
+              t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
             process.stdout.write(`  ${t.display_id}${title}  [${t.priority}]${vs}\n`);
           }
         }
@@ -146,10 +152,12 @@ export function createOrchestrationCommands(): Command[] {
 
         let filteredWaves = waves;
         if (opts.workstream) {
-          filteredWaves = waves.map(w => ({
-            ...w,
-            taskIds: w.taskIds.filter(id => id.startsWith(opts.workstream!)),
-          })).filter(w => w.taskIds.length > 0);
+          filteredWaves = waves
+            .map((w) => ({
+              ...w,
+              taskIds: w.taskIds.filter((id) => id.startsWith(opts.workstream!)),
+            }))
+            .filter((w) => w.taskIds.length > 0);
         }
 
         if (filteredWaves.length === 0) {
@@ -196,7 +204,10 @@ export function createOrchestrationCommands(): Command[] {
               process.stdout.write(`  ${id}\n`);
             } else {
               const title = r.data.title ? ` ${r.data.title}` : '';
-              const ws = r.data.workstream !== undefined ? ` [WS-${String(r.data.workstream).padStart(2, '0')}]` : '';
+              const ws =
+                r.data.workstream !== undefined
+                  ? ` [WS-${String(r.data.workstream).padStart(2, '0')}]`
+                  : '';
               process.stdout.write(`  ${id}${ws}${title}\n`);
             }
             totalTasks++;
@@ -230,7 +241,9 @@ export function createOrchestrationCommands(): Command[] {
         const lines: string[] = [];
         const title = bundle.task.title ?? bundle.task.display_id;
         lines.push(`Task: ${bundle.task.display_id} - ${title}`);
-        lines.push(`Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`);
+        lines.push(
+          `Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`
+        );
 
         if (bundle.workstream) {
           lines.push(`Workstream: ${bundle.workstream.displayId} - ${bundle.workstream.title}`);
@@ -321,7 +334,13 @@ export function createOrchestrationCommands(): Command[] {
         let currentStatus = taskResult.data.status;
 
         if (currentStatus === 'pending') {
-          const claimResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'claimed' as TaskStatus);
+          const claimResult = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            'claimed' as TaskStatus
+          );
           if (!claimResult.ok) {
             process.stderr.write(formatError(claimResult.error, !!opts.json) + '\n');
             process.exitCode = 1;
@@ -332,7 +351,13 @@ export function createOrchestrationCommands(): Command[] {
         }
 
         if (currentStatus === 'claimed') {
-          const startResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus);
+          const startResult = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            'in-progress' as TaskStatus
+          );
           if (!startResult.ok) {
             process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
             process.exitCode = 1;

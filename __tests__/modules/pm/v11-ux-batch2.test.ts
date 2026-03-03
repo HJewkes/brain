@@ -15,9 +15,7 @@ describe('UX batch 2', () => {
   describe('notes parent command --module passthrough', () => {
     it('accepts --module flag on parent command', async () => {
       const { notesCommand } = await import('../../../src/commands/notes.js');
-      const moduleOpt = notesCommand.options.find(
-        (o) => o.long === '--module',
-      );
+      const moduleOpt = notesCommand.options.find((o) => o.long === '--module');
       expect(moduleOpt).toBeDefined();
     });
   });

@@ -18,7 +18,9 @@ function formatHuman(bundle: ContextBundle): string {
 
   const title = bundle.task.title ?? bundle.task.display_id;
   lines.push(`Task: ${bundle.task.display_id} - ${title}`);
-  lines.push(`Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`);
+  lines.push(
+    `Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`
+  );
 
   if (bundle.workstream) {
     lines.push(`Workstream: ${bundle.workstream.displayId} - ${bundle.workstream.title}`);
@@ -211,9 +213,7 @@ export function didYouMeanSuggestion(
   return undefined;
 }
 
-function availableProjects(
-  db: Parameters<typeof getPmNotes>[0]
-): string[] {
+function availableProjects(db: Parameters<typeof getPmNotes>[0]): string[] {
   return getPmNotes(db, 'project')
     .map((n) => {
       if (!n.metadata) return undefined;

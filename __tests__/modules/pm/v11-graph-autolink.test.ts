@@ -71,9 +71,7 @@ describe('computeAutoLinks', () => {
     db.upsertChunks('note-b', [chunkB], [embedding]);
 
     // Pre-create a relation
-    db.upsertRelations('note-a', [
-      { sourceId: 'note-a', targetId: 'note-b', type: 'related' },
-    ]);
+    db.upsertRelations('note-a', [{ sourceId: 'note-a', targetId: 'note-b', type: 'related' }]);
 
     const links = computeAutoLinks(db, 'note-a', 0.85, 5);
 
@@ -92,9 +90,7 @@ describe('computeAutoLinks', () => {
 
 describe('relate command', () => {
   test('creates edge between two notes', async () => {
-    const { createRelateCommand } = await import(
-      '../../../src/modules/pm/commands/relate.js'
-    );
+    const { createRelateCommand } = await import('../../../src/modules/pm/commands/relate.js');
     const noteA = makeNote({ id: 'note-a', title: 'Note A' });
     const noteB = makeNote({ id: 'note-b', title: 'Note B' });
     db.upsertNote(noteA);
@@ -103,9 +99,7 @@ describe('relate command', () => {
     createRelateCommand();
 
     // Manually invoke the action logic via the exported handler
-    const { relateAction } = await import(
-      '../../../src/modules/pm/commands/relate.js'
-    );
+    const { relateAction } = await import('../../../src/modules/pm/commands/relate.js');
     await relateAction(db, 'note-a', 'note-b', { type: 'related' });
 
     const rels = db.getRelationsFrom('note-a');
@@ -123,14 +117,10 @@ describe('relate command', () => {
     db.upsertNote(noteB);
 
     // Create the relation first
-    db.upsertRelations('note-a', [
-      { sourceId: 'note-a', targetId: 'note-b', type: 'related' },
-    ]);
+    db.upsertRelations('note-a', [{ sourceId: 'note-a', targetId: 'note-b', type: 'related' }]);
     expect(db.getRelationsFrom('note-a').length).toBe(1);
 
-    const { relateAction } = await import(
-      '../../../src/modules/pm/commands/relate.js'
-    );
+    const { relateAction } = await import('../../../src/modules/pm/commands/relate.js');
     await relateAction(db, 'note-a', 'note-b', { type: 'related', remove: true });
 
     const rels = db.getRelationsFrom('note-a');

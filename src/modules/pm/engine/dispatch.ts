@@ -41,7 +41,14 @@ export interface ContextBundle {
   task: TaskMetadata;
   body: string;
   workstream?: { displayId: string; title: string };
-  relatedNotes: Array<{ title: string; excerpt: string; score: number; source: 'linked' | 'graph' | 'semantic'; relationType?: string; depth?: number }>;
+  relatedNotes: Array<{
+    title: string;
+    excerpt: string;
+    score: number;
+    source: 'linked' | 'graph' | 'semantic';
+    relationType?: string;
+    depth?: number;
+  }>;
   prompt?: string;
   dependencies: DependencySummary[];
   decisions: DecisionSummary[];
@@ -84,13 +91,16 @@ function findWorkstreamInfo(
   return { displayId: wsDisplayId, title };
 }
 
-function buildDependencySummaries(db: BrainDB, taskNoteId: string, dependsOn: string[]): DependencySummary[] {
+function buildDependencySummaries(
+  db: BrainDB,
+  taskNoteId: string,
+  dependsOn: string[]
+): DependencySummary[] {
   const summaries: DependencySummary[] = [];
   const seen = new Set<string>();
 
   // Upstream from relations table: tasks this task depends on
-  const upstreamRelations = db.getRelationsFrom(taskNoteId)
-    .filter((r) => r.type === 'depends_on');
+  const upstreamRelations = db.getRelationsFrom(taskNoteId).filter((r) => r.type === 'depends_on');
   for (const rel of upstreamRelations) {
     const note = db.getNoteById(rel.targetId);
     if (!note?.metadata) continue;
@@ -124,8 +134,7 @@ function buildDependencySummaries(db: BrainDB, taskNoteId: string, dependsOn: st
   }
 
   // Downstream from relations table: tasks that depend on this task
-  const downstreamRelations = db.getRelationsTo(taskNoteId)
-    .filter((r) => r.type === 'depends_on');
+  const downstreamRelations = db.getRelationsTo(taskNoteId).filter((r) => r.type === 'depends_on');
   for (const rel of downstreamRelations) {
     const note = db.getNoteById(rel.sourceId);
     if (!note?.metadata) continue;
@@ -293,14 +302,18 @@ export async function assembleDispatch(
     const ss = semanticScores.get(noteId);
     const graphScore = gs?.score ?? 0;
     const semanticScore = ss?.score ?? 0;
-    const finalScore = (GRAPH_WEIGHT * graphScore) + (SEMANTIC_WEIGHT * semanticScore);
+    const finalScore = GRAPH_WEIGHT * graphScore + SEMANTIC_WEIGHT * semanticScore;
 
     const source = gs && ss ? 'linked' : gs ? 'graph' : 'semantic';
     const title = ss?.title ?? db.getNoteById(noteId)?.title ?? noteId;
     const excerpt = ss?.excerpt ?? '';
 
     fused.push({
-      noteId, title, excerpt, score: finalScore, source,
+      noteId,
+      title,
+      excerpt,
+      score: finalScore,
+      source,
       relationType: gs?.relationType,
       depth: gs?.depth,
     });
@@ -351,11 +364,7 @@ export async function assembleDispatch(
   });
 }
 
-function findWorkstreamDescription(
-  db: BrainDB,
-  project: string,
-  workstreamNum: number
-): string {
+function findWorkstreamDescription(db: BrainDB, project: string, workstreamNum: number): string {
   const wsDisplayId = `${project}-${String(workstreamNum).padStart(2, '0')}`;
   const wsNotes = getPmNotes(db, 'workstream', { display_id: wsDisplayId });
   if (wsNotes.length === 0) return '';
@@ -386,10 +395,7 @@ export interface WorkstreamContext {
   relatedNotes: Array<{ title: string; excerpt: string; score: number }>;
 }
 
-export function assembleProjectContext(
-  db: BrainDB,
-  prefix: string
-): Result<ProjectContext> {
+export function assembleProjectContext(db: BrainDB, prefix: string): Result<ProjectContext> {
   const projectNotes = getPmNotes(db, 'project', { prefix });
   if (projectNotes.length === 0) {
     return fail('NOT_FOUND', `Project "${prefix}" not found`);
@@ -420,7 +426,11 @@ export function assembleProjectContext(
   const allTasks = listTasks(db, prefix, { priority: 'critical' });
   const criticalTasks: TaskMetadata[] = (allTasks.ok ? allTasks.data : [])
     .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
-    .map((t) => { const { virtualStates, ...rest } = t; void virtualStates; return rest; });
+    .map((t) => {
+      const { virtualStates, ...rest } = t;
+      void virtualStates;
+      return rest;
+    });
 
   const allProjectTasks = listTasks(db, prefix);
   const dist: Record<string, number> = {};
@@ -486,7 +496,10 @@ export async function assembleWorkstreamContext(
   let relatedNotes: WorkstreamContext['relatedNotes'] = [];
   if (embedder && config) {
     const wsTitle = (wsMeta.title as string) ?? '';
-    const taskTitles = taskList.slice(0, 3).map((t) => t.title ?? '').join(' ');
+    const taskTitles = taskList
+      .slice(0, 3)
+      .map((t) => t.title ?? '')
+      .join(' ');
     const searchQuery = `${wsTitle} ${taskTitles}`.trim();
 
     if (searchQuery) {

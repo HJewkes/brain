@@ -76,10 +76,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Backend',
-          tasks: [
-            { name: 'Set up API', priority: 'high' },
-            { name: 'Add auth' },
-          ],
+          tasks: [{ name: 'Set up API', priority: 'high' }, { name: 'Add auth' }],
         },
         {
           name: 'Frontend',
@@ -104,10 +101,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [
-            { name: 'First task' },
-            { name: 'Second task', depends_on: ['DEP-01.01'] },
-          ],
+          tasks: [{ name: 'First task' }, { name: 'Second task', depends_on: ['DEP-01.01'] }],
         },
       ],
     };
@@ -158,10 +152,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [
-            { name: 'Task A' },
-            { name: 'Task B', depends_on: ['DST-01.01'] },
-          ],
+          tasks: [{ name: 'Task A' }, { name: 'Task B', depends_on: ['DST-01.01'] }],
         },
       ],
     };
@@ -207,9 +198,7 @@ describe('import command (--from-json)', () => {
       JSON.stringify({
         name: 'CLI Import',
         prefix: 'CLI',
-        workstreams: [
-          { name: 'Core', tasks: [{ name: 'Task one' }] },
-        ],
+        workstreams: [{ name: 'Core', tasks: [{ name: 'Task one' }] }],
       })
     );
 
@@ -365,10 +354,7 @@ describe('import command (--from-json)', () => {
   it('sets exitCode=1 when all items fail', async () => {
     // Create a project first, then try to import it again (duplicate)
     const jsonFile = join(tempDir, 'dup.json');
-    writeFileSync(
-      jsonFile,
-      JSON.stringify({ name: 'Dup', prefix: 'DUP' })
-    );
+    writeFileSync(jsonFile, JSON.stringify({ name: 'Dup', prefix: 'DUP' }));
 
     await run('--from-json', jsonFile);
     stdoutChunks = [];

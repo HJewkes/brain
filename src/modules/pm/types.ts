@@ -37,7 +37,16 @@ export type NoteVisibility = 'public' | 'contextual' | 'private';
 export type EmbedStatus = 'queued' | 'embedding' | 'embedded' | 'stale' | 'failed';
 
 // Activity types for state transition tracking
-export type ActivityType = 'onboard' | 'import' | 'delete' | 'complete' | 'claim' | 'start' | 'block' | 'unblock' | 'cancel';
+export type ActivityType =
+  | 'onboard'
+  | 'import'
+  | 'delete'
+  | 'complete'
+  | 'claim'
+  | 'start'
+  | 'block'
+  | 'unblock'
+  | 'cancel';
 
 // PM metadata interfaces (stored in notes.metadata JSON)
 export interface ProjectMetadata {

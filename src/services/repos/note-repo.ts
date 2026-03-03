@@ -213,7 +213,11 @@ export class NoteRepo {
       .prepare('SELECT embedding FROM chunk_vectors WHERE chunk_id = ?')
       .get(chunkId) as { embedding: Buffer } | undefined;
     if (!row) return null;
-    return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4);
+    return new Float32Array(
+      row.embedding.buffer,
+      row.embedding.byteOffset,
+      row.embedding.byteLength / 4
+    );
   }
 
   getChunkHeading(chunkId: string | null, noteId: string): string | null {

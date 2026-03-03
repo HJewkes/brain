@@ -12,11 +12,15 @@ let db: BrainDB;
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })),
+  withBrain: vi.fn(async (fn) =>
+    fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })
+  ),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 
-const mockGenerate = vi.fn().mockResolvedValue('- Add a summary field\n- Consider splitting into sections');
+const mockGenerate = vi
+  .fn()
+  .mockResolvedValue('- Add a summary field\n- Consider splitting into sections');
 vi.mock('../../src/services/ollama.js', () => ({
   requireOllama: vi.fn(async () => ({
     model: 'mock-model',
@@ -91,7 +95,11 @@ describe('tidy command', () => {
     const tmpDir = join(tmpdir(), `tidy-${randomUUID().slice(0, 8)}`);
     mkdirSync(tmpDir, { recursive: true });
     const filePath = join(tmpDir, 'tidy-note.md');
-    writeFileSync(filePath, '---\ntitle: Tidy Test\n---\n\n# Content\n\nSome note content', 'utf-8');
+    writeFileSync(
+      filePath,
+      '---\ntitle: Tidy Test\n---\n\n# Content\n\nSome note content',
+      'utf-8'
+    );
     const note = makeNote({ id: 'tidy-note', title: 'Tidy Test', filePath });
     db.upsertNote(note);
 
@@ -120,7 +128,11 @@ describe('tidy command', () => {
   });
 
   it('skips files that do not exist on disk', async () => {
-    const note = makeNote({ id: 'missing-file', title: 'Missing', filePath: '/nonexistent/path.md' });
+    const note = makeNote({
+      id: 'missing-file',
+      title: 'Missing',
+      filePath: '/nonexistent/path.md',
+    });
     db.upsertNote(note);
 
     await run('--note', 'missing-file');
