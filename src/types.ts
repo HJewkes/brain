@@ -175,6 +175,18 @@ export interface SearchOptions {
   dropoff?: number;
   includePm?: boolean;
   excludePm?: boolean;
+  filters?: Array<{ field: string; value: string }>;
+  facets?: string[];
+}
+
+export interface FacetResult {
+  field: string;
+  values: Array<{ value: string; count: number }>;
+}
+
+export interface SearchWithFacets {
+  results: SearchResult[];
+  facets: FacetResult[];
 }
 
 // === Graph Types ===

@@ -4,6 +4,7 @@ import { addFrontmatterField } from './indexing.js';
 import { rerank } from './reranker.js';
 import type {
   Embedder,
+  FacetResult,
   FusionStrategy,
   MemorySearchResult,
   SearchOptions,
@@ -252,6 +253,12 @@ export async function search(
     }
   }
 
+  // Custom frontmatter filters via json_extract
+  if (options.filters?.length) {
+    const metaIds = db.getFilteredNoteIdsByMetadata(options.filters, allowedNoteIds ?? undefined);
+    allowedNoteIds = metaIds;
+  }
+
   // Step 1: BM25 search via FTS5
   const ftsResults = db.searchFTS(query, overfetchLimit);
   const filteredFts = allowedNoteIds
@@ -309,6 +316,17 @@ export async function search(
   }
 
   return results;
+}
+
+export function computeFacets(
+  db: BrainDB,
+  facetFields: string[],
+  noteIds: Set<string>
+): FacetResult[] {
+  return facetFields.map((field) => ({
+    field,
+    values: db.getFacetCounts(field, noteIds),
+  }));
 }
 
 function buildSearchResults(db: BrainDB, topResults: ScoredResult[]): SearchResult[] {
