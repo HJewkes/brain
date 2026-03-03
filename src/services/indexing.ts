@@ -41,10 +41,9 @@ export interface IndexResult {
 export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): NoteRecord {
   const fm = parsed.frontmatter;
 
-  // Build metadata JSON from raw frontmatter when module is present
-  // Raw frontmatter preserves module-specific fields (e.g., prefix, display_id)
-  // that coerceFrontmatter strips to NoteFrontmatter shape
-  const metadata = fm.module ? JSON.stringify(parsed.rawFrontmatter) : null;
+  // Preserve all raw frontmatter as metadata so custom fields (e.g., architecture-layer,
+  // enforcement-strength) are available for filtering, not just module-specific fields
+  const metadata = JSON.stringify(parsed.rawFrontmatter);
 
   return {
     id: parsed.id,
