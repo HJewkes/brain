@@ -448,6 +448,92 @@ export class NoteRepo {
     return new Set(rows.map((r) => r.id));
   }
 
+  getFilteredNoteIdsByMetadata(
+    filters: Array<{ field: string; value: string }>,
+    baseIds?: Set<string>
+  ): Set<string> {
+    if (filters.length === 0) return baseIds ?? new Set();
+
+    let ids: Set<string> | null = baseIds ?? null;
+
+    for (const filter of filters) {
+      // Detect array vs scalar via json_type on first non-null row
+      const typeRow = this.db
+        .prepare(
+          `SELECT json_type(metadata, '$.' || ?) AS jt FROM notes
+           WHERE metadata IS NOT NULL AND json_extract(metadata, '$.' || ?) IS NOT NULL LIMIT 1`
+        )
+        .get(filter.field, filter.field) as { jt: string } | undefined;
+
+      const isArray = typeRow?.jt === 'array';
+      let rows: { id: string }[];
+
+      if (isArray) {
+        const sql = ids
+          ? `SELECT n.id FROM notes n, json_each(json_extract(n.metadata, '$.' || ?)) AS je
+             WHERE CAST(je.value AS TEXT) = ? AND n.id IN (SELECT value FROM json_each(?))`
+          : `SELECT n.id FROM notes n, json_each(json_extract(n.metadata, '$.' || ?)) AS je
+             WHERE CAST(je.value AS TEXT) = ?`;
+        rows = ids
+          ? (this.db.prepare(sql).all(filter.field, filter.value, JSON.stringify([...ids])) as { id: string }[])
+          : (this.db.prepare(sql).all(filter.field, filter.value) as { id: string }[]);
+      } else {
+        const sql = ids
+          ? `SELECT id FROM notes WHERE json_extract(metadata, '$.' || ?) = ?
+             AND id IN (SELECT value FROM json_each(?))`
+          : `SELECT id FROM notes WHERE json_extract(metadata, '$.' || ?) = ?`;
+        rows = ids
+          ? (this.db.prepare(sql).all(filter.field, filter.value, JSON.stringify([...ids])) as { id: string }[])
+          : (this.db.prepare(sql).all(filter.field, filter.value) as { id: string }[]);
+      }
+
+      ids = new Set(rows.map((r) => r.id));
+    }
+
+    return ids ?? new Set();
+  }
+
+  getFacetCounts(
+    field: string,
+    noteIds: Set<string>
+  ): Array<{ value: string; count: number }> {
+    if (noteIds.size === 0) return [];
+
+    const idsJson = JSON.stringify([...noteIds]);
+
+    // Detect array vs scalar
+    const typeRow = this.db
+      .prepare(
+        `SELECT json_type(metadata, '$.' || ?) AS jt FROM notes
+         WHERE metadata IS NOT NULL AND json_extract(metadata, '$.' || ?) IS NOT NULL
+         AND id IN (SELECT value FROM json_each(?)) LIMIT 1`
+      )
+      .get(field, field, idsJson) as { jt: string } | undefined;
+
+    const isArray = typeRow?.jt === 'array';
+
+    if (isArray) {
+      return this.db
+        .prepare(
+          `SELECT CAST(je.value AS TEXT) AS value, COUNT(DISTINCT n.id) AS count
+           FROM notes n, json_each(json_extract(n.metadata, '$.' || ?)) AS je
+           WHERE n.id IN (SELECT value FROM json_each(?))
+           GROUP BY je.value ORDER BY count DESC, CAST(je.value AS TEXT) ASC`
+        )
+        .all(field, idsJson) as Array<{ value: string; count: number }>;
+    }
+
+    return this.db
+      .prepare(
+        `SELECT CAST(json_extract(metadata, '$.' || ?) AS TEXT) AS value, COUNT(*) AS count
+         FROM notes
+         WHERE id IN (SELECT value FROM json_each(?))
+         AND metadata IS NOT NULL AND json_extract(metadata, '$.' || ?) IS NOT NULL
+         GROUP BY value ORDER BY count DESC`
+      )
+      .all(field, idsJson, field) as Array<{ value: string; count: number }>;
+  }
+
   getModuleNoteIds(filter: {
     module?: string;
     moduleInstance?: string;
