@@ -17,11 +17,18 @@ export const searchCommand = new Command('search')
   .option('--min-score <score>', 'minimum relevance score (0-1)')
   .option('--dropoff <pct>', 'cut results when score drops by this percentage (e.g. 30)')
   .option('--rerank', 'apply cross-encoder reranking for better relevance')
+  .option('--include-tasks', 'include PM task notes in search results')
+  .option('--exclude-pm', 'exclude project management notes from results')
   .option('--expand', 'include graph-connected notes')
   .option('--memories', 'also search extracted memories')
   .option('--container <tag>', 'filter memories by container tag')
+  .option('--workstream <id>', 'filter by workstream (number or display ID)')
+  .option('--type <type>', 'filter by note type (e.g. task, project, note)')
+  .option('--module <module>', 'filter by module (e.g. pm)')
+  .option('--title', 'Search titles only (excludes body matches)')
+  .option('--project <prefix>', 'Filter results to a specific project')
   .action(async (query, opts) => {
-    await withBrain(async ({ db, embedder, config }) => {
+    await withBrain(async ({ db, embedder, config, modules }) => {
       const searchOpts: SearchOptions = {
         limit: parseInt(opts.limit, 10),
         tier: opts.tier as SearchOptions['tier'],
@@ -32,9 +39,11 @@ export const searchCommand = new Command('search')
         minScore: opts.minScore ? parseFloat(opts.minScore) : undefined,
         dropoff: opts.dropoff ? parseFloat(opts.dropoff) / 100 : undefined,
         rerank: opts.rerank,
+        includePm: opts.includeTasks,
+        excludePm: opts.excludePm,
       };
 
-      const results = await search(db, embedder, query, searchOpts, config.fusionWeights);
+      const results = await search(db, embedder, query, searchOpts, config.fusionWeights, modules);
 
       const expanded: SearchResult[] = [];
       if (opts.expand && results.length > 0) {
@@ -57,18 +66,78 @@ export const searchCommand = new Command('search')
         }
       }
 
-      const allResults = [...results, ...expanded];
+      let allResults = [...results, ...expanded];
+
+      if (opts.excludePm && !opts.includeTasks) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return true;
+          const meta = note.metadata ? JSON.parse(note.metadata) : null;
+          return meta?.visibility !== 'private';
+        });
+      }
+
+      if (opts.project) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return false;
+          const meta = note.metadata ? JSON.parse(note.metadata) : null;
+          const noteProject = meta?.project as string | undefined;
+          return noteProject?.toUpperCase() === opts.project!.toUpperCase();
+        });
+      }
+
+      if (opts.type || opts.module || opts.workstream) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return false;
+          if (opts.type && note.type !== opts.type) return false;
+          if (opts.module && note.module !== opts.module) return false;
+          if (opts.workstream) {
+            const meta = note.metadata ? JSON.parse(note.metadata) : null;
+            if (!meta) return false;
+            const wsNum = parseInt(opts.workstream, 10);
+            if (!isNaN(wsNum)) {
+              if (meta.workstream !== wsNum) return false;
+            } else {
+              if (meta.workstream_display_id !== opts.workstream.toUpperCase()) return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      if (opts.title) {
+        allResults = allResults.filter((r) => {
+          const note = db.getNoteById(r.noteId);
+          if (!note) return false;
+          return note.title?.toLowerCase().includes(query.toLowerCase());
+        });
+      } else {
+        allResults.sort((a, b) => {
+          const noteA = db.getNoteById(a.noteId);
+          const noteB = db.getNoteById(b.noteId);
+          const aTitle = noteA?.title?.toLowerCase().includes(query.toLowerCase()) ? 1 : 0;
+          const bTitle = noteB?.title?.toLowerCase().includes(query.toLowerCase()) ? 1 : 0;
+          if (aTitle !== bTitle) return bTitle - aTitle;
+          return (b.score ?? 0) - (a.score ?? 0);
+        });
+      }
 
       const memoryResults = opts.memories
         ? await searchMemories(db, embedder, query, parseInt(opts.limit, 10), opts.container)
         : [];
 
       if (opts.json) {
-        const output = opts.memories ? { notes: allResults, memories: memoryResults } : allResults;
+        const output = { notes: allResults, memories: memoryResults };
         process.stdout.write(JSON.stringify(output) + '\n');
       } else {
         if (allResults.length === 0 && memoryResults.length === 0) {
-          process.stderr.write('No results found.\n');
+          process.stderr.write(`No results found for "${query}".\n\n`);
+          process.stderr.write('Suggestions:\n');
+          process.stderr.write('  - Try broader search terms\n');
+          process.stderr.write('  - Use brain pm task list --search "<term>" for PM task search\n');
+          process.stderr.write('  - Use brain pm status <prefix> for project overview\n');
           return;
         }
         for (const r of allResults) {

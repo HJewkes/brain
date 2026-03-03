@@ -4,9 +4,14 @@ Quick-lookup reference for all `brain pm` commands, organized by command group.
 
 **Enum values:**
 - `--status`: `pending`, `claimed`, `in-progress`, `done`, `blocked`, `cancelled`
+- `--status` (virtual states): `blocked`, `ready`, `eligible` — computed from dependencies, not stored
 - `--mode`: `auto`, `interactive`, `review`, `agent`, `assisted`, `human`
 - `--category`: `implementation`, `testing`, `documentation`, `research`, `review`, `infrastructure`, `configuration`, `design`, `migration`
 - `--priority`: `critical`, `high`, `medium`, `low`
+
+**Aliases:**
+- `brain pm tasks` → `brain pm task list` (passes through all flags)
+- `brain pm workstreams` → `brain pm workstream list` (passes through all flags)
 
 ---
 
@@ -319,16 +324,27 @@ List tasks for a project, with optional filters.
 **Options:**
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--project <PREFIX>` | Filter by project prefix | required |
-| `--workstream <n>` | Filter by workstream number | — |
-| `--status <status>` | Filter by status | — |
-| `--json` | Output JSON | false |
+| `--project <PREFIX>` | Filter by project prefix | active project |
+| `--workstream <n>` | Filter by workstream number or display ID (e.g. `6` or `VOLT-06`) | — |
+| `--status <status>` | Filter by status or virtual state (`blocked`, `ready`, `eligible`) | — |
+| `--priority <level>` | Filter by priority | — |
+| `--category <cat>` | Filter by category | — |
+| `--search <text>` | Filter by title (case-insensitive substring) | — |
+| `--json` | Output JSON (includes `virtualStates` and `depends_on`) | false |
+
+**Notes:**
+- `--status blocked` returns tasks with raw `blocked` status OR computed `+BLOCKED` virtual state (pending with unmet dependencies)
+- `--status ready` and `--status eligible` filter by computed virtual states only
+- When results are empty with active filters, output shows applied filters: `0 tasks found matching: status=done, workstream=VOLT-06`
 
 **Example:**
 ```bash
 $ brain pm task list --project WEB --status pending
 WEB-01.001 - pending [high] (auto)
 WEB-01.002 - pending [medium] (review)
+
+$ brain pm tasks --status blocked
+WEB-02.003 - pending [high] (auto) +BLOCKED
 ```
 
 ---
@@ -938,13 +954,55 @@ Context hash: a3f9b2c1
 
 ---
 
+## Onboard Commands
+
+### brain pm onboard
+
+Set up a PM project from a codebase. Detects components, discovers docs, ingests them, and creates a project with an onboard manifest.
+
+**Usage:** `brain pm onboard <project-name> [options]`
+
+**Arguments:**
+| Name | Required | Description |
+|------|----------|-------------|
+| `project-name` | Yes | Project name |
+
+**Options:**
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--prefix <PREFIX>` | Project prefix (2-5 uppercase chars) | derived from name |
+| `--cwd <path>` | Project directory to scan | current working directory |
+| `--max-docs <n>` | Max docs to ingest (0 = no limit) | no limit |
+| `--skip-ingest` | Skip doc ingestion phase | false |
+| `--reset` | Wipe existing onboard data and start fresh | false |
+| `--json` | Output JSON | false |
+
+**Phases:**
+1. **Detect** — Scan `--cwd` for components (package.json, Cargo.toml, etc.)
+2. **Create** — Create project note with prefix
+3. **Discover** — Find and score `.md` files across component paths
+4. **Ingest** — Copy docs to brain notes dir, add frontmatter, index
+5. **Reference** — Ingest PM reference docs (commands.md, architecture.md) from brain package
+
+**Example:**
+```bash
+$ cd ~/projects/my-app
+$ brain pm onboard "My App" --prefix APP
+Onboarded "My App" (APP)
+  Components: 3 (frontend, backend, shared)
+  Docs: 15/15 ingested
+  Manifest note: app-onboard-manifest
+```
+
+---
+
 ## Orchestration Commands
 
 These commands are primarily called by hooks and the orchestrator skill. They manage session lifecycle, routing, rendering, and worktree allocation.
 
 ### brain pm orchestrate session-start
 
-Initialize an orchestration session. Called by the `SessionStart` hook. Reads JSON from stdin (optional `sessionId`). Requires an active project.
+Initialize an orchestration session. Called by the `SessionStart` hook. Reads JSON from stdin (optional `sessionId`). Requires an active project. Outputs JSON metadata followed by a command quick-reference cheat sheet for agent context.
 
 **Usage:** `brain pm orchestrate session-start`
 

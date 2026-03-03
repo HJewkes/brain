@@ -153,6 +153,28 @@ describe('getProject', () => {
       expect(result.error.code).toBe('NOT_FOUND');
     }
   });
+
+  it('NOT_FOUND error includes available project names (O-98)', async () => {
+    await createProject(db, config, embedder, { name: 'Web', prefix: 'WEB' });
+    await createProject(db, config, embedder, { name: 'API', prefix: 'API' });
+
+    const result = getProject(db, 'XYZ');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).toContain('Available:');
+      expect(result.error.message).toContain('WEB');
+      expect(result.error.message).toContain('API');
+    }
+  });
+
+  it('NOT_FOUND error omits available section when no projects exist', () => {
+    const result = getProject(db, 'XYZ');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).not.toContain('Available:');
+    }
+  });
 });
 
 describe('updateProject', () => {

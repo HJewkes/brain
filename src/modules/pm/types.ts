@@ -33,8 +33,15 @@ export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
 // Note visibility for search scoping
 export type NoteVisibility = 'public' | 'contextual' | 'private';
 
+// Embedding lifecycle states
+export type EmbedStatus = 'queued' | 'embedding' | 'embedded' | 'stale' | 'failed';
+
+// Activity types for state transition tracking
+export type ActivityType = 'onboard' | 'import' | 'delete' | 'complete' | 'claim' | 'start' | 'block' | 'unblock' | 'cancel';
+
 // PM metadata interfaces (stored in notes.metadata JSON)
 export interface ProjectMetadata {
+  title?: string;
   display_id: string;
   prefix: string;
   status: ProjectStatus;
@@ -43,6 +50,8 @@ export interface ProjectMetadata {
 }
 
 export interface WorkstreamMetadata {
+  title?: string;
+  description?: string;
   display_id: string;
   project: string;
   number: number;
@@ -50,6 +59,8 @@ export interface WorkstreamMetadata {
 }
 
 export interface TaskMetadata {
+  id?: string;
+  title?: string;
   display_id: string;
   project: string;
   workstream: number;
@@ -61,9 +72,15 @@ export interface TaskMetadata {
   depends_on?: string[];
   claim_token?: string;
   claimed_at?: string;
+  due_date?: string;
+  milestone?: string;
+  done_when?: string;
+  acceptance_criteria?: string[];
+  references?: string[];
 }
 
 export interface DecisionMetadata {
+  title?: string;
   display_id: string;
   project: string;
   status: DecisionStatus;
@@ -72,6 +89,7 @@ export interface DecisionMetadata {
 }
 
 export interface PromptMetadata {
+  title?: string;
   display_id: string;
   project: string;
   task: string;

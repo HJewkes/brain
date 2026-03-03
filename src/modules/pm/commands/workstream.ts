@@ -8,6 +8,10 @@ import {
   updateWorkstream,
   deleteWorkstream,
 } from '../data/workstream-ops.js';
+import { resolveProject } from '../data/queries.js';
+import { listTasks } from '../data/task-ops.js';
+import { parseDisplayId } from '../ids.js';
+import { checkNamespaceMismatch } from '../engine/routing.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -26,7 +30,9 @@ function outputResult(data: unknown, json: boolean): void {
 
 function formatWorkstreamLine(ws: unknown): string {
   const w = ws as Record<string, unknown>;
-  return `${w.display_id} - ${w.project} #${w.number} (${w.status})`;
+  const rawTitle = (w.title as string) ?? '';
+  const name = rawTitle.replace(/^Workstream\s+/i, '') || `#${w.number}`;
+  return `${w.display_id} - ${name} (${w.status})`;
 }
 
 export function createWorkstreamCommands(): Command {
@@ -36,13 +42,20 @@ export function createWorkstreamCommands(): Command {
     .command('add')
     .description('Create a new workstream')
     .argument('<name>', 'Workstream name')
-    .requiredOption('--project <prefix>', 'Parent project prefix')
+    .option('--project <prefix>', 'Project prefix (uses active if omitted)')
     .option('--description <desc>', 'Workstream description')
     .option('--json', 'Output JSON')
     .action(async (name, opts) => {
       await withBrain(async (svc) => {
+        const projectResult = resolveProject(svc.db, opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        const project = projectResult.data;
         const result = await createWorkstream(svc.db, svc.config, svc.embedder, {
-          project: opts.project.toUpperCase(),
+          project,
           name,
           description: opts.description,
         });
@@ -51,32 +64,31 @@ export function createWorkstreamCommands(): Command {
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
+        } else {
+          const ws = result.data;
+          const displayName = ws.title?.replace(/^Workstream\s+/i, '') || name;
+          process.stdout.write(`Created ${ws.display_id} - ${displayName} (${ws.status})\n`);
+        }
       });
     });
 
   cmd
     .command('list')
     .description('List workstreams')
+    .argument('[prefix]', 'Project prefix (uses active project if omitted)')
     .option('--project <prefix>', 'Filter by project prefix')
     .option('--json', 'Output JSON')
-    .action(async (opts) => {
+    .action(async (prefix, opts) => {
       await withBrain(async (svc) => {
-        if (!opts.project) {
-          process.stderr.write(
-            formatError(
-              {
-                error: true,
-                code: 'INVALID_INPUT',
-                message: '--project is required for listing workstreams',
-              },
-              !!opts.json
-            ) + '\n'
-          );
+        const projectResult = resolveProject(svc.db, prefix ?? opts.project);
+        if (!projectResult.ok) {
+          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
-        const result = listWorkstreams(svc.db, opts.project.toUpperCase());
+        const result = listWorkstreams(svc.db, projectResult.data);
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
@@ -93,13 +105,91 @@ export function createWorkstreamCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
+        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'workstream');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
         const result = getWorkstream(svc.db, id.toUpperCase());
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
-        outputResult(result.data, !!opts.json);
+        const wsMeta = result.data;
+        const parsed = parseDisplayId(id.toUpperCase());
+        const prefix = parsed?.prefix ?? wsMeta.project;
+        const wsNumber = parsed?.workstream ?? wsMeta.number;
+
+        const tasksResult = listTasks(svc.db, prefix, { workstream: wsNumber });
+        const taskList = tasksResult.ok ? tasksResult.data : [];
+
+        const byStatus: Record<string, number> = {};
+        const byPriority: Record<string, number> = {};
+        for (const t of taskList) {
+          byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
+          byPriority[t.priority] = (byPriority[t.priority] ?? 0) + 1;
+        }
+
+        const PRIORITY_ORDER: Record<string, number> = {
+          critical: 0, high: 1, medium: 2, low: 3,
+        };
+        const eligible = taskList
+          .filter(t => t.virtualStates.includes('+ELIGIBLE'))
+          .sort((a, b) =>
+            (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)
+          )
+          .slice(0, 3);
+
+        if (opts.json) {
+          const jsonData = {
+            ...wsMeta,
+            taskSummary: {
+              total: taskList.length,
+              byStatus,
+              byPriority,
+            },
+            eligibleTasks: eligible.map(t => ({
+              display_id: t.display_id,
+              title: t.title,
+              priority: t.priority,
+              status: t.status,
+            })),
+          };
+          process.stdout.write(JSON.stringify(jsonData, null, 2) + '\n');
+        } else {
+          const lines: string[] = [];
+          const name = wsMeta.title?.replace(/^Workstream\s+/i, '') || `#${wsMeta.number}`;
+          lines.push(`${wsMeta.display_id} - ${name} (${wsMeta.status})`);
+
+          if (wsMeta.description) {
+            lines.push(`  ${wsMeta.description}`);
+          }
+
+          if (taskList.length > 0) {
+            lines.push('');
+            lines.push('Tasks:');
+            for (const [status, count] of Object.entries(byStatus)) {
+              lines.push(`  ${status}: ${count}`);
+            }
+            lines.push('');
+            lines.push('Priority:');
+            for (const [priority, count] of Object.entries(byPriority)) {
+              lines.push(`  ${priority}: ${count}`);
+            }
+          }
+
+          if (eligible.length > 0) {
+            lines.push('');
+            lines.push('Eligible:');
+            for (const t of eligible) {
+              lines.push(`  ${t.display_id} - ${t.title ?? '(untitled)'} [${t.priority}]`);
+            }
+          }
+
+          process.stdout.write(lines.join('\n') + '\n');
+        }
       });
     });
 

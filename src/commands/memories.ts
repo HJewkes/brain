@@ -1,62 +1,62 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 
+const listCommand = new Command('list')
+  .description('List active memories')
+  .option('--container <tag>', 'Filter by container tag')
+  .option('--since <date>', 'Only memories created after this date')
+  .option('--note <id>', 'Only memories from a specific note')
+  .option('--json', 'Output as JSON')
+  .option('--limit <n>', 'Max results', '50')
+  .action(async (opts) => {
+    await withDb(({ db }) => {
+      db.forgetExpiredMemories();
+
+      let memories;
+      if (opts.note) {
+        memories = db.getMemoriesForNote(opts.note);
+      } else if (opts.since) {
+        memories = db.getMemoriesSince(opts.since, opts.container);
+      } else {
+        memories = db.getLatestMemories(opts.container);
+      }
+
+      const limit = parseInt(opts.limit, 10);
+      if (isNaN(limit) || limit <= 0) {
+        process.stderr.write('Error: --limit must be a positive integer\n');
+        process.exitCode = 1;
+        return;
+      }
+      const limited = memories.slice(0, limit);
+
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(limited) + '\n');
+        return;
+      }
+
+      if (limited.length === 0) {
+        process.stdout.write('No memories found.\n');
+        return;
+      }
+
+      for (const m of limited) {
+        process.stdout.write(`[${m.containerTag}] ${m.memory}\n`);
+        process.stdout.write(`  id: ${m.id} | source: ${m.sourceNoteId} | ${m.createdAt}\n`);
+        if (m.parentMemoryId) {
+          process.stdout.write(`  updated from: ${m.parentMemoryId}\n`);
+        }
+        process.stdout.write('\n');
+      }
+
+      process.stdout.write(
+        `Total: ${limited.length}${memories.length > limit ? ` (showing ${limit} of ${memories.length})` : ''}\n`
+      );
+    });
+  });
+
 export const memoriesCommand = new Command('memories')
   .description('View and manage extracted memories')
-  .addCommand(
-    new Command('list')
-      .description('List active memories')
-      .option('--container <tag>', 'Filter by container tag')
-      .option('--since <date>', 'Only memories created after this date')
-      .option('--note <id>', 'Only memories from a specific note')
-      .option('--json', 'Output as JSON')
-      .option('--limit <n>', 'Max results', '50')
-      .action(async (opts) => {
-        await withDb(({ db }) => {
-          db.forgetExpiredMemories();
-
-          let memories;
-          if (opts.note) {
-            memories = db.getMemoriesForNote(opts.note);
-          } else if (opts.since) {
-            memories = db.getMemoriesSince(opts.since, opts.container);
-          } else {
-            memories = db.getLatestMemories(opts.container);
-          }
-
-          const limit = parseInt(opts.limit, 10);
-          if (isNaN(limit) || limit <= 0) {
-            process.stderr.write('Error: --limit must be a positive integer\n');
-            process.exitCode = 1;
-            return;
-          }
-          const limited = memories.slice(0, limit);
-
-          if (opts.json) {
-            process.stdout.write(JSON.stringify(limited) + '\n');
-            return;
-          }
-
-          if (limited.length === 0) {
-            process.stdout.write('No memories found.\n');
-            return;
-          }
-
-          for (const m of limited) {
-            process.stdout.write(`[${m.containerTag}] ${m.memory}\n`);
-            process.stdout.write(`  id: ${m.id} | source: ${m.sourceNoteId} | ${m.createdAt}\n`);
-            if (m.parentMemoryId) {
-              process.stdout.write(`  updated from: ${m.parentMemoryId}\n`);
-            }
-            process.stdout.write('\n');
-          }
-
-          process.stdout.write(
-            `Total: ${limited.length}${memories.length > limit ? ` (showing ${limit} of ${memories.length})` : ''}\n`
-          );
-        });
-      })
-  )
+  .addCommand(listCommand, { isDefault: true })
   .addCommand(
     new Command('history')
       .description('View version history of a memory')

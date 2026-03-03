@@ -144,7 +144,8 @@ describe('Wave 7: Context + Verify + Briefing', () => {
     if (!contextResult.ok) return;
 
     const bundle = contextResult.data;
-    const depStatuses = bundle.dependencies.map((d) => ({
+    const upstreamDeps = bundle.dependencies.filter((d) => d.direction === 'upstream');
+    const depStatuses = upstreamDeps.map((d) => ({
       displayId: d.displayId,
       status: d.status,
     }));

@@ -1,13 +1,16 @@
 import { Command } from '@commander-js/extra-typings';
-import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { join, dirname, basename } from 'node:path';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel } from '../services/ollama.js';
-import type { EmbedderBackend } from '../types.js';
+import { slugify } from '../utils.js';
+import { indexSingleFile } from '../services/indexing.js';
+import type { BrainConfig, Embedder, EmbedderBackend } from '../types.js';
 
 const SUBDIRS = [
   'notes',
@@ -151,11 +154,109 @@ async function promptEmbedderChoice(): Promise<'ollama' | 'local' | null> {
   }
 }
 
+export async function ingestBrainReferenceDocs(
+  config: BrainConfig,
+  db?: BrainDB,
+  embedder?: Embedder
+): Promise<void> {
+  // Stub: golden dataset path (V14)
+  // if (goldenDatasetExists(config)) return seedFromGolden(db, config);
+
+  const sourceDocsDir = join(
+    dirname(new URL(import.meta.url).pathname),
+    '..', '..', 'docs', 'pm-module'
+  );
+  const commandsDir = join(sourceDocsDir, 'commands');
+
+  const refDocs: Array<{ slug: string; sourcePath: string; title: string }> = [];
+
+  // Decomposed command files
+  if (existsSync(commandsDir)) {
+    const files = readdirSync(commandsDir).filter(f => f.endsWith('.md'));
+    for (const file of files) {
+      const name = basename(file, '.md');
+      const slug = `pm-ref-${name === '_index' ? 'overview' : name}`;
+      const title = name === '_index' ? 'PM Commands Overview' : `PM Commands: ${name}`;
+      refDocs.push({ slug, sourcePath: join(commandsDir, file), title });
+    }
+  }
+
+  // Also ingest architecture.md if it exists
+  const archPath = join(sourceDocsDir, 'architecture.md');
+  if (existsSync(archPath)) {
+    refDocs.push({ slug: 'pm-ref-architecture', sourcePath: archPath, title: 'PM Architecture' });
+  }
+
+  if (refDocs.length === 0) return;
+
+  const outDir = join(config.notesDir, 'modules', 'pm', 'reference');
+  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+
+  const createdNoteIds: string[] = [];
+
+  for (const doc of refDocs) {
+    let content = readFileSync(doc.sourcePath, 'utf-8');
+
+    if (!content.trimStart().startsWith('---')) {
+      const fmNow = new Date().toISOString().slice(0, 10);
+      const fm = [
+        '---',
+        `id: ${doc.slug}`,
+        `title: "${doc.title}"`,
+        'type: reference',
+        'tier: slow',
+        'module: pm',
+        'embed_status: queued',
+        `created: ${fmNow}`,
+        `modified: ${fmNow}`,
+        '---',
+      ].join('\n');
+      content = fm + '\n\n' + content;
+    }
+
+    const outPath = join(outDir, `${doc.slug}.md`);
+    const hash = createHash('sha256').update(content).digest('hex');
+
+    // Skip if unchanged
+    if (existsSync(outPath)) {
+      const existing = readFileSync(outPath, 'utf-8');
+      if (createHash('sha256').update(existing).digest('hex') === hash) continue;
+    }
+
+    writeFileSync(outPath, content, 'utf-8');
+
+    // Index into SQLite (THE BUG FIX)
+    if (db && embedder) {
+      try {
+        const noteId = await indexSingleFile(db, embedder, outPath, content, hash, Date.now());
+        createdNoteIds.push(noteId);
+      } catch {
+        // Auto-link may hit unique constraint with similar reference docs;
+        // note/FTS/chunks are already persisted, just track the slug
+        createdNoteIds.push(doc.slug);
+      }
+    }
+  }
+
+  // Create relations between reference notes (overview -> children)
+  if (db && createdNoteIds.length > 1) {
+    const overviewId = createdNoteIds.find(id => id.includes('pm-ref-overview'));
+    if (overviewId) {
+      const existingRelations = db.getRelationsFrom(overviewId);
+      const newRelations = createdNoteIds
+        .filter(id => id !== overviewId)
+        .map(targetId => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
+      db.upsertRelations(overviewId, [...existingRelations, ...newRelations]);
+    }
+  }
+}
+
 export const initCommand = new Command('init')
   .description('Initialize a new brain workspace')
   .option('--notes-dir <path>', 'path to notes directory')
   .option('--embedder <type>', 'embedding backend (local, ollama, remote)')
   .option('--json', 'output result as JSON')
+  .option('--verbose', 'show technical details')
   .action(async (opts) => {
     const overrides: Record<string, unknown> = {};
     if (opts.notesDir) overrides.notesDir = opts.notesDir;
@@ -212,6 +313,17 @@ export const initCommand = new Command('init')
     const db = new BrainDB(config.dbPath);
     const info = getEmbedderInfo(config.embedder);
     db.setEmbeddingModel(info.model, info.dimensions);
+
+    // Ingest brain's own PM reference docs (best-effort, with indexing)
+    try {
+      const { createEmbedder } = await import('../adapters/index.js');
+      const embedder = createEmbedder(config);
+      await ingestBrainReferenceDocs(config, db, embedder);
+    } catch {
+      // Fall back to write-only (no indexing) if embedder fails
+      await ingestBrainReferenceDocs(config);
+    }
+
     db.close();
 
     // LLM setup — reuses the Ollama health check from above
@@ -245,19 +357,32 @@ export const initCommand = new Command('init')
     if (opts.json) {
       process.stdout.write(JSON.stringify(summary) + '\n');
     } else {
-      process.stderr.write(`Initialized brain at ${config.notesDir}\n`);
-      process.stderr.write(`Database: ${config.dbPath}\n`);
-      process.stderr.write(`Embedder: ${config.embedder} (${embInfo.model})\n`);
+      process.stderr.write('Brain initialized successfully!\n\n');
+      process.stderr.write(`Notes directory: ${config.notesDir}\n`);
+      process.stderr.write('Search: ready (hybrid BM25 + vector)\n');
       if (llmReady) {
-        process.stderr.write(`LLM: ollama (${llmModel})\n`);
+        process.stderr.write('Memory extraction: ready\n');
       } else {
-        process.stderr.write('LLM: not configured (extract, tidy unavailable)\n');
+        process.stderr.write('Memory extraction: not configured (needs Ollama)\n');
       }
-      process.stderr.write(
-        `Features: search ${features.search ? '+' : '-'}  extract ${features.extract ? '+' : '-'}  tidy ${features.tidy ? '+' : '-'}\n`
-      );
-      if (created.length > 0) {
-        process.stderr.write(`Created directories: ${created.join(', ')}\n`);
+
+      if (opts.verbose) {
+        process.stderr.write(`\nDatabase: ${config.dbPath}\n`);
+        process.stderr.write(`Embedder: ${config.embedder} (${embInfo.model})\n`);
+        if (llmReady) {
+          process.stderr.write(`LLM: ollama (${llmModel})\n`);
+        }
+        process.stderr.write(
+          `Features: search ${features.search ? '+' : '-'}  extract ${features.extract ? '+' : '-'}  tidy ${features.tidy ? '+' : '-'}\n`
+        );
+        if (created.length > 0) {
+          process.stderr.write(`Created directories: ${created.join(', ')}\n`);
+        }
       }
+
+      process.stderr.write('\nNext steps:\n');
+      process.stderr.write('  brain index          Index your existing notes\n');
+      process.stderr.write('  brain quick "idea"   Capture a thought\n');
+      process.stderr.write('  brain pm init        Set up project management\n');
     }
   });

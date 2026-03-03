@@ -189,19 +189,146 @@ describe('listTasks', () => {
   it('lists tasks filtered by status', async () => {
     await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
     await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 2' });
-    await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'blocked');
+    await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'claimed');
+
+    const claimedResult = listTasks(db, 'WEB', { status: 'claimed' });
+    expect(claimedResult.ok).toBe(true);
+    if (claimedResult.ok) {
+      expect(claimedResult.data).toHaveLength(1);
+      expect(claimedResult.data[0].display_id).toBe('WEB-01.01');
+    }
+  });
+
+  it('filters by virtual state blocked', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dep task' });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Blocked task', dependsOn: ['WEB-01.01'],
+    });
 
     const blockedResult = listTasks(db, 'WEB', { status: 'blocked' });
     expect(blockedResult.ok).toBe(true);
     if (blockedResult.ok) {
       expect(blockedResult.data).toHaveLength(1);
-      expect(blockedResult.data[0].display_id).toBe('WEB-01.01');
+      expect(blockedResult.data[0].display_id).toBe('WEB-01.02');
+      expect(blockedResult.data[0].virtualStates).toContain('+BLOCKED');
+    }
+  });
+
+  it('filters by virtual state ready', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
+
+    const readyResult = listTasks(db, 'WEB', { status: 'ready' });
+    expect(readyResult.ok).toBe(true);
+    if (readyResult.ok) {
+      expect(readyResult.data).toHaveLength(1);
+      expect(readyResult.data[0].virtualStates).toContain('+READY');
+    }
+  });
+
+  it('includes virtualStates in listed tasks', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
+
+    const result = listTasks(db, 'WEB');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data[0].virtualStates).toBeDefined();
+      expect(result.data[0].virtualStates).toContain('+READY');
     }
   });
 
   it('returns empty array when no tasks exist', () => {
     const result = listTasks(db, 'WEB');
     expect(result).toEqual({ ok: true, data: [] });
+  });
+
+  it('filters by priority', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'High task', priority: 'high',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Low task', priority: 'low',
+    });
+
+    const result = listTasks(db, 'WEB', { priority: 'high' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.01');
+  });
+
+  it('filters by category', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Impl task', category: 'implementation',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Test task', category: 'testing',
+    });
+
+    const result = listTasks(db, 'WEB', { category: 'testing' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.02');
+  });
+
+  it('filters by title search (case-insensitive)', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Setup Auth',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Deploy Pipeline',
+    });
+
+    const result = listTasks(db, 'WEB', { search: 'auth' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.01');
+  });
+
+  it('combines multiple filters', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'High impl', priority: 'high', category: 'implementation',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'High test', priority: 'high', category: 'testing',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Low impl', priority: 'low', category: 'implementation',
+    });
+
+    const result = listTasks(db, 'WEB', { priority: 'high', category: 'testing' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].display_id).toBe('WEB-01.02');
+  });
+
+  it('returns empty array when no tasks match filters', async () => {
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 1, name: 'Medium task', priority: 'medium',
+    });
+
+    const result = listTasks(db, 'WEB', { priority: 'low' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(0);
+  });
+
+  it('search matches task title only, not workstream name (O-63)', async () => {
+    await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Integration' });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 2, name: 'Setup CI',
+    });
+    await createTask(db, config, embedder, {
+      project: 'WEB', workstream: 2, name: 'Integration test harness',
+    });
+
+    const result = listTasks(db, 'WEB', { search: 'integration' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].title).toBe('Integration test harness');
   });
 });
 
@@ -214,6 +341,7 @@ describe('getTask', () => {
     if (!result.ok) return;
 
     expect(result.data.display_id).toBe('WEB-01.01');
+    expect(result.data.title).toBe('Ready task');
     expect(result.data.virtualStates).toContain('+READY');
     expect(result.data.virtualStates).toContain('+ELIGIBLE');
   });
@@ -238,6 +366,26 @@ describe('getTask', () => {
     const result = getTask(db, 'WEB-01.99');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('NOT_FOUND');
+  });
+
+  it('suggests correct prefix when task ID has wrong prefix (O-58)', async () => {
+    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Real task' });
+
+    const result = getTask(db, 'VLT-01.01');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).toContain('Did you mean "WEB-01.01"');
+    }
+  });
+
+  it('returns plain NOT_FOUND when no matching numeric portion exists', () => {
+    const result = getTask(db, 'WEB-99.99');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('NOT_FOUND');
+      expect(result.error.message).not.toContain('Did you mean');
+    }
   });
 });
 

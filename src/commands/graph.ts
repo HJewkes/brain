@@ -68,7 +68,18 @@ export const graphCommand = new Command('graph')
   .option('--json', 'Output as JSON')
   .action(async (noteId, opts) => {
     await withDb(({ db }) => {
-      const result = traverseGraph(db, noteId, opts.depth);
+      let resolvedId = noteId;
+
+      if (noteId.includes('/') || noteId.endsWith('.md')) {
+        const note = db.getNoteByFilePath(noteId);
+        if (note) {
+          resolvedId = note.id;
+        } else {
+          process.stderr.write(`Warning: No note found at path "${noteId}", trying as note ID...\n`);
+        }
+      }
+
+      const result = traverseGraph(db, resolvedId, opts.depth);
 
       if (opts.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');

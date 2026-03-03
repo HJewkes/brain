@@ -8,6 +8,7 @@ import {
   validatePrefix,
   nextWorkstreamNumber,
   nextTaskNumber,
+  resolveWorkstreamFilter,
 } from '../../../src/modules/pm/ids.js';
 
 describe('parseDisplayId', () => {
@@ -348,5 +349,42 @@ describe('nextTaskNumber', () => {
     );
 
     expect(nextTaskNumber(db, 'WEB', 8)).toBe(1);
+  });
+});
+
+describe('resolveWorkstreamFilter', () => {
+  it('accepts raw integer string', () => {
+    const result = resolveWorkstreamFilter('6');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data).toBe(6);
+  });
+
+  it('accepts display ID format', () => {
+    const result = resolveWorkstreamFilter('VOLT-06');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data).toBe(6);
+  });
+
+  it('accepts display ID with different prefix', () => {
+    const result = resolveWorkstreamFilter('WEB-12');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data).toBe(12);
+  });
+
+  it('rejects invalid format with guidance', () => {
+    const result = resolveWorkstreamFilter('not-valid');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain('Invalid workstream filter');
+      expect(result.error.message).toContain('workstream list');
+    }
+  });
+
+  it('rejects task-level display ID', () => {
+    const result = resolveWorkstreamFilter('VOLT-06.01');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain('Invalid workstream filter');
+    }
   });
 });

@@ -24,6 +24,8 @@ function makeTask(overrides: Partial<TaskMetadata> = {}): TaskMetadata {
 function makeBundle(overrides: Partial<ContextBundle> = {}): ContextBundle {
   return {
     task: makeTask(),
+    body: '',
+    relatedNotes: [],
     dependencies: [],
     decisions: [],
     constraints: [],
@@ -86,9 +88,10 @@ describe('renderAgentPrompt', () => {
     expect(result).toContain('Build the API endpoint for /users');
   });
 
-  test('shows "No specific prompt" when prompt is undefined', () => {
+  test('auto-generates instructions from context when no prompt exists', () => {
     const result = renderAgentPrompt(makeBundle());
-    expect(result).toContain('No specific prompt provided');
+    expect(result).toContain('## Instructions');
+    expect(result).toContain('Implement: **WEB-01-003**');
   });
 
   test('includes worktree path when provided', () => {

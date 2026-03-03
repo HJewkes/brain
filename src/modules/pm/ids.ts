@@ -1,4 +1,6 @@
 import type { BrainDB } from '../../services/brain-db.js';
+import type { Result } from './errors.js';
+import { ok, fail } from './errors.js';
 
 export interface ParsedDisplayId {
   prefix: string;
@@ -54,6 +56,23 @@ export function nextWorkstreamNumber(db: BrainDB, prefix: string): number {
   }
 
   return max + 1;
+}
+
+export function resolveWorkstreamFilter(input: string): Result<number> {
+  const asInt = Number(input);
+  if (Number.isInteger(asInt) && asInt > 0) {
+    return ok(asInt);
+  }
+
+  const parsed = parseDisplayId(input);
+  if (parsed && parsed.workstream !== undefined && parsed.task === undefined) {
+    return ok(parsed.workstream);
+  }
+
+  return fail(
+    'INVALID_INPUT',
+    `Invalid workstream filter "${input}". Use a number (6) or display ID (PREFIX-NN). Run "brain pm workstream list" to see options.`
+  );
 }
 
 export function nextTaskNumber(db: BrainDB, prefix: string, workstream: number): number {

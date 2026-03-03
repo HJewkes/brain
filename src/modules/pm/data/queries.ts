@@ -8,19 +8,28 @@ const PM_ACTIVE_PROJECT_KEY = 'pm_active_project';
 export function resolveDisplayId(db: BrainDB, displayId: string): Result<string> {
   const noteIds = db.getModuleNoteIds({ module: 'pm' });
   if (noteIds.length === 0) {
-    return fail('NOT_FOUND', `No PM note found with display ID "${displayId}"`);
+    return fail('NOT_FOUND', `No PM notes found. Run "brain pm list" to check projects.`);
   }
 
   const notes = db.getNotesByIds(noteIds);
+  const knownPrefixes = new Set<string>();
+
   for (const [, note] of notes) {
     if (!note.metadata) continue;
     const meta = JSON.parse(note.metadata) as Record<string, unknown>;
     if (meta.display_id === displayId) {
       return ok(note.id);
     }
+    if (typeof meta.prefix === 'string') {
+      knownPrefixes.add(meta.prefix);
+    }
   }
 
-  return fail('NOT_FOUND', `No PM note found with display ID "${displayId}"`);
+  const prefixList = [...knownPrefixes].sort().join(', ');
+  const hint = prefixList
+    ? ` Known projects: ${prefixList}. Run "brain pm list" to see all projects.`
+    : ' Run "brain pm list" to check available projects.';
+  return fail('NOT_FOUND', `No PM note found with display ID "${displayId}".${hint}`);
 }
 
 export function getProjectNotes(db: BrainDB, prefix: string): NoteRecord[] {
@@ -94,6 +103,75 @@ export function setActiveProject(db: BrainDB, prefix: string): void {
   db.setMetaValue(PM_ACTIVE_PROJECT_KEY, prefix);
 }
 
+export function resolveProject(
+  db: BrainDB,
+  explicit: string | undefined
+): Result<string> {
+  if (explicit) {
+    const upper = explicit.toUpperCase();
+    const projectNotes = getPmNotes(db, 'project', { prefix: upper });
+    if (projectNotes.length === 0) {
+      const allProjects = getPmNotes(db, 'project');
+      if (allProjects.length > 0) {
+        const available = allProjects.map((p) => {
+          const m = JSON.parse(p.metadata!) as Record<string, unknown>;
+          return m.prefix as string;
+        });
+        return fail(
+          'NOT_FOUND',
+          `Project "${upper}" not found. Available projects: ${available.sort().join(', ')}.`
+        );
+      }
+      return fail('NOT_FOUND', `Project "${upper}" not found. No projects exist yet.`);
+    }
+    return ok(upper);
+  }
+  const active = getActiveProject(db);
+  if (active) return ok(active);
+
+  // Auto-resolve when exactly one project exists
+  const projects = getPmNotes(db, 'project');
+  if (projects.length === 1) {
+    const meta = JSON.parse(projects[0].metadata!) as Record<string, unknown>;
+    const prefix = meta.prefix as string;
+    setActiveProject(db, prefix);
+    return ok(prefix);
+  }
+
+  if (projects.length > 1) {
+    const prefixes = projects.map((p) => {
+      const m = JSON.parse(p.metadata!) as Record<string, unknown>;
+      return m.prefix as string;
+    });
+    return fail(
+      'INVALID_INPUT',
+      `Multiple projects found: ${prefixes.join(', ')}. Use --project <prefix> or "brain pm use <prefix>".`
+    );
+  }
+
+  return fail(
+    'INVALID_INPUT',
+    'No projects found. Run "brain pm onboard <name>" to create one.'
+  );
+}
+
+export function enrichNotFoundError(
+  db: BrainDB,
+  displayId: string
+): Result<never> {
+  // Check if it's a workstream display ID (PREFIX-NN without .MM)
+  if (/^[A-Z]+-\d{2}$/.test(displayId)) {
+    const wsNotes = getPmNotes(db, 'workstream', { display_id: displayId });
+    if (wsNotes.length > 0) {
+      return fail(
+        'NOT_FOUND',
+        `"${displayId}" is a workstream, not a task. Try: brain pm workstream show ${displayId}`
+      );
+    }
+  }
+  return fail('NOT_FOUND', `Task "${displayId}" not found`);
+}
+
 export function getPmNotes(
   db: BrainDB,
   type: string,
@@ -112,7 +190,14 @@ export function getPmNotes(
   for (const [, note] of notes) {
     if (!note.metadata) continue;
     const meta = JSON.parse(note.metadata) as Record<string, unknown>;
-    const matches = Object.entries(filters).every(([key, value]) => meta[key] === value);
+    const matches = Object.entries(filters).every(([key, value]) => {
+      const stored = meta[key];
+      if (stored === value) return true;
+      // Coerce for numeric fields stored as strings
+      if (typeof value === 'number' && String(stored) === String(value)) return true;
+      if (typeof stored === 'number' && String(stored) === String(value)) return true;
+      return false;
+    });
     if (matches) {
       results.push(note);
     }

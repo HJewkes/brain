@@ -963,7 +963,7 @@ Loading full project context into an agent's prompt at startup is wasteful. Most
 Agents start with focused context (task prompt + immediate dependencies + relevant decisions). During execution, they can fetch more context on demand via CLI:
 
 ```bash
-# Full context for a task
+# Full context for a task (includes semantic search for related notes)
 brain pm context WEB-01.03 --json
 
 # Just decisions impacting this task
@@ -975,6 +975,8 @@ brain pm context WEB-01.03 --deps --json
 # Changes since a timestamp (new decisions, completed deps, state changes)
 brain pm context WEB-01.03 --since "2026-02-26T10:00:00Z" --json
 ```
+
+The `context` command uses `assembleDispatch()` internally, which enriches the base context with semantic search results (related notes), peer tasks in the same workstream, workstream description, and downstream dependents. This is the same enrichment used by `brain pm dispatch`.
 
 The `--since` flag enables incremental context updates. It queries the activities table for events since the given timestamp that are relevant to the task — new decisions, newly completed dependencies, and state changes in the same workstream.
 

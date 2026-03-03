@@ -35,7 +35,7 @@ export interface ArchiveResult {
   orphanedChildren: string[];
 }
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 export class BrainDB {
   private db: Database.Database;
@@ -87,6 +87,7 @@ export class BrainDB {
     this.applyMigration(currentVersion, 5, () => this.db.exec(this.memoryDDL()));
     this.applyMigration(currentVersion, 6, () => this.db.exec(this.noteAccessDDL()));
     this.applyMigration(currentVersion, 7, () => this.migrateToV7());
+    this.applyMigration(currentVersion, 8, () => this.migrateToV8());
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -224,7 +225,9 @@ export class BrainDB {
         metadata        TEXT,
         module          TEXT,
         module_instance TEXT,
-        content_dir     TEXT
+        content_dir     TEXT,
+        embed_status    TEXT GENERATED ALWAYS AS (json_extract(metadata, '$.embed_status')),
+        activity_type   TEXT GENERATED ALWAYS AS (json_extract(metadata, '$.activity_type'))
       );
 
       CREATE TABLE IF NOT EXISTS relations (
@@ -270,6 +273,9 @@ export class BrainDB {
       ${this.noteAccessDDL()}
       ${this.activitiesDDL()}
       ${this.moduleIndexesDDL()}
+
+      CREATE INDEX IF NOT EXISTS idx_notes_embed_status ON notes(embed_status);
+      CREATE INDEX IF NOT EXISTS idx_notes_activity_type ON notes(activity_type);
     `;
   }
 
@@ -312,6 +318,17 @@ export class BrainDB {
 
     this.db.exec(this.activitiesDDL());
     this.db.exec(this.moduleIndexesDDL());
+  }
+
+  private migrateToV8(): void {
+    this.db.exec(`
+      ALTER TABLE notes ADD COLUMN embed_status TEXT
+        GENERATED ALWAYS AS (json_extract(metadata, '$.embed_status'));
+      ALTER TABLE notes ADD COLUMN activity_type TEXT
+        GENERATED ALWAYS AS (json_extract(metadata, '$.activity_type'));
+      CREATE INDEX IF NOT EXISTS idx_notes_embed_status ON notes(embed_status);
+      CREATE INDEX IF NOT EXISTS idx_notes_activity_type ON notes(activity_type);
+    `);
   }
 
   private activitiesDDL(): string {
@@ -528,6 +545,9 @@ export class BrainDB {
   }
   getChunkHeading(chunkId: string | null, noteId: string): string | null {
     return this.noteRepo.getChunkHeading(chunkId, noteId);
+  }
+  getChunkEmbedding(chunkId: string): Float32Array | null {
+    return this.noteRepo.getChunkEmbedding(chunkId);
   }
 
   // --- Relation Delegates ---

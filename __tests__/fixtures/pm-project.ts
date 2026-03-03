@@ -25,13 +25,13 @@ export async function createStandardProject(
 
   const ws1 = await createWorkstream(db, config, embedder, {
     project: 'TEST',
-    name: 'Workstream 1',
+    name: 'Alpha',
   });
   if (!ws1.ok) throw new Error(`Failed to create workstream 1: ${ws1.error.message}`);
 
   const ws2 = await createWorkstream(db, config, embedder, {
     project: 'TEST',
-    name: 'Workstream 2',
+    name: 'Beta',
   });
   if (!ws2.ok) throw new Error(`Failed to create workstream 2: ${ws2.error.message}`);
 
