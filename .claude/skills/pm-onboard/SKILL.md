@@ -56,10 +56,10 @@ Agents use `brain search` to read ingested docs and up to 5 source files for arc
 After all component analyses complete, spawn a synthesis agent that:
 - Reads all component analysis outputs
 - Identifies cross-cutting work themes (NOT 1:1 with components)
-- Creates workstreams via `brain pm workstream add`
-- Creates tasks with `brain pm task add --description` for each
+- Creates workstreams via `brain pm workstream add` with goals, success criteria, and constraints in the description (not just one-line names)
+- Creates tasks with `brain pm task add --description` for each — `--description` is required and must contain 2-4 sentences explaining what problem the task solves, why it matters, and key technical considerations
 - Sets priorities, categories, and dependencies
-- Ensures variety: at least 3 categories, 3 priority levels, dependency chains where logical
+- Ensures variety: at least 3 categories (implementation, testing, documentation, infrastructure, design), all priority levels including `low` for speculative/nice-to-have items, dependency chains where logical
 
 ### Phase 4: Final Output
 

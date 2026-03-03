@@ -16,12 +16,14 @@ VERSION="${1:?Usage: run.sh <version> [--skip-setup] [--phase <name>] [--concurr
 shift
 
 SKIP_SETUP=false
+SKIP_QUALITY_GATE=false
 PHASE="all"
 CONCURRENCY=6
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-setup) SKIP_SETUP=true; shift ;;
+    --skip-quality-gate) SKIP_QUALITY_GATE=true; shift ;;
     --phase) PHASE="$2"; shift 2 ;;
     --concurrency) CONCURRENCY="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -284,6 +286,13 @@ case "$PHASE" in
   all)
     if [[ "$SKIP_SETUP" == false ]]; then
       run_setup
+    fi
+    echo ""
+    echo "── Quality Gate ─────────────────────────────────"
+    if [[ "$SKIP_QUALITY_GATE" == true ]]; then
+      bash "${SCRIPT_DIR}/quality-gate.sh" --skip
+    else
+      bash "${SCRIPT_DIR}/quality-gate.sh"
     fi
     run_audits
     run_test_bench
