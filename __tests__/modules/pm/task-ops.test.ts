@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -9,6 +9,7 @@ import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import {
+  createTask,
   listTasks,
   getTask,
   updateTaskStatus,
@@ -502,5 +503,89 @@ describe('deleteTask', () => {
     const result = await deleteTask(db, config, 'WEB-01.99');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('description validation', () => {
+  it('rejects task with empty description', async () => {
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'No body task',
+      description: '',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('INVALID_INPUT');
+      expect(result.error.message).toContain('description is required');
+    }
+  });
+
+  it('rejects task with whitespace-only description', async () => {
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Whitespace body',
+      description: '   \n\t  ',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('INVALID_INPUT');
+    }
+  });
+
+  it('accepts task with valid description and indexes chunks', async () => {
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Rich body task',
+      description: 'Implement the authentication flow using JWT tokens. This task covers login, logout, and token refresh endpoints.',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const filePath = join(notesDir, 'modules', 'pm', 'WEB', 'WEB-01.01.md');
+    const content = readFileSync(filePath, 'utf-8');
+    expect(content).toContain('Implement the authentication flow');
+
+    const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+    expect(noteIds).toHaveLength(1);
+    const chunks = db.getChunksForNote(noteIds[0]);
+    expect(chunks.length).toBeGreaterThan(0);
+  });
+});
+
+describe('depends_on in task list JSON', () => {
+  it('returns empty array when task has no dependencies', async () => {
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Independent task',
+    });
+
+    const result = listTasks(db, 'WEB');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data[0].depends_on).toEqual([]);
+  });
+
+  it('returns dependency display IDs when task has deps', async () => {
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Task A',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Task B',
+      dependsOn: ['WEB-01.01'],
+    });
+
+    const result = listTasks(db, 'WEB');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const taskB = result.data.find(t => t.display_id === 'WEB-01.02');
+    expect(taskB?.depends_on).toEqual(['WEB-01.01']);
   });
 });
