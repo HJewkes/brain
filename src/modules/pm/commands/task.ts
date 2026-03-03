@@ -69,7 +69,7 @@ export function createTaskCommands(): Command {
     .option('--category <cat>', 'Task category')
     .option('--priority <pri>', 'Task priority (critical|high|medium|low)')
     .option('--depends-on <ids...>', 'Display IDs this task depends on')
-    .option('--description <text>', 'Task description/body content')
+    .requiredOption('--description <text>', 'Task description/body content (required for search indexing)')
     .option('--due <date>', 'Due date (YYYY-MM-DD)')
     .option('--milestone <name>', 'Milestone name')
     .option('--done-when <text>', 'Completion definition (1-2 sentences)')

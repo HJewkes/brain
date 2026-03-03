@@ -46,7 +46,7 @@ export interface CreateTaskInput {
   dependsOn?: string[];
   dueDate?: string;
   milestone?: string;
-  description?: string;
+  description: string;
   doneWhen?: string;
   acceptanceCriteria?: string[];
   references?: string[];
@@ -193,9 +193,9 @@ export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string
   return displayIds;
 }
 
-function mergeDependsOn(db: BrainDB, noteId: string, _frontmatterDeps: string[] | undefined): string[] | undefined {
+function mergeDependsOn(db: BrainDB, noteId: string, frontmatterDeps: string[] | undefined): string[] {
   const relationDeps = getDependencyDisplayIds(db, noteId);
-  return relationDeps.length > 0 ? relationDeps : undefined;
+  return relationDeps.length > 0 ? relationDeps : (frontmatterDeps ?? []);
 }
 
 export async function createTask(
@@ -213,6 +213,10 @@ export async function createTask(
   const wsNotes = getPmNotes(db, 'workstream', { display_id: wsDisplayId });
   if (wsNotes.length === 0) {
     return fail('NOT_FOUND', `Workstream "${wsDisplayId}" not found`);
+  }
+
+  if (!input.description?.trim()) {
+    return fail('INVALID_INPUT', 'Task description is required — tasks without body content are invisible to search');
   }
 
   const resolvedDepIds: Array<{ displayId: string; noteId: string }> = [];
@@ -280,7 +284,7 @@ export async function createTask(
     mode: input.mode ?? 'auto',
     category: input.category ?? 'implementation',
     priority: input.priority ?? 'medium',
-    depends_on: getDependencyDisplayIds(db, noteId) || undefined,
+    depends_on: getDependencyDisplayIds(db, noteId) ?? [],
     due_date: input.dueDate,
     milestone: input.milestone,
     done_when: input.doneWhen,

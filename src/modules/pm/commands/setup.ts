@@ -72,6 +72,7 @@ const DEMO_TASKS = [
     ws: 1,
     category: 'implementation' as const,
     priority: 'high' as const,
+    description: 'Create the initial project directory structure with src/, tests/, and config files. Establishes the foundation for all subsequent implementation work.',
   },
   {
     name: 'Implement core logic',
@@ -79,6 +80,7 @@ const DEMO_TASKS = [
     category: 'implementation' as const,
     priority: 'medium' as const,
     deps: [0],
+    description: 'Build the primary business logic module that handles data processing and validation. Depends on project structure being in place.',
   },
   {
     name: 'Write unit tests',
@@ -86,12 +88,14 @@ const DEMO_TASKS = [
     category: 'testing' as const,
     priority: 'medium' as const,
     deps: [1],
+    description: 'Create comprehensive unit test coverage for the core logic module. Tests should cover happy paths, edge cases, and error handling.',
   },
   {
     name: 'Write documentation',
     ws: 2,
     category: 'documentation' as const,
     priority: 'low' as const,
+    description: 'Write developer documentation covering API usage, configuration options, and architecture decisions. Include code examples for common use cases.',
     deps: [1],
   },
 ];
@@ -121,6 +125,7 @@ async function createDemoProject(): Promise<{ success: boolean; error?: string }
           project: 'DEMO',
           workstream: t.ws,
           name: t.name,
+          description: t.description,
           mode: 'auto',
           category: t.category,
           priority: t.priority,
