@@ -102,17 +102,18 @@ run_setup() {
   npm run build --silent
 
   echo "Resetting brain..."
-  npx tsx src/cli.ts reset --confirm
+  (cd /tmp && npx tsx "$PROJECT_DIR/src/cli.ts" reset --confirm)
 
   echo "Linking..."
   npm link --silent
 
   echo "Initializing brain..."
-  brain init --notes-dir ~/brain --embedder local
+  # Run from /tmp to avoid local .brain/ instance resolution
+  (cd /tmp && brain init --notes-dir ~/brain --embedder local)
 
   echo "Ingesting command reference docs..."
   for doc in docs/pm-module/commands/*.md; do
-    brain add "$doc" --type guide --tier fast 2>/dev/null || true
+    (cd /tmp && brain add "$PROJECT_DIR/$doc" --type guide --tier fast 2>/dev/null) || true
   done
 
   echo "Spawning setup agent (with session persistence)..."
@@ -315,8 +316,8 @@ case "$PHASE" in
 
     echo ""
     echo "── Ingesting diagnostic outputs ──────────────"
-    brain add "${RESULTS_DIR}/summary.md" --type note --tier fast 2>/dev/null || echo "  SKIP: summary.md ingest failed"
-    brain add "${RESULTS_DIR}/gap-analysis.md" --type note --tier fast 2>/dev/null || echo "  SKIP: gap-analysis.md ingest failed"
+    (cd /tmp && brain add "$PROJECT_DIR/${RESULTS_DIR}/summary.md" --type note --tier fast 2>/dev/null) || echo "  SKIP: summary.md ingest failed"
+    (cd /tmp && brain add "$PROJECT_DIR/${RESULTS_DIR}/gap-analysis.md" --type note --tier fast 2>/dev/null) || echo "  SKIP: gap-analysis.md ingest failed"
     echo "  Diagnostic outputs ingested for future reference."
     ;;
   test-bench)

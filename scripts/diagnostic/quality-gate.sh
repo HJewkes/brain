@@ -15,7 +15,8 @@ echo "  Running data quality gate..."
 FAILURES=0
 
 # Check: every task has a non-empty body
-TASK_JSON=$(brain pm task list --json --full 2>/dev/null || echo '[]')
+# Run from /tmp to avoid local .brain/ instance resolution
+TASK_JSON=$(cd /tmp && brain pm task list --json --full 2>/dev/null || echo '[]')
 TASK_COUNT=$(echo "$TASK_JSON" | jq 'length')
 
 if [[ "$TASK_COUNT" -eq 0 ]]; then
