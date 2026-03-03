@@ -1,0 +1,1 @@
+{"agents": {"default": {"paths": ["src/", "__tests__/", "docs/", "scripts/", "skill/", "templates/"]}}}

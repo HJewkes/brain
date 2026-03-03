@@ -1,0 +1,8 @@
+{
+  "name": "code-change",
+  "criteria": [
+    { "name": "types check", "check": "npm run typecheck", "required": true },
+    { "name": "tests pass", "check": "npm test", "required": true },
+    { "name": "lint clean", "check": "npm run lint", "required": true }
+  ]
+}
