@@ -1,7 +1,8 @@
 import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
-import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync, symlinkSync, lstatSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
+import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig, GLOBAL_BRAIN_DIR } from '../services/config.js';
@@ -153,6 +154,45 @@ async function promptEmbedderChoice(): Promise<'ollama' | 'local' | null> {
     default:
       return null;
   }
+}
+
+function installSkills(): string[] {
+  const brainSkillsDir = join(
+    dirname(new URL(import.meta.url).pathname),
+    '..', '..', '.claude', 'skills'
+  );
+  const globalSkillsDir = join(homedir(), '.claude', 'skills');
+
+  if (!existsSync(brainSkillsDir)) return [];
+  if (!existsSync(globalSkillsDir)) mkdirSync(globalSkillsDir, { recursive: true });
+
+  const installed: string[] = [];
+  const entries = readdirSync(brainSkillsDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const skillPath = join(brainSkillsDir, entry.name);
+    const linkPath = join(globalSkillsDir, entry.name);
+
+    // Skip if already linked correctly
+    if (existsSync(linkPath)) {
+      try {
+        const stat = lstatSync(linkPath);
+        if (stat.isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
+    }
+
+    try {
+      symlinkSync(skillPath, linkPath);
+      installed.push(entry.name);
+    } catch {
+      // Non-fatal — skill won't be globally available
+    }
+  }
+
+  return installed;
 }
 
 export async function ingestBrainReferenceDocs(
@@ -390,6 +430,9 @@ export const initCommand = new Command('init')
     saveConfig(overrides);
     const config = loadConfig();
 
+    // Install brain skills globally for agent accessibility
+    const installedSkills = installSkills();
+
     const created: string[] = [];
     for (const sub of SUBDIRS) {
       const dir = join(config.notesDir, sub);
@@ -474,6 +517,9 @@ export const initCommand = new Command('init')
         );
         if (created.length > 0) {
           process.stderr.write(`Created directories: ${created.join(', ')}\n`);
+        }
+        if (installedSkills.length > 0) {
+          process.stderr.write(`Installed skills: ${installedSkills.join(', ')}\n`);
         }
       }
 
