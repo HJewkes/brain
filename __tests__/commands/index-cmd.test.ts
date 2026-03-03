@@ -3,7 +3,6 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import type { BrainConfig } from '../../src/types.js';
 
 let stdoutChunks: string[];
 let stderrChunks: string[];

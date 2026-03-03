@@ -420,7 +420,7 @@ export function assembleProjectContext(
   const allTasks = listTasks(db, prefix, { priority: 'critical' });
   const criticalTasks: TaskMetadata[] = (allTasks.ok ? allTasks.data : [])
     .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
-    .map(({ virtualStates: _vs, ...rest }) => rest);
+    .map((t) => { const { virtualStates, ...rest } = t; void virtualStates; return rest; });
 
   const allProjectTasks = listTasks(db, prefix);
   const dist: Record<string, number> = {};

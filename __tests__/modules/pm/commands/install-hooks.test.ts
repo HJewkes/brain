@@ -20,10 +20,6 @@ function stdout(): string {
   return stdoutChunks.join('');
 }
 
-function stderr(): string {
-  return stderrChunks.join('');
-}
-
 async function run(...args: string[]): Promise<void> {
   await createInstallHooksCommand().parseAsync(['node', 'install-hooks', ...args], {
     from: 'node',

@@ -21,7 +21,6 @@ import {
 } from '../../src/modules/pm/data/task-ops.js';
 import { resolveDisplayId } from '../../src/modules/pm/data/queries.js';
 import { assembleContext } from '../../src/modules/pm/engine/dispatch.js';
-import { computeVirtualState } from '../../src/modules/pm/engine/state-machine.js';
 
 let db: BrainDB;
 let dbPath: string;
