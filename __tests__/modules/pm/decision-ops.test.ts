@@ -8,13 +8,14 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import {
   createDecision,
   listDecisions,
   getDecision,
   supersedeDecision,
 } from '../../../src/modules/pm/data/decision-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -25,7 +26,7 @@ const embedder = createMockEmbedder();
 async function seedProjectAndTask(): Promise<{ taskDisplayId: string }> {
   await createProject(db, config, embedder, { name: 'Web', prefix: 'WEB' });
   await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Core' });
-  const taskResult = await createTask(db, config, embedder, {
+  const taskResult = await createTestTask(db, config, embedder, {
     project: 'WEB',
     workstream: 1,
     name: 'Build API',
@@ -80,7 +81,7 @@ describe('createDecision', () => {
   it('creates impacts relations to affected tasks', async () => {
     const { taskDisplayId } = await seedProjectAndTask();
 
-    const task2 = await createTask(db, config, embedder, {
+    const task2 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Build Frontend',
@@ -238,7 +239,7 @@ describe('listDecisions', () => {
 
   it('filters by source task', async () => {
     const { taskDisplayId } = await seedProjectAndTask();
-    const task2 = await createTask(db, config, embedder, {
+    const task2 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Other',

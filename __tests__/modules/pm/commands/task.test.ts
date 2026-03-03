@@ -6,7 +6,8 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createTaskCommands } from '../../../../src/modules/pm/commands/task.js';
-import { createTask, updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../../helpers.js';
 
 let db: BrainDB;
 const embedder = createMockEmbedder();
@@ -96,7 +97,7 @@ describe('task list', () => {
 
   it('--priority high filters correctly', async () => {
     // Create a high-priority task
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'High priority task',
@@ -129,19 +130,19 @@ describe('task list', () => {
   });
 
   it('--sort priority orders critical > high > medium > low', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Critical task',
       priority: 'critical',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Low task',
       priority: 'low',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'High task',
@@ -169,7 +170,7 @@ describe('task list', () => {
   });
 
   it('--sort priority --limit 1 combines both', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Critical task',
@@ -204,7 +205,7 @@ describe('task list', () => {
 
 describe('task add', () => {
   it('creates task with required fields', async () => {
-    await run('add', 'New task', '--project', 'TEST', '--workstream', '1');
+    await run('add', 'New task', '--project', 'TEST', '--workstream', '1', '--description', 'A new test task.');
 
     const out = stdout();
     expect(out).toContain('TEST-01.04');
@@ -212,14 +213,14 @@ describe('task add', () => {
   });
 
   it('--depends-on sets dependency', async () => {
-    await run('add', 'Dep task', '--project', 'TEST', '--workstream', '1', '--depends-on', 'TEST-01.01');
+    await run('add', 'Dep task', '--project', 'TEST', '--workstream', '1', '--description', 'Task with dependency.', '--depends-on', 'TEST-01.01');
 
     const out = stdout();
     expect(out).toContain('TEST-01.04');
   });
 
   it('--json outputs created task', async () => {
-    await run('add', 'Json task', '--project', 'TEST', '--workstream', '1', '--json');
+    await run('add', 'Json task', '--project', 'TEST', '--workstream', '1', '--description', 'JSON output test task.', '--json');
 
     const parsed = JSON.parse(stdout());
     expect(parsed.display_id).toBe('TEST-01.04');
@@ -303,7 +304,7 @@ describe('task update', () => {
 
   it('update --depends-on with multiple IDs adds all relations (O-44)', async () => {
     // Create a fresh task with no deps
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'No deps task',
@@ -423,7 +424,7 @@ describe('task add (error paths)', () => {
     db.close();
     db = new BrainDB(tmpDbPath('task-add-noproj'));
 
-    await run('add', 'New task', '--workstream', '1');
+    await run('add', 'New task', '--workstream', '1', '--description', 'Test task.');
 
     expect(process.exitCode).toBe(1);
   });
@@ -513,7 +514,7 @@ describe('task release (error paths)', () => {
 
 describe('task delete (json output)', () => {
   it('--json returns delete confirmation', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Deletable json task',
@@ -529,7 +530,7 @@ describe('task delete (json output)', () => {
 
 describe('task show (text detail)', () => {
   it('shows mode when present', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Auto mode task',
@@ -655,7 +656,7 @@ describe('task list (output formatting)', () => {
   });
 
   it('text output single task shows display_id and status', async () => {
-    await run('add', 'Single task', '--project', 'TEST', '--workstream', '1');
+    await run('add', 'Single task', '--project', 'TEST', '--workstream', '1', '--description', 'A single test task.');
 
     const out = stdout();
     expect(out).toContain('TEST-01.04');
@@ -663,7 +664,7 @@ describe('task list (output formatting)', () => {
   });
 
   it('--category filter works', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Bug task',
@@ -691,7 +692,7 @@ describe('task delete', () => {
   it('deletes a task without dependents', async () => {
     // TEST-01.03 has no dependents (nothing depends on it except TEST-02.03)
     // Actually TEST-02.03 depends on TEST-01.03. Use a fresh task instead.
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Deletable task',

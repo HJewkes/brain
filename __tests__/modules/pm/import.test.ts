@@ -44,13 +44,13 @@ describe('executeImport', () => {
         {
           name: 'Backend',
           tasks: [
-            { name: 'Setup DB', priority: 'high' },
-            { name: 'Build API', priority: 'medium' },
+            { name: 'Setup DB', description: 'Set up the database schema and migrations.', priority: 'high' },
+            { name: 'Build API', description: 'Build the REST API endpoints.', priority: 'medium' },
           ],
         },
         {
           name: 'Frontend',
-          tasks: [{ name: 'Design UI' }],
+          tasks: [{ name: 'Design UI', description: 'Design the user interface components.' }],
         },
       ],
     };
@@ -91,7 +91,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [{ name: 'First task' }, { name: 'Second task', depends_on: ['DEP-01.01'] }],
+          tasks: [{ name: 'First task', description: 'The first task to complete.' }, { name: 'Second task', description: 'Depends on first task.', depends_on: ['DEP-01.01'] }],
         },
       ],
     };
@@ -163,7 +163,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [{ name: 'First' }, { name: 'Second', depends_on: ['BAD-99.99'] }],
+          tasks: [{ name: 'First', description: 'First task.' }, { name: 'Second', description: 'Second task with bad dep.', depends_on: ['BAD-99.99'] }],
         },
       ],
     };
@@ -196,11 +196,11 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'WS1',
-          tasks: [{ name: 'Foundation' }],
+          tasks: [{ name: 'Foundation', description: 'Foundation work for WS1.' }],
         },
         {
           name: 'WS2',
-          tasks: [{ name: 'Depends on WS1', depends_on: ['XDP-01.01'] }],
+          tasks: [{ name: 'Depends on WS1', description: 'Cross-workstream dependency task.', depends_on: ['XDP-01.01'] }],
         },
       ],
     };

@@ -8,11 +8,12 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { computeWaves } from '../../../src/modules/pm/engine/dependency.js';
 import { resolveWorkstreamFilter } from '../../../src/modules/pm/ids.js';
 import { resolveWorkstreamByName } from '../../../src/modules/pm/commands/orchestration.js';
 import type { TaskStatus } from '../../../src/modules/pm/types.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -48,12 +49,12 @@ afterEach(() => {
 describe('O-158: wave freshness — computeWaves reads fresh data', () => {
   it('waves reflects status changes from current session', async () => {
     // Create two tasks, T2 depends on T1
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FR2',
       workstream: 1,
       name: 'First task',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FR2',
       workstream: 1,
       name: 'Second task',

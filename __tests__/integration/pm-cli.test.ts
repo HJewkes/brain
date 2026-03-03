@@ -110,7 +110,7 @@ describe('PM CLI integration', { timeout: 60_000 }, () => {
   describe('task CRUD and filters', () => {
     it('add creates task', () => {
       const output = pm(
-        'task add "First task" --workstream 1 --priority high --category implementation --json'
+        'task add "First task" --workstream 1 --priority high --category implementation --description "First implementation task." --json'
       );
       const result = JSON.parse(output);
 
@@ -122,7 +122,7 @@ describe('PM CLI integration', { timeout: 60_000 }, () => {
 
     it('add creates second task with dependency', () => {
       const output = pm(
-        'task add "Second task" --workstream 1 --priority medium --category implementation --depends-on TST-01.01 --json'
+        'task add "Second task" --workstream 1 --priority medium --category implementation --description "Second task depending on first." --depends-on TST-01.01 --json'
       );
       const result = JSON.parse(output);
 

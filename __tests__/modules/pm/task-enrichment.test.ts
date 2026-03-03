@@ -8,14 +8,11 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import {
-  createTask,
-  getTask,
-  updateTaskStatus,
-} from '../../../src/modules/pm/data/task-ops.js';
+import { getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { readTaskBody } from '../../../src/modules/pm/engine/dispatch.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import type { TaskStatus } from '../../../src/modules/pm/types.js';
+import { createTestTask } from '../../helpers.js';
 
 function replaceFm(content: string, field: string, value: string): string {
   const endOfFrontmatter = content.indexOf('\n---', 4);
@@ -60,7 +57,7 @@ afterEach(() => {
 
 describe('O-128: task add --description', () => {
   it('creates task with description in note body', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Build login page',
@@ -77,8 +74,8 @@ describe('O-128: task add --description', () => {
     expect(body).toBe('Implement OAuth2 login flow with Google provider');
   });
 
-  it('creates task without description when omitted', async () => {
-    const result = await createTask(db, config, embedder, {
+  it('creates task with default description when not explicitly provided', async () => {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Simple task',
@@ -89,11 +86,11 @@ describe('O-128: task add --description', () => {
 
     const notes = getPmNotes(db, 'task', { display_id: 'WEB-01.01' });
     const body = readTaskBody(notes[0]);
-    expect(body).toBe('');
+    expect(body).toBe('Test task: Simple task. This is a test task for automated testing.');
   });
 
   it('handles escaped newlines in description', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Multi-line task',
@@ -113,7 +110,7 @@ describe('O-128: task add --description', () => {
 
 describe('O-95: task block --reason', () => {
   it('stores block_reason in task frontmatter metadata', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Blocked task',
@@ -133,7 +130,7 @@ describe('O-95: task block --reason', () => {
   });
 
   it('block_reason can be written to frontmatter via file update', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Blocked task',
@@ -165,7 +162,7 @@ describe('O-95: task block --reason', () => {
 
 describe('O-127: task done --token', () => {
   it('completes task without token (backward compatible)', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Token task',
@@ -181,7 +178,7 @@ describe('O-127: task done --token', () => {
   });
 
   it('token mismatch is detectable via getTask claim_token', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Claimed task',
@@ -223,7 +220,7 @@ describe('O-127: task done --token', () => {
   });
 
   it('matching token produces no mismatch', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Token match task',

@@ -71,12 +71,12 @@ beforeAll(() => {
   pm('workstream add "Backend" --json');
 
   // Tasks in ws 1
-  pm('task add "Build UI" --workstream 1 --priority high --category implementation --json');
-  pm('task add "Write UI tests" --workstream 1 --priority medium --category testing --json');
+  pm('task add "Build UI" --workstream 1 --priority high --category implementation --description "Build the frontend user interface." --json');
+  pm('task add "Write UI tests" --workstream 1 --priority medium --category testing --description "Write tests for the UI components." --json');
 
   // Tasks in ws 2
-  pm('task add "Setup CI" --workstream 2 --priority high --category implementation --json');
-  pm('task add "Deploy staging" --workstream 2 --priority medium --category implementation --json');
+  pm('task add "Setup CI" --workstream 2 --priority high --category implementation --description "Set up continuous integration pipeline." --json');
+  pm('task add "Deploy staging" --workstream 2 --priority medium --category implementation --description "Deploy the application to staging." --json');
 
   // Add dependency: Deploy staging depends on Setup CI
   const ws2Raw = pm('task list --workstream 2 --json');
@@ -187,6 +187,7 @@ describe('V12 Integration: Task creation template', { timeout: 60_000 }, () => {
   it('task add --done-when --ac --refs stores structured fields', () => {
     const output = pm(
       'task add "Templated task" --workstream 1 --priority medium ' +
+      '--description "A templated task with structured fields." ' +
       '--done-when "All tests pass and coverage above 80%" ' +
       '--ac "Unit tests cover edge cases" --ac "Integration test passes" ' +
       '--refs "docs/api.md,src/handler.ts" --json'
@@ -206,6 +207,7 @@ describe('V12 Integration: Task creation template', { timeout: 60_000 }, () => {
   it('acceptance_criteria from frontmatter appears in task show', () => {
     const createOutput = pm(
       'task add "AC frontmatter test" --workstream 1 ' +
+      '--description "Task for acceptance criteria frontmatter test." ' +
       '--ac "Criterion from flag" --json'
     );
     const created = JSON.parse(createOutput);
@@ -221,6 +223,7 @@ describe('V12 Integration: Task creation template', { timeout: 60_000 }, () => {
   it('done_when round-trips through task show', () => {
     const createOutput = pm(
       'task add "Done-when test" --workstream 1 ' +
+      '--description "Task for done-when round-trip test." ' +
       '--done-when "Feature deployed to production" --json'
     );
     const created = JSON.parse(createOutput);
@@ -425,7 +428,7 @@ describe('V12 Integration: O-139 and O-140 verification', { timeout: 60_000 }, (
     // Ensure we're on the VOLT project
     pm('use VOLT');
 
-    pm('task add "O139 base" --workstream 1 --priority low --json');
+    pm('task add "O139 base" --workstream 1 --priority low --description "Base task for O-139 verification." --json');
 
     const createOutput = pm(
       'task add "O139 target" --workstream 1 --priority low ' +
@@ -450,7 +453,7 @@ describe('V12 Integration: O-139 and O-140 verification', { timeout: 60_000 }, (
 
   it('modified field is valid date after --depends-on update', () => {
     const createOutput = pm(
-      'task add "Timestamp test" --workstream 1 --priority low --json'
+      'task add "Timestamp test" --workstream 1 --priority low --description "Task for timestamp verification." --json'
     );
     const created = JSON.parse(createOutput);
 

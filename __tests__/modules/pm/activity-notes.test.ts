@@ -8,7 +8,8 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -31,7 +32,7 @@ afterEach(() => {
 
 describe('activity notes on state transitions', () => {
   it('completing a task creates an activity note', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Build it' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Build it' });
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'in-progress');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
@@ -50,7 +51,7 @@ describe('activity notes on state transitions', () => {
   });
 
   it('activity note has required relation to task', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Build it' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Build it' });
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'in-progress');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
@@ -67,7 +68,7 @@ describe('activity notes on state transitions', () => {
   });
 
   it('claiming a task creates a claim activity note', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Claim me' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Claim me' });
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
 
     const activities = db.getAllNotes().filter(n => {
@@ -78,8 +79,8 @@ describe('activity notes on state transitions', () => {
   });
 
   it('complete activity includes newly_eligible tasks', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, {
       project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
     });
 
@@ -96,7 +97,7 @@ describe('activity notes on state transitions', () => {
   });
 
   it('activity note has embed_status: queued', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Test' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Test' });
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
 
     const activities = db.getAllNotes().filter(n => {

@@ -9,9 +9,10 @@ import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream, getWorkstream, listWorkstreams } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
 import { search } from '../../../src/services/search.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -75,7 +76,7 @@ describe('O-216: search score field baseline', () => {
 
 describe('O-234: task list --search searches body content', () => {
   it('finds task by unique keyword in description body, not title', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Generic task name',
@@ -91,7 +92,7 @@ describe('O-234: task list --search searches body content', () => {
   });
 
   it('search is case-insensitive for body content', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Another task',
@@ -189,13 +190,13 @@ describe('O-96: workstreams alias routing', () => {
 
 describe('O-222: tasks alias flag forwarding', () => {
   it('listTasks with priority filter returns only matching tasks', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Critical fix',
       priority: 'critical',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Low effort cleanup',
@@ -223,7 +224,7 @@ describe('O-222: tasks alias flag forwarding', () => {
   });
 
   it('listTasks with combined priority and status filters works', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 2,
       name: 'High priority task',

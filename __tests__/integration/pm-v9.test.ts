@@ -124,18 +124,18 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
     it('creates tasks with categories for auto-dependency', () => {
       // Implementation tasks in ws1
       pm(
-        'task add "Build API endpoint" --workstream 1 --priority high --category implementation --json'
+        'task add "Build API endpoint" --workstream 1 --priority high --category implementation --description "Build the REST API endpoint for the service." --json'
       );
       pm(
-        'task add "Build data model" --workstream 1 --priority medium --category implementation --json'
+        'task add "Build data model" --workstream 1 --priority medium --category implementation --description "Build the database data model." --json'
       );
       // Testing task in ws1
       pm(
-        'task add "Write API tests" --workstream 1 --priority medium --category testing --json'
+        'task add "Write API tests" --workstream 1 --priority medium --category testing --description "Write tests for the API endpoints." --json'
       );
       // Implementation task in ws2
       pm(
-        'task add "Setup test framework" --workstream 2 --priority high --category implementation --json'
+        'task add "Setup test framework" --workstream 2 --priority high --category implementation --description "Set up the test framework for the project." --json'
       );
     });
 
@@ -164,7 +164,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
     it('creates task with --due and --milestone', () => {
       pm('use VNM');
       const output = pm(
-        'task add "Deadline task" --workstream 1 --due 2026-06-01 --milestone v1.0 --json'
+        'task add "Deadline task" --workstream 1 --due 2026-06-01 --milestone v1.0 --description "Task with a deadline and milestone." --json'
       );
       const result = JSON.parse(output);
 
@@ -191,7 +191,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
       pm('use VNM');
       // Create a task - body is set via the title for search
       pm(
-        'task add "Implement xylophone parser" --workstream 1 --category implementation --json'
+        'task add "Implement xylophone parser" --workstream 1 --category implementation --description "Implement a parser for xylophone notation format." --json'
       );
     });
 

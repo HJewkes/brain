@@ -8,14 +8,10 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import {
-  createTask,
-  getTask,
-  listTasks,
-  updateTaskStatus,
-} from '../../../src/modules/pm/data/task-ops.js';
+import { getTask, listTasks, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import { computeWaves } from '../../../src/modules/pm/engine/dependency.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -68,12 +64,12 @@ function addRelationDep(sourceDisplayId: string, targetDisplayId: string): void 
 
 describe('virtual state with relation-only dependencies', () => {
   it('computeVirtualState returns +BLOCKED when relation-only dep is pending', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Prerequisite',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Blocked by prereq',
@@ -90,12 +86,12 @@ describe('virtual state with relation-only dependencies', () => {
   });
 
   it('computeVirtualState returns +ELIGIBLE when relation-only dep is done', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Prereq to complete',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Waiting on prereq',
@@ -117,12 +113,12 @@ describe('virtual state with relation-only dependencies', () => {
   });
 
   it('listTasks returns +BLOCKED for tasks with unsatisfied relation deps', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'List prereq',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'List blocked',
@@ -146,12 +142,12 @@ describe('virtual state with relation-only dependencies', () => {
 
 describe('waves JSON with relation-based dependencies', () => {
   it('waves JSON includes depends_on from relations', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Wave 0 task',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Wave 1 task',
@@ -193,12 +189,12 @@ describe('waves JSON with relation-based dependencies', () => {
   });
 
   it('waves JSON excludes completed tasks from waves', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Already done',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Still pending',
@@ -223,17 +219,17 @@ describe('waves JSON with relation-based dependencies', () => {
   });
 
   it('waves JSON preserves depends_on for multi-hop relation chains', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'First',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Second',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VST',
       workstream: 1,
       name: 'Third',

@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { assembleContext } from '../../../src/modules/pm/engine/dispatch.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -33,7 +34,7 @@ afterEach(() => {
 describe('context regressions', () => {
   // O-50: context assembly returns task metadata
   it('O-50: assembleContext returns task metadata', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Context test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Context test' });
     const result = assembleContext(db, 'VOLT-01.01');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -43,7 +44,7 @@ describe('context regressions', () => {
 
   // O-51: context includes workstream info
   it('O-51: context includes workstream', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'WS test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'WS test' });
     const result = assembleContext(db, 'VOLT-01.01');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -54,8 +55,8 @@ describe('context regressions', () => {
 
   // O-64: context includes dependencies
   it('O-64: context includes dependency info', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'First' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, {
       project: 'VOLT', workstream: 1, name: 'Second', dependsOn: ['VOLT-01.01'],
     });
     const result = assembleContext(db, 'VOLT-01.02');
@@ -75,7 +76,7 @@ describe('context regressions', () => {
 
   // O-75: context includes task body
   it('O-75: context includes task body', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'VOLT', workstream: 1, name: 'With body',
       description: 'This is the body content',
     });
@@ -88,7 +89,7 @@ describe('context regressions', () => {
 
   // O-76: context hash is deterministic for same state
   it('O-76: context hash is deterministic', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Hash test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Hash test' });
     const r1 = assembleContext(db, 'VOLT-01.01');
     const r2 = assembleContext(db, 'VOLT-01.01');
     expect(r1.ok && r2.ok).toBe(true);

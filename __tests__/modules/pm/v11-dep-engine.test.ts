@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { listTasks, getTask, createTask } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -46,14 +47,14 @@ afterEach(() => {
 describe('relations as single source of truth for depends_on', () => {
   it('getTask() returns depends_on from relations table, not just frontmatter', async () => {
     // Create two tasks with NO explicit dependsOn in frontmatter
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'Target task',
     });
     expect(t1.ok).toBe(true);
 
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'Source task',
@@ -82,14 +83,14 @@ describe('relations as single source of truth for depends_on', () => {
   });
 
   it('areDependenciesComplete returns false when relation-only dep is not done', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'Blocking task',
     });
     expect(t1.ok).toBe(true);
 
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'Blocked task',
@@ -115,14 +116,14 @@ describe('relations as single source of truth for depends_on', () => {
   });
 
   it('areDependenciesComplete returns true when relation-only dep is done', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'Done task',
     });
     expect(t1.ok).toBe(true);
 
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'Waiting task',
@@ -154,14 +155,14 @@ describe('relations as single source of truth for depends_on', () => {
   });
 
   it('listTasks enrichment reads depends_on from relations', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'List target',
     });
     expect(t1.ok).toBe(true);
 
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'DEP',
       workstream: 1,
       name: 'List source',

@@ -5,7 +5,7 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createOrchestrateCommands } from '../../../../src/modules/pm/commands/orchestrate.js';
-import { createTask, updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
 import { setActiveProject } from '../../../../src/modules/pm/data/queries.js';
 
 let db: BrainDB;

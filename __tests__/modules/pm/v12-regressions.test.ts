@@ -8,9 +8,10 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject, listProjects } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { listTasks, getTask, createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import { traverseGraph } from '../../../src/services/graph.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -46,7 +47,7 @@ afterEach(() => {
 // V11 fix confirmed: O-134
 describe('O-134: display_id in base task JSON', () => {
   it('taskMetaFromRecord always includes display_id (not gated on --full)', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Display ID test',
@@ -96,14 +97,14 @@ describe('O-135: project name in pm list JSON', () => {
 // V11 fix confirmed: O-84
 describe('O-84: dependencies field populated from relations', () => {
   it('task with relation-only dependency has depends_on populated', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Target task',
     });
     expect(t1.ok).toBe(true);
 
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Source task',
@@ -134,14 +135,14 @@ describe('O-84: dependencies field populated from relations', () => {
 // V11 fix confirmed: O-148
 describe('O-148: bidirectional graph traversal', () => {
   it('traverseGraph follows related edges in both directions', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Note A',
     });
     expect(t1.ok).toBe(true);
 
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Note B',
@@ -166,7 +167,7 @@ describe('O-148: bidirectional graph traversal', () => {
 // V11 fix confirmed: O-113
 describe('O-113: display_id consistency in human output', () => {
   it('task display_id matches PREFIX-WW.TT format', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Format test',
@@ -183,14 +184,14 @@ describe('O-113: display_id consistency in human output', () => {
 // V11 fix confirmed: O-114
 describe('O-114: newly eligible after dependency completion', () => {
   it('completing a dependency changes dependent to +ELIGIBLE', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Blocking task',
     });
     expect(t1.ok).toBe(true);
 
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'REG',
       workstream: 1,
       name: 'Blocked task',

@@ -5,8 +5,9 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createOrchestrationCommands } from '../../../../src/modules/pm/commands/orchestration.js';
-import { createTask, updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
 import type { TaskStatus } from '../../../../src/modules/pm/types.js';
+import { createTestTask } from '../../../helpers.js';
 
 let db: BrainDB;
 const embedder = createMockEmbedder();
@@ -87,7 +88,7 @@ describe('next (error paths)', () => {
   it('shows "... and N more" when filtered > limit', async () => {
     // Add more eligible tasks
     for (let i = 0; i < 3; i++) {
-      await createTask(db, config, embedder, {
+      await createTestTask(db, config, embedder, {
         project: 'TEST',
         workstream: 1,
         name: `Extra eligible ${i}`,
@@ -418,7 +419,7 @@ describe('briefing', () => {
 
   it('shows consistency issues when present', async () => {
     // Create a blocked task without cause
-    const t = await createTask(db, config, embedder, {
+    const t = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Blocked no deps',
@@ -436,7 +437,7 @@ describe('briefing', () => {
   it('briefing with >5 eligible shows truncated list', async () => {
     // Add more tasks to get >5 eligible (no deps)
     for (let i = 0; i < 5; i++) {
-      await createTask(db, config, embedder, {
+      await createTestTask(db, config, embedder, {
         project: 'TEST',
         workstream: 1,
         name: `Extra task ${i}`,

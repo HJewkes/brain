@@ -8,9 +8,10 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { indexSingleFile } from '../../../src/services/indexing.js';
 import { computeAutoLinks, computeGraphScores } from '../../../src/services/graph.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -58,7 +59,7 @@ describe('O-224: references relation edges after task creation', () => {
     await seedProjectAndWorkstream('GR');
     const docNoteId = await indexDoc('design-doc', 'Design Doc', 'System design for the API layer.');
 
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'GR', workstream: 1, name: 'Implement design',
       references: ['design-doc'],
     });
@@ -81,7 +82,7 @@ describe('O-224: references relation edges after task creation', () => {
     const docA = await indexDoc('arch-doc', 'Architecture', 'Microservices architecture overview.');
     const docB = await indexDoc('api-doc', 'API Guide', 'REST API patterns and conventions.');
 
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'MR', workstream: 1, name: 'Build microservice',
       references: ['arch-doc', 'api-doc'],
     });
@@ -144,7 +145,7 @@ describe('O-49: task notes are searchable', () => {
   it('chunks exist after createTask', async () => {
     await seedProjectAndWorkstream('SR');
 
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'SR', workstream: 1, name: 'Searchable task with unique keywords',
       description: 'This task involves refactoring the authentication middleware.',
     });
@@ -165,7 +166,7 @@ describe('Graph traversal: computeGraphScores from task finds referenced docs', 
     await seedProjectAndWorkstream('GT');
     const docNoteId = await indexDoc('ref-target', 'Target Doc', 'Important reference material.');
 
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'GT', workstream: 1, name: 'Graph traversal task',
       references: ['ref-target'],
     });
@@ -187,7 +188,7 @@ describe('Graph traversal: computeGraphScores from task finds referenced docs', 
     const implDoc = await indexDoc('impl-doc', 'Impl Guide', 'Implementation guide.');
 
     // Create task referencing spec-doc
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TH', workstream: 1, name: 'Two-hop task',
       references: ['spec-doc'],
     });

@@ -10,7 +10,7 @@ import type { BrainConfig } from '../../../src/types.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createDecision } from '../../../src/modules/pm/data/decision-ops.js';
 import {
   writePrompt,
@@ -20,6 +20,7 @@ import {
 import { assembleContext } from '../../../src/modules/pm/engine/dispatch.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
 import { allocateWorktree, getBudget } from '../../../src/modules/pm/engine/worktree.js';
+import { createTestTask } from '../../helpers.js';
 
 vi.mock('node:child_process', () => ({
   execSync: vi.fn((cmd: string) => {
@@ -67,7 +68,7 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
       await createProject(db, config, embedder, { name: 'Lifecycle', prefix: 'LC' });
       await createWorkstream(db, config, embedder, { project: 'LC', name: 'WS1' });
 
-      const t1 = await createTask(db, config, embedder, {
+      const t1 = await createTestTask(db, config, embedder, {
         project: 'LC',
         workstream: 1,
         name: 'First task',
@@ -75,7 +76,7 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
       expect(t1.ok).toBe(true);
       if (!t1.ok) return;
 
-      const t2 = await createTask(db, config, embedder, {
+      const t2 = await createTestTask(db, config, embedder, {
         project: 'LC',
         workstream: 1,
         name: 'Second task',
@@ -117,12 +118,12 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
       await createProject(db, config, embedder, { name: 'DecTest', prefix: 'DT' });
       await createWorkstream(db, config, embedder, { project: 'DT', name: 'WS1' });
 
-      await createTask(db, config, embedder, {
+      await createTestTask(db, config, embedder, {
         project: 'DT',
         workstream: 1,
         name: 'Task A',
       });
-      await createTask(db, config, embedder, {
+      await createTestTask(db, config, embedder, {
         project: 'DT',
         workstream: 1,
         name: 'Task B',
@@ -153,7 +154,7 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
     it('v1 is superseded when v2 is written, history shows both', async () => {
       await createProject(db, config, embedder, { name: 'PromptTest', prefix: 'PT' });
       await createWorkstream(db, config, embedder, { project: 'PT', name: 'WS1' });
-      await createTask(db, config, embedder, {
+      await createTestTask(db, config, embedder, {
         project: 'PT',
         workstream: 1,
         name: 'Prompt task',

@@ -8,9 +8,10 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { search } from '../../../src/services/search.js';
 import { indexSingleFile } from '../../../src/services/indexing.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -58,7 +59,7 @@ describe('V14 integration', () => {
     await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());
 
     // Create task referencing that doc
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'V14', workstream: 1, name: 'Implement design',
       references: ['design-spec'],
     });
@@ -86,7 +87,7 @@ describe('V14 integration', () => {
     await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());
 
     // Create task with reference
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'E2E', workstream: 1, name: 'Build REST API',
       references: ['api-guide'],
       description: 'Implement the REST API following the API guide patterns.',

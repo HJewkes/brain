@@ -16,7 +16,6 @@ import {
 } from '../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../src/modules/pm/data/workstream-ops.js';
 import {
-  createTask,
   getTask,
   updateTaskStatus,
   listTasks,
@@ -44,6 +43,7 @@ import { createStandardProject } from '../fixtures/pm-project.js';
 import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
 import type { ModuleRegistry } from '../../src/modules/registry.js';
 import type { BrainConfig } from '../../src/types.js';
+import { createTestTask } from '../helpers.js';
 
 function tmpDir(prefix = 'brain-pm-integ'): string {
   const dir = join(tmpdir(), `${prefix}-${randomUUID()}`);
@@ -134,7 +134,7 @@ describe('V4: PM Module Smoke Test', () => {
   it('create task -> note indexed with correct metadata JSON', async () => {
     await createProject(db, config, embedder, { name: 'Gamma', prefix: 'GAM' });
     await createWorkstream(db, config, embedder, { project: 'GAM', name: 'WS1' });
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'GAM',
       workstream: 1,
       name: 'First Task',
@@ -159,8 +159,8 @@ describe('V4: PM Module Smoke Test', () => {
   it('relations stored with module=pm scope', async () => {
     await createProject(db, config, embedder, { name: 'Rel', prefix: 'REL' });
     await createWorkstream(db, config, embedder, { project: 'REL', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'REL', workstream: 1, name: 'T1' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'REL', workstream: 1, name: 'T1' });
+    await createTestTask(db, config, embedder, {
       project: 'REL',
       workstream: 1,
       name: 'T2',
@@ -498,7 +498,7 @@ describe('V6: CLI Commands (data layer)', () => {
     await createProject(db, config, embedder, { name: 'TL', prefix: 'TL' });
     await createWorkstream(db, config, embedder, { project: 'TL', name: 'WS1' });
 
-    const taskResult = await createTask(db, config, embedder, {
+    const taskResult = await createTestTask(db, config, embedder, {
       project: 'TL',
       workstream: 1,
       name: 'Lifecycle Task',
@@ -530,7 +530,7 @@ describe('V6: CLI Commands (data layer)', () => {
   it('decision + prompt: add decision -> write prompt -> detect staleness', async () => {
     await createProject(db, config, embedder, { name: 'DP', prefix: 'DP' });
     await createWorkstream(db, config, embedder, { project: 'DP', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'DP', workstream: 1, name: 'Task 1' });
+    await createTestTask(db, config, embedder, { project: 'DP', workstream: 1, name: 'Task 1' });
 
     // Write prompt first
     const promptResult = await writePrompt(db, config, embedder, {
@@ -566,8 +566,8 @@ describe('V6: CLI Commands (data layer)', () => {
   it('dispatch returns valid context bundle', async () => {
     await createProject(db, config, embedder, { name: 'Ctx', prefix: 'CTX' });
     await createWorkstream(db, config, embedder, { project: 'CTX', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'CTX', workstream: 1, name: 'Dep Task' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'CTX', workstream: 1, name: 'Dep Task' });
+    await createTestTask(db, config, embedder, {
       project: 'CTX',
       workstream: 1,
       name: 'Target Task',
@@ -592,8 +592,8 @@ describe('V6: CLI Commands (data layer)', () => {
   it('briefing includes all project state', async () => {
     await createProject(db, config, embedder, { name: 'Brief', prefix: 'BRF' });
     await createWorkstream(db, config, embedder, { project: 'BRF', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'BRF', workstream: 1, name: 'T1' });
-    await createTask(db, config, embedder, { project: 'BRF', workstream: 1, name: 'T2' });
+    await createTestTask(db, config, embedder, { project: 'BRF', workstream: 1, name: 'T1' });
+    await createTestTask(db, config, embedder, { project: 'BRF', workstream: 1, name: 'T2' });
 
     // getProjectNotes should include project + workstream + tasks
     const allNotes = getProjectNotes(db, 'BRF');
@@ -617,7 +617,7 @@ describe('V6: CLI Commands (data layer)', () => {
   it('invalid transition from data layer rejected', async () => {
     await createProject(db, config, embedder, { name: 'Trans', prefix: 'TRN' });
     await createWorkstream(db, config, embedder, { project: 'TRN', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'TRN', workstream: 1, name: 'T1' });
+    await createTestTask(db, config, embedder, { project: 'TRN', workstream: 1, name: 'T1' });
 
     const result = await updateTaskStatus(db, config, embedder, 'TRN-01.01', 'done');
     expect(result.ok).toBe(false);
@@ -651,7 +651,7 @@ describe('V7: Directory-Backed Tasks', () => {
     await createProject(db, config, embedder, { name: 'Dir', prefix: 'DIR' });
     await createWorkstream(db, config, embedder, { project: 'DIR', name: 'WS1' });
 
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'DIR',
       workstream: 1,
       name: 'Dir Task',
@@ -667,7 +667,7 @@ describe('V7: Directory-Backed Tasks', () => {
     await createProject(db, config, embedder, { name: 'FTS', prefix: 'FTS' });
     await createWorkstream(db, config, embedder, { project: 'FTS', name: 'WS1' });
 
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FTS',
       workstream: 1,
       name: 'FTS Task',
@@ -705,7 +705,7 @@ describe('V7: Directory-Backed Tasks', () => {
   it('dispatch includes dependency summaries from content_dir', async () => {
     await createProject(db, config, embedder, { name: 'DCtx', prefix: 'DCTX' });
     await createWorkstream(db, config, embedder, { project: 'DCTX', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'DCTX', workstream: 1, name: 'Dep' });
+    await createTestTask(db, config, embedder, { project: 'DCTX', workstream: 1, name: 'Dep' });
 
     // Write summary to dep's content_dir
     const depContentDir = join(notesDir, 'modules', 'pm', 'DCTX', 'DCTX-01.01');
@@ -719,7 +719,7 @@ describe('V7: Directory-Backed Tasks', () => {
       contentDir: depContentDir,
     });
 
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'DCTX',
       workstream: 1,
       name: 'Target',
@@ -736,7 +736,7 @@ describe('V7: Directory-Backed Tasks', () => {
   it('delete task -> content_dir cleaned up', async () => {
     await createProject(db, config, embedder, { name: 'Del', prefix: 'DEL' });
     await createWorkstream(db, config, embedder, { project: 'DEL', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'DEL', workstream: 1, name: 'Del Task' });
+    await createTestTask(db, config, embedder, { project: 'DEL', workstream: 1, name: 'Del Task' });
 
     const contentDir = join(notesDir, 'modules', 'pm', 'DEL', 'DEL-01.01');
     expect(existsSync(contentDir)).toBe(true);
@@ -752,7 +752,7 @@ describe('V7: Directory-Backed Tasks', () => {
   it('task without dependencies has empty dep list in context', async () => {
     await createProject(db, config, embedder, { name: 'Ind', prefix: 'IND' });
     await createWorkstream(db, config, embedder, { project: 'IND', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'IND', workstream: 1, name: 'Solo' });
+    await createTestTask(db, config, embedder, { project: 'IND', workstream: 1, name: 'Solo' });
 
     const bundle = assembleContext(db, 'IND-01.01');
     expect(bundle.ok).toBe(true);

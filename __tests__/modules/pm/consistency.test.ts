@@ -8,7 +8,7 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createDecision } from '../../../src/modules/pm/data/decision-ops.js';
 import { writePrompt } from '../../../src/modules/pm/data/prompt-ops.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
@@ -24,6 +24,7 @@ import {
   clusterSourceDocuments,
 } from '../../../src/modules/pm/engine/consistency.js';
 import { indexSingleFile } from '../../../src/services/indexing.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -51,7 +52,7 @@ afterEach(() => {
 
 describe('findOrphanedDecisions', () => {
   it('returns decisions with no impacts', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
     await createDecision(db, config, embedder, {
       project: 'CHK',
       name: 'Orphan Decision',
@@ -66,7 +67,7 @@ describe('findOrphanedDecisions', () => {
   });
 
   it('excludes decisions with impacts', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
     await createDecision(db, config, embedder, {
       project: 'CHK',
       name: 'Good Decision',
@@ -81,8 +82,8 @@ describe('findOrphanedDecisions', () => {
 
 describe('findBrokenDependencies', () => {
   it('returns empty when all dependencies exist', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, {
       project: 'CHK',
       workstream: 1,
       name: 'Task B',
@@ -93,7 +94,7 @@ describe('findBrokenDependencies', () => {
   });
 
   it('detects dependencies referencing nonexistent tasks', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
     // Create a relation pointing to a non-existent note (simulating data corruption)
     const taskNotes = getPmNotes(db, 'task', { project: 'CHK', display_id: 'CHK-01.01' });
     expect(taskNotes).toHaveLength(1);
@@ -113,13 +114,13 @@ describe('findBrokenDependencies', () => {
 
 describe('findBlockedWithoutCause', () => {
   it('returns blocked tasks where all deps are done', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'CHK',
       workstream: 1,
       name: 'Dep Task',
     });
     expect(t1.ok).toBe(true);
-    const t2 = await createTask(db, config, embedder, {
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'CHK',
       workstream: 1,
       name: 'Blocked Task',
@@ -142,8 +143,8 @@ describe('findBlockedWithoutCause', () => {
 
 describe('findCancelledDependencies', () => {
   it('returns tasks depending on cancelled tasks', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Will Cancel' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Will Cancel' });
+    await createTestTask(db, config, embedder, {
       project: 'CHK',
       workstream: 1,
       name: 'Depends On Cancelled',
@@ -161,7 +162,7 @@ describe('findCancelledDependencies', () => {
 
 describe('findStalePrompts', () => {
   it('returns prompts older than impacting decisions with decision details', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
     // Write prompt first
     await writePrompt(db, config, embedder, {
       project: 'CHK',
@@ -187,7 +188,7 @@ describe('findStalePrompts', () => {
   });
 
   it('returns empty when no stale prompts', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
     // Decision first, prompt after — prompt is not stale
     await createDecision(db, config, embedder, {
       project: 'CHK',
@@ -210,7 +211,7 @@ describe('findStalePrompts', () => {
 
 describe('computeDecisionPairs', () => {
   it('returns pairs of decisions sharing impact targets', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Shared Task' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Shared Task' });
     await createDecision(db, config, embedder, {
       project: 'CHK',
       name: 'Use REST',
@@ -233,8 +234,8 @@ describe('computeDecisionPairs', () => {
   });
 
   it('returns empty when no overlapping impacts', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B' });
     await createDecision(db, config, embedder, {
       project: 'CHK',
       name: 'Dec A',
@@ -257,7 +258,7 @@ describe('computeDecisionPairs', () => {
 
 describe('computeTaskDecisionAlignment', () => {
   it('returns tasks with their impacting decisions', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'API Task' });
     await createDecision(db, config, embedder, {
       project: 'CHK',
       name: 'Use REST',
@@ -274,7 +275,7 @@ describe('computeTaskDecisionAlignment', () => {
   });
 
   it('skips tasks with no impacting decisions', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'No decisions' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'No decisions' });
     const alignments = computeTaskDecisionAlignment(db, 'CHK');
     expect(alignments).toHaveLength(0);
   });
@@ -282,7 +283,7 @@ describe('computeTaskDecisionAlignment', () => {
 
 describe('computeSupersessionGaps', () => {
   it('returns decision pairs on same source task without supersession relation', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task' });
     await createDecision(db, config, embedder, {
       project: 'CHK',
       name: 'Old approach',
@@ -336,8 +337,8 @@ describe('clusterSourceDocuments', () => {
   });
 
   it('excludes PM module notes from clustering', async () => {
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
-    await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task B' });
 
     const clusters = clusterSourceDocuments(db);
     expect(clusters).toHaveLength(0);

@@ -7,8 +7,9 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
-import { listTasks, getTask, createTask } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
 import { computeWaves, inferDependencies } from '../../../src/modules/pm/engine/dependency.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -165,7 +166,7 @@ describe('O-131 + O-132: relation-only dependencies via inferDependencies', () =
   it('O-132: inferred-dep task has +BLOCKED virtualState (not +ELIGIBLE)', async () => {
     // Create a testing task and an implementation task in same workstream.
     // inferDependencies should add testing->implementation dep via relations only.
-    const implTask = await createTask(db, config, embedder, {
+    const implTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Impl task',
@@ -173,7 +174,7 @@ describe('O-131 + O-132: relation-only dependencies via inferDependencies', () =
     });
     expect(implTask.ok).toBe(true);
 
-    const testTask = await createTask(db, config, embedder, {
+    const testTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Test task',
@@ -198,7 +199,7 @@ describe('O-131 + O-132: relation-only dependencies via inferDependencies', () =
   });
 
   it('O-131: inferred-dep task has populated depends_on in waves JSON', async () => {
-    const implTask = await createTask(db, config, embedder, {
+    const implTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Impl task for waves',
@@ -206,7 +207,7 @@ describe('O-131 + O-132: relation-only dependencies via inferDependencies', () =
     });
     expect(implTask.ok).toBe(true);
 
-    const testTask = await createTask(db, config, embedder, {
+    const testTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Test task for waves',

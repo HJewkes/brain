@@ -8,7 +8,8 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -31,8 +32,8 @@ afterEach(() => {
 
 describe('relations as single source of truth', () => {
   it('createTask creates relation edges for depends_on', async () => {
-    const t1 = await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
-    const t2 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    const t2 = await createTestTask(db, config, embedder, {
       project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
     });
     expect(t2.ok).toBe(true);
@@ -44,8 +45,8 @@ describe('relations as single source of truth', () => {
   });
 
   it('listTasks shows depends_on from relations even without frontmatter', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Second' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Second' });
 
     // Add relation directly (simulating inferDependencies)
     const notes = db.getAllNotes().filter(n => JSON.parse(n.metadata ?? '{}').module === 'pm');
@@ -61,8 +62,8 @@ describe('relations as single source of truth', () => {
   });
 
   it('getTask shows depends_on from relations', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, {
       project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
     });
     const result = getTask(db, 'TST-01.02');
@@ -72,8 +73,8 @@ describe('relations as single source of truth', () => {
   });
 
   it('virtual state +BLOCKED computed from relations', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, {
       project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
     });
     const result = listTasks(db, 'TST');

@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, deleteTask } from '../../../../src/modules/pm/data/task-ops.js';
+import { deleteTask } from '../../../../src/modules/pm/data/task-ops.js';
 import { getPmNotes } from '../../../../src/modules/pm/data/queries.js';
+import { createTestTask } from '../../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -58,7 +59,7 @@ describe('PM hierarchy edges', () => {
 
   it('createTask creates parent relation from workstream to task', async () => {
     await createWorkstream(db, config, embedder, { project: 'ALP', name: 'Backend' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'ALP',
       workstream: 1,
       name: 'Set up database',
@@ -79,7 +80,7 @@ describe('PM hierarchy edges', () => {
 
   it('deleting a task removes its parent relation', async () => {
     await createWorkstream(db, config, embedder, { project: 'ALP', name: 'Backend' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'ALP',
       workstream: 1,
       name: 'Temporary task',
@@ -99,17 +100,17 @@ describe('PM hierarchy edges', () => {
   it('multiple tasks in same workstream each get parent edge', async () => {
     await createWorkstream(db, config, embedder, { project: 'ALP', name: 'Backend' });
 
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'ALP',
       workstream: 1,
       name: 'Task one',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'ALP',
       workstream: 1,
       name: 'Task two',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'ALP',
       workstream: 1,
       name: 'Task three',

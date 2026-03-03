@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { indexSingleFile } from '../../../src/services/indexing.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -41,7 +42,7 @@ describe('reference resolution', () => {
     await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());
 
     // Create task with reference to that doc
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'REF', workstream: 1, name: 'Implement API',
       references: ['api-spec'],
     });
@@ -59,7 +60,7 @@ describe('reference resolution', () => {
   });
 
   it('skips references when target note not found', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'REF', workstream: 1, name: 'Task with bad ref',
       references: ['nonexistent-doc'],
     });
@@ -84,7 +85,7 @@ describe('reference resolution', () => {
       await indexSingleFile(db, embedder, path, content, hash, Date.now());
     }
 
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'REF', workstream: 1, name: 'Multi-ref task',
       references: ['doc-a', 'doc-b'],
     });

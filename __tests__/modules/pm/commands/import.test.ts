@@ -77,13 +77,13 @@ describe('executeImport', () => {
         {
           name: 'Backend',
           tasks: [
-            { name: 'Set up API', priority: 'high' },
-            { name: 'Add auth' },
+            { name: 'Set up API', description: 'Set up the API framework.', priority: 'high' },
+            { name: 'Add auth', description: 'Add authentication module.' },
           ],
         },
         {
           name: 'Frontend',
-          tasks: [{ name: 'Build UI' }],
+          tasks: [{ name: 'Build UI', description: 'Build the user interface.' }],
         },
       ],
     };
@@ -105,8 +105,8 @@ describe('executeImport', () => {
         {
           name: 'Main',
           tasks: [
-            { name: 'First task' },
-            { name: 'Second task', depends_on: ['DEP-01.01'] },
+            { name: 'First task', description: 'The first task.' },
+            { name: 'Second task', description: 'Depends on first.', depends_on: ['DEP-01.01'] },
           ],
         },
       ],
@@ -125,7 +125,7 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [{ name: 'Task with bad dep', depends_on: ['BAD-99.99'] }],
+          tasks: [{ name: 'Task with bad dep', description: 'Task with bad dependency.', depends_on: ['BAD-99.99'] }],
         },
       ],
     };
@@ -159,8 +159,8 @@ describe('executeImport', () => {
         {
           name: 'Main',
           tasks: [
-            { name: 'Task A' },
-            { name: 'Task B', depends_on: ['DST-01.01'] },
+            { name: 'Task A', description: 'Task A for dep source test.' },
+            { name: 'Task B', description: 'Task B depends on A.', depends_on: ['DST-01.01'] },
           ],
         },
       ],
@@ -208,7 +208,7 @@ describe('import command (--from-json)', () => {
         name: 'CLI Import',
         prefix: 'CLI',
         workstreams: [
-          { name: 'Core', tasks: [{ name: 'Task one' }] },
+          { name: 'Core', tasks: [{ name: 'Task one', description: 'First core task.' }] },
         ],
       })
     );
@@ -229,7 +229,7 @@ describe('import command (--from-json)', () => {
       JSON.stringify({
         name: 'JSON Import',
         prefix: 'JSN',
-        workstreams: [{ name: 'WS1', tasks: [{ name: 'T1' }] }],
+        workstreams: [{ name: 'WS1', tasks: [{ name: 'T1', description: 'Test task T1.' }] }],
       })
     );
 
@@ -391,7 +391,7 @@ describe('import command (--from-json)', () => {
         workstreams: [
           {
             name: 'WS',
-            tasks: [{ name: 'T1', depends_on: ['DER-99.99'] }],
+            tasks: [{ name: 'T1', description: 'Task with invalid dep.', depends_on: ['DER-99.99'] }],
           },
         ],
       })

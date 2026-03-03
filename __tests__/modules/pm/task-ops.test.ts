@@ -9,13 +9,13 @@ import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import {
-  createTask,
   listTasks,
   getTask,
   updateTaskStatus,
   updateTask,
   deleteTask,
 } from '../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -48,7 +48,7 @@ afterEach(() => {
 
 describe('createTask', () => {
   it('creates task with correct metadata, auto-number, and display_id format', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Build login page',
@@ -74,12 +74,12 @@ describe('createTask', () => {
   });
 
   it('auto-numbers tasks: first = 1, second = 2', async () => {
-    const r1 = await createTask(db, config, embedder, {
+    const r1 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task 1',
     });
-    const r2 = await createTask(db, config, embedder, {
+    const r2 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task 2',
@@ -92,14 +92,14 @@ describe('createTask', () => {
   });
 
   it('creates task with depends_on and stores relations', async () => {
-    const r1 = await createTask(db, config, embedder, {
+    const r1 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task A',
     });
     expect(r1.ok).toBe(true);
 
-    const r2 = await createTask(db, config, embedder, {
+    const r2 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task B',
@@ -125,7 +125,7 @@ describe('createTask', () => {
   });
 
   it('returns NOT_FOUND for invalid dependency', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task with bad dep',
@@ -139,7 +139,7 @@ describe('createTask', () => {
   });
 
   it('returns NOT_FOUND when project does not exist', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'NOPE',
       workstream: 1,
       name: 'Orphan',
@@ -150,7 +150,7 @@ describe('createTask', () => {
   });
 
   it('returns NOT_FOUND when workstream does not exist', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 99,
       name: 'Orphan',
@@ -161,7 +161,7 @@ describe('createTask', () => {
   });
 
   it('creates content directory for task', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'With content dir',
@@ -175,8 +175,8 @@ describe('createTask', () => {
 describe('listTasks', () => {
   it('lists tasks filtered by workstream', async () => {
     await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Backend' });
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'FE Task' });
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 2, name: 'BE Task' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'FE Task' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 2, name: 'BE Task' });
 
     const ws1Result = listTasks(db, 'WEB', { workstream: 1 });
     expect(ws1Result.ok).toBe(true);
@@ -187,8 +187,8 @@ describe('listTasks', () => {
   });
 
   it('lists tasks filtered by status', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 2' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 2' });
     await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'claimed');
 
     const claimedResult = listTasks(db, 'WEB', { status: 'claimed' });
@@ -200,8 +200,8 @@ describe('listTasks', () => {
   });
 
   it('filters by virtual state blocked', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dep task' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dep task' });
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Blocked task', dependsOn: ['WEB-01.01'],
     });
 
@@ -215,7 +215,7 @@ describe('listTasks', () => {
   });
 
   it('filters by virtual state ready', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
 
     const readyResult = listTasks(db, 'WEB', { status: 'ready' });
     expect(readyResult.ok).toBe(true);
@@ -226,7 +226,7 @@ describe('listTasks', () => {
   });
 
   it('includes virtualStates in listed tasks', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
 
     const result = listTasks(db, 'WEB');
     expect(result.ok).toBe(true);
@@ -242,10 +242,10 @@ describe('listTasks', () => {
   });
 
   it('filters by priority', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'High task', priority: 'high',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Low task', priority: 'low',
     });
 
@@ -257,10 +257,10 @@ describe('listTasks', () => {
   });
 
   it('filters by category', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Impl task', category: 'implementation',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Test task', category: 'testing',
     });
 
@@ -272,10 +272,10 @@ describe('listTasks', () => {
   });
 
   it('filters by title search (case-insensitive)', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Setup Auth',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Deploy Pipeline',
     });
 
@@ -287,13 +287,13 @@ describe('listTasks', () => {
   });
 
   it('combines multiple filters', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'High impl', priority: 'high', category: 'implementation',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'High test', priority: 'high', category: 'testing',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Low impl', priority: 'low', category: 'implementation',
     });
 
@@ -305,7 +305,7 @@ describe('listTasks', () => {
   });
 
   it('returns empty array when no tasks match filters', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 1, name: 'Medium task', priority: 'medium',
     });
 
@@ -317,10 +317,10 @@ describe('listTasks', () => {
 
   it('search matches task title only, not workstream name (O-63)', async () => {
     await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Integration' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 2, name: 'Setup CI',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB', workstream: 2, name: 'Integration test harness',
     });
 
@@ -334,7 +334,7 @@ describe('listTasks', () => {
 
 describe('getTask', () => {
   it('returns task with virtual states (+READY for no deps)', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
 
     const result = getTask(db, 'WEB-01.01');
     expect(result.ok).toBe(true);
@@ -347,8 +347,8 @@ describe('getTask', () => {
   });
 
   it('returns +BLOCKED when dependencies are incomplete', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task A' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task B',
@@ -369,7 +369,7 @@ describe('getTask', () => {
   });
 
   it('suggests correct prefix when task ID has wrong prefix (O-58)', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Real task' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Real task' });
 
     const result = getTask(db, 'VLT-01.01');
     expect(result.ok).toBe(false);
@@ -391,7 +391,7 @@ describe('getTask', () => {
 
 describe('updateTaskStatus', () => {
   it('valid transition: pending → blocked succeeds', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Block me' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Block me' });
 
     const result = await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'blocked');
     expect(result.ok).toBe(true);
@@ -401,7 +401,7 @@ describe('updateTaskStatus', () => {
   });
 
   it('invalid transition: pending → done fails with INVALID_TRANSITION', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Skip ahead' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Skip ahead' });
 
     const result = await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'done');
     expect(result.ok).toBe(false);
@@ -411,7 +411,7 @@ describe('updateTaskStatus', () => {
   });
 
   it('valid lifecycle: pending → claimed → in-progress → done', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Full lifecycle',
@@ -431,7 +431,7 @@ describe('updateTaskStatus', () => {
 
 describe('updateTask', () => {
   it('updates mode and priority', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Update me' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Update me' });
 
     const result = await updateTask(db, config, embedder, 'WEB-01.01', {
       mode: 'interactive',
@@ -454,7 +454,7 @@ describe('updateTask', () => {
 
 describe('deleteTask', () => {
   it('deletes task with no dependents', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Delete me' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Delete me' });
 
     const result = await deleteTask(db, config, 'WEB-01.01');
     expect(result.ok).toBe(true);
@@ -470,8 +470,8 @@ describe('deleteTask', () => {
   });
 
   it('fails with HAS_DEPENDENTS when other tasks depend on it', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dependency' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dependency' });
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Dependent',
@@ -486,8 +486,8 @@ describe('deleteTask', () => {
   });
 
   it('force deletes task even with dependents', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dependency' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dependency' });
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Dependent',

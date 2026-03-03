@@ -10,9 +10,10 @@ import { loadModules } from '../../../src/modules/loader.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus, listTasks } from '../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus, listTasks } from '../../../src/modules/pm/data/task-ops.js';
 import { assembleDispatch } from '../../../src/modules/pm/engine/dispatch.js';
 import { computeWaves } from '../../../src/modules/pm/engine/dependency.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -44,12 +45,12 @@ describe('V13 integration: full workflow', () => {
     await createProject(db, config, embedder, { name: 'Integration', prefix: 'INT' });
     await createWorkstream(db, config, embedder, { project: 'INT', name: 'Core' });
 
-    await createTask(db, config, embedder, { project: 'INT', workstream: 1, name: 'Foundation' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'INT', workstream: 1, name: 'Foundation' });
+    await createTestTask(db, config, embedder, {
       project: 'INT', workstream: 1, name: 'Build on foundation',
       dependsOn: ['INT-01.01'],
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'INT', workstream: 1, name: 'Final step',
       dependsOn: ['INT-01.02'],
     });
@@ -103,8 +104,8 @@ describe('V13 integration: full workflow', () => {
   it('hybrid context includes relatedNotes field', async () => {
     await createProject(db, config, embedder, { name: 'Hybrid', prefix: 'HYB' });
     await createWorkstream(db, config, embedder, { project: 'HYB', name: 'Core' });
-    await createTask(db, config, embedder, { project: 'HYB', workstream: 1, name: 'Design auth system' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'HYB', workstream: 1, name: 'Design auth system' });
+    await createTestTask(db, config, embedder, {
       project: 'HYB', workstream: 1, name: 'Implement auth',
       dependsOn: ['HYB-01.01'],
     });
@@ -120,8 +121,8 @@ describe('V13 integration: full workflow', () => {
   it('relations are single source of truth for deps', async () => {
     await createProject(db, config, embedder, { name: 'Rel', prefix: 'REL' });
     await createWorkstream(db, config, embedder, { project: 'REL', name: 'Core' });
-    await createTask(db, config, embedder, { project: 'REL', workstream: 1, name: 'A' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'REL', workstream: 1, name: 'A' });
+    await createTestTask(db, config, embedder, {
       project: 'REL', workstream: 1, name: 'B', dependsOn: ['REL-01.01'],
     });
 
@@ -133,7 +134,7 @@ describe('V13 integration: full workflow', () => {
     expect(b?.depends_on).toContain('REL-01.01');
 
     // Add a third task and manually add a relation (simulating inferDependencies)
-    await createTask(db, config, embedder, { project: 'REL', workstream: 1, name: 'C' });
+    await createTestTask(db, config, embedder, { project: 'REL', workstream: 1, name: 'C' });
     const notes = db.getAllNotes();
     const cNote = notes.find(n => {
       if (!n.metadata) return false;
@@ -171,8 +172,8 @@ describe('V13 integration: full workflow', () => {
   it('waves exclude completed tasks and recompute correctly', async () => {
     await createProject(db, config, embedder, { name: 'Waves', prefix: 'WAV' });
     await createWorkstream(db, config, embedder, { project: 'WAV', name: 'Core' });
-    await createTask(db, config, embedder, { project: 'WAV', workstream: 1, name: 'First' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'WAV', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, {
       project: 'WAV', workstream: 1, name: 'Second',
       dependsOn: ['WAV-01.01'],
     });

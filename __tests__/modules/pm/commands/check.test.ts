@@ -6,7 +6,8 @@ import type { BrainConfig } from '../../../../src/types.js';
 import { createCheckCommand } from '../../../../src/modules/pm/commands/check.js';
 import { createDecision, supersedeDecision } from '../../../../src/modules/pm/data/decision-ops.js';
 import { writePrompt } from '../../../../src/modules/pm/data/prompt-ops.js';
-import { createTask, updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../../helpers.js';
 
 let db: BrainDB;
 const embedder = createMockEmbedder();
@@ -114,7 +115,7 @@ describe('check command', () => {
 
   it('detects blocked without cause', async () => {
     // Create a task with blocked status but no actual blocking dependencies
-    const t = await createTask(db, config, embedder, {
+    const t = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Blocked task no cause',
@@ -180,7 +181,7 @@ describe('check command', () => {
   });
 
   it('text report shows blocked without cause section', async () => {
-    const t = await createTask(db, config, embedder, {
+    const t = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Blocked no cause',

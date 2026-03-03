@@ -7,11 +7,12 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
-import { createTask, listTasks, getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import { generateClaim } from '../../../src/modules/pm/engine/claims.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -131,7 +132,7 @@ describe('O-160: --full flag returns untruncated descriptions', () => {
   it('default mode truncates description to 500 chars', async () => {
     await createProject(db, config, embedder, { name: 'Full Test', prefix: 'FULL' });
     await createWorkstream(db, config, embedder, { project: 'FULL', name: 'WS1' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FULL',
       workstream: 1,
       name: 'Long task',
@@ -150,7 +151,7 @@ describe('O-160: --full flag returns untruncated descriptions', () => {
   it('full mode returns untruncated description', async () => {
     await createProject(db, config, embedder, { name: 'Full Test', prefix: 'FULL' });
     await createWorkstream(db, config, embedder, { project: 'FULL', name: 'WS1' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FULL',
       workstream: 1,
       name: 'Long task',
@@ -171,7 +172,7 @@ describe('O-160: --full flag returns untruncated descriptions', () => {
   it('short mode omits description entirely', async () => {
     await createProject(db, config, embedder, { name: 'Full Test', prefix: 'FULL' });
     await createWorkstream(db, config, embedder, { project: 'FULL', name: 'WS1' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FULL',
       workstream: 1,
       name: 'Long task',

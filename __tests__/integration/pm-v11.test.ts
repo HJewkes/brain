@@ -16,12 +16,12 @@ import {
   listTasks,
   getTask,
   getDependencyDisplayIds,
-  createTask,
   updateTaskStatus,
 } from '../../src/modules/pm/data/task-ops.js';
 import { resolveDisplayId } from '../../src/modules/pm/data/queries.js';
 import { assembleContext } from '../../src/modules/pm/engine/dispatch.js';
 import { computeVirtualState } from '../../src/modules/pm/engine/state-machine.js';
+import { createTestTask } from '../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -73,7 +73,7 @@ describe('V11 Integration: Dependency source of truth', () => {
 
   it('relation-only dep (no frontmatter) is recognized by getTask', async () => {
     // Create a task with no depends_on in frontmatter
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Relation-only dep task',
@@ -155,7 +155,7 @@ describe('V11 Integration: Wave computation with relations', () => {
   });
 
   it('relation-only deps are reflected in wave computation', async () => {
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Wave test task',
@@ -190,17 +190,17 @@ describe('V11 Integration: Wave computation with relations', () => {
 describe('V11 Integration: Cycle detection', () => {
   it('detects cycle in A->B->C->A', async () => {
     // Create 3 tasks that form a cycle
-    const a = await createTask(db, config, embedder, {
+    const a = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Cycle A',
     });
-    const b = await createTask(db, config, embedder, {
+    const b = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Cycle B',
     });
-    const c = await createTask(db, config, embedder, {
+    const c = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Cycle C',
@@ -269,7 +269,7 @@ describe('V11 Integration: Context assembly with dependencies', () => {
   });
 
   it('assembleContext reflects relation-only deps', async () => {
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Context dep task',

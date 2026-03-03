@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks } from '../../../src/modules/pm/data/task-ops.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -69,12 +70,12 @@ function addRelationDep(sourceDisplayId: string, targetDisplayId: string): void 
 
 describe('O-130: workstream filter type coercion', () => {
   it('--workstream 1 (integer) returns only workstream 1 tasks', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Alpha task',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 2,
       name: 'Beta task',
@@ -88,12 +89,12 @@ describe('O-130: workstream filter type coercion', () => {
   });
 
   it('--workstream resolves display ID and integer identically', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Alpha task',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 2,
       name: 'Beta task',
@@ -113,14 +114,14 @@ describe('O-130: workstream filter type coercion', () => {
 
 describe('O-131: --status blocked maps to virtual state', () => {
   it('--status blocked returns tasks with +BLOCKED virtual state', async () => {
-    const taskB = await createTask(db, config, embedder, {
+    const taskB = await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Prerequisite',
     });
     if (!taskB.ok) throw new Error(taskB.error.message);
 
-    const taskA = await createTask(db, config, embedder, {
+    const taskA = await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Depends on prereq',
@@ -139,14 +140,14 @@ describe('O-131: --status blocked maps to virtual state', () => {
   });
 
   it('--status eligible returns tasks with +ELIGIBLE virtual state', async () => {
-    const taskB = await createTask(db, config, embedder, {
+    const taskB = await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Prerequisite',
     });
     if (!taskB.ok) throw new Error(taskB.error.message);
 
-    const taskA = await createTask(db, config, embedder, {
+    const taskA = await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Depends on prereq',
@@ -169,12 +170,12 @@ describe('O-131: --status blocked maps to virtual state', () => {
 
 describe('O-132: --status all returns all tasks', () => {
   it('status all does not filter by status', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Pending task',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Another pending',
@@ -190,14 +191,14 @@ describe('O-132: --status all returns all tasks', () => {
 
 describe('O-133: --search matches display_id', () => {
   it('searching for display_id returns matching task', async () => {
-    const t1 = await createTask(db, config, embedder, {
+    const t1 = await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Alpha task one',
     });
     if (!t1.ok) throw new Error(t1.error.message);
 
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 2,
       name: 'Beta task one',
@@ -212,12 +213,12 @@ describe('O-133: --search matches display_id', () => {
   });
 
   it('searching for partial display_id returns matches', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'First task',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FLT',
       workstream: 1,
       name: 'Second task',
