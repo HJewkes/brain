@@ -25,6 +25,9 @@
     "lint": "eslint src __tests__ --no-error-on-unmatched-pattern",
     "format": "prettier --write \"src/**/*.ts\" \"__tests__/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"__tests__/**/*.ts\"",
+    "check": "./scripts/check.sh --quick",
+    "check:full": "./scripts/check.sh",
+    "install-pre-push": "cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push && echo 'Pre-push hook installed'",
     "test:coverage": "vitest run --coverage",
     "postinstall": "node scripts/postinstall.js",
     "preuninstall": "node scripts/preuninstall.js"
