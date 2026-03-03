@@ -14,17 +14,7 @@ export interface VerificationPlan {
   steps: string[];
 }
 
-export function extractAcceptanceCriteria(body: string): string[] {
-  const acMatch = body.match(/acceptance criteria[:\s]*\n((?:[-*]\s+.+\n?)+)/i);
-  if (!acMatch) return [];
-  return acMatch[1]
-    .split('\n')
-    .filter((l) => l.trim().startsWith('-') || l.trim().startsWith('*'))
-    .map((l) => l.replace(/^[\s]*[-*]\s+/, '').trim())
-    .filter((l) => l.length > 0);
-}
-
-export function suggestVerificationSteps(category: TaskCategory): string[] {
+function suggestVerificationSteps(category: TaskCategory): string[] {
   switch (category) {
     case 'implementation':
       return [
@@ -73,12 +63,6 @@ export function suggestVerificationSteps(category: TaskCategory): string[] {
         'Verify design document covers all requirements',
         'Check for consistency with existing architecture',
         'Review trade-offs and alternatives considered',
-      ];
-    default:
-      return [
-        'Verify implementation matches task description',
-        'Run relevant tests',
-        'Check for regressions',
       ];
   }
 }
@@ -147,8 +131,6 @@ export function createVerifyCommand(): Command {
         const bundle = contextResult.data;
         const task = taskResult.data;
 
-        const acSteps = extractAcceptanceCriteria(bundle.body);
-
         const plan: VerificationPlan = {
           taskId: displayId,
           category: task.category,
@@ -161,7 +143,7 @@ export function createVerifyCommand(): Command {
             displayId: d.displayId,
             content: d.content,
           })),
-          steps: acSteps.length > 0 ? acSteps : suggestVerificationSteps(task.category),
+          steps: suggestVerificationSteps(task.category),
         };
 
         if (opts.json) {

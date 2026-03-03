@@ -231,20 +231,17 @@ export async function search(
     tags: options.tags,
   });
 
-  // Module visibility: exclude private module notes from general search.
-  // PM notes are included by default (opt-out via excludePm / includePm:false).
-  // All other private modules are always excluded.
+  // Module visibility: exclude private module notes from general search
   if (moduleRegistry) {
-    const excludePm = options.excludePm || options.includePm === false;
-    const idsToExclude = getPrivateModuleNoteIds(db, moduleRegistry, excludePm ? undefined : 'pm');
-    if (idsToExclude.size > 0) {
+    const privateModuleNoteIds = getPrivateModuleNoteIds(db, moduleRegistry);
+    if (privateModuleNoteIds.size > 0) {
       if (allowedNoteIds) {
-        for (const id of idsToExclude) {
+        for (const id of privateModuleNoteIds) {
           allowedNoteIds.delete(id);
         }
       } else {
         const allNoteIds = new Set(db.getAllNotes().map((n) => n.id));
-        for (const id of idsToExclude) {
+        for (const id of privateModuleNoteIds) {
           allNoteIds.delete(id);
         }
         allowedNoteIds = allNoteIds;
@@ -282,15 +279,8 @@ export async function search(
       : fuseByRRF(filteredFts, bestVectorByNote, fusionWeights);
 
   scored.sort((a, b) => b.score - a.score);
-  const DEFAULT_MIN_SCORE = 0.25;
-  const effectiveMinScore =
-    options.minScore != null
-      ? options.minScore
-      : strategy === 'score'
-        ? DEFAULT_MIN_SCORE
-        : null;
   const filtered =
-    effectiveMinScore != null ? scored.filter((s) => s.score >= effectiveMinScore) : scored;
+    options.minScore != null ? scored.filter((s) => s.score >= options.minScore!) : scored;
   const afterDropoff =
     options.dropoff != null ? applyDropoffFilter(filtered, options.dropoff) : filtered;
   const topResults = afterDropoff.slice(0, limit);
@@ -400,14 +390,10 @@ export function checkAndPromote(
   return true;
 }
 
-function getPrivateModuleNoteIds(
-  db: BrainDB,
-  registry: ModuleRegistry,
-  skipModule?: string,
-): Set<string> {
+function getPrivateModuleNoteIds(db: BrainDB, registry: ModuleRegistry): Set<string> {
   const privateIds = new Set<string>();
   for (const { module: moduleName, filter } of registry.getFilters()) {
-    if (filter.visibility === 'private' && moduleName !== skipModule) {
+    if (filter.visibility === 'private') {
       const noteIds = db.getModuleNoteIds({ module: moduleName });
       for (const id of noteIds) {
         privateIds.add(id);

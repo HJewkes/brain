@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
-import type { BrainConfig, Embedder, Relation } from '../../../types.js';
+import type { BrainConfig, Embedder } from '../../../types.js';
 import type { Result } from '../errors.js';
 import type { WorkstreamMetadata } from '../types.js';
 import { ok, fail } from '../errors.js';
@@ -67,36 +67,8 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   return frontmatter + `\n${field}: ${quoted}` + rest;
 }
 
-function extractDescription(filePath: string): string | undefined {
-  if (!existsSync(filePath)) return undefined;
-
-  const content = readFileSync(filePath, 'utf-8');
-  const fmEnd = content.indexOf('\n---', 4);
-  if (fmEnd === -1) return undefined;
-
-  const afterFm = content.slice(fmEnd + 4).trim();
-  const lines = afterFm.split('\n');
-  const headingIdx = lines.findIndex(l => l.startsWith('# '));
-  if (headingIdx === -1) return undefined;
-
-  const descLines: string[] = [];
-  for (let i = headingIdx + 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line === '' && descLines.length > 0) break;
-    if (line === '') continue;
-    descLines.push(line);
-  }
-
-  return descLines.length > 0 ? descLines.join(' ') : undefined;
-}
-
-function workstreamMetaFromRecord(
-  meta: Record<string, unknown>,
-  description?: string,
-): WorkstreamMetadata {
+function workstreamMetaFromRecord(meta: Record<string, unknown>): WorkstreamMetadata {
   return {
-    title: (meta.title as string) ?? undefined,
-    description,
     display_id: meta.display_id as string,
     project: meta.project as string,
     number: meta.number as number,
@@ -128,14 +100,7 @@ export async function createWorkstream(
   writeFileSync(filePath, markdown, 'utf-8');
 
   const hash = createHash('sha256').update(markdown).digest('hex');
-  const noteId = await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
-
-  if (projectNotes.length > 0) {
-    const parentRelation: Relation[] = [
-      { sourceId: projectNotes[0].id, targetId: noteId, type: 'parent' },
-    ];
-    db.upsertRelations(noteId, parentRelation);
-  }
+  await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
 
   const metadata: WorkstreamMetadata = {
     display_id: displayId,
@@ -151,8 +116,7 @@ export function listWorkstreams(db: BrainDB, prefix: string): Result<WorkstreamM
   const notes = getPmNotes(db, 'workstream', { project: prefix });
   const workstreams: WorkstreamMetadata[] = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    const description = extractDescription(note.filePath);
-    return workstreamMetaFromRecord(meta, description);
+    return workstreamMetaFromRecord(meta);
   });
 
   return ok(workstreams);
@@ -165,8 +129,7 @@ export function getWorkstream(db: BrainDB, displayId: string): Result<Workstream
   }
 
   const meta = JSON.parse(notes[0].metadata!) as Record<string, unknown>;
-  const description = extractDescription(notes[0].filePath);
-  return ok(workstreamMetaFromRecord(meta, description));
+  return ok(workstreamMetaFromRecord(meta));
 }
 
 export async function updateWorkstream(

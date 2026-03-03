@@ -4,16 +4,13 @@ import { join } from 'node:path';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
-import { resolveWorkstreamFilter } from '../ids.js';
-import type { Result } from '../errors.js';
-import { ok, fail } from '../errors.js';
-import { getActiveProject, getPmNotes, resolveProject } from '../data/queries.js';
+import { getActiveProject, getPmNotes } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
 import { detectStalePrompts } from '../data/prompt-ops.js';
 import { getProject } from '../data/project-ops.js';
 import { computeEligible, computeWaves, computeImpact } from '../engine/dependency.js';
-import { assembleContext, assembleDispatch } from '../engine/dispatch.js';
+import { assembleContext } from '../engine/dispatch.js';
 import { validateClaimToken } from '../engine/claims.js';
 import {
   findOrphanedDecisions,
@@ -21,165 +18,98 @@ import {
   findBlockedWithoutCause,
   findCancelledDependencies,
 } from '../engine/consistency.js';
-import { listWorkstreams } from '../data/workstream-ops.js';
-import type { BrainDB } from '../../../services/brain-db.js';
 import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
 
-/** Resolve workstream by number, display ID, or name (case-insensitive substring). */
-export function resolveWorkstreamByName(db: BrainDB, prefix: string, input: string): Result<number> {
-  const idResult = resolveWorkstreamFilter(input);
-  if (idResult.ok) return idResult;
-
-  const wsResult = listWorkstreams(db, prefix);
-  if (!wsResult.ok) return fail('NOT_FOUND', `Could not list workstreams: ${wsResult.error.message}`);
-
-  const lower = input.toLowerCase();
-  for (const ws of wsResult.data) {
-    const name = ws.title?.replace(/^Workstream\s+/i, '') ?? '';
-    if (name.toLowerCase().includes(lower)) return ok(ws.number);
-  }
-
-  return fail(
-    'INVALID_INPUT',
-    `No workstream matching "${input}". Use a number, display ID, or name. Run "brain pm workstream list" to see options.`
-  );
+function resolvePrefix(
+  explicitProject: string | undefined,
+  activeProject: string | null
+): string | null {
+  if (explicitProject) return explicitProject.toUpperCase();
+  return activeProject;
 }
 
 export function createOrchestrationCommands(): Command[] {
   const nextCmd = new Command('next')
     .description('Show eligible tasks (pending with all deps done)')
-    .argument('[prefix]', 'Project prefix (uses active project if omitted)')
-    .option('--project <prefix>', 'Project prefix (alternative to positional)')
-    .option('--all', 'Show all eligible tasks (no truncation)')
-    .option('--limit <n>', 'Max tasks to show (default: 10)', '10')
-    .option('--workstream <ws>', 'Filter by workstream number, display ID, or name')
+    .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
     .option('--json', 'Output JSON')
-    .action(async (prefixArg, opts) => {
+    .action(async (opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, prefixArg ?? opts.project);
-        if (!projectResult.ok) {
-          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+        const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
+        if (!prefix) {
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
-        const prefix = projectResult.data;
-        const limit = opts.all ? Infinity : parseInt(opts.limit, 10);
 
         const eligibleIds = computeEligible(svc.db, prefix);
 
-        const priorityOrder = ['critical', 'high', 'medium', 'low'];
-        const resolved = eligibleIds
-          .flatMap((id) => {
-            const r = getTask(svc.db, id);
-            return r.ok ? [r.data] : [];
-          })
-          .sort((a, b) => {
-            const priDiff = priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority);
-            if (priDiff !== 0) return priDiff;
-            const wsDiff = a.workstream - b.workstream;
-            if (wsDiff !== 0) return wsDiff;
-            return a.display_id.localeCompare(b.display_id);
-          });
-
-        let filtered = resolved;
-        if (opts.workstream) {
-          const wsResult = resolveWorkstreamByName(svc.db, prefix, opts.workstream);
-          if (!wsResult.ok) {
-            process.stderr.write(formatError(wsResult.error, !!opts.json) + '\n');
-            process.exitCode = 1;
-            return;
-          }
-          filtered = resolved.filter((t) => t.workstream === wsResult.data);
-        }
-
-        const limited = filtered.slice(0, limit);
-
         if (opts.json) {
-          process.stdout.write(JSON.stringify(limited, null, 2) + '\n');
+          const tasks = eligibleIds.map((id) => {
+            const result = getTask(svc.db, id);
+            if (!result.ok) return { display_id: id };
+            return {
+              display_id: result.data.display_id,
+              name: result.data.display_id,
+              priority: result.data.priority,
+              virtualStates: result.data.virtualStates,
+            };
+          });
+          process.stdout.write(JSON.stringify(tasks, null, 2) + '\n');
           return;
         }
 
-        if (limited.length === 0) {
+        if (eligibleIds.length === 0) {
           process.stdout.write('No eligible tasks.\n');
           return;
         }
 
-        const byWorkstream = new Map<number, typeof limited>();
-        for (const t of limited) {
-          const ws = t.workstream;
-          if (!byWorkstream.has(ws)) byWorkstream.set(ws, []);
-          byWorkstream.get(ws)!.push(t);
-        }
-
-        for (const [ws, tasks] of byWorkstream) {
-          process.stdout.write(`Workstream ${ws}:\n`);
-          for (const t of tasks) {
-            const title = t.title ? ` ${t.title}` : '';
-            const vs = t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
-            process.stdout.write(`  ${t.display_id}${title}  [${t.priority}]${vs}\n`);
+        for (const id of eligibleIds) {
+          const result = getTask(svc.db, id);
+          if (!result.ok) {
+            process.stdout.write(`${id}\n`);
+            continue;
           }
-        }
-
-        if (filtered.length > limit) {
-          process.stdout.write(`\n... and ${filtered.length - limit} more eligible tasks\n`);
+          const t = result.data;
+          const vs = t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
+          process.stdout.write(`${t.display_id}  ${t.priority}${vs}\n`);
         }
       });
     });
 
   const wavesCmd = new Command('waves')
     .description('Show topological wave grouping of remaining tasks')
-    .argument('[prefix]', 'Project prefix (uses active project if omitted)')
-    .option('--project <prefix>', 'Project prefix (alternative to positional)')
-    .option('--workstream <id>', 'Filter to specific workstream (e.g., TST-01)')
+    .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
     .option('--json', 'Output JSON')
-    .action(async (prefixArg, opts) => {
+    .action(async (opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, prefixArg ?? opts.project);
-        if (!projectResult.ok) {
-          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+        const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
+        if (!prefix) {
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
-        const prefix = projectResult.data;
 
         const waves = computeWaves(svc.db, prefix);
 
-        let filteredWaves = waves;
-        if (opts.workstream) {
-          filteredWaves = waves.map(w => ({
-            ...w,
-            taskIds: w.taskIds.filter(id => id.startsWith(opts.workstream!)),
-          })).filter(w => w.taskIds.length > 0);
-        }
-
-        if (filteredWaves.length === 0) {
-          const msg = opts.workstream
-            ? `No tasks in waves for workstream ${opts.workstream}.`
-            : 'No tasks in waves. All tasks are done or cancelled.';
-          if (opts.json) {
-            process.stdout.write(JSON.stringify({ waves: [], summary: msg }, null, 2) + '\n');
-          } else {
-            process.stdout.write(msg + '\n');
-          }
-          return;
-        }
-
         if (opts.json) {
-          const result = filteredWaves.map((w) => ({
+          const result = waves.map((w) => ({
             wave: w.wave,
             tasks: w.taskIds.map((id) => {
               const r = getTask(svc.db, id);
-              if (!r.ok) return { display_id: id, title: undefined, status: 'unknown' };
-              const wsNum = r.data.workstream;
-              const wsDisplayId = `${prefix}-${String(wsNum).padStart(2, '0')}`;
+              if (!r.ok) return { display_id: id, name: id, status: 'unknown' };
               return {
                 display_id: r.data.display_id,
-                title: r.data.title,
+                name: r.data.display_id,
                 status: r.data.status,
-                workstream: wsDisplayId,
-                priority: r.data.priority,
-                category: r.data.category,
-                depends_on: r.data.depends_on ?? [],
               };
             }),
           }));
@@ -187,33 +117,25 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
 
-        let totalTasks = 0;
-        for (const w of filteredWaves) {
-          process.stdout.write(`Wave ${w.wave}:\n`);
-          for (const id of w.taskIds) {
-            const r = getTask(svc.db, id);
-            if (!r.ok) {
-              process.stdout.write(`  ${id}\n`);
-            } else {
-              const title = r.data.title ? ` ${r.data.title}` : '';
-              const ws = r.data.workstream !== undefined ? ` [WS-${String(r.data.workstream).padStart(2, '0')}]` : '';
-              process.stdout.write(`  ${id}${ws}${title}\n`);
-            }
-            totalTasks++;
-          }
+        if (waves.length === 0) {
+          process.stdout.write('No active tasks.\n');
+          return;
         }
-        process.stdout.write(`\n${totalTasks} tasks across ${filteredWaves.length} waves\n`);
+
+        for (const w of waves) {
+          process.stdout.write(`Wave ${w.wave}: ${w.taskIds.join(', ')}\n`);
+        }
       });
     });
 
   const dispatchCmd = new Command('dispatch')
-    .description('Assemble and output enriched context bundle for a task')
+    .description('Assemble and output context bundle for a task')
     .argument('<id>', 'Task display ID')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
-        const result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
+        const result = assembleContext(svc.db, displayId);
 
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -227,77 +149,22 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
 
-        const lines: string[] = [];
-        const title = bundle.task.title ?? bundle.task.display_id;
-        lines.push(`Task: ${bundle.task.display_id} - ${title}`);
-        lines.push(`Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`);
-
-        if (bundle.workstream) {
-          lines.push(`Workstream: ${bundle.workstream.displayId} - ${bundle.workstream.title}`);
-        }
-
-        if (bundle.workstreamDescription) {
-          lines.push(`  ${bundle.workstreamDescription}`);
-        }
-
-        if (bundle.body) {
-          lines.push('');
-          lines.push('--- Description ---');
-          lines.push(bundle.body);
-        }
-
+        process.stdout.write(`Task: ${bundle.task.display_id}\n`);
+        process.stdout.write(`Status: ${bundle.task.status}\n`);
         if (bundle.prompt) {
-          lines.push('');
-          lines.push('--- Prompt ---');
-          lines.push(bundle.prompt);
+          process.stdout.write(`Prompt: ${bundle.prompt}\n`);
         }
-
         if (bundle.dependencies.length > 0) {
-          lines.push('');
-          lines.push('--- Dependencies ---');
-          for (const dep of bundle.dependencies) {
-            const summary = dep.summary ? ` - ${dep.summary}` : '';
-            lines.push(`  ${dep.displayId} [${dep.status}] ${dep.name}${summary}`);
-          }
+          process.stdout.write(
+            `Dependencies: ${bundle.dependencies.map((d) => d.displayId).join(', ')}\n`
+          );
         }
-
-        if (bundle.peerTasks.length > 0) {
-          lines.push('');
-          lines.push('--- Peer Tasks (same workstream) ---');
-          for (const peer of bundle.peerTasks) {
-            lines.push(`  ${peer.displayId} [${peer.status}] ${peer.title}`);
-          }
-        }
-
-        if (bundle.downstreamDependents.length > 0) {
-          lines.push('');
-          lines.push('--- Downstream (blocked by this task) ---');
-          for (const dep of bundle.downstreamDependents) {
-            lines.push(`  ${dep.displayId} ${dep.title}`);
-          }
-        }
-
-        if (bundle.relatedNotes.length > 0) {
-          lines.push('');
-          lines.push('--- Related Notes ---');
-          for (const note of bundle.relatedNotes) {
-            const score = note.score.toFixed(2);
-            lines.push(`  [${score}] ${note.title}`);
-            if (note.excerpt) {
-              lines.push(`    ${note.excerpt.slice(0, 120)}`);
-            }
-          }
-        }
-
         if (bundle.decisions.length > 0) {
-          lines.push('');
-          lines.push('--- Decisions ---');
-          for (const dec of bundle.decisions) {
-            lines.push(`  ${dec.displayId} [${dec.status}] ${dec.content}`);
-          }
+          process.stdout.write(
+            `Decisions: ${bundle.decisions.map((d) => d.displayId).join(', ')}\n`
+          );
         }
-
-        process.stdout.write(lines.join('\n') + '\n');
+        process.stdout.write(`Context hash: ${bundle.contextHash}\n`);
       });
     });
 
@@ -316,29 +183,6 @@ export function createOrchestrationCommands(): Command[] {
           process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
-        }
-
-        let currentStatus = taskResult.data.status;
-
-        if (currentStatus === 'pending') {
-          const claimResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'claimed' as TaskStatus);
-          if (!claimResult.ok) {
-            process.stderr.write(formatError(claimResult.error, !!opts.json) + '\n');
-            process.exitCode = 1;
-            return;
-          }
-          if (!opts.json) process.stdout.write(`${displayId}: pending → claimed\n`);
-          currentStatus = 'claimed';
-        }
-
-        if (currentStatus === 'claimed') {
-          const startResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus);
-          if (!startResult.ok) {
-            process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
-            process.exitCode = 1;
-            return;
-          }
-          if (!opts.json) process.stdout.write(`${displayId}: claimed → in-progress\n`);
         }
 
         if (opts.token) {
@@ -413,16 +257,7 @@ export function createOrchestrationCommands(): Command[] {
         } else {
           process.stdout.write(`Completed ${displayId}\n`);
           if (impact.length > 0) {
-            process.stderr.write('\nNewly eligible tasks:\n');
-            for (const impactId of impact) {
-              const impactTask = getTask(svc.db, impactId);
-              if (impactTask.ok) {
-                const title = impactTask.data.title ? ` ${impactTask.data.title}` : '';
-                process.stderr.write(`  ${impactId} [${impactTask.data.priority}]${title}\n`);
-              } else {
-                process.stderr.write(`  ${impactId}\n`);
-              }
-            }
+            process.stdout.write(`Newly eligible: ${impact.join(', ')}\n`);
           }
         }
       });
@@ -431,17 +266,19 @@ export function createOrchestrationCommands(): Command[] {
   const briefingCmd = new Command('briefing')
     .description('Session briefing with project state overview')
     .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
-    .option('--verbose', 'Show workstream breakdown and priority matrix')
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        const resolvedResult = resolveProject(svc.db, opts.project);
-        if (!resolvedResult.ok) {
-          process.stderr.write(formatError(resolvedResult.error, !!opts.json) + '\n');
+        const prefix = resolvePrefix(opts.project, getActiveProject(svc.db));
+        if (!prefix) {
+          const msg =
+            'No project specified and no active project set. Use "brain pm use <prefix>" first.';
+          process.stderr.write(
+            formatError({ error: true, code: 'INVALID_INPUT', message: msg }, !!opts.json) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
-        const prefix = resolvedResult.data;
 
         const projectResult = getProject(svc.db, prefix);
         const project = projectResult.ok ? projectResult.data : null;
@@ -451,9 +288,7 @@ export function createOrchestrationCommands(): Command[] {
 
         const eligible = computeEligible(svc.db, prefix);
         const inProgress = allTasks.filter((t) => t.status === 'in-progress');
-        const blocked = allTasks.filter(
-          (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
-        );
+        const blocked = allTasks.filter((t) => t.status === 'blocked');
         const done = allTasks.filter((t) => t.status === 'done');
         const pending = allTasks.filter((t) => t.status === 'pending');
 
@@ -472,9 +307,8 @@ export function createOrchestrationCommands(): Command[] {
           orphans.length + brokenDeps.length + blockedNoCause.length + cancelledDeps.length;
 
         const nextActions: string[] = [];
-        const topEligible = eligible.slice(0, 5);
-        for (const taskId of topEligible) {
-          nextActions.push(`Pick up eligible task: ${taskId}`);
+        if (eligible.length > 0) {
+          nextActions.push(`Pick up eligible task: ${eligible[0]}`);
         }
         if (stalePrompts.length > 0) {
           nextActions.push(`Update ${stalePrompts.length} stale prompt(s)`);
@@ -499,32 +333,6 @@ export function createOrchestrationCommands(): Command[] {
           consistencyIssues,
         };
 
-        if (opts.verbose) {
-          const wsResult = listWorkstreams(svc.db, prefix);
-          const workstreams = wsResult.ok ? wsResult.data : [];
-
-          briefing.workstreamBreakdown = workstreams.map((ws) => {
-            const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
-            return {
-              display_id: ws.display_id,
-              name: ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`,
-              pending: wsTasks.filter((t) => t.status === 'pending').length,
-              inProgress: wsTasks.filter((t) => t.status === 'in-progress').length,
-              done: wsTasks.filter((t) => t.status === 'done').length,
-              blocked: wsTasks.filter(
-                (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
-              ).length,
-            };
-          });
-
-          briefing.priorityMatrix = {
-            critical: allTasks.filter((t) => t.priority === 'critical').length,
-            high: allTasks.filter((t) => t.priority === 'high').length,
-            medium: allTasks.filter((t) => t.priority === 'medium').length,
-            low: allTasks.filter((t) => t.priority === 'low').length,
-          };
-        }
-
         if (opts.json) {
           process.stdout.write(JSON.stringify(briefing, null, 2) + '\n');
           return;
@@ -542,18 +350,11 @@ export function createOrchestrationCommands(): Command[] {
         lines.push(`Tasks: ${allTasks.length} total`);
         lines.push(`  Done: ${done.length}`);
         lines.push(`  In-progress: ${inProgress.length}`);
-        if (eligible.length <= 5) {
-          lines.push(
-            `  Eligible: ${eligible.length}${eligible.length > 0 ? ` (${eligible.join(', ')})` : ''}`
-          );
-        } else {
-          const top5 = eligible.slice(0, 5);
-          lines.push(
-            `  Eligible: ${eligible.length} (${top5.join(', ')} and ${eligible.length - 5} more)`
-          );
-        }
         lines.push(
-          `  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.map((t) => t.display_id).join(', ')})` : ''}`
+          `  Eligible: ${eligible.length}${eligible.length > 0 ? ` (${eligible.join(', ')})` : ''}`
+        );
+        lines.push(
+          `  Blocked: ${blocked.length}${blocked.length > 0 ? ` (${blocked.join(', ')})` : ''}`
         );
         lines.push(`  Pending: ${pending.length}`);
         lines.push('');
@@ -588,58 +389,6 @@ export function createOrchestrationCommands(): Command[] {
           );
         }
 
-        if (opts.verbose) {
-          lines.push('');
-          lines.push('--- Workstream Breakdown ---');
-
-          const wsResult = listWorkstreams(svc.db, prefix);
-          const workstreams = wsResult.ok ? wsResult.data : [];
-
-          for (const ws of workstreams) {
-            const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
-            const wsDone = wsTasks.filter((t) => t.status === 'done').length;
-            const wsInProgress = wsTasks.filter((t) => t.status === 'in-progress').length;
-            const wsPending = wsTasks.filter((t) => t.status === 'pending').length;
-            const wsBlocked = wsTasks.filter((t) => t.status === 'blocked').length;
-            const wsName = ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`;
-            lines.push(
-              `  ${ws.display_id} ${wsName}: ${wsPending} pending, ${wsInProgress} in-progress, ${wsDone} done${wsBlocked > 0 ? `, ${wsBlocked} blocked` : ''}`
-            );
-          }
-
-          lines.push('');
-          lines.push('--- Priority Matrix ---');
-          const critical = allTasks.filter((t) => t.priority === 'critical').length;
-          const high = allTasks.filter((t) => t.priority === 'high').length;
-          const medium = allTasks.filter((t) => t.priority === 'medium').length;
-          const low = allTasks.filter((t) => t.priority === 'low').length;
-          lines.push(`  Critical: ${critical} | High: ${high} | Medium: ${medium} | Low: ${low}`);
-
-          if (eligible.length > 0) {
-            lines.push('');
-            lines.push('--- Top Eligible ---');
-            const priorityOrder = ['critical', 'high', 'medium', 'low'];
-            const sortedEligible = eligible
-              .map((id) => {
-                const r = getTask(svc.db, id);
-                if (!r.ok) return { display_id: id, title: undefined, priority: 'low' as const };
-                return r.data;
-              })
-              .sort(
-                (a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority)
-              );
-
-            const topN = sortedEligible.slice(0, 5);
-            for (const t of topN) {
-              const title = t.title ? ` ${t.title}` : '';
-              lines.push(`  ${t.display_id}${title} [${t.priority}]`);
-            }
-            if (sortedEligible.length > 5) {
-              lines.push(`  ... and ${sortedEligible.length - 5} more`);
-            }
-          }
-        }
-
         process.stdout.write(lines.join('\n') + '\n');
       });
     });
@@ -661,18 +410,4 @@ export interface BriefingData {
   stalePrompts: PromptMetadata[];
   nextActions: string[];
   consistencyIssues?: number;
-  workstreamBreakdown?: Array<{
-    display_id: string;
-    name: string;
-    pending: number;
-    inProgress: number;
-    done: number;
-    blocked: number;
-  }>;
-  priorityMatrix?: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-  };
 }

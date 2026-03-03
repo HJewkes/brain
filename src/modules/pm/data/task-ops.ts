@@ -17,24 +17,6 @@ import { nextTaskNumber, formatDisplayId, parseDisplayId } from '../ids.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { getPmNotes, resolveDisplayId } from './queries.js';
 import { validateTransition, computeVirtualState } from '../engine/state-machine.js';
-import { readTaskBody } from '../engine/dispatch.js';
-import { listWorkstreams } from './workstream-ops.js';
-import { buildDependencyGraph, computeNewlyEligible } from '../engine/dependency.js';
-import { createActivityNote } from '../engine/activity.js';
-import type { ActivityType } from '../types.js';
-
-export type ListMode = 'default' | 'full' | 'short';
-
-export interface EnrichedTaskFields {
-  description?: string;
-  acceptance_criteria?: string[];
-  blocked_by?: string[];
-  blocks?: string[];
-  created?: string | null;
-  modified?: string | null;
-  workstream_name?: string;
-  workstream_display_id?: string;
-}
 
 export interface CreateTaskInput {
   project: string;
@@ -44,12 +26,6 @@ export interface CreateTaskInput {
   category?: TaskCategory;
   priority?: TaskPriority;
   dependsOn?: string[];
-  dueDate?: string;
-  milestone?: string;
-  description?: string;
-  doneWhen?: string;
-  acceptanceCriteria?: string[];
-  references?: string[];
 }
 
 function taskFilePath(config: BrainConfig, prefix: string, displayId: string): string {
@@ -83,40 +59,12 @@ function buildTaskMarkdown(input: CreateTaskInput, displayId: string, number: nu
     `priority: ${priority}`,
   ];
 
-  if (input.dueDate) {
-    lines.push(`due_date: "${input.dueDate}"`);
-  }
-  if (input.milestone) {
-    lines.push(`milestone: ${input.milestone}`);
-  }
-
-  if (input.doneWhen) {
-    lines.push(`done_when: "${input.doneWhen.replace(/"/g, '\\"')}"`);
-  }
-  if (input.acceptanceCriteria && input.acceptanceCriteria.length > 0) {
-    lines.push('acceptance_criteria:');
-    for (const ac of input.acceptanceCriteria) {
-      lines.push(`  - "${ac.replace(/"/g, '\\"')}"`);
-    }
-  }
-  if (input.references && input.references.length > 0) {
-    lines.push('references:');
-    for (const ref of input.references) {
-      lines.push(`  - "${ref.replace(/"/g, '\\"')}"`);
-    }
+  if (input.dependsOn && input.dependsOn.length > 0) {
+    lines.push(`depends_on: [${input.dependsOn.join(', ')}]`);
   }
 
   lines.push(`created: ${now}`, `modified: ${now}`, '---', '', `# ${input.name}`, '');
-
-  let content = lines.join('\n');
-  if (input.description) {
-    content += '\n' + input.description.replace(/\\n/g, '\n') + '\n';
-  }
-  return content;
-}
-
-function needsQuoting(value: string): boolean {
-  return value.includes(' ') || /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return lines.join('\n');
 }
 
 function replaceFrontmatterField(content: string, field: string, value: string): string {
@@ -126,7 +74,7 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   const frontmatter = content.slice(0, endOfFrontmatter);
   const rest = content.slice(endOfFrontmatter);
   const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = needsQuoting(value) ? `"${value}"` : value;
+  const quoted = value.includes(' ') ? `"${value}"` : value;
 
   if (fieldRegex.test(frontmatter)) {
     return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
@@ -134,17 +82,8 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   return frontmatter + `\n${field}: ${quoted}` + rest;
 }
 
-function coerceDateField(value: unknown): string | undefined {
-  if (value == null) return undefined;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === 'string') return value;
-  return String(value);
-}
-
 function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
   return {
-    id: meta.display_id as string,
-    title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     project: meta.project as string,
     workstream: meta.workstream as number,
@@ -156,11 +95,6 @@ function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
     depends_on: meta.depends_on as string[] | undefined,
     claim_token: meta.claim_token as string | undefined,
     claimed_at: meta.claimed_at as string | undefined,
-    due_date: coerceDateField(meta.due_date),
-    milestone: meta.milestone as string | undefined,
-    done_when: meta.done_when as string | undefined,
-    acceptance_criteria: meta.acceptance_criteria as string[] | undefined,
-    references: meta.references as string[] | undefined,
   };
 }
 
@@ -174,28 +108,6 @@ function areDependenciesComplete(db: BrainDB, dependsOn: string[] | undefined): 
     if (depMeta.status !== 'done') return false;
   }
   return true;
-}
-
-export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string[] {
-  const relations = db.getRelationsFrom(taskNoteId);
-  const depNoteIds = relations
-    .filter((r) => r.type === 'depends_on')
-    .map((r) => r.targetId);
-
-  const displayIds: string[] = [];
-  for (const noteId of depNoteIds) {
-    const note = db.getNoteById(noteId);
-    if (note?.metadata) {
-      const meta = JSON.parse(note.metadata) as Record<string, unknown>;
-      if (meta.display_id) displayIds.push(meta.display_id as string);
-    }
-  }
-  return displayIds;
-}
-
-function mergeDependsOn(db: BrainDB, noteId: string, _frontmatterDeps: string[] | undefined): string[] | undefined {
-  const relationDeps = getDependencyDisplayIds(db, noteId);
-  return relationDeps.length > 0 ? relationDeps : undefined;
 }
 
 export async function createTask(
@@ -246,32 +158,16 @@ export async function createTask(
   const hash = createHash('sha256').update(markdown).digest('hex');
   const noteId = await indexSingleFile(db, embedder, filePath, markdown, hash, Date.now());
 
-  const relations: Relation[] = resolvedDepIds.map((dep) => ({
-    sourceId: noteId,
-    targetId: dep.noteId,
-    type: 'depends_on',
-  }));
-
-  if (wsNotes.length > 0) {
-    relations.push({ sourceId: wsNotes[0].id, targetId: noteId, type: 'parent' });
-  }
-
-  if (input.references?.length) {
-    for (const ref of input.references) {
-      const target = db.getNoteById(ref);
-      if (target) {
-        relations.push({ sourceId: noteId, targetId: target.id, type: 'references' });
-      }
-    }
-  }
-
-  if (relations.length > 0) {
+  if (resolvedDepIds.length > 0) {
+    const relations: Relation[] = resolvedDepIds.map((dep) => ({
+      sourceId: noteId,
+      targetId: dep.noteId,
+      type: 'depends_on',
+    }));
     db.upsertRelations(noteId, relations);
   }
 
   const metadata: TaskMetadata = {
-    id: displayId,
-    title: input.name,
     display_id: displayId,
     project: input.project,
     workstream: input.workstream,
@@ -280,204 +176,29 @@ export async function createTask(
     mode: input.mode ?? 'auto',
     category: input.category ?? 'implementation',
     priority: input.priority ?? 'medium',
-    depends_on: getDependencyDisplayIds(db, noteId) || undefined,
-    due_date: input.dueDate,
-    milestone: input.milestone,
-    done_when: input.doneWhen,
-    acceptance_criteria: input.acceptanceCriteria,
-    references: input.references,
+    depends_on: input.dependsOn,
   };
 
   return ok(metadata);
 }
 
-function buildWorkstreamMap(
-  db: BrainDB,
-  project: string
-): Map<number, { title: string; description?: string }> {
-  const wsNotes = getPmNotes(db, 'workstream', { project });
-  const map = new Map<number, { title: string; description?: string }>();
-  for (const note of wsNotes) {
-    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    const num = meta.number as number;
-    const title = (meta.title as string) ?? '';
-    const description = (meta.description as string) ?? undefined;
-    map.set(num, { title, description });
-  }
-  return map;
-}
-
 export function listTasks(
   db: BrainDB,
   prefix: string,
-  filters?: {
-    workstream?: number;
-    status?: string;
-    mode?: string;
-    priority?: string;
-    category?: string;
-    search?: string;
-    dueBefore?: string;
-    milestone?: string;
-  },
-  listMode: ListMode = 'default'
-): Result<(TaskMetadata & EnrichedTaskFields & { virtualStates: VirtualState[] })[]> {
-  const VIRTUAL_STATE_FILTERS: Record<string, VirtualState> = {
-    blocked: '+BLOCKED',
-    ready: '+READY',
-    eligible: '+ELIGIBLE',
-  };
-
-  const virtualStateFilter = filters?.status
-    ? VIRTUAL_STATE_FILTERS[filters.status.toLowerCase()]
-    : undefined;
-
-  const isSearch = !!filters?.search;
-
-  const isStatusAll = filters?.status?.toLowerCase() === 'all';
-
+  filters?: { workstream?: number; status?: string; mode?: string }
+): Result<TaskMetadata[]> {
   const filterObj: Record<string, unknown> = { project: prefix };
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
-  // When searching, query all statuses by default (unless explicit --status)
-  // 'all' means no status filter; virtual state filters are handled post-hoc
-  if (filters?.status !== undefined && !virtualStateFilter && !isStatusAll) filterObj.status = filters.status;
+  if (filters?.status !== undefined) filterObj.status = filters.status;
   if (filters?.mode !== undefined) filterObj.mode = filters.mode;
-  if (filters?.priority !== undefined) filterObj.priority = filters.priority;
-  if (filters?.category !== undefined) filterObj.category = filters.category;
 
   const notes = getPmNotes(db, 'task', filterObj);
-
-  // Build reverse dependency graph once (cache per list call)
-  const depGraph = listMode !== 'short' ? buildDependencyGraph(db, prefix) : null;
-
-  // Build workstream lookup for name/display_id enrichment
-  const wsMap = new Map<number, { name: string; display_id: string }>();
-  if (listMode !== 'short') {
-    const wsResult = listWorkstreams(db, prefix);
-    if (wsResult.ok) {
-      for (const ws of wsResult.data) {
-        wsMap.set(ws.number, { name: ws.title ?? '', display_id: ws.display_id });
-      }
-    }
-  }
-
-  let tasks = notes.map((note) => {
+  const tasks: TaskMetadata[] = notes.map((note) => {
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    const taskMeta = taskMetaFromRecord(meta);
-
-    // Merge depends_on from relations table (single source of truth)
-    taskMeta.depends_on = mergeDependsOn(db, note.id, taskMeta.depends_on);
-
-    const hasDependencies = !!(taskMeta.depends_on && taskMeta.depends_on.length > 0);
-    const dependenciesComplete = areDependenciesComplete(db, taskMeta.depends_on);
-
-    const virtualStates = computeVirtualState({
-      status: taskMeta.status,
-      hasDependencies,
-      dependenciesComplete,
-      claimedAt: taskMeta.claimed_at,
-      dueDate: taskMeta.due_date,
-    });
-
-    const enriched: EnrichedTaskFields = {};
-
-    // Read body when enriching or when searching (need body for search matching)
-    const needsBody = listMode !== 'short' || isSearch;
-    const body = needsBody ? readTaskBody(note) : '';
-
-    if (listMode !== 'short') {
-      enriched.description = listMode === 'full' ? body : body.slice(0, 500);
-
-      // Prefer structured frontmatter over regex parsing
-      if (taskMeta.acceptance_criteria && taskMeta.acceptance_criteria.length > 0) {
-        enriched.acceptance_criteria = taskMeta.acceptance_criteria;
-      } else {
-        // Fallback: regex parse from body (legacy tasks)
-        const acMatch = body.match(/acceptance criteria[:\s]*\n((?:[-*]\s+.+\n?)+)/i);
-        enriched.acceptance_criteria = acMatch
-          ? acMatch[1]
-              .split('\n')
-              .filter((l) => l.trim().startsWith('-') || l.trim().startsWith('*'))
-              .map((l) => l.replace(/^[\s]*[-*]\s+/, '').trim())
-          : [];
-      }
-
-      // blocked_by = upstream prerequisites (tasks I wait on)
-      const blockedBy = getDependencyDisplayIds(db, note.id);
-      enriched.blocked_by = blockedBy.length > 0 ? blockedBy : undefined;
-
-      // blocks = downstream dependents (tasks waiting on me)
-      const blocksMe: string[] = [];
-      const reverseRelations = db.getRelationsTo(note.id);
-      for (const rel of reverseRelations) {
-        if (rel.type === 'depends_on') {
-          const sourceNote = db.getNoteById(rel.sourceId);
-          if (sourceNote?.metadata) {
-            const meta2 = JSON.parse(sourceNote.metadata) as Record<string, unknown>;
-            if (meta2.display_id) blocksMe.push(meta2.display_id as string);
-          }
-        }
-      }
-      enriched.blocks = blocksMe.length > 0 ? blocksMe : undefined;
-
-      enriched.created = note.createdAt ?? (meta.created as string) ?? null;
-      enriched.modified = note.modifiedAt ?? (meta.modified as string) ?? null;
-
-      const wsInfo = taskMeta.workstream !== undefined ? wsMap.get(taskMeta.workstream) : undefined;
-      if (wsInfo) {
-        enriched.workstream_name = wsInfo.name;
-        enriched.workstream_display_id = wsInfo.display_id;
-      }
-    }
-
-    return { ...taskMeta, ...enriched, virtualStates, _body: body };
+    return taskMetaFromRecord(meta);
   });
 
-  if (filters?.dueBefore) {
-    const cutoff = filters.dueBefore;
-    tasks = tasks.filter((t) => t.due_date && t.due_date <= cutoff);
-  }
-
-  if (filters?.milestone) {
-    const ms = filters.milestone;
-    tasks = tasks.filter((t) => t.milestone === ms);
-  }
-
-  if (filters?.search) {
-    const searchLower = filters.search.toLowerCase();
-    tasks = tasks.filter((t) => {
-      const titleMatch = !!t.title?.toLowerCase().includes(searchLower);
-      const bodyMatch = !!t._body?.toLowerCase().includes(searchLower);
-      const displayIdMatch = !!t.display_id?.toLowerCase().includes(searchLower);
-      return titleMatch || bodyMatch || displayIdMatch;
-    });
-  }
-
-  if (virtualStateFilter) {
-    const filterName = filters!.status!.toLowerCase();
-    tasks = tasks.filter((t) =>
-      t.virtualStates.includes(virtualStateFilter) || t.status === filterName
-    );
-  }
-
-  // Strip internal _body field before returning
-  const cleaned = tasks.map(({ _body, ...rest }) => rest);
-  return ok(cleaned);
-}
-
-function didYouMeanTask(db: BrainDB, displayId: string): string | undefined {
-  const parsed = parseDisplayId(displayId);
-  if (!parsed || parsed.workstream === undefined || parsed.task === undefined) return undefined;
-
-  const allTasks = getPmNotes(db, 'task');
-  for (const note of allTasks) {
-    if (!note.metadata) continue;
-    const meta = JSON.parse(note.metadata) as Record<string, unknown>;
-    if (meta.workstream === parsed.workstream && meta.number === parsed.task) {
-      return meta.display_id as string;
-    }
-  }
-  return undefined;
+  return ok(tasks);
 }
 
 export function getTask(
@@ -486,17 +207,11 @@ export function getTask(
 ): Result<TaskMetadata & { virtualStates: VirtualState[] }> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
-    const suggestion = didYouMeanTask(db, displayId);
-    const hint = suggestion ? ` Did you mean "${suggestion}"?` : '';
-    return fail('NOT_FOUND', `Task "${displayId}" not found.${hint}`);
+    return fail('NOT_FOUND', `Task "${displayId}" not found`);
   }
 
-  const taskNote = notes[0];
-  const meta = JSON.parse(taskNote.metadata!) as Record<string, unknown>;
+  const meta = JSON.parse(notes[0].metadata!) as Record<string, unknown>;
   const taskMeta = taskMetaFromRecord(meta);
-
-  // Merge depends_on from relations table (single source of truth)
-  taskMeta.depends_on = mergeDependsOn(db, taskNote.id, taskMeta.depends_on);
 
   const hasDependencies = !!(taskMeta.depends_on && taskMeta.depends_on.length > 0);
   const dependenciesComplete = areDependenciesComplete(db, taskMeta.depends_on);
@@ -506,7 +221,6 @@ export function getTask(
     hasDependencies,
     dependenciesComplete,
     claimedAt: taskMeta.claimed_at,
-    dueDate: taskMeta.due_date,
   });
 
   return ok({ ...taskMeta, virtualStates });
@@ -555,36 +269,6 @@ export async function updateTaskStatus(
   const refreshedNote = db.getNoteById(noteId);
   const refreshedMeta = JSON.parse(refreshedNote!.metadata!) as Record<string, unknown>;
 
-  // Map status transitions to activity types
-  const activityTypeMap: Record<string, ActivityType> = {
-    claimed: 'claim',
-    'in-progress': 'start',
-    done: 'complete',
-    blocked: 'block',
-    cancelled: 'cancel',
-  };
-
-  // Unblock is: blocked -> pending
-  const activityType = currentStatus === 'blocked' && newStatus === 'pending'
-    ? 'unblock'
-    : activityTypeMap[newStatus];
-
-  if (activityType) {
-    const newlyEligible = activityType === 'complete'
-      ? computeNewlyEligible(db, noteId)
-      : undefined;
-
-    await createActivityNote(db, config, embedder, {
-      project: refreshedMeta.project as string,
-      activityType,
-      taskDisplayId: displayId,
-      taskNoteId: noteId,
-      fromState: currentStatus,
-      toState: newStatus,
-      newlyEligible,
-    });
-  }
-
   return ok(taskMetaFromRecord(refreshedMeta));
 }
 
@@ -593,7 +277,7 @@ export async function updateTask(
   config: BrainConfig,
   embedder: Embedder,
   displayId: string,
-  updates: Partial<Pick<TaskMetadata, 'mode' | 'category' | 'priority' | 'due_date' | 'milestone'>>
+  updates: Partial<Pick<TaskMetadata, 'mode' | 'category' | 'priority'>>
 ): Promise<Result<TaskMetadata>> {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) {
@@ -617,12 +301,6 @@ export async function updateTask(
   }
   if (updates.priority !== undefined) {
     content = replaceFrontmatterField(content, 'priority', updates.priority);
-  }
-  if (updates.due_date !== undefined) {
-    content = replaceFrontmatterField(content, 'due_date', updates.due_date);
-  }
-  if (updates.milestone !== undefined) {
-    content = replaceFrontmatterField(content, 'milestone', updates.milestone);
   }
 
   const now = new Date().toISOString().slice(0, 10);

@@ -24,40 +24,6 @@ function readStdin(): Promise<string> {
   });
 }
 
-const CHEAT_SHEET = `
-## brain pm — Quick Reference
-
-brain pm list                              # List projects
-brain pm status [--json]                   # Project status summary
-brain pm briefing [--full] [--json]        # Current state briefing
-
-brain pm task list [--status <s>] [--workstream <n|PROJ-NN>] [--category <c>] [--priority <p>] [--json]
-brain pm task add "<title>" --workstream <n|PROJ-NN> --project <PREFIX> --category <cat> --priority <pri> [--description "<desc>"] [--depends-on <id>]
-brain pm task show <PROJ-WS.TT> [--json]
-brain pm task claim <PROJ-WS.TT>
-brain pm task start <PROJ-WS.TT> --token <token>
-brain pm task done <PROJ-WS.TT>
-
-brain pm workstream list [--project <PREFIX>] [--json]
-brain pm workstream add --project <PREFIX> "<name>" [--description "<desc>"]
-brain pm workstream show <PROJ-NN> [--json]
-
-brain pm waves [--json]                    # Dependency-ordered task waves
-brain pm next [--json]                     # Next eligible tasks
-brain pm context <PROJ-WS.TT> [--json]    # Task context bundle
-brain pm dispatch <PROJ-WS.TT> [--json]   # Agent dispatch brief
-brain pm audit [--json]                    # Data quality audit
-brain pm check [--deep] [--json]           # Consistency checks
-
-brain pm onboard <name> [--prefix <PFX>] [--cwd <path>] [--skip-ingest] [--reset] [--json]
-brain pm onboard status [<prefix>] [--json]
-
-Statuses: pending, claimed, in-progress, done
-Virtual states (computed): blocked, ready, eligible
-Categories: bug, feature, improvement, research, documentation, testing, design, infrastructure, refactor
-Priorities: critical, high, medium, low
-`;
-
 export function createOrchestrateCommands(): Command {
   const cmd = new Command('orchestrate').description(
     'Orchestration layer commands (used by hooks and skill)'
@@ -97,9 +63,6 @@ export function createOrchestrateCommands(): Command {
             },
           };
           process.stdout.write(JSON.stringify(output, null, 2) + '\n');
-
-          // Append command cheat sheet for agent context
-          process.stdout.write(CHEAT_SHEET);
         });
       })
   );

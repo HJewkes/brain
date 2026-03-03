@@ -18,7 +18,6 @@ describe('validateTransition', () => {
     ['in-progress', 'done'],
     ['in-progress', 'blocked'],
     ['in-progress', 'cancelled'],
-    ['in-progress', 'pending'],
     ['blocked', 'pending'],
     ['blocked', 'cancelled'],
   ];
@@ -46,6 +45,7 @@ describe('validateTransition', () => {
     ['blocked', 'claimed'],
     ['blocked', 'in-progress'],
     ['blocked', 'done'],
+    ['in-progress', 'pending'],
     ['in-progress', 'claimed'],
   ];
 
@@ -55,40 +55,6 @@ describe('validateTransition', () => {
     if (!result.ok) {
       expect(result.error.code).toBe('INVALID_TRANSITION');
       expect(result.error.details).toEqual({ from, to });
-    }
-  });
-
-  test('error lists valid transitions for invalid transition', () => {
-    const result = validateTransition('pending', 'done');
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('claimed');
-      expect(result.error.message).toContain('blocked');
-      expect(result.error.message).toContain('cancelled');
-    }
-  });
-
-  test('error includes hint for pending -> done', () => {
-    const result = validateTransition('pending', 'done');
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('claim');
-    }
-  });
-
-  test('error includes hint for pending -> in-progress', () => {
-    const result = validateTransition('pending', 'in-progress');
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('claim');
-    }
-  });
-
-  test('error says terminal state for done', () => {
-    const result = validateTransition('done', 'pending');
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('none (terminal state)');
     }
   });
 
@@ -285,8 +251,8 @@ describe('allowedTransitions', () => {
     expect(allowedTransitions('claimed')).toEqual(['in-progress', 'pending', 'cancelled']);
   });
 
-  test('in-progress returns [done, blocked, cancelled, pending]', () => {
-    expect(allowedTransitions('in-progress')).toEqual(['done', 'blocked', 'cancelled', 'pending']);
+  test('in-progress returns [done, blocked, cancelled]', () => {
+    expect(allowedTransitions('in-progress')).toEqual(['done', 'blocked', 'cancelled']);
   });
 
   test('done returns []', () => {

@@ -124,7 +124,6 @@ describe('assembleContext', () => {
       name: 'Dependency Task',
       status: 'done',
       summary: undefined,
-      direction: 'upstream',
     });
   });
 
@@ -257,126 +256,6 @@ describe('assembleContext', () => {
     if (!r1.ok || !r2.ok) return;
 
     expect(r1.data.contextHash).toBe(r2.data.contextHash);
-  });
-});
-
-describe('assembleContext enriched fields', () => {
-  test('returns body text from task note markdown', () => {
-    const noteId = `task-body-${randomUUID()}`;
-    const filePath = join(tempDir, 'TST-01.01.md');
-    writeFileSync(filePath, [
-      '---',
-      'title: "Setup CI"',
-      'type: task',
-      'module: pm',
-      'project: TST',
-      'workstream: 1',
-      'display_id: TST-01.01',
-      'number: 1',
-      'status: pending',
-      'mode: auto',
-      'category: implementation',
-      'priority: medium',
-      '---',
-      '',
-      '# Setup CI',
-      '',
-      'Configure GitHub Actions for the main repo.',
-      'Need to handle matrix builds for Node 18/20.',
-      '',
-    ].join('\n'));
-
-    db.upsertNote({
-      ...makeNote({ id: noteId }),
-      filePath,
-      title: 'Setup CI',
-      type: 'task',
-      module: 'pm',
-      metadata: taskMeta('TST-01.01', 'TST'),
-    });
-
-    const result = assembleContext(db, 'TST-01.01');
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(result.data.body).toBeDefined();
-    expect(result.data.body).toContain('Configure GitHub Actions');
-    expect(result.data.body).toContain('matrix builds');
-  });
-
-  test('returns empty string for body when note has no content after heading', () => {
-    const noteId = `task-empty-${randomUUID()}`;
-    const filePath = join(tempDir, 'TST-01.02.md');
-    writeFileSync(filePath, [
-      '---',
-      'title: "Empty Task"',
-      'type: task',
-      'module: pm',
-      'display_id: TST-01.02',
-      'project: TST',
-      'workstream: 1',
-      'number: 2',
-      'status: pending',
-      'mode: auto',
-      'category: implementation',
-      'priority: medium',
-      '---',
-      '',
-      '# Empty Task',
-      '',
-    ].join('\n'));
-
-    db.upsertNote({
-      ...makeNote({ id: noteId }),
-      filePath,
-      title: 'Empty Task',
-      type: 'task',
-      module: 'pm',
-      metadata: taskMeta('TST-01.02', 'TST'),
-    });
-
-    const result = assembleContext(db, 'TST-01.02');
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(result.data.body).toBe('');
-  });
-
-  test('includes workstream info in bundle', () => {
-    const wsNoteId = `ws-${randomUUID()}`;
-    db.upsertNote({
-      ...makeNote({ id: wsNoteId }),
-      title: 'Mobile App',
-      type: 'workstream',
-      module: 'pm',
-      metadata: JSON.stringify({
-        display_id: 'TST-01',
-        project: 'TST',
-        number: 1,
-        status: 'active',
-        title: 'Mobile App',
-      }),
-    });
-
-    const taskNoteId = `task-ws-${randomUUID()}`;
-    const filePath = join(tempDir, 'TST-01.03.md');
-    writeFileSync(filePath, '---\ntitle: "Test"\ntype: task\nmodule: pm\ndisplay_id: TST-01.03\nproject: TST\nworkstream: 1\nnumber: 3\nstatus: pending\nmode: auto\ncategory: implementation\npriority: medium\n---\n\n# Test\n');
-    db.upsertNote({
-      ...makeNote({ id: taskNoteId }),
-      filePath,
-      title: 'Test',
-      type: 'task',
-      module: 'pm',
-      metadata: taskMeta('TST-01.03', 'TST'),
-    });
-
-    const result = assembleContext(db, 'TST-01.03');
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(result.data.workstream).toBeDefined();
-    expect(result.data.workstream?.displayId).toBe('TST-01');
-    expect(result.data.workstream?.title).toBe('Mobile App');
   });
 });
 

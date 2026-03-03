@@ -1,8 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 
-const PM_ID_PATTERN = /^[A-Z]{2,5}(-\d{2}(\.\d{2})?)?$/;
-
 export const contextCommand = new Command('context')
   .description('Show context for a note: related notes, memories, and graph connections')
   .argument('<id>', 'Note ID')
@@ -11,13 +9,7 @@ export const contextCommand = new Command('context')
     await withDb(({ db }) => {
       const note = db.getNoteById(id);
       if (!note) {
-        if (PM_ID_PATTERN.test(id.toUpperCase())) {
-          process.stderr.write(
-            `Note "${id}" not found. This looks like a PM display ID — try: brain pm context ${id}\n`
-          );
-        } else {
-          process.stderr.write(`Error: note "${id}" not found\n`);
-        }
+        process.stderr.write(`Error: note "${id}" not found\n`);
         process.exitCode = 1;
         return;
       }

@@ -89,7 +89,6 @@ export async function createProject(
 
 function projectMetaFromRecord(meta: Record<string, unknown>): ProjectMetadata {
   return {
-    title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     prefix: meta.prefix as string,
     status: meta.status as ProjectMetadata['status'],
@@ -108,22 +107,10 @@ export function listProjects(db: BrainDB): Result<ProjectMetadata[]> {
   return ok(projects);
 }
 
-function availableProjectsList(db: BrainDB): string {
-  const notes = getPmNotes(db, 'project');
-  const prefixes = notes
-    .map((n) => {
-      if (!n.metadata) return undefined;
-      const m = JSON.parse(n.metadata) as Record<string, unknown>;
-      return m.prefix as string | undefined;
-    })
-    .filter((p): p is string => !!p);
-  return prefixes.length > 0 ? ` Available: ${prefixes.join(', ')}` : '';
-}
-
 export function getProject(db: BrainDB, prefix: string): Result<ProjectMetadata> {
   const notes = getPmNotes(db, 'project', { prefix });
   if (notes.length === 0) {
-    return fail('NOT_FOUND', `Project "${prefix}" not found.${availableProjectsList(db)}`);
+    return fail('NOT_FOUND', `Project "${prefix}" not found`);
   }
 
   const meta = JSON.parse(notes[0].metadata!) as Record<string, unknown>;
@@ -139,7 +126,7 @@ export async function updateProject(
 ): Promise<Result<ProjectMetadata>> {
   const notes = getPmNotes(db, 'project', { prefix });
   if (notes.length === 0) {
-    return fail('NOT_FOUND', `Project "${prefix}" not found.${availableProjectsList(db)}`);
+    return fail('NOT_FOUND', `Project "${prefix}" not found`);
   }
 
   const note = notes[0];
@@ -184,7 +171,7 @@ export async function deleteProject(
 ): Promise<Result<void>> {
   const notes = getPmNotes(db, 'project', { prefix });
   if (notes.length === 0) {
-    return fail('NOT_FOUND', `Project "${prefix}" not found.${availableProjectsList(db)}`);
+    return fail('NOT_FOUND', `Project "${prefix}" not found`);
   }
 
   const projectNotes = getProjectNotes(db, prefix);

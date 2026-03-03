@@ -109,21 +109,6 @@ describe('listWorkstreams', () => {
     }
   });
 
-  it('includes description in list results', async () => {
-    await createProject(db, config, embedder, { name: 'Web', prefix: 'WEB' });
-    await createWorkstream(db, config, embedder, {
-      project: 'WEB',
-      name: 'Frontend',
-      description: 'React components and state management.',
-    });
-
-    const result = listWorkstreams(db, 'WEB');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data[0].description).toBe('React components and state management.');
-    }
-  });
-
   it('returns empty array when no workstreams exist', async () => {
     const result = listWorkstreams(db, 'WEB');
     expect(result).toEqual({ ok: true, data: [] });
@@ -169,21 +154,6 @@ describe('getWorkstream', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('NOT_FOUND');
-    }
-  });
-
-  it('includes description from note body', async () => {
-    await createProject(db, config, embedder, { name: 'Web', prefix: 'WEB' });
-    await createWorkstream(db, config, embedder, {
-      project: 'WEB',
-      name: 'API Layer',
-      description: 'Backend REST API endpoints and middleware.',
-    });
-
-    const result = getWorkstream(db, 'WEB-01');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.description).toBe('Backend REST API endpoints and middleware.');
     }
   });
 });

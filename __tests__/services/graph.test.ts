@@ -242,7 +242,7 @@ describe('graph service', () => {
       expect(fromTgt.nodes.map((n) => n.id)).toEqual(['inf-tgt']);
     });
 
-    it('traverses parent bidirectionally', () => {
+    it('traverses parent only forward (child to parent)', () => {
       db.upsertNote(makeNote({ id: 'child', title: 'Child' }));
       db.upsertNote(makeNote({ id: 'par', title: 'Parent' }));
 
@@ -252,25 +252,8 @@ describe('graph service', () => {
       const fromChild = traverseGraph(db, 'child', 1);
       expect(fromChild.nodes.map((n) => n.id).sort()).toEqual(['child', 'par']);
 
-      // Starting from parent should find child via incoming parent edge
       const fromParent = traverseGraph(db, 'par', 1);
-      expect(fromParent.nodes.map((n) => n.id).sort()).toEqual(['child', 'par']);
-    });
-
-    it('traverses depends_on bidirectionally', () => {
-      db.upsertNote(makeNote({ id: 'dep-a', title: 'Task A' }));
-      db.upsertNote(makeNote({ id: 'dep-b', title: 'Task B' }));
-
-      // dep-a depends_on dep-b
-      db.upsertRelations('dep-a', [{ sourceId: 'dep-a', targetId: 'dep-b', type: 'depends_on' }]);
-
-      // From dep-a (source) should find dep-b via outgoing edge
-      const fromA = traverseGraph(db, 'dep-a', 1);
-      expect(fromA.nodes.map((n) => n.id).sort()).toEqual(['dep-a', 'dep-b']);
-
-      // From dep-b (target) should find dep-a via incoming depends_on edge
-      const fromB = traverseGraph(db, 'dep-b', 1);
-      expect(fromB.nodes.map((n) => n.id).sort()).toEqual(['dep-a', 'dep-b']);
+      expect(fromParent.nodes.map((n) => n.id)).toEqual(['par']);
     });
 
     it('handles mixed relation types in a graph', () => {

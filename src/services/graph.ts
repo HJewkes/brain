@@ -1,51 +1,8 @@
 import type { BrainDB } from './brain-db.js';
-import type { Relation, GraphNode, GraphResult, RelationType } from '../types.js';
+import type { Relation, GraphNode, GraphResult } from '../types.js';
 
 const MAX_DEPTH = 3;
-const BIDIRECTIONAL_TYPES = new Set(['related-to', 'related', 'parent', 'depends_on']);
-
-function distanceToCosineSim(distance: number): number {
-  return 1 - (distance * distance) / 2;
-}
-
-export function computeAutoLinks(
-  db: BrainDB,
-  noteId: string,
-  threshold = 0.65,
-  maxLinks = 5,
-  embedding?: Float32Array,
-): Relation[] {
-  let queryEmbedding = embedding;
-  if (!queryEmbedding) {
-    const chunks = db.getChunksForNote(noteId);
-    if (chunks.length === 0) return [];
-    const stored = db.getChunkEmbedding(chunks[0].id);
-    if (!stored) return [];
-    queryEmbedding = stored;
-  }
-
-  const vectorResults = db.searchVector(queryEmbedding, maxLinks + 1);
-
-  const existing = db.getRelationsFrom(noteId);
-  const existingTargets = new Set(existing.map((r) => r.targetId));
-
-  const links: Relation[] = [];
-  const seen = new Set<string>();
-  for (const result of vectorResults) {
-    if (result.noteId === noteId) continue;
-    if (seen.has(result.noteId)) continue;
-    const cosineSim = distanceToCosineSim(result.distance);
-    if (cosineSim < threshold) continue;
-    if (existingTargets.has(result.noteId)) continue;
-    seen.add(result.noteId);
-    links.push({
-      sourceId: noteId,
-      targetId: result.noteId,
-      type: 'related',
-    });
-  }
-  return links;
-}
+const BIDIRECTIONAL_TYPES = new Set(['related-to']);
 
 export function getDirectRelations(db: BrainDB, noteId: string): Relation[] {
   const outgoing = db.getRelationsFrom(noteId);
@@ -145,45 +102,6 @@ export function expandResults(
   return Array.from(scoreMap.entries())
     .map(([noteId, decayedScore]) => ({ noteId, decayedScore }))
     .sort((a, b) => b.decayedScore - a.decayedScore);
-}
-
-export interface GraphScore {
-  noteId: string;
-  score: number;
-  relationType: RelationType;
-  depth: number;
-}
-
-export function computeGraphScores(
-  db: BrainDB,
-  rootId: string,
-  maxDepth: number = 3
-): Map<string, GraphScore> {
-  const result = traverseGraph(db, rootId, maxDepth);
-  const scores = new Map<string, GraphScore>();
-
-  // Build a map from node id to its nearest edge type
-  const edgeTypeByTarget = new Map<string, RelationType>();
-  for (const edge of result.edges) {
-    const neighbor = edge.sourceId === rootId ? edge.targetId : edge.sourceId;
-    if (!edgeTypeByTarget.has(neighbor)) {
-      edgeTypeByTarget.set(neighbor, edge.type);
-    }
-  }
-
-  for (const node of result.nodes) {
-    if (node.id === rootId) continue;
-    const depth = node.depth;
-    const score = 1.0 / Math.pow(2, depth);
-    const relationType = edgeTypeByTarget.get(node.id) ?? 'related';
-
-    const existing = scores.get(node.id);
-    if (!existing || score > existing.score) {
-      scores.set(node.id, { noteId: node.id, score, relationType, depth });
-    }
-  }
-
-  return scores;
 }
 
 function deduplicateEdges(edges: Relation[]): Relation[] {

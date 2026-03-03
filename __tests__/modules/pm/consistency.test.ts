@@ -94,19 +94,18 @@ describe('findBrokenDependencies', () => {
 
   it('detects dependencies referencing nonexistent tasks', async () => {
     await createTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Task A' });
-    // Create a relation pointing to a non-existent note (simulating data corruption)
+    // Manually patch metadata to include a broken dep (createTask validates deps)
     const taskNotes = getPmNotes(db, 'task', { project: 'CHK', display_id: 'CHK-01.01' });
     expect(taskNotes).toHaveLength(1);
     const note = taskNotes[0];
-    db.upsertRelations(note.id, [
-      ...db.getRelationsFrom(note.id),
-      { sourceId: note.id, targetId: 'nonexistent-note-id', type: 'depends_on' },
-    ]);
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    meta.depends_on = ['CHK-99.99'];
+    db.upsertNote({ ...note, metadata: JSON.stringify(meta) });
 
     const result = findBrokenDependencies(db, 'CHK');
     expect(result).toHaveLength(1);
     expect(result[0].task).toBe('CHK-01.01');
-    expect(result[0].dependsOn).toBe('nonexistent-note-id');
+    expect(result[0].dependsOn).toBe('CHK-99.99');
     expect(result[0].reason).toContain('does not exist');
   });
 });

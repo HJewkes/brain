@@ -131,15 +131,12 @@ describe('CLI integration', () => {
 
   it('search returns results with correct shape (FTS)', () => {
     const output = cli('search "integration testing" --json --limit 5');
-    const parsed = JSON.parse(output);
+    const results = JSON.parse(output);
 
-    expect(parsed).toHaveProperty('notes');
-    expect(parsed).toHaveProperty('memories');
-    expect(Array.isArray(parsed.notes)).toBe(true);
-    expect(Array.isArray(parsed.memories)).toBe(true);
-    expect(parsed.notes.length).toBeGreaterThan(0);
+    expect(Array.isArray(results)).toBe(true);
+    expect(results.length).toBeGreaterThan(0);
 
-    const first = parsed.notes[0];
+    const first = results[0];
     expect(first).toHaveProperty('score');
     expect(first).toHaveProperty('filePath');
     expect(first).toHaveProperty('noteId');

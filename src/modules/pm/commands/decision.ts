@@ -7,7 +7,6 @@ import {
   getDecision,
   supersedeDecision,
 } from '../data/decision-ops.js';
-import { resolveProject } from '../data/queries.js';
 
 function outputResult(data: unknown, json: boolean): void {
   if (json) {
@@ -26,11 +25,8 @@ function outputResult(data: unknown, json: boolean): void {
 
 function formatDecisionLine(d: unknown): string {
   const dec = d as Record<string, unknown>;
-  const rawTitle = (dec.title as string) ?? '';
-  const name = rawTitle.replace(/^Decision:\s*/i, '');
-  const title = name ? ` ${name}` : '';
   const source = dec.source_task ? ` from ${dec.source_task}` : '';
-  return `${dec.display_id} -${title} [${dec.status}]${source}`;
+  return `${dec.display_id} - ${dec.status}${source}`;
 }
 
 export function createDecisionCommands(): Command {
@@ -40,22 +36,15 @@ export function createDecisionCommands(): Command {
     .command('add')
     .description('Record a new decision')
     .argument('<name>', 'Decision name')
-    .option('--project <prefix>', 'Project prefix (uses active if omitted)')
+    .requiredOption('--project <prefix>', 'Parent project prefix')
     .requiredOption('--source-task <id>', 'Task that prompted this decision')
     .option('--impacts <ids...>', 'Display IDs of impacted tasks')
     .option('--json', 'Output JSON')
     .action(async (name, opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, opts.project);
-        if (!projectResult.ok) {
-          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
-          process.exitCode = 1;
-          return;
-        }
-        const project = projectResult.data;
         const content = '';
         const result = await createDecision(svc.db, svc.config, svc.embedder, {
-          project,
+          project: opts.project.toUpperCase(),
           name,
           sourceTask: opts.sourceTask.toUpperCase(),
           impacts: opts.impacts?.map((id: string) => id.toUpperCase()),
@@ -78,13 +67,21 @@ export function createDecisionCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, opts.project);
-        if (!projectResult.ok) {
-          process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+        if (!opts.project) {
+          process.stderr.write(
+            formatError(
+              {
+                error: true,
+                code: 'INVALID_INPUT',
+                message: '--project is required for listing decisions',
+              },
+              !!opts.json
+            ) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
-        const result = listDecisions(svc.db, projectResult.data, {
+        const result = listDecisions(svc.db, opts.project.toUpperCase(), {
           status: opts.status,
         });
         if (!result.ok) {

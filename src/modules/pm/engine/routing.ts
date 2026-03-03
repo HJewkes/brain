@@ -1,29 +1,5 @@
 import type { TaskCategory, TaskMode } from '../types.js';
 
-type EntityType = 'task' | 'workstream' | 'project';
-
-export function detectEntityType(id: string): EntityType {
-  if (id.includes('.')) return 'task';
-  if (id.includes('-')) return 'workstream';
-  return 'project';
-}
-
-export function checkNamespaceMismatch(
-  id: string,
-  expectedType: EntityType
-): string | null {
-  const actualType = detectEntityType(id);
-  if (actualType === expectedType) return null;
-
-  const commands: Record<EntityType, string> = {
-    task: 'brain pm task show',
-    workstream: 'brain pm workstream show',
-    project: 'brain pm project show',
-  };
-
-  return `${id} is a ${actualType}, not a ${expectedType}.\n  → Use: ${commands[actualType]} ${id}`;
-}
-
 export interface RoutingResult {
   agentType: 'general-purpose' | 'Explore' | 'Plan';
   model: 'opus' | 'sonnet' | 'haiku';

@@ -1,6 +1,5 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import { getPmNotes, resolveDisplayId } from '../data/queries.js';
-import { getDependencyDisplayIds } from '../data/task-ops.js';
 import { getDecision } from '../data/decision-ops.js';
 import { getPrompt } from '../data/prompt-ops.js';
 
@@ -78,31 +77,18 @@ export function findBrokenDependencies(db: BrainDB, prefix: string): BrokenDep[]
 
   for (const task of tasks) {
     const meta = JSON.parse(task.metadata!) as Record<string, unknown>;
-    // Read raw relation edges (not just resolved display_ids) to detect dangling targets
-    const depRelations = db.getRelationsFrom(task.id).filter(r => r.type === 'depends_on');
-    if (depRelations.length === 0) continue;
+    const deps = meta.depends_on as string[] | undefined;
+    if (!deps) continue;
 
-    for (const rel of depRelations) {
-      const targetNote = db.getNoteById(rel.targetId);
-      if (!targetNote) {
+    for (const dep of deps) {
+      const resolved = resolveDisplayId(db, dep);
+      if (!resolved.ok) {
         broken.push({
           task: meta.display_id as string,
           taskTitle: task.title ?? (meta.display_id as string),
-          dependsOn: rel.targetId,
+          dependsOn: dep,
           reason: 'Target task does not exist',
         });
-      } else {
-        const targetMeta = JSON.parse(targetNote.metadata ?? '{}') as Record<string, unknown>;
-        const targetDisplayId = (targetMeta.display_id as string) ?? rel.targetId;
-        const resolved = resolveDisplayId(db, targetDisplayId);
-        if (!resolved.ok) {
-          broken.push({
-            task: meta.display_id as string,
-            taskTitle: task.title ?? (meta.display_id as string),
-            dependsOn: targetDisplayId,
-            reason: 'Target task does not exist',
-          });
-        }
       }
     }
   }
@@ -123,8 +109,8 @@ export function findBlockedWithoutCause(db: BrainDB, prefix: string): BlockedTas
 
   for (const task of blockedTasks) {
     const meta = JSON.parse(task.metadata!) as Record<string, unknown>;
-    const deps = getDependencyDisplayIds(db, task.id);
-    if (deps.length === 0) {
+    const deps = meta.depends_on as string[] | undefined;
+    if (!deps || deps.length === 0) {
       results.push({
         id: meta.display_id as string,
         title: task.title ?? (meta.display_id as string),
@@ -167,8 +153,8 @@ export function findCancelledDependencies(db: BrainDB, prefix: string): Cancelle
     const status = meta.status as string;
     if (status === 'done' || status === 'cancelled') continue;
 
-    const deps = getDependencyDisplayIds(db, task.id);
-    if (deps.length === 0) continue;
+    const deps = meta.depends_on as string[] | undefined;
+    if (!deps) continue;
 
     for (const dep of deps) {
       if (statusMap.get(dep) === 'cancelled') {

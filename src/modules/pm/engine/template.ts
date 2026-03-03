@@ -21,7 +21,7 @@ export function renderAgentPrompt(bundle: ContextBundle, options?: RenderOptions
     sections.push(renderDecisionsSection(decisions));
   }
 
-  sections.push(renderInstructionsSection(bundle));
+  sections.push(renderInstructionsSection(prompt));
   sections.push(renderValidationSection(task.category));
   sections.push(renderStatusReportingSection(task.display_id));
   sections.push(renderWorktreeSection(options?.worktreePath));
@@ -134,29 +134,9 @@ function renderDecisionsSection(decisions: DecisionSummary[]): string {
   return `## Decisions\n\n${items}`;
 }
 
-function renderInstructionsSection(bundle: ContextBundle): string {
-  if (bundle.prompt) {
-    return `## Instructions\n\n${bundle.prompt}`;
-  }
-
-  const parts: string[] = [];
-  const title = bundle.task.title ?? bundle.task.display_id;
-  parts.push(`Implement: **${title}**`);
-
-  if (bundle.body) {
-    parts.push('');
-    parts.push(bundle.body);
-  }
-
-  if (bundle.relatedNotes?.length > 0) {
-    parts.push('');
-    parts.push('### Related Context');
-    for (const note of bundle.relatedNotes.slice(0, 3)) {
-      parts.push(`- **${note.title}**: ${note.excerpt.slice(0, 200)}`);
-    }
-  }
-
-  return `## Instructions\n\n${parts.join('\n')}`;
+function renderInstructionsSection(prompt: string | undefined): string {
+  const content = prompt ?? 'No specific prompt provided.';
+  return `## Instructions\n\n${content}`;
 }
 
 function renderValidationSection(category: string): string {

@@ -105,7 +105,6 @@ function replaceFrontmatterField(content: string, field: string, value: string):
 
 function promptMetaFromRecord(meta: Record<string, unknown>): PromptMetadata {
   return {
-    title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
     project: meta.project as string,
     task: meta.task as string,

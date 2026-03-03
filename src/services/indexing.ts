@@ -1,12 +1,11 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { parseMarkdown, extractNoteLinks } from './markdown-parser.js';
+import { parseMarkdown } from './markdown-parser.js';
 import type { BrainDB } from './brain-db.js';
-import type { Chunk, Embedder, InboxItem, NoteRecord, RawChunk, Relation } from '../types.js';
+import type { Chunk, Embedder, InboxItem, NoteRecord, RawChunk } from '../types.js';
 import { scanForChanges } from './file-scanner.js';
 import { readIndexableContent } from './content-dir.js';
-import { computeAutoLinks } from './graph.js';
 import { slugify } from '../utils.js';
 export { slugify };
 
@@ -141,37 +140,15 @@ export async function indexSingleFile(
   );
 
   const chunks = rawChunksToChunks(parsed.id, parsed.chunks);
-  let vectors: Float32Array[] = [];
   if (chunks.length > 0) {
     const texts = chunks.map((c) => c.content);
     const embeddings = await embedder.embed(texts);
-    vectors = embeddings.map((e) => new Float32Array(e));
+    const vectors = embeddings.map((e) => new Float32Array(e));
     db.upsertChunks(parsed.id, chunks, vectors);
   }
 
   if (parsed.relations.length > 0) {
     db.upsertRelations(parsed.id, parsed.relations);
-  }
-
-  const noteLinks = extractNoteLinks(parsed.content);
-  const linkRelations: Relation[] = [];
-  for (const targetSlug of noteLinks) {
-    const targetNote = db.getNoteById(targetSlug);
-    if (targetNote && targetSlug !== parsed.id) {
-      linkRelations.push({ sourceId: parsed.id, targetId: targetSlug, type: 'related-to' });
-    }
-  }
-  if (linkRelations.length > 0) {
-    db.upsertRelations(parsed.id, linkRelations);
-  }
-
-  // Auto-link: create edges for semantically similar notes
-  if (vectors.length > 0) {
-    const autoLinks = computeAutoLinks(db, parsed.id, 0.85, 5, vectors[0]);
-    if (autoLinks.length > 0) {
-      const existingRelations = db.getRelationsFrom(parsed.id);
-      db.upsertRelations(parsed.id, [...existingRelations, ...autoLinks]);
-    }
   }
 
   db.upsertFile({

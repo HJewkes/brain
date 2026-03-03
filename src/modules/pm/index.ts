@@ -1,4 +1,3 @@
-import { Command } from '@commander-js/extra-typings';
 import type { BrainModule } from '../../modules/types.js';
 import { createPmCommand } from './commands/project.js';
 import { createWorkstreamCommands } from './commands/workstream.js';
@@ -15,17 +14,6 @@ import { createOrchestrateCommands } from './commands/orchestrate.js';
 import { createInstallHooksCommand } from './commands/install-hooks.js';
 import { createSetupCommand } from './commands/setup.js';
 import { createCheckCommand } from './commands/check.js';
-import { createOnboardCommand } from './commands/onboard.js';
-import { createRelateCommand } from './commands/relate.js';
-import { createActivityCommand } from './commands/activity.js';
-
-export type EntityType = 'task' | 'workstream' | 'project';
-
-export function detectEntityType(id: string): EntityType {
-  if (id.includes('.')) return 'task';
-  if (id.includes('-')) return 'workstream';
-  return 'project';
-}
 
 export const pmModule: BrainModule = {
   name: 'pm',
@@ -114,8 +102,6 @@ export const pmModule: BrainModule = {
             enum: ['critical', 'high', 'medium', 'low'],
             description: 'Task priority',
           },
-          due_date: { type: 'string', description: 'Due date (YYYY-MM-DD)' },
-          milestone: { type: 'string', description: 'Milestone name' },
         },
         required: ['project', 'workstream', 'number', 'status', 'mode', 'category', 'priority'],
       },
@@ -176,45 +162,6 @@ export const pmModule: BrainModule = {
       },
     });
 
-    ctx.registerNoteType({
-      name: 'onboard-manifest',
-      description: 'Onboarding activity manifest',
-      tier: 'slow',
-      schema: {
-        type: 'object',
-        properties: {
-          project: { type: 'string', description: 'Parent project prefix' },
-        },
-        required: ['project'],
-      },
-    });
-
-    ctx.registerNoteType({
-      name: 'activity',
-      description: 'Tracks actions performed on a project (onboard, import, delete)',
-      tier: 'slow',
-      schema: {
-        type: 'object',
-        properties: {
-          project: { type: 'string', description: 'Project prefix' },
-          activity_type: {
-            type: 'string',
-            enum: ['onboard', 'import', 'delete', 'complete', 'claim', 'start', 'block', 'unblock', 'cancel'],
-            description: 'Type of activity',
-          },
-          created_notes: {
-            type: 'array',
-            description: 'Note IDs created by this activity',
-          },
-          created_relations: {
-            type: 'number',
-            description: 'Number of relations created',
-          },
-        },
-        required: ['project', 'activity_type'],
-      },
-    });
-
     ctx.registerRelationType({
       name: 'depends_on',
       description: 'Task dependency',
@@ -232,18 +179,6 @@ export const pmModule: BrainModule = {
     ctx.registerRelationType({
       name: 'supersedes',
       description: 'Decision supersedes another',
-    });
-    ctx.registerRelationType({
-      name: 'recorded_for',
-      description: 'Activity recorded for a task',
-    });
-    ctx.registerRelationType({
-      name: 'unblocked',
-      description: 'Activity unblocked a downstream task',
-    });
-    ctx.registerRelationType({
-      name: 'references',
-      description: 'Task references a source document',
     });
 
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
@@ -283,134 +218,6 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createInstallHooksCommand());
     pmCmd.addCommand(createSetupCommand());
     pmCmd.addCommand(createCheckCommand());
-    pmCmd.addCommand(createOnboardCommand());
-    pmCmd.addCommand(createRelateCommand());
-    pmCmd.addCommand(createActivityCommand());
-
-    // Catch unknown commands with intelligent resolution
-    pmCmd.on('command:*', async (operands: string[]) => {
-      const unknown = operands[0];
-      if (!unknown) return;
-
-      const { resolveUnknownCommand } = await import('./engine/command-resolution.js');
-
-      let resolution;
-      try {
-        const { withBrain } = await import('../../services/brain-service.js');
-        resolution = await withBrain(async (svc) => {
-          return resolveUnknownCommand(unknown, svc.db, svc.embedder);
-        });
-      } catch {
-        resolution = await resolveUnknownCommand(unknown);
-      }
-
-      process.stderr.write(`Error: ${resolution.message}\n`);
-      process.exitCode = 1;
-    });
-
-    const showCmd = new Command('show')
-      .description('Show details for any PM entity (task, workstream, or project)')
-      .argument('<id>', 'Display ID (e.g., VOLT, VOLT-01, VOLT-01.03)')
-      .option('--json', 'Output JSON')
-      .option('--format <format>', 'Output format')
-      .action(async (id: string, opts: { json?: boolean; format?: string }) => {
-        if (opts.format === 'json') opts.json = true;
-        const entityType = detectEntityType(id);
-        const args = ['node', 'brain-pm', entityType, 'show', id];
-        if (opts.json) args.push('--json');
-        await pmCmd.parseAsync(args, { from: 'node' });
-      });
-    pmCmd.addCommand(showCmd);
-
-    const claimCmd = new Command('claim')
-      .description('Claim a task')
-      .argument('<id>', 'Task display ID (e.g., VOLT-01.03)')
-      .option('--start', 'Start working immediately after claiming')
-      .option('--json', 'Output JSON')
-      .option('--format <format>', 'Output format')
-      .action(async (id: string, opts: { json?: boolean; start?: boolean; format?: string }) => {
-        if (opts.format === 'json') opts.json = true;
-        const args = ['node', 'brain-pm', 'task', 'claim', id];
-        if (opts.start) args.push('--start');
-        if (opts.json) args.push('--json');
-        await pmCmd.parseAsync(args, { from: 'node' });
-      });
-    pmCmd.addCommand(claimCmd);
-
-    // Plural aliases — delegate to subcommand
-    const taskSubcommands = new Set([
-      'add', 'list', 'show', 'update', 'done', 'block', 'unblock',
-      'delete', 'claim', 'start', 'release',
-      'complete',
-    ]);
-    const tasksAlias = new Command('tasks')
-      .description('Task management (alias for "task")')
-      .helpOption(false)
-      .allowUnknownOption()
-      .allowExcessArguments(true)
-      .action(async () => {
-        const idx = process.argv.indexOf('tasks');
-        const tail = process.argv.slice(idx + 1);
-        const hasSubcommand = tail.length > 0 && taskSubcommands.has(tail[0]);
-        let prefix: string[];
-        if (hasSubcommand) {
-          if (tail[0] === 'complete') {
-            // Route "tasks complete <id>" to "pm complete <id>"
-            await pmCmd.parseAsync(['node', 'brain-pm', 'complete', ...tail.slice(1)], { from: 'node' });
-            return;
-          }
-          prefix = [];
-        } else if (tail.length > 0 && tail[0].includes('.')) {
-          prefix = ['show'];
-        } else {
-          prefix = ['list'];
-        }
-        await pmCmd.parseAsync(['node', 'brain-pm', 'task', ...prefix, ...tail], { from: 'node' });
-      });
-    pmCmd.addCommand(tasksAlias);
-
-    const wsSubcommands = new Set(['list', 'show', 'add']);
-    const workstreamsAlias = new Command('workstreams')
-      .description('Workstream management (alias for "workstream")')
-      .helpOption(false)
-      .allowUnknownOption()
-      .allowExcessArguments(true)
-      .action(async () => {
-        const idx = process.argv.indexOf('workstreams');
-        const tail = process.argv.slice(idx + 1);
-        const hasSubcommand = tail.length > 0 && wsSubcommands.has(tail[0]);
-        const prefix = hasSubcommand ? [] : ['list'];
-        await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', ...prefix, ...tail], { from: 'node' });
-      });
-    pmCmd.addCommand(workstreamsAlias);
-
-    const projectSubcommands = new Set(['list', 'show', 'add']);
-    const projectsAlias = new Command('projects')
-      .description('Project management (alias for "project")')
-      .helpOption(false)
-      .allowUnknownOption()
-      .allowExcessArguments(true)
-      .action(async () => {
-        const idx = process.argv.indexOf('projects');
-        const tail = process.argv.slice(idx + 1);
-        const hasSubcommand = tail.length > 0 && projectSubcommands.has(tail[0]);
-        const prefix = hasSubcommand ? [] : ['list'];
-        await pmCmd.parseAsync(['node', 'brain-pm', 'project', ...prefix, ...tail], { from: 'node' });
-      });
-    pmCmd.addCommand(projectsAlias);
-
-    const lsAlias = new Command('ls')
-      .description('List projects (alias for "list")')
-      .helpOption(false)
-      .allowUnknownOption()
-      .allowExcessArguments(true)
-      .action(async () => {
-        const idx = process.argv.indexOf('ls');
-        const tail = process.argv.slice(idx + 1);
-        await pmCmd.parseAsync(['node', 'brain-pm', 'list', ...tail], { from: 'node' });
-      });
-    pmCmd.addCommand(lsAlias);
-
     ctx.registerCommand(pmCmd);
   },
 };
