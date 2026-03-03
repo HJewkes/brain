@@ -9,8 +9,7 @@ import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import { listTasks, createTask } from '../../../src/modules/pm/data/task-ops.js';
-import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
-import { detectCycles, buildDependencyGraph } from '../../../src/modules/pm/engine/dependency.js';
+import { detectCycles } from '../../../src/modules/pm/engine/dependency.js';
 
 let db: BrainDB;
 let dbPath: string;

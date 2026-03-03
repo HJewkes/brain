@@ -7,13 +7,13 @@ import { formatError } from '../errors.js';
 import { resolveWorkstreamFilter } from '../ids.js';
 import type { Result } from '../errors.js';
 import { ok, fail } from '../errors.js';
-import { getActiveProject, getPmNotes, resolveProject } from '../data/queries.js';
+import { getPmNotes, resolveProject } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
 import { detectStalePrompts } from '../data/prompt-ops.js';
 import { getProject } from '../data/project-ops.js';
 import { computeEligible, computeWaves, computeImpact } from '../engine/dependency.js';
-import { assembleContext, assembleDispatch } from '../engine/dispatch.js';
+import { assembleDispatch } from '../engine/dispatch.js';
 import { validateClaimToken } from '../engine/claims.js';
 import {
   findOrphanedDecisions,

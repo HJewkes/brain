@@ -19,7 +19,7 @@ import { getPmNotes, resolveDisplayId } from './queries.js';
 import { validateTransition, computeVirtualState } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
 import { listWorkstreams } from './workstream-ops.js';
-import { buildDependencyGraph, computeNewlyEligible } from '../engine/dependency.js';
+import { computeNewlyEligible } from '../engine/dependency.js';
 import { createActivityNote } from '../engine/activity.js';
 import type { ActivityType } from '../types.js';
 
@@ -193,7 +193,7 @@ export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string
   return displayIds;
 }
 
-function mergeDependsOn(db: BrainDB, noteId: string, _frontmatterDeps: string[] | undefined): string[] | undefined {
+function mergeDependsOn(db: BrainDB, noteId: string): string[] | undefined {
   const relationDeps = getDependencyDisplayIds(db, noteId);
   return relationDeps.length > 0 ? relationDeps : undefined;
 }
@@ -291,22 +291,6 @@ export async function createTask(
   return ok(metadata);
 }
 
-function buildWorkstreamMap(
-  db: BrainDB,
-  project: string
-): Map<number, { title: string; description?: string }> {
-  const wsNotes = getPmNotes(db, 'workstream', { project });
-  const map = new Map<number, { title: string; description?: string }>();
-  for (const note of wsNotes) {
-    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    const num = meta.number as number;
-    const title = (meta.title as string) ?? '';
-    const description = (meta.description as string) ?? undefined;
-    map.set(num, { title, description });
-  }
-  return map;
-}
-
 export function listTasks(
   db: BrainDB,
   prefix: string,
@@ -347,9 +331,6 @@ export function listTasks(
 
   const notes = getPmNotes(db, 'task', filterObj);
 
-  // Build reverse dependency graph once (cache per list call)
-  const depGraph = listMode !== 'short' ? buildDependencyGraph(db, prefix) : null;
-
   // Build workstream lookup for name/display_id enrichment
   const wsMap = new Map<number, { name: string; display_id: string }>();
   if (listMode !== 'short') {
@@ -366,7 +347,7 @@ export function listTasks(
     const taskMeta = taskMetaFromRecord(meta);
 
     // Merge depends_on from relations table (single source of truth)
-    taskMeta.depends_on = mergeDependsOn(db, note.id, taskMeta.depends_on);
+    taskMeta.depends_on = mergeDependsOn(db, note.id);
 
     const hasDependencies = !!(taskMeta.depends_on && taskMeta.depends_on.length > 0);
     const dependenciesComplete = areDependenciesComplete(db, taskMeta.depends_on);
@@ -430,7 +411,7 @@ export function listTasks(
       }
     }
 
-    return { ...taskMeta, ...enriched, virtualStates, _body: body };
+    return { ...taskMeta, ...enriched, virtualStates, body };
   });
 
   if (filters?.dueBefore) {
@@ -447,7 +428,7 @@ export function listTasks(
     const searchLower = filters.search.toLowerCase();
     tasks = tasks.filter((t) => {
       const titleMatch = !!t.title?.toLowerCase().includes(searchLower);
-      const bodyMatch = !!t._body?.toLowerCase().includes(searchLower);
+      const bodyMatch = !!t.body?.toLowerCase().includes(searchLower);
       const displayIdMatch = !!t.display_id?.toLowerCase().includes(searchLower);
       return titleMatch || bodyMatch || displayIdMatch;
     });
@@ -460,9 +441,11 @@ export function listTasks(
     );
   }
 
-  // Strip internal _body field before returning
-  const cleaned = tasks.map(({ _body, ...rest }) => rest);
-  return ok(cleaned);
+  // Strip internal body field before returning
+  return ok(tasks.map((t) => {
+    delete (t as Record<string, unknown>).body;
+    return t;
+  }));
 }
 
 function didYouMeanTask(db: BrainDB, displayId: string): string | undefined {
@@ -496,7 +479,7 @@ export function getTask(
   const taskMeta = taskMetaFromRecord(meta);
 
   // Merge depends_on from relations table (single source of truth)
-  taskMeta.depends_on = mergeDependsOn(db, taskNote.id, taskMeta.depends_on);
+  taskMeta.depends_on = mergeDependsOn(db, taskNote.id);
 
   const hasDependencies = !!(taskMeta.depends_on && taskMeta.depends_on.length > 0);
   const dependenciesComplete = areDependenciesComplete(db, taskMeta.depends_on);

@@ -7,9 +7,8 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
-import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream, getWorkstream, listWorkstreams } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import { createTask, listTasks } from '../../../src/modules/pm/data/task-ops.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
 import { search } from '../../../src/services/search.js';
 

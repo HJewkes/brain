@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, makeNote, makeChunk } from '../../helpers.js';
 import { computeAutoLinks } from '../../../src/services/graph.js';
@@ -100,7 +100,7 @@ describe('relate command', () => {
     db.upsertNote(noteA);
     db.upsertNote(noteB);
 
-    const cmd = createRelateCommand();
+    createRelateCommand();
 
     // Manually invoke the action logic via the exported handler
     const { relateAction } = await import(

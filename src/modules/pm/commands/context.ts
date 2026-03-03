@@ -3,7 +3,6 @@ import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
 import {
   assembleDispatch,
-  assembleContext,
   assembleProjectContext,
   assembleWorkstreamContext,
   type ContextBundle,

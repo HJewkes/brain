@@ -8,7 +8,6 @@ import { loadConfig, saveConfig } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel } from '../services/ollama.js';
-import { slugify } from '../utils.js';
 import { indexSingleFile } from '../services/indexing.js';
 import type { BrainConfig, Embedder, EmbedderBackend } from '../types.js';
 

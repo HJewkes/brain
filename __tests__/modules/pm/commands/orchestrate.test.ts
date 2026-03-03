@@ -1,11 +1,9 @@
-import { EventEmitter, Readable } from 'node:stream';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createOrchestrateCommands } from '../../../../src/modules/pm/commands/orchestrate.js';
-import { createTask, updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
 import { setActiveProject } from '../../../../src/modules/pm/data/queries.js';
 
 let db: BrainDB;
@@ -305,7 +303,7 @@ describe('orchestrate route (validation)', () => {
 });
 
 describe('orchestrate session-start', () => {
-  function mockStdin(data: string) {
+  function mockStdin() {
     const originalIsTTY = process.stdin.isTTY;
     Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
     // When isTTY is true, readStdin resolves immediately with ''
@@ -319,7 +317,7 @@ describe('orchestrate session-start', () => {
   }
 
   it('outputs session info with active project (TTY mode)', async () => {
-    const restore = mockStdin('');
+    const restore = mockStdin();
 
     await run('session-start');
 
@@ -335,7 +333,7 @@ describe('orchestrate session-start', () => {
   it('errors when no active project', async () => {
     db.close();
     db = new BrainDB(tmpDbPath('orchestrate-no-project'));
-    const restore = mockStdin('');
+    const restore = mockStdin();
 
     await run('session-start');
 

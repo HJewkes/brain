@@ -25,20 +25,6 @@ function pm(args: string): string {
   return cli(`pm ${args}`);
 }
 
-function tryPm(args: string): { stdout: string; stderr: string; exitCode: number } {
-  try {
-    const stdout = pm(args);
-    return { stdout, stderr: '', exitCode: 0 };
-  } catch (err: unknown) {
-    const e = err as { stdout?: string; stderr?: string; status?: number };
-    return {
-      stdout: (e.stdout ?? '').toString().trim(),
-      stderr: (e.stderr ?? '').toString().trim(),
-      exitCode: e.status ?? 1,
-    };
-  }
-}
-
 beforeAll(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'brain-pm-v9-'));
   notesDir = join(tmpDir, 'notes');
