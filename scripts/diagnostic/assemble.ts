@@ -179,6 +179,10 @@ function buildAggregates(
     return `**${sign}${pct.toFixed(1)}%**`;
   };
 
+  if (!cur) {
+    return `*No results for ${version} — all test agents failed or produced no output.*`;
+  }
+
   const lines = [
     `| Metric | ${prevVersion} (${prev?.count ?? '?'}p) | ${version} (${cur.count}p) | Delta |`,
     '|--------|----------|----------|-------|',

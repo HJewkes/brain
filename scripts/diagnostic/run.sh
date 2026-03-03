@@ -196,11 +196,15 @@ run_test_bench() {
 
   local total=0
   local failed=0
-  local running=0
+  local pids=()
   local next_i=1
 
-  start_next_agent() {
-    while [[ $next_i -le 30 && $running -lt $CONCURRENCY ]]; do
+  # Launch agents in waves of $CONCURRENCY
+  while [[ $next_i -le 30 ]]; do
+    local wave_pids=()
+    local wave_count=0
+
+    while [[ $next_i -le 30 && $wave_count -lt $CONCURRENCY ]]; do
       local num
       num=$(printf "%02d" "$next_i")
       local prompt_file="${PROMPTS_DIR}/test-bench/P-${num}.md"
@@ -213,20 +217,20 @@ run_test_bench() {
       fi
 
       run_agent "$prompt_file" "$output_file" sonnet "--output-format json" &
-      echo "  Started P-${num} (pid $!)"
+      local pid=$!
+      echo "  Started P-${num} (pid ${pid})"
+      wave_pids+=("$pid")
       ((total++))
-      ((running++))
+      ((wave_count++))
     done
-  }
 
-  start_next_agent
-
-  while [[ $running -gt 0 ]]; do
-    if ! wait -n; then
-      ((failed++))
-    fi
-    ((running--))
-    start_next_agent
+    # Wait for entire wave to finish
+    for pid in "${wave_pids[@]}"; do
+      if ! wait "$pid"; then
+        ((failed++))
+      fi
+    done
+    echo "  Wave complete (${wave_count} agents)"
   done
 
   echo "  Test bench complete: ${total} prompts, ${failed} failures"
