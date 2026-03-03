@@ -64,7 +64,7 @@ export function createRelateCommand() {
       await withDb(async ({ db }) => {
         const result = await relateAction(db, source, target, opts);
         if (opts.json) {
-          process.stdout.write(JSON.stringify(result) + '\n');
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
         } else {
           process.stdout.write(result.message + '\n');
         }

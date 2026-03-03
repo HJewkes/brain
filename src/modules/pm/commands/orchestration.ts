@@ -457,6 +457,8 @@ export function createOrchestrationCommands(): Command[] {
         const done = allTasks.filter((t) => t.status === 'done');
         const pending = allTasks.filter((t) => t.status === 'pending');
 
+        const taskMap = new Map(allTasks.map((t) => [t.display_id, t]));
+
         const decisionsResult = listDecisions(svc.db, prefix);
         const recentDecisions = decisionsResult.ok ? decisionsResult.data : [];
 
@@ -487,11 +489,14 @@ export function createOrchestrationCommands(): Command[] {
           project: project ?? { display_id: prefix, prefix, status: 'active' as const },
           tasks: {
             total: allTasks.length,
-            eligible,
-            inProgress: inProgress.map((t) => t.display_id),
-            blocked: blocked.map((t) => t.display_id),
-            done: done.map((t) => t.display_id),
-            pending: pending.map((t) => t.display_id),
+            eligible: eligible.map((id) => {
+              const t = taskMap.get(id);
+              return { displayId: id, title: t?.title ?? id, priority: t?.priority ?? 'medium', workstream: t?.workstream ?? 0 };
+            }),
+            inProgress: inProgress.map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id, priority: t.priority })),
+            blocked: blocked.map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id })),
+            doneCount: done.length,
+            pendingCount: pending.length,
           },
           recentDecisions,
           stalePrompts,
@@ -499,7 +504,7 @@ export function createOrchestrationCommands(): Command[] {
           consistencyIssues,
         };
 
-        if (opts.verbose) {
+        if (opts.verbose || opts.json) {
           const wsResult = listWorkstreams(svc.db, prefix);
           const workstreams = wsResult.ok ? wsResult.data : [];
 
@@ -651,11 +656,11 @@ export interface BriefingData {
   project: ProjectMetadata | { display_id: string; prefix: string; status: 'active' };
   tasks: {
     total: number;
-    eligible: string[];
-    inProgress: string[];
-    blocked: string[];
-    done: string[];
-    pending: string[];
+    eligible: Array<{ displayId: string; title: string; priority: string; workstream: number }>;
+    inProgress: Array<{ displayId: string; title: string; priority: string }>;
+    blocked: Array<{ displayId: string; title: string }>;
+    doneCount: number;
+    pendingCount: number;
   };
   recentDecisions: DecisionMetadata[];
   stalePrompts: PromptMetadata[];

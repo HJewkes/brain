@@ -359,7 +359,7 @@ describe('briefing', () => {
     const parsed = JSON.parse(stdout());
     // No tasks have status='blocked', but tasks with unmet deps get +BLOCKED virtual state
     // TEST-01.02 depends on 01.01 (pending), TEST-01.03 depends on 01.02, etc.
-    const blockedIds = parsed.tasks.blocked as string[];
+    const blockedIds = (parsed.tasks.blocked as Array<{ displayId: string }>).map((t) => t.displayId);
     expect(blockedIds.length).toBe(4);
     expect(blockedIds).toContain('TEST-01.02');
     expect(blockedIds).toContain('TEST-01.03');
@@ -389,11 +389,21 @@ describe('briefing', () => {
     expect(parsed.tasks).toHaveProperty('eligible');
     expect(parsed.tasks).toHaveProperty('inProgress');
     expect(parsed.tasks).toHaveProperty('blocked');
-    expect(parsed.tasks).toHaveProperty('done');
-    expect(parsed.tasks).toHaveProperty('pending');
+    expect(parsed.tasks).toHaveProperty('doneCount');
+    expect(parsed.tasks).toHaveProperty('pendingCount');
     expect(parsed).toHaveProperty('recentDecisions');
     expect(parsed).toHaveProperty('nextActions');
     expect(parsed.tasks.total).toBe(6);
+    // Enriched task objects have displayId and title
+    if (parsed.tasks.eligible.length > 0) {
+      expect(parsed.tasks.eligible[0]).toHaveProperty('displayId');
+      expect(parsed.tasks.eligible[0]).toHaveProperty('title');
+      expect(parsed.tasks.eligible[0]).toHaveProperty('priority');
+      expect(parsed.tasks.eligible[0]).toHaveProperty('workstream');
+    }
+    // --json auto-includes verbose fields
+    expect(parsed).toHaveProperty('workstreamBreakdown');
+    expect(parsed).toHaveProperty('priorityMatrix');
   });
 
   it('--verbose --json includes workstreamBreakdown and priorityMatrix', async () => {
