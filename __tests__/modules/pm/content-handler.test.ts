@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PmContentHandler, mapPriority } from '../../../src/modules/pm/content-handler.js';
 import type { BrainDB } from '../../../src/services/brain-db.js';
 import type { BrainConfig, Embedder, ExtractedItem } from '../../../src/types.js';
-import type { ClassifiedSection } from '../../../src/services/content-classifier.js';
 
 // Mock all PM data operations
 vi.mock('../../../src/modules/pm/data/task-ops.js', () => ({
@@ -17,15 +16,11 @@ vi.mock('../../../src/modules/pm/data/workstream-ops.js', () => ({
 vi.mock('../../../src/modules/pm/data/queries.js', () => ({
   getPmNotes: vi.fn(),
 }));
-vi.mock('../../../src/services/indexing.js', () => ({
-  indexSingleFile: vi.fn().mockResolvedValue('mock-note-id'),
-}));
 
 import { createTask } from '../../../src/modules/pm/data/task-ops.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
-import { indexSingleFile } from '../../../src/services/indexing.js';
 
 const mockConfig: BrainConfig = {
   notesDir: '/tmp/test-brain',
@@ -147,45 +142,19 @@ describe('PmContentHandler', () => {
     it('declares task note type', () => {
       expect(handler.noteTypes).toContain('task');
     });
-
-    it('declares task-list content class for legacy', () => {
-      expect(handler.contentClasses).toContain('task-list');
-    });
   });
 
   describe('canHandle', () => {
-    it('returns true for task note type (new interface)', () => {
+    it('returns true for task note type', () => {
       expect(handler.canHandle('task', 'some content')).toBe(true);
     });
 
-    it('returns false for non-task note type (new interface)', () => {
+    it('returns false for non-task note type', () => {
       expect(handler.canHandle('project', 'some content')).toBe(false);
-    });
-
-    it('returns true for task-list classification (legacy interface)', () => {
-      const section: ClassifiedSection = {
-        content: '| Title |\n| --- |\n| Task |',
-        contentClass: 'task-list',
-        confidence: 0.9,
-        method: 'deterministic',
-        heading: 'Tasks',
-      };
-      expect(handler.canHandle(section)).toBe(true);
-    });
-
-    it('returns false for non-task-list classification (legacy interface)', () => {
-      const section: ClassifiedSection = {
-        content: 'Architecture text',
-        contentClass: 'architecture',
-        confidence: 0.8,
-        method: 'deterministic',
-        heading: 'Architecture',
-      };
-      expect(handler.canHandle(section)).toBe(false);
     });
   });
 
-  describe('new interface: materialize with ExtractedItem[]', () => {
+  describe('materialize with ExtractedItem[]', () => {
     it('creates real PM tasks from extracted items', async () => {
       const mockDb = createMockDb();
       setupMocksForNewProject();
@@ -370,70 +339,6 @@ describe('PmContentHandler', () => {
         mockEmbedder,
         expect.objectContaining({ description: 'Content description' })
       );
-    });
-  });
-
-  describe('legacy interface: materialize with content string', () => {
-    it('parses table rows and creates notes via indexSingleFile', async () => {
-      const content = `| Title | Status | Priority | Assignee |
-| --- | --- | --- | --- |
-| Fix login bug | Open | High | Alice |
-| Add tests | Done | Medium | Bob |`;
-
-      const section: ClassifiedSection = {
-        content,
-        contentClass: 'task-list',
-        confidence: 0.9,
-        method: 'deterministic',
-        heading: 'Tasks',
-      };
-
-      const mockDb = createMockDb();
-      (indexSingleFile as ReturnType<typeof vi.fn>).mockResolvedValue('mock-note-id');
-      const ids = await handler.materialize(mockDb, mockEmbedder, content, section, 'source-note-1');
-
-      expect(ids).toHaveLength(2);
-      expect(indexSingleFile).toHaveBeenCalledTimes(2);
-      expect(mockDb.upsertRelations).toHaveBeenCalledTimes(2);
-    });
-
-    it('creates derived-from relations to source note', async () => {
-      const content = `| Title | Status |
-| --- | --- |
-| Task A | Open |`;
-
-      const section: ClassifiedSection = {
-        content,
-        contentClass: 'task-list',
-        confidence: 0.9,
-        method: 'deterministic',
-        heading: 'Tasks',
-      };
-
-      const mockDb = createMockDb();
-      (indexSingleFile as ReturnType<typeof vi.fn>).mockResolvedValue('mock-note-id');
-      await handler.materialize(mockDb, mockEmbedder, content, section, 'source-42');
-
-      expect(mockDb.upsertRelations).toHaveBeenCalledWith('mock-note-id', [
-        { sourceId: 'mock-note-id', targetId: 'source-42', type: 'derived-from' },
-      ]);
-    });
-
-    it('returns empty array for content without a valid table', async () => {
-      const content = 'Just some plain text without any table';
-      const section: ClassifiedSection = {
-        content,
-        contentClass: 'task-list',
-        confidence: 0.6,
-        method: 'deterministic',
-        heading: null,
-      };
-
-      const mockDb = createMockDb();
-      const ids = await handler.materialize(mockDb, mockEmbedder, content, section, 'source-1');
-
-      expect(ids).toHaveLength(0);
-      expect(indexSingleFile).not.toHaveBeenCalled();
     });
   });
 

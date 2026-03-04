@@ -1,6 +1,5 @@
 import type { Command } from '@commander-js/extra-typings';
-import type { NoteRecord, ContentClass, Embedder, ExtractedItem } from '../types.js';
-import type { ClassifiedSection } from '../services/content-classifier.js';
+import type { NoteRecord, Embedder, ExtractedItem } from '../types.js';
 import type { BrainDB } from '../services/brain-db.js';
 
 /** Schema for validating module note frontmatter (JSON Schema subset) */
@@ -65,25 +64,8 @@ export interface ModuleMigration {
   up: (db: unknown) => void;
 }
 
-/** @deprecated Use ContentHandlerV2 instead — will be removed when ContentClass is dropped */
-export interface ContentHandler {
-  contentClasses: ContentClass[];
-  canHandle(classification: ClassifiedSection): boolean;
-  materialize(
-    db: BrainDB,
-    embedder: Embedder,
-    content: string,
-    classification: ClassifiedSection,
-    sourceNoteId: string,
-    schemaMapping?: Record<string, string>
-  ): Promise<string[]>;
-}
-
-/** @deprecated Alias for ContentHandler — use ContentHandlerV2 for new code */
-export type LegacyContentHandler = ContentHandler;
-
 /** Handler for materializing extracted items into module-specific notes */
-export interface ContentHandlerV2 {
+export interface ContentHandler {
   noteTypes: string[];
   canHandle(noteType: string, content: string): boolean;
   materialize(
@@ -102,7 +84,7 @@ export interface ModuleContext {
   registerExtractionStrategy(strategy: ModuleExtractionStrategy): void;
   registerFilter(filter: FilterProvider): void;
   registerMigration(migration: ModuleMigration): void;
-  registerContentHandler(handler: ContentHandler | ContentHandlerV2): void;
+  registerContentHandler(handler: ContentHandler): void;
 }
 
 /** The interface every brain module must implement */

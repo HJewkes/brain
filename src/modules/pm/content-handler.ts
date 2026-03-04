@@ -1,18 +1,11 @@
-import type {
-  ContentHandler,
-  ContentHandlerV2,
-} from '../../modules/types.js';
-import type { BrainConfig, ContentClass, Embedder, ExtractedItem } from '../../types.js';
+import type { ContentHandler } from '../../modules/types.js';
+import type { BrainConfig, Embedder, ExtractedItem } from '../../types.js';
 import type { BrainDB } from '../../services/brain-db.js';
-import type { ClassifiedSection } from '../../services/content-classifier.js';
 import type { TaskPriority, TaskCategory } from './types.js';
 import { createTask } from './data/task-ops.js';
 import { createProject } from './data/project-ops.js';
 import { createWorkstream } from './data/workstream-ops.js';
 import { getPmNotes } from './data/queries.js';
-import { indexSingleFile } from '../../services/indexing.js';
-import { createHash } from 'node:crypto';
-import { slugify } from '../../utils.js';
 
 const VALID_CATEGORIES: TaskCategory[] = [
   'implementation',
@@ -96,16 +89,10 @@ async function ensureProjectAndWorkstream(
 }
 
 /**
- * PM content handler that implements both the new ContentHandler interface
- * (ExtractedItem[] batches) and the legacy ContentHandler interface
- * (raw content + classification) for backward compatibility.
+ * PM content handler that materializes extracted task items into PM notes.
  */
-export class PmContentHandler implements ContentHandlerV2, ContentHandler {
-  // New interface (ContentHandlerV2)
+export class PmContentHandler implements ContentHandler {
   noteTypes: string[] = ['task'];
-
-  // Legacy interface (ContentHandler)
-  contentClasses: ContentClass[] = ['task-list'];
 
   private config: BrainConfig | null = null;
 
@@ -113,41 +100,12 @@ export class PmContentHandler implements ContentHandlerV2, ContentHandler {
     this.config = config;
   }
 
-  // --- New ContentHandler interface ---
-
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  canHandle(noteTypeOrClassification: string | ClassifiedSection, _content?: string): boolean {
-    if (typeof noteTypeOrClassification === 'string') {
-      return noteTypeOrClassification === 'task';
-    }
-    return noteTypeOrClassification.contentClass === 'task-list';
+  canHandle(noteType: string, _content: string): boolean {
+    return noteType === 'task';
   }
 
   async materialize(
-    db: BrainDB,
-    embedder: Embedder,
-    itemsOrContent: ExtractedItem[] | string,
-    classificationOrSourceNoteId: ClassifiedSection | string,
-    sourceNoteId?: string
-  ): Promise<string[]> {
-    if (Array.isArray(itemsOrContent)) {
-      return this.materializeItems(
-        db,
-        embedder,
-        itemsOrContent,
-        classificationOrSourceNoteId as string
-      );
-    }
-    return this.materializeLegacy(
-      db,
-      embedder,
-      itemsOrContent,
-      classificationOrSourceNoteId as ClassifiedSection,
-      sourceNoteId!
-    );
-  }
-
-  private async materializeItems(
     db: BrainDB,
     embedder: Embedder,
     items: ExtractedItem[],
@@ -200,97 +158,4 @@ export class PmContentHandler implements ContentHandlerV2, ContentHandler {
 
     return noteIds;
   }
-
-  // --- Legacy ContentHandler interface ---
-
-  private async materializeLegacy(
-    db: BrainDB,
-    embedder: Embedder,
-    content: string,
-    _classification: ClassifiedSection,
-    sourceNoteId: string
-  ): Promise<string[]> {
-    const rows = parseTable(content);
-    if (rows.length === 0) return [];
-
-    const project = findActiveProjectPrefix(db);
-    const noteIds: string[] = [];
-
-    for (const row of rows) {
-      const title = row.get('title') ?? row.get('name') ?? 'Task from import';
-      const status = row.get('status') ?? 'pending';
-      const priority = mapPriority(row.get('priority'));
-      const id = slugify(title);
-      const now = new Date().toISOString().slice(0, 10);
-
-      const lines = [
-        '---',
-        `id: ${id}`,
-        `title: "${title.replace(/"/g, '\\"')}"`,
-        'type: note',
-        'tier: fast',
-        'status: draft',
-        `created: ${now}`,
-        `modified: ${now}`,
-        `import_status: "${status}"`,
-        `import_priority: "${priority}"`,
-      ];
-
-      if (project) {
-        lines.push('module: pm');
-        lines.push(`project: ${project}`);
-      }
-
-      lines.push('---', '', `# ${title}`, '');
-
-      for (const [key, value] of row.entries()) {
-        if (!['title', 'name', 'status', 'priority'].includes(key)) {
-          lines.push(`**${key}:** ${value}`);
-        }
-      }
-
-      const markdown = lines.join('\n') + '\n';
-      const hash = createHash('sha256').update(markdown).digest('hex');
-      const noteId = await indexSingleFile(
-        db,
-        embedder,
-        `import-task-${id}.md`,
-        markdown,
-        hash,
-        Date.now()
-      );
-
-      db.upsertRelations(noteId, [
-        { sourceId: noteId, targetId: sourceNoteId, type: 'derived-from' },
-      ]);
-      noteIds.push(noteId);
-    }
-
-    return noteIds;
-  }
-}
-
-function parseTable(content: string): Map<string, string>[] {
-  const lines = content.split('\n').filter((l) => l.trim().startsWith('|'));
-  if (lines.length < 3) return [];
-
-  const headers = lines[0]
-    .split('|')
-    .map((h) => h.trim())
-    .filter(Boolean)
-    .map((h) => h.toLowerCase());
-
-  const rows: Map<string, string>[] = [];
-  for (let i = 2; i < lines.length; i++) {
-    const cells = lines[i]
-      .split('|')
-      .map((c) => c.trim())
-      .filter(Boolean);
-    const row = new Map<string, string>();
-    for (let j = 0; j < headers.length && j < cells.length; j++) {
-      row.set(headers[j], cells[j]);
-    }
-    rows.push(row);
-  }
-  return rows;
 }

@@ -149,28 +149,15 @@ export const importCommand = new Command('import')
 
           const handler = contentHandlers.find(
             (h) =>
-              h.handler.contentClasses.includes(derived.contentClass) &&
-              h.handler.canHandle({
-                content: derived.content,
-                contentClass: derived.contentClass,
-                confidence: derived.confidence,
-                method: 'deterministic',
-                heading: null,
-              })
+              h.handler.noteTypes.includes(derived.contentClass) &&
+              h.handler.canHandle(derived.contentClass, derived.content)
           );
 
           if (handler) {
             const ids = await handler.handler.materialize(
               db,
               embedder,
-              derived.content,
-              {
-                content: derived.content,
-                contentClass: derived.contentClass,
-                confidence: derived.confidence,
-                method: 'deterministic',
-                heading: null,
-              },
+              [{ noteType: derived.contentClass, title: derived.suggestedTitle, content: derived.content, fields: {} }],
               sourceId
             );
             stats.noteIds.push(...ids);

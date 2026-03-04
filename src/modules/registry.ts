@@ -10,15 +10,8 @@ import type {
   ContentHandler,
 } from './types.js';
 
-/** Import hints for module note types — enables automatic classification of imported content.
- *  Defined here temporarily until Task 1 adds it to ModuleNoteType in types.ts. */
-export interface ImportHints {
-  tableColumnAliases?: Record<string, string[]>;
-  archetypeText?: string;
-}
-
-/** Extended note type with optional importHints (bridges until types.ts is updated) */
-export type ImportableNoteType = ModuleNoteType & { importHints?: ImportHints };
+/** @deprecated Use ModuleNoteType.importHints directly — ImportHints is now in types.ts */
+export type ImportableNoteType = ModuleNoteType;
 
 export class ModuleRegistry {
   private modules = new Map<string, BrainModule>();

@@ -59,7 +59,7 @@ deploy:
 `;
     const result = await splitDocument(content, 'plan.md', mockEmbedder);
     expect(result.derivedNotes.length).toBeGreaterThan(0);
-    const taskDerived = result.derivedNotes.find((d) => d.contentClass === 'task-list');
+    const taskDerived = result.derivedNotes.find((d) => d.contentClass === 'task');
     expect(taskDerived).toBeDefined();
   });
 
@@ -73,6 +73,7 @@ tier: slow
 ## Overview
 
 Some overview text that is long enough to be classified.
+More detail here about the project scope and timeline for delivery.
 
 ## Tasks
 
@@ -135,8 +136,8 @@ middleware:
 | Task 2 | Open | Medium | Bob |
 `;
     const result = await splitDocument(content, 'multi.md', mockEmbedder);
-    // Two consecutive task-list sections should be grouped into one derived note
-    const taskDerived = result.derivedNotes.filter((d) => d.contentClass === 'task-list');
+    // Two consecutive task sections should be grouped into one derived note
+    const taskDerived = result.derivedNotes.filter((d) => d.contentClass === 'task');
     expect(taskDerived).toHaveLength(1);
     expect(taskDerived[0].content).toContain('Task 1');
     expect(taskDerived[0].content).toContain('Task 2');
@@ -158,7 +159,7 @@ More detail here about the project scope and timeline for delivery.
     expect(result.derivedNotes).toHaveLength(0);
   });
 
-  it('returns correct suggestedType from CLASS_TO_TYPE mapping', async () => {
+  it('returns correct suggestedType mapping', async () => {
     const content = `---
 title: Arch and Tasks
 type: note
@@ -188,11 +189,11 @@ deploy:
 | Write tests | Open | Medium | Bob |
 `;
     const result = await splitDocument(content, 'mixed.md', mockEmbedder);
-    const taskDerived = result.derivedNotes.find((d) => d.contentClass === 'task-list');
+    const taskDerived = result.derivedNotes.find((d) => d.contentClass === 'task');
     if (taskDerived) {
-      expect(taskDerived.suggestedType).toBe('note');
+      expect(taskDerived.suggestedType).toBe('task');
     }
-    const archDerived = result.derivedNotes.find((d) => d.contentClass === 'architecture');
+    const archDerived = result.derivedNotes.find((d) => d.contentClass === 'research');
     if (archDerived) {
       expect(archDerived.suggestedType).toBe('research');
     }
@@ -228,7 +229,7 @@ deploy:
 | Write tests | Open | Medium | Bob |
 `;
     const result = await splitDocument(content, 'plan.md', mockEmbedder);
-    const taskDerived = result.derivedNotes.find((d) => d.contentClass === 'task-list');
+    const taskDerived = result.derivedNotes.find((d) => d.contentClass === 'task');
     expect(taskDerived?.suggestedTitle).toBe('Sprint Tasks');
   });
 
