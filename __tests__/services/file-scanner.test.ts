@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { scanForChanges, hashContent } from '../../src/services/file-scanner.js';
+import {
+  scanForChanges,
+  hashContent,
+  INDEXABLE_EXTENSIONS,
+  listUnsupportedFiles,
+} from '../../src/services/file-scanner.js';
 import type { FileRecord } from '../../src/types.js';
 import { mkdtemp, writeFile, mkdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -183,14 +188,15 @@ describe('scanForChanges', () => {
   });
 
   describe('glob filtering', () => {
-    it('only picks up .md files', async () => {
+    it('picks up indexable file types (md, csv, txt)', async () => {
       await writeFile(join(tempDir, 'note.md'), '# Note');
-      await writeFile(join(tempDir, 'readme.txt'), 'Not a note');
+      await writeFile(join(tempDir, 'readme.txt'), 'A text file');
       await writeFile(join(tempDir, 'script.js'), 'console.log("hi")');
 
       const result = await scanForChanges(tempDir, new Map());
-      expect(result.new).toHaveLength(1);
-      expect(result.new[0].path).toBe(join(tempDir, 'note.md'));
+      expect(result.new).toHaveLength(2);
+      const paths = result.new.map((f) => f.path).sort();
+      expect(paths).toEqual([join(tempDir, 'note.md'), join(tempDir, 'readme.txt')]);
     });
 
     it('ignores node_modules and .git directories', async () => {
@@ -258,5 +264,57 @@ describe('scanForChanges', () => {
       expect(result.deleted).toEqual([deletedFile]);
       expect(result.unchanged).toBe(1);
     });
+  });
+});
+
+describe('INDEXABLE_EXTENSIONS', () => {
+  it('includes md, csv, and txt', () => {
+    expect(INDEXABLE_EXTENSIONS.has('.md')).toBe(true);
+    expect(INDEXABLE_EXTENSIONS.has('.csv')).toBe(true);
+    expect(INDEXABLE_EXTENSIONS.has('.txt')).toBe(true);
+  });
+
+  it('does not include images or other formats', () => {
+    expect(INDEXABLE_EXTENSIONS.has('.png')).toBe(false);
+    expect(INDEXABLE_EXTENSIONS.has('.xlsx')).toBe(false);
+  });
+});
+
+describe('scanForChanges with non-md files', () => {
+  it('detects new .csv files', async () => {
+    await writeFile(join(tempDir, 'data.csv'), 'A,B\n1,2');
+    const result = await scanForChanges(tempDir, new Map());
+    expect(result.new.some((f) => f.path.endsWith('.csv'))).toBe(true);
+  });
+
+  it('detects new .txt files', async () => {
+    await writeFile(join(tempDir, 'notes.txt'), 'some text');
+    const result = await scanForChanges(tempDir, new Map());
+    expect(result.new.some((f) => f.path.endsWith('.txt'))).toBe(true);
+  });
+
+  it('ignores .png files', async () => {
+    await writeFile(join(tempDir, 'image.png'), 'binary');
+    const result = await scanForChanges(tempDir, new Map());
+    expect(result.new).toHaveLength(0);
+  });
+});
+
+describe('listUnsupportedFiles', () => {
+  it('returns files with unsupported extensions grouped by ext', async () => {
+    await writeFile(join(tempDir, 'note.md'), '# test');
+    await writeFile(join(tempDir, 'image.png'), 'binary');
+    await writeFile(join(tempDir, 'sheet.xlsx'), 'binary');
+    const result = await listUnsupportedFiles(tempDir);
+    expect(result).toContainEqual(expect.objectContaining({ ext: '.png' }));
+    expect(result).toContainEqual(expect.objectContaining({ ext: '.xlsx' }));
+    expect(result).not.toContainEqual(expect.objectContaining({ ext: '.md' }));
+  });
+
+  it('excludes node_modules and .git', async () => {
+    await mkdir(join(tempDir, 'node_modules'), { recursive: true });
+    await writeFile(join(tempDir, 'node_modules', 'file.png'), 'x');
+    const result = await listUnsupportedFiles(tempDir);
+    expect(result).toHaveLength(0);
   });
 });

@@ -19,6 +19,7 @@ import { slugify } from '../utils.js';
 const MAX_CHUNK_TOKENS = 512;
 const FENCE_OPEN = /^```/;
 const FENCE_CLOSE = /^```\s*$/;
+const TABLE_LINE = /^\|.+\|/;
 const MIN_CHUNK_LENGTH = 20;
 
 export function estimateTokens(text: string): number {
@@ -169,7 +170,7 @@ function coerceStringArray(value: unknown): string[] | undefined {
   return undefined;
 }
 
-interface Section {
+export interface Section {
   heading: string | null;
   headingLevel: number;
   headingAncestry: string | null;
@@ -181,7 +182,7 @@ function buildAncestry(stack: Array<{ level: number; text: string }>): string | 
   return stack.map((h) => `${'#'.repeat(h.level)} ${h.text}`).join('\n');
 }
 
-function splitIntoSections(body: string): Section[] {
+export function splitIntoSections(body: string): Section[] {
   const lines = body.split('\n');
   const sections: Section[] = [];
   const headingStack: Array<{ level: number; text: string }> = [];
@@ -231,7 +232,8 @@ function chunkBody(body: string): RawChunk[] {
 
     const contentWithAncestry = prependAncestry(section.headingAncestry, text);
     const tokens = estimateTokens(contentWithAncestry);
-    if (tokens <= MAX_CHUNK_TOKENS) {
+    const containsTable = TABLE_LINE.test(text);
+    if (tokens <= MAX_CHUNK_TOKENS && !containsTable) {
       chunks.push({
         heading: section.heading,
         headingAncestry: section.headingAncestry,
@@ -273,14 +275,25 @@ function splitOversizedSection(
   const chunkBudget = MAX_CHUNK_TOKENS - ancestryTokens;
 
   for (const para of paragraphs) {
+    const isTablePara = TABLE_LINE.test(para);
+    const bufferIsTable = TABLE_LINE.test(buffer);
+
+    // Force a boundary when transitioning between table and non-table content
+    const boundaryChange =
+      buffer.length > 0 && (isTablePara !== bufferIsTable);
+
     const budgetForContent =
       overlapPrefix.length > 0 ? chunkBudget - estimateTokens(overlapPrefix + '\n\n') : chunkBudget;
     const bufferWithPara = buffer.length > 0 ? buffer + '\n\n' + para : para;
-    if (estimateTokens(bufferWithPara) > budgetForContent && buffer.length > 0) {
+    if ((estimateTokens(bufferWithPara) > budgetForContent || boundaryChange) && buffer.length > 0) {
       const rawText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
       const chunkText = ancestryPrefix + rawText.trim();
       const tokenCount = estimateTokens(chunkText);
-      const cutType: CutType = para.startsWith('```') ? 'code_fence' : 'paragraph_end';
+      const cutType: CutType = para.startsWith('```')
+        ? 'code_fence'
+        : isTablePara || bufferIsTable
+          ? 'table_boundary'
+          : 'paragraph_end';
       chunks.push({
         heading,
         headingAncestry,
@@ -290,7 +303,7 @@ function splitOversizedSection(
         cutType,
         position: pos++,
       });
-      overlapPrefix = extractOverlap(buffer);
+      overlapPrefix = bufferIsTable ? '' : extractOverlap(buffer);
       buffer = para;
     } else {
       buffer = buffer.length > 0 ? buffer + '\n\n' + para : para;
@@ -327,6 +340,7 @@ function splitParagraphsProtectingFences(text: string): string[] {
   const paragraphs: string[] = [];
   let current: string[] = [];
   let inFence = false;
+  let inTable = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -339,6 +353,7 @@ function splitParagraphsProtectingFences(text: string): string[] {
         current = [];
       }
       inFence = true;
+      inTable = false;
       current.push(line);
       continue;
     }
@@ -356,7 +371,31 @@ function splitParagraphsProtectingFences(text: string): string[] {
       continue;
     }
 
-    // Outside fence: split on blank lines
+    // Table protection — keep all contiguous table lines as one paragraph
+    if (TABLE_LINE.test(line)) {
+      if (!inTable) {
+        // Flush accumulated prose before starting table
+        if (current.length > 0) {
+          const joined = current.join('\n').trim();
+          if (joined.length > 0) paragraphs.push(joined);
+          current = [];
+        }
+        inTable = true;
+      }
+      current.push(line);
+      continue;
+    }
+
+    if (inTable) {
+      // Non-table line ends the table — flush it
+      const joined = current.join('\n').trim();
+      if (joined.length > 0) paragraphs.push(joined);
+      current = [];
+      inTable = false;
+      // Fall through to handle this line normally
+    }
+
+    // Outside fence and table: split on blank lines
     if (line.trim() === '') {
       if (current.length > 0) {
         const joined = current.join('\n').trim();

@@ -570,6 +570,63 @@ Content with enough text to generate at least one chunk for the parser output.
   });
 });
 
+describe('table-aware chunking', () => {
+  it('keeps a markdown table as a single chunk', () => {
+    const content = `---
+title: Test
+type: note
+tier: slow
+---
+
+## Data
+
+| Name | Status | Priority |
+| --- | --- | --- |
+| Task A | Done | High |
+| Task B | Open | Low |
+| Task C | Open | Medium |
+`;
+    const result = parseMarkdown('test.md', content);
+    const tableChunk = result.chunks.find((c) => c.text.includes('| Name |'));
+    expect(tableChunk).toBeDefined();
+    expect(tableChunk!.text).toContain('| Task C |');
+  });
+
+  it('does not split table rows across chunks', () => {
+    const rows = Array.from({ length: 30 }, (_, i) => `| Task ${i} | Status ${i} | Priority ${i} |`);
+    const table = `| Name | Status | Priority |\n| --- | --- | --- |\n${rows.join('\n')}`;
+    const content = `---\ntitle: Big Table\ntype: note\ntier: slow\n---\n\n## Tasks\n\n${table}\n`;
+    const result = parseMarkdown('test.md', content);
+    // All table rows should be in the same chunk
+    const tableChunks = result.chunks.filter((c) => c.text.includes('| Task '));
+    expect(tableChunks).toHaveLength(1);
+  });
+
+  it('separates prose from table into distinct paragraph units', () => {
+    const content = `---
+title: Mixed
+type: note
+tier: slow
+---
+
+## Overview
+
+This is some prose before the table.
+
+| A | B |
+| --- | --- |
+| 1 | 2 |
+
+This is prose after the table.
+`;
+    const result = parseMarkdown('test.md', content);
+    // The table should not be merged with surrounding prose
+    const tableChunk = result.chunks.find((c) => c.text.includes('| A | B |'));
+    expect(tableChunk).toBeDefined();
+    expect(tableChunk!.text).not.toContain('prose before');
+  });
+});
+
 describe('frontmatter coercion', () => {
   it('normalizes comma-separated tags string to array', () => {
     const fm = coerceFrontmatter('test.md', { tags: 'react, hooks, state' });

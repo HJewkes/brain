@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readFile, stat, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
 import type { FileRecord } from '../types.js';
+
+export const INDEXABLE_EXTENSIONS = new Set(['.md', '.csv', '.txt']);
 
 export interface ScanResult {
   new: Array<{ path: string; hash: string; mtime: number }>;
@@ -27,7 +29,10 @@ export async function scanForChanges(
 
   const entries = await readdir(rootDir, { recursive: true });
   const files = entries
-    .filter((e) => e.endsWith('.md') && !e.includes('node_modules') && !e.includes('.git'))
+    .filter((e) => {
+      const ext = extname(e).toLowerCase();
+      return INDEXABLE_EXTENSIONS.has(ext) && !e.includes('node_modules') && !e.includes('.git');
+    })
     .map((e) => join(rootDir, e));
 
   const seen = new Set<string>();
@@ -67,4 +72,17 @@ export async function scanForChanges(
   }
 
   return result;
+}
+
+export async function listUnsupportedFiles(
+  rootDir: string
+): Promise<Array<{ path: string; ext: string }>> {
+  const entries = await readdir(rootDir, { recursive: true });
+  return entries
+    .filter((e) => {
+      if (e.includes('node_modules') || e.includes('.git')) return false;
+      const ext = extname(e).toLowerCase();
+      return ext !== '' && !INDEXABLE_EXTENSIONS.has(ext);
+    })
+    .map((e) => ({ path: join(rootDir, e), ext: extname(e).toLowerCase() }));
 }

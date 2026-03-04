@@ -45,6 +45,15 @@ export const VALID_NOTE_TIERS: NoteTier[] = ['slow', 'fast'];
 export const VALID_NOTE_CONFIDENCES: NoteConfidence[] = ['high', 'medium', 'low', 'speculative'];
 export const VALID_NOTE_STATUSES: NoteStatus[] = ['current', 'outdated', 'deprecated', 'draft'];
 
+export type ContentClass =
+  | 'task-list'
+  | 'bug-report'
+  | 'architecture'
+  | 'requirements'
+  | 'meeting-notes'
+  | 'reference'
+  | 'general';
+
 export type CoreRelationType = 'related-to' | 'supersedes' | 'informs' | 'parent' | 'derived-from';
 
 export type RelationType = CoreRelationType | (string & {});
@@ -122,7 +131,8 @@ export type CutType =
   | 'paragraph_end'
   | 'semantic_split'
   | 'token_limit'
-  | 'code_fence';
+  | 'code_fence'
+  | 'table_boundary';
 
 export interface RawChunk {
   heading: string | null;
@@ -213,9 +223,9 @@ export interface GraphResult {
 
 // === Inbox Types ===
 
-export type InboxSource = 'cli' | 'rss' | 'crawler' | 'alert' | 'api' | 'file';
+export type InboxSource = 'cli' | 'rss' | 'crawler' | 'alert' | 'api' | 'file' | 'notion' | 'linear';
 
-export const VALID_INBOX_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file'];
+export const VALID_INBOX_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file', 'notion', 'linear'];
 
 export type InboxStatus = 'pending' | 'processing' | 'indexed' | 'failed' | 'discarded';
 
@@ -319,6 +329,7 @@ export interface ParsedNote {
   content: string;
   chunks: RawChunk[];
   relations: Relation[];
+  imageRefs?: Array<{ alt: string; path: string }>;
 }
 
 // === Health Check Types ===
