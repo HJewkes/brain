@@ -53,7 +53,7 @@ export const doctorCommand = new Command('doctor')
   .option('--json', 'output as JSON')
   .action(async (opts, cmd) => {
     await withDb(async ({ db, config }) => {
-      const report = await runAllChecks(db, config.embedder, config.ollamaUrl, config.ollamaModel);
+      const report = await runAllChecks(db, config.embedder, config.ollamaUrl, config.ollamaModel, config.notesDir);
 
       if (opts.json) {
         process.stdout.write(JSON.stringify(report) + '\n');
@@ -75,6 +75,22 @@ export const doctorCommand = new Command('doctor')
             db.updateInboxStatus(item.id, 'pending');
           }
           process.stderr.write(`Reset ${failedItems.length} failed inbox item(s) to pending.\n`);
+        }
+
+        const fsCheck = report.checks.find((c) => c.name === 'Filesystem sync');
+        if (fsCheck?.status === 'warning' && fsCheck.message.includes('orphaned')) {
+          const { existsSync } = await import('node:fs');
+          const dbFiles = db.getAllFiles();
+          let cleaned = 0;
+          for (const [path] of dbFiles) {
+            if (!existsSync(path)) {
+              db.deleteFile(path);
+              cleaned++;
+            }
+          }
+          if (cleaned > 0) {
+            process.stderr.write(`Cleaned ${cleaned} orphaned file record(s).\n`);
+          }
         }
       } else if (report.summary.warnings > 0 || report.summary.errors > 0) {
         process.stderr.write('  Run "brain doctor --fix" to auto-repair.\n');
