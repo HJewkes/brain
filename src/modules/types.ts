@@ -1,5 +1,5 @@
 import type { Command } from '@commander-js/extra-typings';
-import type { NoteRecord, ContentClass, Embedder } from '../types.js';
+import type { NoteRecord, ContentClass, Embedder, ExtractedItem } from '../types.js';
 import type { ClassifiedSection } from '../services/content-classifier.js';
 import type { BrainDB } from '../services/brain-db.js';
 
@@ -20,6 +20,12 @@ export interface DirectorySchema {
   }>;
 }
 
+/** Hints for the import pipeline to improve classification and extraction */
+export interface ImportHints {
+  tableColumnAliases?: Record<string, string[]>;
+  archetypeText?: string;
+}
+
 /** A note type registered by a module */
 export interface ModuleNoteType {
   name: string;
@@ -27,6 +33,7 @@ export interface ModuleNoteType {
   tier: 'slow' | 'fast';
   schema?: ModuleConfigSchema;
   directorySchema?: DirectorySchema;
+  importHints?: ImportHints;
 }
 
 /** A relation type registered by a module */
@@ -58,7 +65,7 @@ export interface ModuleMigration {
   up: (db: unknown) => void;
 }
 
-/** Handler for materializing classified content into module-specific notes */
+/** @deprecated Use ContentHandlerV2 instead — will be removed when ContentClass is dropped */
 export interface ContentHandler {
   contentClasses: ContentClass[];
   canHandle(classification: ClassifiedSection): boolean;
@@ -72,6 +79,21 @@ export interface ContentHandler {
   ): Promise<string[]>;
 }
 
+/** @deprecated Alias for ContentHandler — use ContentHandlerV2 for new code */
+export type LegacyContentHandler = ContentHandler;
+
+/** Handler for materializing extracted items into module-specific notes */
+export interface ContentHandlerV2 {
+  noteTypes: string[];
+  canHandle(noteType: string, content: string): boolean;
+  materialize(
+    db: BrainDB,
+    embedder: Embedder,
+    items: ExtractedItem[],
+    sourceNoteId: string
+  ): Promise<string[]>;
+}
+
 /** Context object passed to module register() */
 export interface ModuleContext {
   registerNoteType(noteType: ModuleNoteType): void;
@@ -80,7 +102,7 @@ export interface ModuleContext {
   registerExtractionStrategy(strategy: ModuleExtractionStrategy): void;
   registerFilter(filter: FilterProvider): void;
   registerMigration(migration: ModuleMigration): void;
-  registerContentHandler(handler: ContentHandler): void;
+  registerContentHandler(handler: ContentHandler | ContentHandlerV2): void;
 }
 
 /** The interface every brain module must implement */

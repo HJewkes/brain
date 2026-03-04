@@ -54,6 +54,14 @@ export type ContentClass =
   | 'reference'
   | 'general';
 
+export interface ExtractedItem {
+  noteType: string;
+  title: string;
+  content: string;
+  fields: Record<string, string>;
+  sourceRegion?: { startLine: number; endLine: number };
+}
+
 export type CoreRelationType = 'related-to' | 'supersedes' | 'informs' | 'parent' | 'derived-from';
 
 export type RelationType = CoreRelationType | (string & {});
