@@ -243,7 +243,7 @@ function chunkBody(body: string): RawChunk[] {
 
     const contentWithAncestry = prependAncestry(section.headingAncestry, text);
     const tokens = estimateTokens(contentWithAncestry);
-    const containsTable = TABLE_LINE.test(text);
+    const containsTable = /^\|.+\|/m.test(text);
     if (tokens <= MAX_CHUNK_TOKENS && !containsTable) {
       chunks.push({
         heading: section.heading,
