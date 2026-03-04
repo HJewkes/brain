@@ -1,5 +1,7 @@
 import type { Command } from '@commander-js/extra-typings';
-import type { NoteRecord } from '../types.js';
+import type { NoteRecord, ContentClass, Embedder } from '../types.js';
+import type { ClassifiedSection } from '../services/content-classifier.js';
+import type { BrainDB } from '../services/brain-db.js';
 
 /** Schema for validating module note frontmatter (JSON Schema subset) */
 export interface ModuleConfigSchema {
@@ -56,6 +58,20 @@ export interface ModuleMigration {
   up: (db: unknown) => void;
 }
 
+/** Handler for materializing classified content into module-specific notes */
+export interface ContentHandler {
+  contentClasses: ContentClass[];
+  canHandle(classification: ClassifiedSection): boolean;
+  materialize(
+    db: BrainDB,
+    embedder: Embedder,
+    content: string,
+    classification: ClassifiedSection,
+    sourceNoteId: string,
+    schemaMapping?: Record<string, string>
+  ): Promise<string[]>;
+}
+
 /** Context object passed to module register() */
 export interface ModuleContext {
   registerNoteType(noteType: ModuleNoteType): void;
@@ -64,6 +80,7 @@ export interface ModuleContext {
   registerExtractionStrategy(strategy: ModuleExtractionStrategy): void;
   registerFilter(filter: FilterProvider): void;
   registerMigration(migration: ModuleMigration): void;
+  registerContentHandler(handler: ContentHandler): void;
 }
 
 /** The interface every brain module must implement */

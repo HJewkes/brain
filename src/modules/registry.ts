@@ -7,6 +7,7 @@ import type {
   FilterProvider,
   ModuleMigration,
   DirectorySchema,
+  ContentHandler,
 } from './types.js';
 
 export class ModuleRegistry {
@@ -17,6 +18,7 @@ export class ModuleRegistry {
   private extractionStrategies: Array<{ module: string; strategy: ModuleExtractionStrategy }> = [];
   private filters: Array<{ module: string; filter: FilterProvider }> = [];
   private migrations: Array<{ module: string; migration: ModuleMigration }> = [];
+  private contentHandlers: Array<{ module: string; handler: ContentHandler }> = [];
 
   registerModule(mod: BrainModule): void {
     if (this.modules.has(mod.name)) {
@@ -122,5 +124,15 @@ export class ModuleRegistry {
       return this.migrations.filter((m) => m.module === moduleName);
     }
     return [...this.migrations];
+  }
+
+  // --- Content Handlers ---
+
+  registerContentHandler(moduleName: string, handler: ContentHandler): void {
+    this.contentHandlers.push({ module: moduleName, handler });
+  }
+
+  getContentHandlers(): Array<{ module: string; handler: ContentHandler }> {
+    return [...this.contentHandlers];
   }
 }
