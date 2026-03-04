@@ -14,7 +14,7 @@ let fakeHome: string;
 
 function cli(args: string, options?: { input?: string }): string {
   return execSync(`${CLI} ${args}`, {
-    cwd: PROJECT_ROOT,
+    cwd: tmpDir,
     encoding: 'utf-8',
     timeout: 30_000,
     input: options?.input,

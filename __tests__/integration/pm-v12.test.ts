@@ -13,7 +13,7 @@ let fakeHome: string;
 
 function cli(args: string): string {
   return execSync(`${CLI} ${args}`, {
-    cwd: PROJECT_ROOT,
+    cwd: tmpDir,
     encoding: 'utf-8',
     timeout: 60_000,
     env: { ...process.env, HOME: fakeHome, NODE_NO_WARNINGS: '1' },
@@ -162,7 +162,7 @@ describe('V12 Integration: Active project normalization', { timeout: 60_000 }, (
 
     const freshCli = (args: string) =>
       execSync(`${CLI} ${args}`, {
-        cwd: PROJECT_ROOT,
+        cwd: freshDir,
         encoding: 'utf-8',
         timeout: 60_000,
         env: { ...process.env, HOME: freshHome, NODE_NO_WARNINGS: '1' },

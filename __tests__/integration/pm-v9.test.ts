@@ -14,7 +14,7 @@ let docsDir: string;
 
 function cli(args: string): string {
   return execSync(`${CLI} ${args}`, {
-    cwd: PROJECT_ROOT,
+    cwd: tmpDir,
     encoding: 'utf-8',
     timeout: 60_000,
     env: { ...process.env, HOME: fakeHome, NODE_NO_WARNINGS: '1' },
@@ -23,20 +23,6 @@ function cli(args: string): string {
 
 function pm(args: string): string {
   return cli(`pm ${args}`);
-}
-
-function tryPm(args: string): { stdout: string; stderr: string; exitCode: number } {
-  try {
-    const stdout = pm(args);
-    return { stdout, stderr: '', exitCode: 0 };
-  } catch (err: unknown) {
-    const e = err as { stdout?: string; stderr?: string; status?: number };
-    return {
-      stdout: (e.stdout ?? '').toString().trim(),
-      stderr: (e.stderr ?? '').toString().trim(),
-      exitCode: e.status ?? 1,
-    };
-  }
 }
 
 beforeAll(() => {
