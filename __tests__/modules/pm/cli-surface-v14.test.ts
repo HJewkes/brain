@@ -15,8 +15,6 @@ vi.mock('../../../src/services/brain-service.js', () => ({
 }));
 
 function stdout(): string { return stdoutChunks.join(''); }
-function stderr(): string { return stderrChunks.join(''); }
-
 beforeEach(async () => {
   db = new BrainDB(tmpDbPath('cli-surface-v14'));
   config = { notesDir: '/tmp/test-cli-v14', dbPath: ':memory:', embedder: 'local', fusionWeights: { bm25: 0.3, vector: 0.7 } };
@@ -32,11 +30,6 @@ afterEach(() => { db.close(); vi.restoreAllMocks(); });
 
 describe('O-227: tasks complete alias', () => {
   it('routes tasks complete to pm complete', async () => {
-    const { createPmCommand } = await import('../../../src/modules/pm/commands/project.js');
-    const { createOrchestrationCommands } = await import('../../../src/modules/pm/commands/orchestration.js');
-    const { createTaskCommands } = await import('../../../src/modules/pm/commands/task.js');
-    const { createWorkstreamCommands } = await import('../../../src/modules/pm/commands/workstream.js');
-
     // We verify the taskSubcommands set includes 'complete' by checking
     // that the tasks alias exists on the full pm command from the module
     const { pmModule } = await import('../../../src/modules/pm/index.js');

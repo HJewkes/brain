@@ -10,7 +10,6 @@ import { ok, fail, formatError } from '../errors.js';
 import { detectComponents } from '../engine/detect.js';
 import { discoverDocs } from '../engine/doc-scanner.js';
 import { createProject } from '../data/project-ops.js';
-import { createWorkstream } from '../data/workstream-ops.js';
 import { getPmNotes, setActiveProject } from '../data/queries.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { slugify } from '../../../utils.js';

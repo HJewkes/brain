@@ -982,7 +982,8 @@ describe('metadata filtering', () => {
   let dbPath: string;
   let embedder: Embedder;
 
-  function addFtsAndChunks(testDb: BrainDB, id: string, title: string, testEmbedder: Embedder): void {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function addFtsAndChunks(testDb: BrainDB, id: string, title: string, _testEmbedder: Embedder): void {
     testDb.upsertNoteFTS(id, title, '', title);
     const content = title;
     const chunk: Chunk = {

@@ -20,10 +20,6 @@ function stdout(): string {
   return stdoutChunks.join('');
 }
 
-function stderr(): string {
-  return stderrChunks.join('');
-}
-
 function getCaptureCmd() {
   const cmds = createCaptureCommands();
   return cmds[0]; // capture command

@@ -7,9 +7,9 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
-import { updateTaskStatus, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import { getTask } from '../../../src/modules/pm/data/task-ops.js';
 import { computeImpact } from '../../../src/modules/pm/engine/dependency.js';
-import { resolveWorkstreamFilter, parseDisplayId } from '../../../src/modules/pm/ids.js';
+import { resolveWorkstreamFilter } from '../../../src/modules/pm/ids.js';
 
 let db: BrainDB;
 let dbPath: string;

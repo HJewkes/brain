@@ -3,8 +3,6 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import type { BrainConfig } from '../../src/types.js';
-
 let stdoutChunks: string[];
 let stderrChunks: string[];
 let tmpNotesDir: string;
@@ -35,6 +33,8 @@ vi.mock('../../src/services/config.js', () => ({
     embedder: 'local',
     fusionWeights: { bm25: 0.3, vector: 0.7 },
   })),
+  resolveInstance: vi.fn(() => ({ root: '/tmp', isLocal: false, source: 'global' })),
+  parentResolveOpts: vi.fn(() => ({})),
 }));
 
 vi.mock('../../src/services/brain-db.js', () => {

@@ -32,7 +32,7 @@ afterEach(() => {
 
 describe('relations as single source of truth', () => {
   it('createTask creates relation edges for depends_on', async () => {
-    const t1 = await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
     const t2 = await createTestTask(db, config, embedder, {
       project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
     });

@@ -6,7 +6,6 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createTaskCommands } from '../../../../src/modules/pm/commands/task.js';
-import { updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
 import { createTestTask } from '../../../helpers.js';
 
 let db: BrainDB;

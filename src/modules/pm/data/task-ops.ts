@@ -19,7 +19,7 @@ import { getPmNotes, resolveDisplayId } from './queries.js';
 import { validateTransition, computeVirtualState } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
 import { listWorkstreams } from './workstream-ops.js';
-import { buildDependencyGraph, computeNewlyEligible } from '../engine/dependency.js';
+import { computeNewlyEligible } from '../engine/dependency.js';
 import { createActivityNote } from '../engine/activity.js';
 import { computeAutoLinks } from '../../../services/graph.js';
 import type { ActivityType } from '../types.js';
@@ -305,22 +305,6 @@ export async function createTask(
   return ok(metadata);
 }
 
-function buildWorkstreamMap(
-  db: BrainDB,
-  project: string
-): Map<number, { title: string; description?: string }> {
-  const wsNotes = getPmNotes(db, 'workstream', { project });
-  const map = new Map<number, { title: string; description?: string }>();
-  for (const note of wsNotes) {
-    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    const num = meta.number as number;
-    const title = (meta.title as string) ?? '';
-    const description = (meta.description as string) ?? undefined;
-    map.set(num, { title, description });
-  }
-  return map;
-}
-
 export function listTasks(
   db: BrainDB,
   prefix: string,
@@ -362,8 +346,6 @@ export function listTasks(
   const notes = getPmNotes(db, 'task', filterObj);
 
   // Build reverse dependency graph once (cache per list call)
-  const depGraph = listMode !== 'short' ? buildDependencyGraph(db, prefix) : null;
-
   // Build workstream lookup for name/display_id enrichment
   const wsMap = new Map<number, { name: string; display_id: string }>();
   if (listMode !== 'short') {
@@ -475,6 +457,7 @@ export function listTasks(
   }
 
   // Strip internal _body field before returning
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const cleaned = tasks.map(({ _body, ...rest }) => rest);
   return ok(cleaned);
 }
