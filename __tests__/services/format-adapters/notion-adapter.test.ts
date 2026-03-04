@@ -62,7 +62,7 @@ The actual content here.`;
 describe('cleanNotionMarkdown', () => {
   it('normalizes Notion internal links to plain text', () => {
     const content = 'See [Design Doc](https://www.notion.so/Design-Doc-abc123def456abc123def456abc123de)';
-    const result = cleanNotionMarkdown(content, 'test.md');
+    const result = cleanNotionMarkdown(content);
     expect(result.markdown).toContain('Design Doc');
     expect(result.markdown).not.toContain('notion.so');
   });
@@ -73,7 +73,7 @@ describe('cleanNotionMarkdown', () => {
 ## Real Section
 
 Content here.`;
-    const result = cleanNotionMarkdown(content, 'test.md');
+    const result = cleanNotionMarkdown(content);
     expect(result.markdown).toContain('My Page');
   });
 
@@ -81,7 +81,7 @@ Content here.`;
     const content = `# Simple Title
 
 Some content.`;
-    const result = cleanNotionMarkdown(content, 'test.md');
+    const result = cleanNotionMarkdown(content);
     expect(result.markdown).toContain('# Simple Title');
   });
 
@@ -94,7 +94,7 @@ Some content.`;
 
 See [Other Page](https://www.notion.so/Other-Page-abc123def456abc123def456abc123de) for details.`;
 
-    const result = cleanNotionMarkdown(content, 'test.md');
+    const result = cleanNotionMarkdown(content);
     expect(result.extractedProperties).toEqual({ Status: 'Done' });
     expect(result.markdown).toContain('Other Page');
     expect(result.markdown).not.toContain('notion.so');

@@ -28,7 +28,6 @@ export function extractNotionProperties(content: string): {
 
 export function cleanNotionMarkdown(
   content: string,
-  _filePath: string,
 ): { markdown: string; extractedProperties: Record<string, string> } {
   const { properties, cleanedContent } = extractNotionProperties(content);
 

@@ -58,7 +58,7 @@ export function convertToMarkdown(filePath: string, content: string): ConvertRes
   }
 
   if (format === 'notion') {
-    const result = cleanNotionMarkdown(content, filePath);
+    const result = cleanNotionMarkdown(content);
     return { markdown: result.markdown, format, meta: { notionProperties: result.extractedProperties } };
   }
 
