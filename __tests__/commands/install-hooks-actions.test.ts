@@ -24,6 +24,8 @@ vi.mock('../../src/services/config.js', () => ({
     embedder: 'local',
     fusionWeights: { bm25: 0.3, vector: 0.7 },
   })),
+  resolveInstance: vi.fn(() => ({ root: '/tmp', isLocal: false, source: 'global' })),
+  parentResolveOpts: vi.fn(() => ({})),
 }));
 
 beforeEach(() => {
@@ -84,14 +86,18 @@ describe('install-hooks --status', () => {
 
 describe('install-hooks --interval validation', () => {
   it('rejects non-numeric interval', async () => {
-    await installHooksCommand.parseAsync(['node', 'install-hooks', '--interval', 'abc'], { from: 'node' });
+    await installHooksCommand.parseAsync(['node', 'install-hooks', '--interval', 'abc'], {
+      from: 'node',
+    });
 
     expect(process.exitCode).toBe(1);
     expect(stderr()).toContain('interval must be a positive number');
   });
 
   it('rejects zero interval', async () => {
-    await installHooksCommand.parseAsync(['node', 'install-hooks', '--interval', '0'], { from: 'node' });
+    await installHooksCommand.parseAsync(['node', 'install-hooks', '--interval', '0'], {
+      from: 'node',
+    });
 
     expect(process.exitCode).toBe(1);
     expect(stderr()).toContain('interval must be a positive number');

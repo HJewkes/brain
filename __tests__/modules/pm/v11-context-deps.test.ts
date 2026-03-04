@@ -30,7 +30,17 @@ function writeTaskFile(dir: string, displayId: string, title: string): string {
   const filePath = join(dir, `${displayId}.md`);
   writeFileSync(
     filePath,
-    ['---', `title: "${title}"`, 'type: task', 'module: pm', '---', '', `# ${title}`, '', 'Task body.'].join('\n')
+    [
+      '---',
+      `title: "${title}"`,
+      'type: task',
+      'module: pm',
+      '---',
+      '',
+      `# ${title}`,
+      '',
+      'Task body.',
+    ].join('\n')
   );
   return filePath;
 }

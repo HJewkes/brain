@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 import type { InboxStatus } from '../types.js';
 
 const VALID_STATUSES: InboxStatus[] = ['pending', 'processing', 'indexed', 'failed', 'discarded'];
@@ -10,7 +11,7 @@ export const inboxCommand = new Command('inbox')
   .option('--discard <id>', 'Discard an inbox item')
   .option('--delete <id>', 'Permanently delete an inbox item')
   .option('--count', 'Show count only')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     const actionFlags = [opts.discard, opts.delete, opts.count].filter(Boolean);
     if (actionFlags.length > 1) {
       process.stderr.write('Error: --discard, --delete, and --count are mutually exclusive\n');
@@ -71,5 +72,5 @@ export const inboxCommand = new Command('inbox')
         process.stdout.write(`  ${preview}${item.content.length > 80 ? '…' : ''}\n`);
         process.stdout.write('\n');
       }
-    });
+    }, parentResolveOpts(cmd));
   });

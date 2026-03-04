@@ -11,6 +11,8 @@ const mockConfig = {
 vi.mock('../../src/services/config.js', () => ({
   loadConfig: vi.fn(() => ({ ...mockConfig, fusionWeights: { ...mockConfig.fusionWeights } })),
   saveConfig: vi.fn(),
+  resolveInstance: vi.fn(() => ({ root: '/tmp', isLocal: false, source: 'global' })),
+  parentResolveOpts: vi.fn(() => ({})),
 }));
 
 let stdoutChunks: string[];

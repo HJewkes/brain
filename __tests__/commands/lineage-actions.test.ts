@@ -8,7 +8,9 @@ let db: BrainDB;
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })),
+  withBrain: vi.fn(async (fn) =>
+    fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })
+  ),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 
@@ -78,7 +80,9 @@ describe('lineage tree', () => {
   it('shows tree with derived notes', async () => {
     db.upsertNote(makeNote({ id: 'parent', title: 'Parent' }));
     db.upsertNote(makeNote({ id: 'child', title: 'Child' }));
-    db.upsertRelations('child', [{ sourceId: 'child', targetId: 'parent', type: 'derived-from', weight: 1 }]);
+    db.upsertRelations('child', [
+      { sourceId: 'child', targetId: 'parent', type: 'derived-from', weight: 1 },
+    ]);
 
     await run('tree', 'parent');
 

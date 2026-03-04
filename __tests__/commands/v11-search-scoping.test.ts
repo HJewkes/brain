@@ -9,7 +9,9 @@ const embedder = createMockEmbedder();
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder, config, modules: { getFilters: () => [] }, close: () => {} })),
+  withBrain: vi.fn(async (fn) =>
+    fn({ db, embedder, config, modules: { getFilters: () => [] }, close: () => {} })
+  ),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 
@@ -26,7 +28,7 @@ async function run(...args: string[]): Promise<void> {
 
 async function indexNote(
   noteOverrides: Parameters<typeof makeNote>[0],
-  content: string,
+  content: string
 ): Promise<void> {
   const note = makeNote(noteOverrides);
   db.upsertNote(note);
@@ -68,11 +70,11 @@ describe('--project flag filters results to specified project', () => {
   it('returns only notes matching the project', async () => {
     await indexNote(
       { id: 'proj-a-note', metadata: JSON.stringify({ project: 'alpha' }) },
-      'TypeScript project alpha design',
+      'TypeScript project alpha design'
     );
     await indexNote(
       { id: 'proj-b-note', metadata: JSON.stringify({ project: 'beta' }) },
-      'TypeScript project beta design',
+      'TypeScript project beta design'
     );
 
     await run('TypeScript', '--json', '--project', 'alpha');
@@ -86,7 +88,7 @@ describe('--project flag filters results to specified project', () => {
   it('is case-insensitive', async () => {
     await indexNote(
       { id: 'proj-upper', metadata: JSON.stringify({ project: 'Alpha' }) },
-      'TypeScript alpha project note',
+      'TypeScript alpha project note'
     );
 
     await run('TypeScript', '--json', '--project', 'ALPHA');
@@ -101,11 +103,11 @@ describe('--project excludes brain reference docs', () => {
   it('excludes notes without a project field', async () => {
     await indexNote(
       { id: 'ref-doc', title: 'Brain Reference' },
-      'TypeScript reference documentation',
+      'TypeScript reference documentation'
     );
     await indexNote(
       { id: 'proj-note', metadata: JSON.stringify({ project: 'myproj' }) },
-      'TypeScript myproj implementation',
+      'TypeScript myproj implementation'
     );
 
     await run('TypeScript', '--json', '--project', 'myproj');
@@ -121,12 +123,9 @@ describe('private-visibility PM notes included in default search', () => {
   it('includes private PM notes in default search', async () => {
     await indexNote(
       { id: 'private-task', module: 'pm', metadata: JSON.stringify({ visibility: 'private' }) },
-      'TypeScript private task details',
+      'TypeScript private task details'
     );
-    await indexNote(
-      { id: 'public-note' },
-      'TypeScript public note content',
-    );
+    await indexNote({ id: 'public-note' }, 'TypeScript public note content');
 
     await run('TypeScript', '--json');
 
@@ -139,12 +138,9 @@ describe('private-visibility PM notes included in default search', () => {
   it('excludes private PM notes with --exclude-pm', async () => {
     await indexNote(
       { id: 'private-task', module: 'pm', metadata: JSON.stringify({ visibility: 'private' }) },
-      'TypeScript private task details',
+      'TypeScript private task details'
     );
-    await indexNote(
-      { id: 'public-note' },
-      'TypeScript public note content',
-    );
+    await indexNote({ id: 'public-note' }, 'TypeScript public note content');
 
     await run('TypeScript', '--json', '--exclude-pm');
 
@@ -159,7 +155,7 @@ describe('--include-tasks surfaces private PM notes', () => {
   it('includes private notes when --include-tasks is set', async () => {
     await indexNote(
       { id: 'private-included', module: 'pm', metadata: JSON.stringify({ visibility: 'private' }) },
-      'TypeScript private task to include',
+      'TypeScript private task to include'
     );
 
     await run('TypeScript', '--json', '--include-tasks');

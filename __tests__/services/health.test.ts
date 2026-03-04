@@ -7,6 +7,7 @@ import {
   checkLlm,
   checkInbox,
   checkStaleNotes,
+  checkFilesystemSync,
   runAllChecks,
 } from '../../src/services/health.js';
 
@@ -108,6 +109,53 @@ describe('health checks', () => {
       const result = checkStaleNotes(db);
       expect(result.status).toBe('warning');
       expect(result.message).toContain('1');
+    });
+  });
+
+  describe('checkFilesystemSync', () => {
+    it('returns ok when DB and disk are in sync', () => {
+      const dbFiles = new Map([
+        ['notes/foo.md', { path: 'notes/foo.md', hash: 'abc', mtime: 1, indexedAt: 1 }],
+      ]);
+      const diskFiles = new Set(['notes/foo.md']);
+
+      const result = checkFilesystemSync(dbFiles, diskFiles);
+      expect(result.status).toBe('ok');
+    });
+
+    it('warns about files on disk not in DB', () => {
+      const dbFiles = new Map([
+        ['notes/foo.md', { path: 'notes/foo.md', hash: 'abc', mtime: 1, indexedAt: 1 }],
+      ]);
+      const diskFiles = new Set(['notes/foo.md', 'notes/bar.md', 'notes/baz.csv']);
+
+      const result = checkFilesystemSync(dbFiles, diskFiles);
+      expect(result.status).toBe('warning');
+      expect(result.message).toContain('2 unindexed');
+    });
+
+    it('warns about DB records with no file on disk', () => {
+      const dbFiles = new Map([
+        ['notes/foo.md', { path: 'notes/foo.md', hash: 'abc', mtime: 1, indexedAt: 1 }],
+        ['notes/gone.md', { path: 'notes/gone.md', hash: 'def', mtime: 1, indexedAt: 1 }],
+      ]);
+      const diskFiles = new Set(['notes/foo.md']);
+
+      const result = checkFilesystemSync(dbFiles, diskFiles);
+      expect(result.status).toBe('warning');
+      expect(result.message).toContain('1 orphaned');
+    });
+
+    it('reports both unindexed and orphaned', () => {
+      const dbFiles = new Map([
+        ['notes/gone.md', { path: 'notes/gone.md', hash: 'def', mtime: 1, indexedAt: 1 }],
+      ]);
+      const diskFiles = new Set(['notes/new.md']);
+
+      const result = checkFilesystemSync(dbFiles, diskFiles);
+      expect(result.status).toBe('warning');
+      expect(result.message).toContain('1 unindexed');
+      expect(result.message).toContain('1 orphaned');
     });
   });
 

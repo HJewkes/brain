@@ -13,7 +13,7 @@ let fakeHome: string;
 
 function cli(args: string): string {
   return execSync(`${CLI} ${args}`, {
-    cwd: PROJECT_ROOT,
+    cwd: tmpDir,
     encoding: 'utf-8',
     timeout: 60_000,
     env: { ...process.env, HOME: fakeHome, NODE_NO_WARNINGS: '1' },
@@ -110,7 +110,7 @@ describe('PM CLI integration', { timeout: 60_000 }, () => {
   describe('task CRUD and filters', () => {
     it('add creates task', () => {
       const output = pm(
-        'task add "First task" --workstream 1 --priority high --category implementation --json'
+        'task add "First task" --workstream 1 --priority high --category implementation --description "First implementation task." --json'
       );
       const result = JSON.parse(output);
 
@@ -122,7 +122,7 @@ describe('PM CLI integration', { timeout: 60_000 }, () => {
 
     it('add creates second task with dependency', () => {
       const output = pm(
-        'task add "Second task" --workstream 1 --priority medium --category implementation --depends-on TST-01.01 --json'
+        'task add "Second task" --workstream 1 --priority medium --category implementation --description "Second task depending on first." --depends-on TST-01.01 --json'
       );
       const result = JSON.parse(output);
 
@@ -290,9 +290,7 @@ describe('PM CLI integration', { timeout: 60_000 }, () => {
 
   describe('decisions and check', () => {
     it('decision add creates', () => {
-      const output = pm(
-        'decision add "Use REST" --project TST --source-task TST-01.01 --json'
-      );
+      const output = pm('decision add "Use REST" --project TST --source-task TST-01.01 --json');
       const result = JSON.parse(output);
 
       expect(result).toHaveProperty('display_id');

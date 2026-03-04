@@ -169,15 +169,32 @@ describe('Wave 7: Context + Verify + Briefing', () => {
     const allTasks = allTasksResult.data;
     const eligible = computeEligible(db, 'TEST');
 
+    const taskMap = new Map(allTasks.map((t) => [t.display_id, t]));
     const briefing: BriefingData = {
       project: projectResult.data,
       tasks: {
         total: allTasks.length,
-        eligible,
-        inProgress: allTasks.filter((t) => t.status === 'in-progress').map((t) => t.display_id),
-        blocked: allTasks.filter((t) => t.status === 'blocked').map((t) => t.display_id),
-        done: allTasks.filter((t) => t.status === 'done').map((t) => t.display_id),
-        pending: allTasks.filter((t) => t.status === 'pending').map((t) => t.display_id),
+        eligible: eligible.map((id) => {
+          const t = taskMap.get(id);
+          return {
+            displayId: id,
+            title: t?.title ?? id,
+            priority: t?.priority ?? 'medium',
+            workstream: t?.workstream ?? 0,
+          };
+        }),
+        inProgress: allTasks
+          .filter((t) => t.status === 'in-progress')
+          .map((t) => ({
+            displayId: t.display_id,
+            title: t.title ?? t.display_id,
+            priority: t.priority,
+          })),
+        blocked: allTasks
+          .filter((t) => t.status === 'blocked')
+          .map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id })),
+        doneCount: allTasks.filter((t) => t.status === 'done').length,
+        pendingCount: allTasks.filter((t) => t.status === 'pending').length,
       },
       recentDecisions: [],
       stalePrompts: [],
@@ -187,8 +204,9 @@ describe('Wave 7: Context + Verify + Briefing', () => {
     expect(briefing.project.display_id).toBe('TEST');
     expect(briefing.tasks.total).toBe(6);
     // TEST-01.01 and TEST-02.01 have no deps, so they're eligible
-    expect(briefing.tasks.eligible).toContain('TEST-01.01');
-    expect(briefing.tasks.eligible).toContain('TEST-02.01');
+    const eligibleIds = briefing.tasks.eligible.map((t) => t.displayId);
+    expect(eligibleIds).toContain('TEST-01.01');
+    expect(eligibleIds).toContain('TEST-02.01');
     expect(briefing.tasks.eligible.length).toBe(2);
   });
 
@@ -210,11 +228,16 @@ describe('Wave 7: Context + Verify + Briefing', () => {
       project: { display_id: 'TEST', prefix: 'TEST', status: 'active' },
       tasks: {
         total: 6,
-        eligible,
+        eligible: eligible.map((id) => ({
+          displayId: id,
+          title: id,
+          priority: 'medium' as const,
+          workstream: 0,
+        })),
         inProgress: [],
         blocked: [],
-        done: [],
-        pending: [],
+        doneCount: 0,
+        pendingCount: 0,
       },
       recentDecisions: decisionsResult.data,
       stalePrompts: [],

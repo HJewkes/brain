@@ -20,10 +20,6 @@ function stdout(): string {
   return stdoutChunks.join('');
 }
 
-function stderr(): string {
-  return stderrChunks.join('');
-}
-
 function getCaptureCmd() {
   const cmds = createCaptureCommands();
   return cmds[0]; // capture command
@@ -85,7 +81,15 @@ describe('capture process (error paths)', () => {
     db.close();
     db = new BrainDB(tmpDbPath('capture-proc-noproj'));
 
-    await runProcess2('some-id', '--task-name', 'T', '--workstream', '1');
+    await runProcess2(
+      'some-id',
+      '--task-name',
+      'T',
+      '--workstream',
+      '1',
+      '--description',
+      'Test task description.'
+    );
 
     expect(process.exitCode).toBe(1);
   });
@@ -193,7 +197,17 @@ describe('capture process', () => {
     stdoutChunks = [];
     stderrChunks = [];
 
-    await runProcess(capture.noteId, '--task-name', 'New task from capture', '--workstream', '1', '--project', 'TEST');
+    await runProcess(
+      capture.noteId,
+      '--task-name',
+      'New task from capture',
+      '--workstream',
+      '1',
+      '--project',
+      'TEST',
+      '--description',
+      'New task created from a capture.'
+    );
 
     const out = stdout();
     expect(out).toContain('Processed capture into task');
@@ -205,14 +219,35 @@ describe('capture process', () => {
     stdoutChunks = [];
     stderrChunks = [];
 
-    await runProcess(capture.noteId, '--task-name', 'JSON task', '--workstream', '1', '--project', 'TEST', '--json');
+    await runProcess(
+      capture.noteId,
+      '--task-name',
+      'JSON task',
+      '--workstream',
+      '1',
+      '--project',
+      'TEST',
+      '--description',
+      'JSON task description.',
+      '--json'
+    );
 
     const parsed = JSON.parse(stdout());
     expect(parsed).toHaveProperty('display_id');
   });
 
   it('errors on invalid capture ID', async () => {
-    await runProcess('nonexistent-id', '--task-name', 'Bad', '--workstream', '1', '--project', 'TEST');
+    await runProcess(
+      'nonexistent-id',
+      '--task-name',
+      'Bad',
+      '--workstream',
+      '1',
+      '--project',
+      'TEST',
+      '--description',
+      'Bad task.'
+    );
 
     expect(process.exitCode).toBe(1);
   });

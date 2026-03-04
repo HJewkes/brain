@@ -7,13 +7,13 @@ import { formatError } from '../errors.js';
 import { resolveWorkstreamFilter } from '../ids.js';
 import type { Result } from '../errors.js';
 import { ok, fail } from '../errors.js';
-import { getActiveProject, getPmNotes, resolveProject } from '../data/queries.js';
+import { getPmNotes, resolveProject } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
 import { detectStalePrompts } from '../data/prompt-ops.js';
 import { getProject } from '../data/project-ops.js';
 import { computeEligible, computeWaves, computeImpact } from '../engine/dependency.js';
-import { assembleContext, assembleDispatch } from '../engine/dispatch.js';
+import { assembleDispatch } from '../engine/dispatch.js';
 import { validateClaimToken } from '../engine/claims.js';
 import {
   findOrphanedDecisions,
@@ -26,12 +26,17 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
 
 /** Resolve workstream by number, display ID, or name (case-insensitive substring). */
-export function resolveWorkstreamByName(db: BrainDB, prefix: string, input: string): Result<number> {
+export function resolveWorkstreamByName(
+  db: BrainDB,
+  prefix: string,
+  input: string
+): Result<number> {
   const idResult = resolveWorkstreamFilter(input);
   if (idResult.ok) return idResult;
 
   const wsResult = listWorkstreams(db, prefix);
-  if (!wsResult.ok) return fail('NOT_FOUND', `Could not list workstreams: ${wsResult.error.message}`);
+  if (!wsResult.ok)
+    return fail('NOT_FOUND', `Could not list workstreams: ${wsResult.error.message}`);
 
   const lower = input.toLowerCase();
   for (const ws of wsResult.data) {
@@ -115,7 +120,8 @@ export function createOrchestrationCommands(): Command[] {
           process.stdout.write(`Workstream ${ws}:\n`);
           for (const t of tasks) {
             const title = t.title ? ` ${t.title}` : '';
-            const vs = t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
+            const vs =
+              t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
             process.stdout.write(`  ${t.display_id}${title}  [${t.priority}]${vs}\n`);
           }
         }
@@ -146,10 +152,12 @@ export function createOrchestrationCommands(): Command[] {
 
         let filteredWaves = waves;
         if (opts.workstream) {
-          filteredWaves = waves.map(w => ({
-            ...w,
-            taskIds: w.taskIds.filter(id => id.startsWith(opts.workstream!)),
-          })).filter(w => w.taskIds.length > 0);
+          filteredWaves = waves
+            .map((w) => ({
+              ...w,
+              taskIds: w.taskIds.filter((id) => id.startsWith(opts.workstream!)),
+            }))
+            .filter((w) => w.taskIds.length > 0);
         }
 
         if (filteredWaves.length === 0) {
@@ -196,7 +204,10 @@ export function createOrchestrationCommands(): Command[] {
               process.stdout.write(`  ${id}\n`);
             } else {
               const title = r.data.title ? ` ${r.data.title}` : '';
-              const ws = r.data.workstream !== undefined ? ` [WS-${String(r.data.workstream).padStart(2, '0')}]` : '';
+              const ws =
+                r.data.workstream !== undefined
+                  ? ` [WS-${String(r.data.workstream).padStart(2, '0')}]`
+                  : '';
               process.stdout.write(`  ${id}${ws}${title}\n`);
             }
             totalTasks++;
@@ -230,7 +241,9 @@ export function createOrchestrationCommands(): Command[] {
         const lines: string[] = [];
         const title = bundle.task.title ?? bundle.task.display_id;
         lines.push(`Task: ${bundle.task.display_id} - ${title}`);
-        lines.push(`Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`);
+        lines.push(
+          `Status: ${bundle.task.status} | Priority: ${bundle.task.priority} | Category: ${bundle.task.category}`
+        );
 
         if (bundle.workstream) {
           lines.push(`Workstream: ${bundle.workstream.displayId} - ${bundle.workstream.title}`);
@@ -321,7 +334,13 @@ export function createOrchestrationCommands(): Command[] {
         let currentStatus = taskResult.data.status;
 
         if (currentStatus === 'pending') {
-          const claimResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'claimed' as TaskStatus);
+          const claimResult = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            'claimed' as TaskStatus
+          );
           if (!claimResult.ok) {
             process.stderr.write(formatError(claimResult.error, !!opts.json) + '\n');
             process.exitCode = 1;
@@ -332,7 +351,13 @@ export function createOrchestrationCommands(): Command[] {
         }
 
         if (currentStatus === 'claimed') {
-          const startResult = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus);
+          const startResult = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            'in-progress' as TaskStatus
+          );
           if (!startResult.ok) {
             process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
             process.exitCode = 1;
@@ -457,6 +482,8 @@ export function createOrchestrationCommands(): Command[] {
         const done = allTasks.filter((t) => t.status === 'done');
         const pending = allTasks.filter((t) => t.status === 'pending');
 
+        const taskMap = new Map(allTasks.map((t) => [t.display_id, t]));
+
         const decisionsResult = listDecisions(svc.db, prefix);
         const recentDecisions = decisionsResult.ok ? decisionsResult.data : [];
 
@@ -487,11 +514,26 @@ export function createOrchestrationCommands(): Command[] {
           project: project ?? { display_id: prefix, prefix, status: 'active' as const },
           tasks: {
             total: allTasks.length,
-            eligible,
-            inProgress: inProgress.map((t) => t.display_id),
-            blocked: blocked.map((t) => t.display_id),
-            done: done.map((t) => t.display_id),
-            pending: pending.map((t) => t.display_id),
+            eligible: eligible.map((id) => {
+              const t = taskMap.get(id);
+              return {
+                displayId: id,
+                title: t?.title ?? id,
+                priority: t?.priority ?? 'medium',
+                workstream: t?.workstream ?? 0,
+              };
+            }),
+            inProgress: inProgress.map((t) => ({
+              displayId: t.display_id,
+              title: t.title ?? t.display_id,
+              priority: t.priority,
+            })),
+            blocked: blocked.map((t) => ({
+              displayId: t.display_id,
+              title: t.title ?? t.display_id,
+            })),
+            doneCount: done.length,
+            pendingCount: pending.length,
           },
           recentDecisions,
           stalePrompts,
@@ -499,7 +541,7 @@ export function createOrchestrationCommands(): Command[] {
           consistencyIssues,
         };
 
-        if (opts.verbose) {
+        if (opts.verbose || opts.json) {
           const wsResult = listWorkstreams(svc.db, prefix);
           const workstreams = wsResult.ok ? wsResult.data : [];
 
@@ -651,11 +693,11 @@ export interface BriefingData {
   project: ProjectMetadata | { display_id: string; prefix: string; status: 'active' };
   tasks: {
     total: number;
-    eligible: string[];
-    inProgress: string[];
-    blocked: string[];
-    done: string[];
-    pending: string[];
+    eligible: Array<{ displayId: string; title: string; priority: string; workstream: number }>;
+    inProgress: Array<{ displayId: string; title: string; priority: string }>;
+    blocked: Array<{ displayId: string; title: string }>;
+    doneCount: number;
+    pendingCount: number;
   };
   recentDecisions: DecisionMetadata[];
   stalePrompts: PromptMetadata[];

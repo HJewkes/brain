@@ -16,12 +16,11 @@ import {
   listTasks,
   getTask,
   getDependencyDisplayIds,
-  createTask,
   updateTaskStatus,
 } from '../../src/modules/pm/data/task-ops.js';
 import { resolveDisplayId } from '../../src/modules/pm/data/queries.js';
 import { assembleContext } from '../../src/modules/pm/engine/dispatch.js';
-import { computeVirtualState } from '../../src/modules/pm/engine/state-machine.js';
+import { createTestTask } from '../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -73,7 +72,7 @@ describe('V11 Integration: Dependency source of truth', () => {
 
   it('relation-only dep (no frontmatter) is recognized by getTask', async () => {
     // Create a task with no depends_on in frontmatter
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Relation-only dep task',
@@ -132,8 +131,7 @@ describe('V11 Integration: Wave computation with relations', () => {
     // Standard fixture has TEST-01.01 -> TEST-01.02 -> TEST-01.03
     const waves = computeWaves(db, 'TEST');
 
-    const waveOf = (displayId: string) =>
-      waves.find((w) => w.taskIds.includes(displayId))?.wave;
+    const waveOf = (displayId: string) => waves.find((w) => w.taskIds.includes(displayId))?.wave;
 
     expect(waveOf('TEST-01.01')).toBe(0);
     expect(waveOf('TEST-01.02')).toBe(1);
@@ -155,7 +153,7 @@ describe('V11 Integration: Wave computation with relations', () => {
   });
 
   it('relation-only deps are reflected in wave computation', async () => {
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Wave test task',
@@ -190,17 +188,17 @@ describe('V11 Integration: Wave computation with relations', () => {
 describe('V11 Integration: Cycle detection', () => {
   it('detects cycle in A->B->C->A', async () => {
     // Create 3 tasks that form a cycle
-    const a = await createTask(db, config, embedder, {
+    const a = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Cycle A',
     });
-    const b = await createTask(db, config, embedder, {
+    const b = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Cycle B',
     });
-    const c = await createTask(db, config, embedder, {
+    const c = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Cycle C',
@@ -215,15 +213,9 @@ describe('V11 Integration: Cycle detection', () => {
     if (!aN.ok || !bN.ok || !cN.ok) return;
 
     // A depends_on B, B depends_on C, C depends_on A
-    db.upsertRelations(aN.data, [
-      { sourceId: aN.data, targetId: bN.data, type: 'depends_on' },
-    ]);
-    db.upsertRelations(bN.data, [
-      { sourceId: bN.data, targetId: cN.data, type: 'depends_on' },
-    ]);
-    db.upsertRelations(cN.data, [
-      { sourceId: cN.data, targetId: aN.data, type: 'depends_on' },
-    ]);
+    db.upsertRelations(aN.data, [{ sourceId: aN.data, targetId: bN.data, type: 'depends_on' }]);
+    db.upsertRelations(bN.data, [{ sourceId: bN.data, targetId: cN.data, type: 'depends_on' }]);
+    db.upsertRelations(cN.data, [{ sourceId: cN.data, targetId: aN.data, type: 'depends_on' }]);
 
     const graph = buildDependencyGraph(db, 'TEST');
     const cycles = detectCycles(graph);
@@ -269,7 +261,7 @@ describe('V11 Integration: Context assembly with dependencies', () => {
   });
 
   it('assembleContext reflects relation-only deps', async () => {
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Context dep task',

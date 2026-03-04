@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { checkNamespaceMismatch, detectEntityType } from '../../../src/modules/pm/engine/routing.js';
+import {
+  checkNamespaceMismatch,
+  detectEntityType,
+} from '../../../src/modules/pm/engine/routing.js';
 
 describe('namespace redirect detection', () => {
   describe('detectEntityType', () => {

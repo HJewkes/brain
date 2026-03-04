@@ -103,10 +103,7 @@ export function setActiveProject(db: BrainDB, prefix: string): void {
   db.setMetaValue(PM_ACTIVE_PROJECT_KEY, prefix);
 }
 
-export function resolveProject(
-  db: BrainDB,
-  explicit: string | undefined
-): Result<string> {
+export function resolveProject(db: BrainDB, explicit: string | undefined): Result<string> {
   if (explicit) {
     const upper = explicit.toUpperCase();
     const projectNotes = getPmNotes(db, 'project', { prefix: upper });
@@ -149,16 +146,10 @@ export function resolveProject(
     );
   }
 
-  return fail(
-    'INVALID_INPUT',
-    'No projects found. Run "brain pm onboard <name>" to create one.'
-  );
+  return fail('INVALID_INPUT', 'No projects found. Run "brain pm onboard <name>" to create one.');
 }
 
-export function enrichNotFoundError(
-  db: BrainDB,
-  displayId: string
-): Result<never> {
+export function enrichNotFoundError(db: BrainDB, displayId: string): Result<never> {
   // Check if it's a workstream display ID (PREFIX-NN without .MM)
   if (/^[A-Z]+-\d{2}$/.test(displayId)) {
     const wsNotes = getPmNotes(db, 'workstream', { display_id: displayId });

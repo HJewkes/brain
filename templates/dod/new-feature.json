@@ -1,0 +1,9 @@
+{
+  "name": "new-feature",
+  "criteria": [
+    { "name": "types check", "check": "npx tsc --noEmit", "required": true },
+    { "name": "tests pass", "check": "npm test", "required": true },
+    { "name": "lint clean", "check": "npm run lint -- --quiet", "required": true },
+    { "name": "tests exist", "check": "test -n \"$(git diff --cached --name-only -- '*.test.*')\"", "required": true }
+  ]
+}

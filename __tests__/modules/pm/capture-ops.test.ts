@@ -148,6 +148,7 @@ describe('processCapture', () => {
       project: 'TST',
       workstream: 1,
       name: 'Build login page',
+      description: 'Build login page for the application.',
     });
 
     expect(result.ok).toBe(true);
@@ -170,12 +171,14 @@ describe('processCapture', () => {
       project: 'TST',
       workstream: 1,
       name: 'First processing',
+      description: 'First processing of the capture.',
     });
 
     const result = await processCapture(db, config, embedder, cap.data.noteId, {
       project: 'TST',
       workstream: 1,
       name: 'Second processing',
+      description: 'Second processing of the capture.',
     });
 
     expect(result.ok).toBe(false);
@@ -189,6 +192,7 @@ describe('processCapture', () => {
       project: 'TST',
       workstream: 1,
       name: 'Test',
+      description: 'Test task for capture processing.',
     });
 
     expect(result.ok).toBe(false);

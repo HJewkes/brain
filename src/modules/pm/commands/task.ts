@@ -69,11 +69,19 @@ export function createTaskCommands(): Command {
     .option('--category <cat>', 'Task category')
     .option('--priority <pri>', 'Task priority (critical|high|medium|low)')
     .option('--depends-on <ids...>', 'Display IDs this task depends on')
-    .option('--description <text>', 'Task description/body content')
+    .requiredOption(
+      '--description <text>',
+      'Task description/body content (required for search indexing)'
+    )
     .option('--due <date>', 'Due date (YYYY-MM-DD)')
     .option('--milestone <name>', 'Milestone name')
     .option('--done-when <text>', 'Completion definition (1-2 sentences)')
-    .option('--ac <criterion>', 'Acceptance criterion (repeatable)', (val: string, prev: string[]) => [...prev, val], [] as string[])
+    .option(
+      '--ac <criterion>',
+      'Acceptance criterion (repeatable)',
+      (val: string, prev: string[]) => [...prev, val],
+      [] as string[]
+    )
     .option('--refs <refs>', 'Comma-separated file/doc references')
     .option('--json', 'Output JSON')
     .action(async (name, opts) => {
@@ -95,7 +103,15 @@ export function createTaskCommands(): Command {
           if (parsed?.workstream !== undefined) {
             workstreamNum = parsed.workstream;
           } else {
-            process.stderr.write(formatError(pmError('INVALID_INPUT', `Invalid workstream: ${wsStr}. Use a number (e.g. 1) or display ID (e.g. ${project}-01)`), !!opts.json) + '\n');
+            process.stderr.write(
+              formatError(
+                pmError(
+                  'INVALID_INPUT',
+                  `Invalid workstream: ${wsStr}. Use a number (e.g. 1) or display ID (e.g. ${project}-01)`
+                ),
+                !!opts.json
+              ) + '\n'
+            );
             process.exitCode = 1;
             return;
           }
@@ -160,30 +176,61 @@ export function createTaskCommands(): Command {
           workstreamNumber = wsResult.data;
         }
 
-        const validStatuses = ['pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled', 'eligible', 'ready', 'all'];
+        const validStatuses = [
+          'pending',
+          'claimed',
+          'in-progress',
+          'done',
+          'blocked',
+          'cancelled',
+          'eligible',
+          'ready',
+          'all',
+        ];
         const validPriorities = ['critical', 'high', 'medium', 'low'];
 
         if (opts.status && !validStatuses.includes(opts.status)) {
-          process.stderr.write(formatError(pmError('INVALID_INPUT', `Invalid status "${opts.status}". Valid values: ${validStatuses.join(', ')}`), !!opts.json) + '\n');
+          process.stderr.write(
+            formatError(
+              pmError(
+                'INVALID_INPUT',
+                `Invalid status "${opts.status}". Valid values: ${validStatuses.join(', ')}`
+              ),
+              !!opts.json
+            ) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
         if (opts.priority && !validPriorities.includes(opts.priority)) {
-          process.stderr.write(formatError(pmError('INVALID_INPUT', `Invalid priority "${opts.priority}". Valid values: ${validPriorities.join(', ')}`), !!opts.json) + '\n');
+          process.stderr.write(
+            formatError(
+              pmError(
+                'INVALID_INPUT',
+                `Invalid priority "${opts.priority}". Valid values: ${validPriorities.join(', ')}`
+              ),
+              !!opts.json
+            ) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
 
         const mode: ListMode = opts.full ? 'full' : opts.short ? 'short' : 'default';
-        const result = listTasks(svc.db, projectResult.data, {
-          workstream: workstreamNumber,
-          status: opts.status,
-          priority: opts.priority,
-          category: opts.category,
-          search: opts.search,
-          dueBefore: opts.dueBefore,
-          milestone: opts.milestone,
-        }, mode);
+        const result = listTasks(
+          svc.db,
+          projectResult.data,
+          {
+            workstream: workstreamNumber,
+            status: opts.status,
+            priority: opts.priority,
+            category: opts.category,
+            search: opts.search,
+            dueBefore: opts.dueBefore,
+            milestone: opts.milestone,
+          },
+          mode
+        );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
@@ -193,8 +240,19 @@ export function createTaskCommands(): Command {
         let tasks = result.data;
 
         if (opts.sort) {
-          const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-          const STATUS_ORDER: Record<string, number> = { pending: 0, claimed: 1, 'in-progress': 2, blocked: 3, done: 4 };
+          const PRIORITY_ORDER: Record<string, number> = {
+            critical: 0,
+            high: 1,
+            medium: 2,
+            low: 3,
+          };
+          const STATUS_ORDER: Record<string, number> = {
+            pending: 0,
+            claimed: 1,
+            'in-progress': 2,
+            blocked: 3,
+            done: 4,
+          };
 
           const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
           tasks = [...tasks].sort((a, b) => {
@@ -263,7 +321,9 @@ export function createTaskCommands(): Command {
 
         const lines: string[] = [];
         lines.push(formatTaskLine(task));
-        lines.push(`  Status: ${task.status} | Priority: ${task.priority} | Category: ${task.category}`);
+        lines.push(
+          `  Status: ${task.status} | Priority: ${task.priority} | Category: ${task.category}`
+        );
         if (task.mode) lines.push(`  Mode: ${task.mode}`);
         if (task.depends_on && task.depends_on.length > 0) {
           lines.push(`  Depends on: ${task.depends_on.join(', ')}`);
@@ -329,7 +389,11 @@ export function createTaskCommands(): Command {
             for (const depId of opts.dependsOn as string[]) {
               const depResolved = resolveDisplayId(svc.db, depId.toUpperCase());
               if (depResolved.ok) {
-                relations.push({ sourceId: taskNoteId, targetId: depResolved.data, type: 'depends_on' });
+                relations.push({
+                  sourceId: taskNoteId,
+                  targetId: depResolved.data,
+                  type: 'depends_on',
+                });
               } else {
                 process.stderr.write(`Warning: dependency "${depId}" not found, skipping\n`);
               }
@@ -360,8 +424,14 @@ export function createTaskCommands(): Command {
         }
         if (opts.token) {
           const taskResult = getTask(svc.db, id.toUpperCase());
-          if (taskResult.ok && taskResult.data.claim_token && taskResult.data.claim_token !== opts.token) {
-            process.stderr.write(`Warning: Token mismatch (expected ${taskResult.data.claim_token}, got ${opts.token})\n`);
+          if (
+            taskResult.ok &&
+            taskResult.data.claim_token &&
+            taskResult.data.claim_token !== opts.token
+          ) {
+            process.stderr.write(
+              `Warning: Token mismatch (expected ${taskResult.data.claim_token}, got ${opts.token})\n`
+            );
           }
         }
         const result = await updateTaskStatus(
@@ -407,13 +477,9 @@ export function createTaskCommands(): Command {
           return;
         }
         if (opts.reason) {
-          await updateTaskMetadataFields(
-            svc.db,
-            svc.config,
-            svc.embedder,
-            id.toUpperCase(),
-            { block_reason: opts.reason }
-          );
+          await updateTaskMetadataFields(svc.db, svc.config, svc.embedder, id.toUpperCase(), {
+            block_reason: opts.reason,
+          });
         }
         outputResult(result.data, !!opts.json);
       });
@@ -541,7 +607,9 @@ export function createTaskCommands(): Command {
           }
 
           if (opts.json) {
-            process.stdout.write(JSON.stringify({ ...startResult.data, token: claim.token }, null, 2) + '\n');
+            process.stdout.write(
+              JSON.stringify({ ...startResult.data, token: claim.token }, null, 2) + '\n'
+            );
           } else {
             process.stdout.write(`${displayId} claimed and started (in-progress)\n`);
           }
@@ -549,7 +617,9 @@ export function createTaskCommands(): Command {
         }
 
         if (opts.json) {
-          process.stdout.write(JSON.stringify({ ...metaResult.data, token: claim.token }, null, 2) + '\n');
+          process.stdout.write(
+            JSON.stringify({ ...metaResult.data, token: claim.token }, null, 2) + '\n'
+          );
         } else {
           process.stdout.write(`${displayId} claimed. Token: ${claim.token}\n`);
           process.stdout.write(`Start: brain pm task start ${displayId} --token ${claim.token}\n`);

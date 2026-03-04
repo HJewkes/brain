@@ -1,11 +1,12 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync, watch } from 'node:fs';
-import { loadConfig } from '../services/config.js';
+import { extname } from 'node:path';
+import { loadConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel, createOllamaClient } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
-import { scanForChanges } from '../services/file-scanner.js';
+import { scanForChanges, INDEXABLE_EXTENSIONS } from '../services/file-scanner.js';
 import {
   indexSingleFile,
   indexFiles,
@@ -25,10 +26,11 @@ export const indexCommand = new Command('index')
   .option('--extract-model <model>', 'Ollama model for extraction (default: qwen2.5:3b)')
   .option('--extract-tag <tag>', 'container tag for extracted memories', 'default')
   .option('--watch', 'watch for file changes and re-index automatically')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     // Bypasses withBrain/withDb because watch mode needs the DB open across
     // the entire process lifetime — the callback pattern can't express that.
-    const config = loadConfig();
+    const instance = resolveInstance(parentResolveOpts(cmd));
+    const config = loadConfig(instance);
     const db = new BrainDB(config.dbPath);
     const embedder = createEmbedder(config);
 
@@ -133,7 +135,8 @@ function startWatcher(db: BrainDB, embedder: Embedder, notesDir: string): void {
   };
 
   watch(notesDir, { recursive: true }, (_event, filename) => {
-    if (!filename || !filename.endsWith('.md')) return;
+    const ext = filename ? extname(filename).toLowerCase() : '';
+    if (!filename || !INDEXABLE_EXTENSIONS.has(ext)) return;
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       reindex().catch((err) => {

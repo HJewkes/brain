@@ -11,12 +11,12 @@ import { pmModule } from '../../../src/modules/pm/index.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
 import {
-  createTask,
   listTasks,
   getTask,
   updateTaskStatus,
   deleteTask,
 } from '../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -49,7 +49,7 @@ afterEach(() => {
 
 describe('Wave 3: Task CRUD integration', () => {
   it('creates task with correct metadata and display_id = PREFIX-NN.MM', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Setup CI',
@@ -85,8 +85,8 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('creates task with depends_on and stores relation in relations table', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Task A' });
-    const r2 = await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Task A' });
+    const r2 = await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Task B',
@@ -105,12 +105,16 @@ describe('Wave 3: Task CRUD integration', () => {
     });
 
     const relations = db.getRelationsFrom(taskBNoteId!);
-    expect(relations).toHaveLength(1);
-    expect(relations[0].type).toBe('depends_on');
+    const depRelations = relations.filter((r) => r.type === 'depends_on');
+    expect(depRelations).toHaveLength(1);
   });
 
   it('shows task with virtual states (+READY for no deps)', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Ready task' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Ready task',
+    });
 
     const result = getTask(db, 'TST-01.01');
     expect(result.ok).toBe(true);
@@ -121,7 +125,7 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('full lifecycle: pending → claimed → in-progress → done', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Lifecycle task',
@@ -141,7 +145,7 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('invalid transition: done on pending returns INVALID_TRANSITION', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Bad transition',
@@ -155,7 +159,11 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('block → unblock round-trip', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Blockable' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Blockable',
+    });
 
     const r1 = await updateTaskStatus(db, config, embedder, 'TST-01.01', 'blocked');
     expect(r1.ok).toBe(true);
@@ -167,7 +175,7 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('task with content_dir has directory created on disk', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'With dir' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'With dir' });
 
     const contentDir = join(notesDir, 'modules', 'pm', 'TST', 'TST-01.01');
     expect(existsSync(contentDir)).toBe(true);
@@ -175,9 +183,9 @@ describe('Wave 3: Task CRUD integration', () => {
 
   it('lists tasks with filters and returns correct subset', async () => {
     await createWorkstream(db, config, embedder, { project: 'TST', name: 'Other' });
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Task 1' });
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Task 2' });
-    await createTask(db, config, embedder, { project: 'TST', workstream: 2, name: 'Task 3' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Task 1' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Task 2' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 2, name: 'Task 3' });
 
     const allResult = listTasks(db, 'TST');
     expect(allResult.ok).toBe(true);
@@ -197,7 +205,7 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('JSON output parses as valid JSON with expected fields', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'JSON test',
@@ -220,7 +228,11 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('deletes task and removes note and content_dir', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Delete me' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Delete me',
+    });
 
     const filePath = join(notesDir, 'modules', 'pm', 'TST', 'TST-01.01.md');
     const contentDir = join(notesDir, 'modules', 'pm', 'TST', 'TST-01.01');

@@ -8,9 +8,10 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import { traverseGraph } from '../../../src/services/graph.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -52,7 +53,7 @@ afterEach(() => {
 
 describe('hierarchy parent edges', () => {
   it('createTask creates parent edge from workstream note to task note', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'HRC',
       workstream: 1,
       name: 'First task',
@@ -72,12 +73,12 @@ describe('hierarchy parent edges', () => {
   });
 
   it('graph traversal from workstream note reaches task notes', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'HRC',
       workstream: 1,
       name: 'Task A',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'HRC',
       workstream: 1,
       name: 'Task B',
@@ -115,7 +116,7 @@ describe('hierarchy parent edges', () => {
   });
 
   it('graph traversal from project note reaches tasks at depth 2', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'HRC',
       workstream: 1,
       name: 'Deep task',
@@ -133,7 +134,7 @@ describe('hierarchy parent edges', () => {
 
   it('multiple tasks in same workstream each get a parent edge', async () => {
     for (let i = 0; i < 3; i++) {
-      const r = await createTask(db, config, embedder, {
+      const r = await createTestTask(db, config, embedder, {
         project: 'HRC',
         workstream: 1,
         name: `Task ${i + 1}`,

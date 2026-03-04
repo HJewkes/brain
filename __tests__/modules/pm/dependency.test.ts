@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { tmpDbPath, createMockEmbedder, createTestTask } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import {
   buildDependencyGraph,
   computeEligible,
@@ -133,8 +133,8 @@ describe('detectCycle', () => {
   it('direct cycle A depends on B, B depends on A returns CYCLE_DETECTED', async () => {
     await createProject(db, config, embedder, { name: 'Cycle', prefix: 'CYC' });
     await createWorkstream(db, config, embedder, { project: 'CYC', name: 'WS1' });
-    await createTask(db, config, embedder, { project: 'CYC', workstream: 1, name: 'A' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'CYC', workstream: 1, name: 'A' });
+    await createTestTask(db, config, embedder, {
       project: 'CYC',
       workstream: 1,
       name: 'B',

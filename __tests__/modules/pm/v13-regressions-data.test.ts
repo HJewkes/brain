@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject, getProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream, listWorkstreams } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks, deleteTask, updateTask } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, deleteTask, updateTask } from '../../../src/modules/pm/data/task-ops.js';
 import { computeWaves } from '../../../src/modules/pm/engine/dependency.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -33,24 +34,27 @@ afterEach(() => {
 describe('data regressions', () => {
   // O-66: createTask with dependencies creates relation edges
   it('O-66: dependencies create relations', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'A' });
-    await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'B', dependsOn: ['VOLT-01.01'],
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'A' });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'B',
+      dependsOn: ['VOLT-01.01'],
     });
     const notes = db.getAllNotes();
-    const bNote = notes.find(n => {
+    const bNote = notes.find((n) => {
       if (!n.metadata) return false;
       const meta = JSON.parse(n.metadata);
       return meta.display_id === 'VOLT-01.02';
     });
     expect(bNote).toBeDefined();
     const rels = db.getRelationsFrom(bNote!.id);
-    expect(rels.some(r => r.type === 'depends_on')).toBe(true);
+    expect(rels.some((r) => r.type === 'depends_on')).toBe(true);
   });
 
   // O-68: task update changes metadata
   it('O-68: updateTask changes priority', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
     const result = await updateTask(db, config, embedder, 'VOLT-01.01', { priority: 'critical' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -59,7 +63,11 @@ describe('data regressions', () => {
 
   // O-70: deleteTask removes note and relations
   it('O-70: deleteTask cleans up', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Delete me' });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'Delete me',
+    });
     const result = await deleteTask(db, config, 'VOLT-01.01');
     expect(result.ok).toBe(true);
     const listResult = listTasks(db, 'VOLT');
@@ -70,7 +78,7 @@ describe('data regressions', () => {
 
   // O-73: task list includes workstream name
   it('O-73: listTasks enriches workstream_name', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
     const result = listTasks(db, 'VOLT');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -81,9 +89,12 @@ describe('data regressions', () => {
 
   // O-80: computeWaves returns proper wave grouping
   it('O-80: waves respect dependency ordering', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'A' });
-    await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'B', dependsOn: ['VOLT-01.01'],
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'A' });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'B',
+      dependsOn: ['VOLT-01.01'],
     });
     const waves = computeWaves(db, 'VOLT');
     expect(waves.length).toBe(2);
@@ -95,7 +106,7 @@ describe('data regressions', () => {
 
   // O-88: task list includes virtual states
   it('O-88: listTasks includes virtualStates', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Ready' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Ready' });
     const result = listTasks(db, 'VOLT');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -105,8 +116,10 @@ describe('data regressions', () => {
 
   // O-91: task with acceptance_criteria
   it('O-91: acceptance_criteria passed through', async () => {
-    await createTask(db, config, embedder, {
-      project: 'VOLT', workstream: 1, name: 'AC test',
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'AC test',
       acceptanceCriteria: ['Must compile', 'Tests pass'],
     });
     const result = listTasks(db, 'VOLT');
@@ -120,7 +133,11 @@ describe('data regressions', () => {
 
   // O-97: task file exists on disk after creation
   it('O-97: task file written to disk', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Disk test' });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'Disk test',
+    });
     const taskFile = join(notesDir, 'modules', 'pm', 'VOLT', 'VOLT-01.01.md');
     expect(existsSync(taskFile)).toBe(true);
   });

@@ -7,11 +7,15 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
-import { createProject } from '../../../src/modules/pm/data/project-ops.js';
-import { createWorkstream, getWorkstream, listWorkstreams } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import {
+  createWorkstream,
+  getWorkstream,
+  listWorkstreams,
+} from '../../../src/modules/pm/data/workstream-ops.js';
+import { listTasks } from '../../../src/modules/pm/data/task-ops.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
 import { search } from '../../../src/services/search.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -44,12 +48,7 @@ afterEach(() => {
 
 describe('O-216: search score field baseline', () => {
   it('search results include a numeric score field', async () => {
-    const results = await search(
-      db,
-      embedder,
-      'Task',
-      { limit: 5 }
-    );
+    const results = await search(db, embedder, 'Task', { limit: 5 });
     expect(results.length).toBeGreaterThan(0);
     for (const r of results) {
       expect(typeof r.score).toBe('number');
@@ -58,12 +57,7 @@ describe('O-216: search score field baseline', () => {
   });
 
   it('search results are sorted by score descending', async () => {
-    const results = await search(
-      db,
-      embedder,
-      'Task',
-      { limit: 10 }
-    );
+    const results = await search(db, embedder, 'Task', { limit: 10 });
     expect(results.length).toBeGreaterThan(1);
     for (let i = 1; i < results.length; i++) {
       expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
@@ -75,7 +69,7 @@ describe('O-216: search score field baseline', () => {
 
 describe('O-234: task list --search searches body content', () => {
   it('finds task by unique keyword in description body, not title', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Generic task name',
@@ -91,7 +85,7 @@ describe('O-234: task list --search searches body content', () => {
   });
 
   it('search is case-insensitive for body content', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Another task',
@@ -121,16 +115,20 @@ describe('O-230: briefing eligible count baseline', () => {
     expect(beforeEligible.length).toBe(2);
 
     // Complete TEST-01.01 to unblock TEST-01.02
-    await import('../../../src/modules/pm/data/task-ops.js').then(
-      async (mod) => {
-        const claimResult = await mod.updateTaskStatus(db, config, embedder, 'TEST-01.01', 'claimed');
-        expect(claimResult.ok).toBe(true);
-        const startResult = await mod.updateTaskStatus(db, config, embedder, 'TEST-01.01', 'in-progress');
-        expect(startResult.ok).toBe(true);
-        const doneResult = await mod.updateTaskStatus(db, config, embedder, 'TEST-01.01', 'done');
-        expect(doneResult.ok).toBe(true);
-      }
-    );
+    await import('../../../src/modules/pm/data/task-ops.js').then(async (mod) => {
+      const claimResult = await mod.updateTaskStatus(db, config, embedder, 'TEST-01.01', 'claimed');
+      expect(claimResult.ok).toBe(true);
+      const startResult = await mod.updateTaskStatus(
+        db,
+        config,
+        embedder,
+        'TEST-01.01',
+        'in-progress'
+      );
+      expect(startResult.ok).toBe(true);
+      const doneResult = await mod.updateTaskStatus(db, config, embedder, 'TEST-01.01', 'done');
+      expect(doneResult.ok).toBe(true);
+    });
 
     const afterEligible = computeEligible(db, 'TEST');
     // TEST-01.01 is done, so TEST-01.02 becomes eligible (deps met)
@@ -189,13 +187,13 @@ describe('O-96: workstreams alias routing', () => {
 
 describe('O-222: tasks alias flag forwarding', () => {
   it('listTasks with priority filter returns only matching tasks', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Critical fix',
       priority: 'critical',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Low effort cleanup',
@@ -223,7 +221,7 @@ describe('O-222: tasks alias flag forwarding', () => {
   });
 
   it('listTasks with combined priority and status filters works', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 2,
       name: 'High priority task',

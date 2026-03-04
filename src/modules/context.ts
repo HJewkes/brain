@@ -6,6 +6,7 @@ import type {
   ModuleExtractionStrategy,
   FilterProvider,
   ModuleMigration,
+  ContentHandler,
 } from './types.js';
 import type { ModuleRegistry } from './registry.js';
 
@@ -28,6 +29,9 @@ export function createModuleContext(registry: ModuleRegistry, moduleName: string
     },
     registerMigration(migration: ModuleMigration): void {
       registry.registerMigration(moduleName, migration);
+    },
+    registerContentHandler(handler: ContentHandler): void {
+      registry.registerContentHandler(moduleName, handler);
     },
   };
 }

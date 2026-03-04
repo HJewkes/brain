@@ -613,6 +613,18 @@ export class BrainDB {
   }): Set<string> | null {
     return this.noteRepo.getFilteredNoteIds(filters);
   }
+
+  getFilteredNoteIdsByMetadata(
+    filters: Array<{ field: string; value: string }>,
+    baseIds?: Set<string>
+  ): Set<string> {
+    return this.noteRepo.getFilteredNoteIdsByMetadata(filters, baseIds);
+  }
+
+  getFacetCounts(field: string, noteIds: Set<string>): Array<{ value: string; count: number }> {
+    return this.noteRepo.getFacetCounts(field, noteIds);
+  }
+
   getModuleNoteIds(filter: {
     module?: string;
     moduleInstance?: string;

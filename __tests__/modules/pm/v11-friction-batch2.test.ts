@@ -8,11 +8,12 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { computeWaves } from '../../../src/modules/pm/engine/dependency.js';
 import { resolveWorkstreamFilter } from '../../../src/modules/pm/ids.js';
 import { resolveWorkstreamByName } from '../../../src/modules/pm/commands/orchestration.js';
 import type { TaskStatus } from '../../../src/modules/pm/types.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -34,7 +35,10 @@ beforeEach(async () => {
 
   const proj = await createProject(db, config, embedder, { name: 'Friction2', prefix: 'FR2' });
   if (!proj.ok) throw new Error(proj.error.message);
-  const ws = await createWorkstream(db, config, embedder, { project: 'FR2', name: 'SDK & Protocol' });
+  const ws = await createWorkstream(db, config, embedder, {
+    project: 'FR2',
+    name: 'SDK & Protocol',
+  });
   if (!ws.ok) throw new Error(ws.error.message);
 });
 
@@ -48,12 +52,12 @@ afterEach(() => {
 describe('O-158: wave freshness — computeWaves reads fresh data', () => {
   it('waves reflects status changes from current session', async () => {
     // Create two tasks, T2 depends on T1
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FR2',
       workstream: 1,
       name: 'First task',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'FR2',
       workstream: 1,
       name: 'Second task',
@@ -123,30 +127,24 @@ describe('O-60: workstream name-based lookup', () => {
 
 describe('O-135/O-145: --project flag on waves and briefing', () => {
   it('wavesCmd definition includes --project option', async () => {
-    const { createOrchestrationCommands } = await import(
-      '../../../src/modules/pm/commands/orchestration.js'
-    );
+    const { createOrchestrationCommands } =
+      await import('../../../src/modules/pm/commands/orchestration.js');
     const cmds = createOrchestrationCommands();
     const wavesCmd = cmds.find((c) => c.name() === 'waves');
     expect(wavesCmd).toBeDefined();
 
-    const projectOpt = wavesCmd!.options.find(
-      (o) => o.long === '--project'
-    );
+    const projectOpt = wavesCmd!.options.find((o) => o.long === '--project');
     expect(projectOpt).toBeDefined();
   });
 
   it('briefingCmd definition includes --project option', async () => {
-    const { createOrchestrationCommands } = await import(
-      '../../../src/modules/pm/commands/orchestration.js'
-    );
+    const { createOrchestrationCommands } =
+      await import('../../../src/modules/pm/commands/orchestration.js');
     const cmds = createOrchestrationCommands();
     const briefingCmd = cmds.find((c) => c.name() === 'briefing');
     expect(briefingCmd).toBeDefined();
 
-    const projectOpt = briefingCmd!.options.find(
-      (o) => o.long === '--project'
-    );
+    const projectOpt = briefingCmd!.options.find((o) => o.long === '--project');
     expect(projectOpt).toBeDefined();
   });
 });

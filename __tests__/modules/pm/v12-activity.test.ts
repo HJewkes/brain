@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, existsSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
-import { createProject, deleteProject } from '../../../src/modules/pm/data/project-ops.js';
+import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { getPmNotes, getProjectNotes } from '../../../src/modules/pm/data/queries.js';
 import { indexSingleFile } from '../../../src/services/indexing.js';
 import { projectDeleteWithActivity } from '../../../src/modules/pm/commands/activity.js';

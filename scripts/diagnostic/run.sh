@@ -16,12 +16,14 @@ VERSION="${1:?Usage: run.sh <version> [--skip-setup] [--phase <name>] [--concurr
 shift
 
 SKIP_SETUP=false
+SKIP_QUALITY_GATE=false
 PHASE="all"
 CONCURRENCY=6
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-setup) SKIP_SETUP=true; shift ;;
+    --skip-quality-gate) SKIP_QUALITY_GATE=true; shift ;;
     --phase) PHASE="$2"; shift 2 ;;
     --concurrency) CONCURRENCY="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -68,10 +70,15 @@ run_agent() {
   prompt="$(apply_template "$prompt_file")"
 
   local cmd=(
-    env -u CLAUDECODE claude -p
+    env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT
+        -u CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY
+        -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+        -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+    claude -p
     --model "$model"
     --permission-mode bypassPermissions
     --no-session-persistence
+    --setting-sources user
   )
 
   if [[ -n "$extra_flags" ]]; then
@@ -96,19 +103,33 @@ run_setup() {
   npm run build --silent
 
   echo "Resetting brain..."
-  npx tsx src/cli.ts reset --confirm
+  (cd /tmp && npx tsx "$PROJECT_DIR/src/cli.ts" reset --confirm)
 
   echo "Linking..."
   npm link --silent
+
+  echo "Initializing brain..."
+  # Run from /tmp to avoid local .brain/ instance resolution
+  (cd /tmp && brain init --notes-dir ~/brain --embedder local)
+
+  echo "Ingesting command reference docs..."
+  for doc in docs/pm-module/commands/*.md; do
+    (cd /tmp && brain add "$PROJECT_DIR/$doc" --type guide --tier fast 2>/dev/null) || true
+  done
 
   echo "Spawning setup agent (with session persistence)..."
   local prompt
   prompt="$(apply_template "${PROMPTS_DIR}/setup.md")"
 
-  (cd "$WORKSPACE_DIR" && env -u CLAUDECODE claude -p \
+  (cd "$WORKSPACE_DIR" && env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+    -u CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY \
+    -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \
+    -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS \
+    claude -p \
     --model sonnet \
     --permission-mode bypassPermissions \
     --no-session-persistence \
+    --setting-sources user \
     "$prompt")
 
   # Find the session log written by the setup agent
@@ -150,10 +171,15 @@ run_audits() {
     prompt="${prompt//\{\{SETUP_SESSION_LOG\}\}/${SETUP_SESSION_LOG}}"
 
     local cmd=(
-      env -u CLAUDECODE claude -p
+      env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT
+          -u CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY
+          -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+          -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+      claude -p
       --model sonnet
       --permission-mode bypassPermissions
       --no-session-persistence
+      --setting-sources user
     )
     "${cmd[@]}" "$prompt" > "${RESULTS_DIR}/session-audit.md" &
     pids+=($!)
@@ -184,11 +210,15 @@ run_test_bench() {
 
   local total=0
   local failed=0
-  local running=0
+  local pids=()
   local next_i=1
 
-  start_next_agent() {
-    while [[ $next_i -le 30 && $running -lt $CONCURRENCY ]]; do
+  # Launch agents in waves of $CONCURRENCY
+  while [[ $next_i -le 30 ]]; do
+    local wave_pids=()
+    local wave_count=0
+
+    while [[ $next_i -le 30 && $wave_count -lt $CONCURRENCY ]]; do
       local num
       num=$(printf "%02d" "$next_i")
       local prompt_file="${PROMPTS_DIR}/test-bench/P-${num}.md"
@@ -201,20 +231,20 @@ run_test_bench() {
       fi
 
       run_agent "$prompt_file" "$output_file" sonnet "--output-format json" &
-      echo "  Started P-${num} (pid $!)"
+      local pid=$!
+      echo "  Started P-${num} (pid ${pid})"
+      wave_pids+=("$pid")
       ((total++))
-      ((running++))
+      ((wave_count++))
     done
-  }
 
-  start_next_agent
-
-  while [[ $running -gt 0 ]]; do
-    if ! wait -n; then
-      ((failed++))
-    fi
-    ((running--))
-    start_next_agent
+    # Wait for entire wave to finish
+    for pid in "${wave_pids[@]}"; do
+      if ! wait "$pid"; then
+        ((failed++))
+      fi
+    done
+    echo "  Wave complete (${wave_count} agents)"
   done
 
   echo "  Test bench complete: ${total} prompts, ${failed} failures"
@@ -269,6 +299,13 @@ case "$PHASE" in
     if [[ "$SKIP_SETUP" == false ]]; then
       run_setup
     fi
+    echo ""
+    echo "── Quality Gate ─────────────────────────────────"
+    if [[ "$SKIP_QUALITY_GATE" == true ]]; then
+      bash "${SCRIPT_DIR}/quality-gate.sh" --skip
+    else
+      bash "${SCRIPT_DIR}/quality-gate.sh"
+    fi
     run_audits
     run_test_bench
     run_assemble
@@ -282,8 +319,8 @@ case "$PHASE" in
 
     echo ""
     echo "── Ingesting diagnostic outputs ──────────────"
-    brain add "${RESULTS_DIR}/summary.md" --type note --tier fast 2>/dev/null || echo "  SKIP: summary.md ingest failed"
-    brain add "${RESULTS_DIR}/gap-analysis.md" --type note --tier fast 2>/dev/null || echo "  SKIP: gap-analysis.md ingest failed"
+    (cd /tmp && brain add "$PROJECT_DIR/${RESULTS_DIR}/summary.md" --type note --tier fast 2>/dev/null) || echo "  SKIP: summary.md ingest failed"
+    (cd /tmp && brain add "$PROJECT_DIR/${RESULTS_DIR}/gap-analysis.md" --type note --tier fast 2>/dev/null) || echo "  SKIP: gap-analysis.md ingest failed"
     echo "  Diagnostic outputs ingested for future reference."
     ;;
   test-bench)

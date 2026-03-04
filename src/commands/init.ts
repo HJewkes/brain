@@ -1,14 +1,23 @@
 import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
-import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import {
+  mkdirSync,
+  existsSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+  lstatSync,
+} from 'node:fs';
 import { join, dirname, basename } from 'node:path';
+import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { loadConfig, saveConfig } from '../services/config.js';
+import { loadConfig, saveConfig, GLOBAL_BRAIN_DIR } from '../services/config.js';
+import { registerInstance } from '../services/instance-registry.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel } from '../services/ollama.js';
-import { slugify } from '../utils.js';
 import { indexSingleFile } from '../services/indexing.js';
 import type { BrainConfig, Embedder, EmbedderBackend } from '../types.js';
 
@@ -154,6 +163,48 @@ async function promptEmbedderChoice(): Promise<'ollama' | 'local' | null> {
   }
 }
 
+function installSkills(): string[] {
+  const brainSkillsDir = join(
+    dirname(new URL(import.meta.url).pathname),
+    '..',
+    '..',
+    '.claude',
+    'skills'
+  );
+  const globalSkillsDir = join(homedir(), '.claude', 'skills');
+
+  if (!existsSync(brainSkillsDir)) return [];
+  if (!existsSync(globalSkillsDir)) mkdirSync(globalSkillsDir, { recursive: true });
+
+  const installed: string[] = [];
+  const entries = readdirSync(brainSkillsDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const skillPath = join(brainSkillsDir, entry.name);
+    const linkPath = join(globalSkillsDir, entry.name);
+
+    // Skip if already linked correctly
+    if (existsSync(linkPath)) {
+      try {
+        const stat = lstatSync(linkPath);
+        if (stat.isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
+    }
+
+    try {
+      symlinkSync(skillPath, linkPath);
+      installed.push(entry.name);
+    } catch {
+      // Non-fatal — skill won't be globally available
+    }
+  }
+
+  return installed;
+}
+
 export async function ingestBrainReferenceDocs(
   config: BrainConfig,
   db?: BrainDB,
@@ -164,7 +215,10 @@ export async function ingestBrainReferenceDocs(
 
   const sourceDocsDir = join(
     dirname(new URL(import.meta.url).pathname),
-    '..', '..', 'docs', 'pm-module'
+    '..',
+    '..',
+    'docs',
+    'pm-module'
   );
   const commandsDir = join(sourceDocsDir, 'commands');
 
@@ -172,7 +226,7 @@ export async function ingestBrainReferenceDocs(
 
   // Decomposed command files
   if (existsSync(commandsDir)) {
-    const files = readdirSync(commandsDir).filter(f => f.endsWith('.md'));
+    const files = readdirSync(commandsDir).filter((f) => f.endsWith('.md'));
     for (const file of files) {
       const name = basename(file, '.md');
       const slug = `pm-ref-${name === '_index' ? 'overview' : name}`;
@@ -240,24 +294,127 @@ export async function ingestBrainReferenceDocs(
 
   // Create relations between reference notes (overview -> children)
   if (db && createdNoteIds.length > 1) {
-    const overviewId = createdNoteIds.find(id => id.includes('pm-ref-overview'));
+    const overviewId = createdNoteIds.find((id) => id.includes('pm-ref-overview'));
     if (overviewId) {
       const existingRelations = db.getRelationsFrom(overviewId);
       const newRelations = createdNoteIds
-        .filter(id => id !== overviewId)
-        .map(targetId => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
+        .filter((id) => id !== overviewId)
+        .map((targetId) => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
       db.upsertRelations(overviewId, [...existingRelations, ...newRelations]);
     }
   }
 }
 
+export interface InitLocalOptions {
+  projectDir: string;
+  globalDir?: string;
+  notesDir?: string;
+}
+
+export function initLocalBrain(opts: InitLocalOptions): void {
+  const brainDir = join(opts.projectDir, '.brain');
+
+  if (existsSync(brainDir) && existsSync(join(brainDir, 'config.json'))) {
+    throw new Error(`Local brain already exists at ${brainDir}`);
+  }
+
+  mkdirSync(brainDir, { recursive: true });
+  mkdirSync(join(brainDir, 'notes'), { recursive: true });
+
+  const localConfig: Record<string, unknown> = {};
+  if (opts.notesDir) {
+    localConfig.notesDir = opts.notesDir;
+    mkdirSync(opts.notesDir, { recursive: true });
+  }
+  writeFileSync(
+    join(brainDir, 'config.json'),
+    JSON.stringify(localConfig, null, 2) + '\n',
+    'utf-8'
+  );
+
+  const globalConfig = loadConfig();
+  const dbPath = join(brainDir, 'brain.db');
+  const db = new BrainDB(dbPath);
+  const info = getEmbedderInfo(globalConfig.embedder);
+  db.setEmbeddingModel(info.model, info.dimensions);
+  db.close();
+
+  const globalDir = opts.globalDir ?? GLOBAL_BRAIN_DIR;
+  const name = basename(opts.projectDir);
+  registerInstance(globalDir, brainDir, name);
+}
+
 export const initCommand = new Command('init')
   .description('Initialize a new brain workspace')
+  .option('--local', 'create a project-local brain instance in CWD')
   .option('--notes-dir <path>', 'path to notes directory')
   .option('--embedder <type>', 'embedding backend (local, ollama, remote)')
   .option('--json', 'output result as JSON')
   .option('--verbose', 'show technical details')
   .action(async (opts) => {
+    if (opts.local) {
+      try {
+        initLocalBrain({
+          projectDir: process.cwd(),
+          notesDir: opts.notesDir ? join(process.cwd(), opts.notesDir) : undefined,
+        });
+      } catch (err) {
+        process.stderr.write(`Error: ${(err as Error).message}\n`);
+        process.exitCode = 1;
+        return;
+      }
+
+      const brainDir = join(process.cwd(), '.brain');
+
+      if (!opts.json && existsSync(join(process.cwd(), '.git'))) {
+        const gitignorePath = join(process.cwd(), '.gitignore');
+        const gitignoreContent = existsSync(gitignorePath)
+          ? readFileSync(gitignorePath, 'utf-8')
+          : '';
+
+        if (!gitignoreContent.includes('.brain/')) {
+          if (process.stdin.isTTY) {
+            const rl = createInterface({ input: process.stdin, output: process.stderr });
+            const answer = await new Promise<string>((resolve) =>
+              rl.question('Add .brain/ to .gitignore? [Y/n] ', resolve)
+            );
+            rl.close();
+
+            if (!answer || answer.toLowerCase().startsWith('y')) {
+              const newContent =
+                gitignoreContent.endsWith('\n') || gitignoreContent === ''
+                  ? gitignoreContent + '.brain/\n'
+                  : gitignoreContent + '\n.brain/\n';
+              writeFileSync(gitignorePath, newContent, 'utf-8');
+              process.stderr.write('Added .brain/ to .gitignore\n');
+            }
+          }
+        }
+      }
+
+      if (opts.json) {
+        process.stdout.write(
+          JSON.stringify({
+            type: 'local',
+            brainDir,
+            notesDir: opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes'),
+            dbPath: join(brainDir, 'brain.db'),
+          }) + '\n'
+        );
+      } else {
+        process.stderr.write('Local brain initialized!\n\n');
+        process.stderr.write(`Instance: ${brainDir}\n`);
+        process.stderr.write(
+          `Notes: ${opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes')}\n`
+        );
+        process.stderr.write(`Database: ${join(brainDir, 'brain.db')}\n`);
+        process.stderr.write(
+          '\nAll brain commands in this directory will use the local instance.\n'
+        );
+      }
+      return;
+    }
+
     const overrides: Record<string, unknown> = {};
     if (opts.notesDir) overrides.notesDir = opts.notesDir;
     if (opts.embedder) overrides.embedder = opts.embedder as EmbedderBackend;
@@ -292,6 +449,9 @@ export const initCommand = new Command('init')
 
     saveConfig(overrides);
     const config = loadConfig();
+
+    // Install brain skills globally for agent accessibility
+    const installedSkills = installSkills();
 
     const created: string[] = [];
     for (const sub of SUBDIRS) {
@@ -377,6 +537,9 @@ export const initCommand = new Command('init')
         );
         if (created.length > 0) {
           process.stderr.write(`Created directories: ${created.join(', ')}\n`);
+        }
+        if (installedSkills.length > 0) {
+          process.stderr.write(`Installed skills: ${installedSkills.join(', ')}\n`);
         }
       }
 

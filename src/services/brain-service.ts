@@ -1,4 +1,5 @@
-import { loadConfig } from './config.js';
+import { loadConfig, resolveInstance } from './config.js';
+import type { ResolveOptions, InstancePaths } from './config.js';
 import { BrainDB } from './brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { loadModules } from '../modules/loader.js';
@@ -10,17 +11,23 @@ export interface BrainService {
   embedder: Embedder;
   config: BrainConfig;
   modules: ModuleRegistry;
+  instance: InstancePaths;
   close(): void;
 }
 
 export interface DbService {
   db: BrainDB;
   config: BrainConfig;
+  instance: InstancePaths;
   close(): void;
 }
 
-export async function withBrain<T>(fn: (svc: BrainService) => T | Promise<T>): Promise<T> {
-  const config = loadConfig();
+export async function withBrain<T>(
+  fn: (svc: BrainService) => T | Promise<T>,
+  resolveOpts?: ResolveOptions
+): Promise<T> {
+  const instance = resolveInstance(resolveOpts);
+  const config = loadConfig(instance);
   const db = new BrainDB(config.dbPath);
   const embedder = createEmbedder(config);
   const { registry } = await loadModules();
@@ -29,6 +36,7 @@ export async function withBrain<T>(fn: (svc: BrainService) => T | Promise<T>): P
     embedder,
     config,
     modules: registry,
+    instance,
     close() {
       db.close();
     },
@@ -40,12 +48,17 @@ export async function withBrain<T>(fn: (svc: BrainService) => T | Promise<T>): P
   }
 }
 
-export async function withDb<T>(fn: (svc: DbService) => T | Promise<T>): Promise<T> {
-  const config = loadConfig();
+export async function withDb<T>(
+  fn: (svc: DbService) => T | Promise<T>,
+  resolveOpts?: ResolveOptions
+): Promise<T> {
+  const instance = resolveInstance(resolveOpts);
+  const config = loadConfig(instance);
   const db = new BrainDB(config.dbPath);
   const svc: DbService = {
     db,
     config,
+    instance,
     close() {
       db.close();
     },

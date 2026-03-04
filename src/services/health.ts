@@ -1,5 +1,5 @@
 import type { BrainDB } from './brain-db.js';
-import type { EmbedderBackend, HealthCheckResult, HealthReport } from '../types.js';
+import type { EmbedderBackend, FileRecord, HealthCheckResult, HealthReport } from '../types.js';
 import { checkOllamaHealth, hasModel, type OllamaHealthResult } from './ollama.js';
 import { getEmbedderInfo } from '../adapters/index.js';
 import { parseIntervalDays } from '../utils.js';
@@ -116,11 +116,51 @@ export function checkStaleNotes(db: BrainDB): HealthCheckResult {
   };
 }
 
+export function checkFilesystemSync(
+  dbFiles: Map<string, FileRecord>,
+  diskFiles: Set<string>
+): HealthCheckResult {
+  const dbPaths = new Set(dbFiles.keys());
+
+  const unindexed: string[] = [];
+  for (const path of diskFiles) {
+    if (!dbPaths.has(path)) unindexed.push(path);
+  }
+
+  const orphaned: string[] = [];
+  for (const path of dbPaths) {
+    if (!diskFiles.has(path)) orphaned.push(path);
+  }
+
+  if (unindexed.length === 0 && orphaned.length === 0) {
+    return {
+      name: 'Filesystem sync',
+      status: 'ok',
+      message: `${dbPaths.size} file(s) in sync`,
+    };
+  }
+
+  const parts: string[] = [];
+  if (unindexed.length > 0) parts.push(`${unindexed.length} unindexed`);
+  if (orphaned.length > 0) parts.push(`${orphaned.length} orphaned`);
+
+  return {
+    name: 'Filesystem sync',
+    status: 'warning',
+    message: parts.join(', '),
+    detail:
+      unindexed.length > 0
+        ? `Run 'brain index' to index new files`
+        : `Run 'brain doctor --fix' to clean orphaned records`,
+  };
+}
+
 export async function runAllChecks(
   db: BrainDB,
   embedderBackend: EmbedderBackend,
   ollamaUrl?: string,
-  ollamaModel?: string
+  ollamaModel?: string,
+  notesDir?: string
 ): Promise<HealthReport> {
   const ollamaHealth = await checkOllamaHealth(ollamaUrl);
 
@@ -131,6 +171,36 @@ export async function runAllChecks(
     checkInbox(db),
     checkStaleNotes(db),
   ];
+
+  if (notesDir) {
+    const { readdirSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { INDEXABLE_EXTENSIONS } = await import('./file-scanner.js');
+
+    const diskFiles = new Set<string>();
+    try {
+      const entries = readdirSync(notesDir, { recursive: true }) as string[];
+      for (const entry of entries) {
+        const full = join(notesDir, entry);
+        try {
+          if (statSync(full).isFile()) {
+            const ext = full.slice(full.lastIndexOf('.')).toLowerCase();
+            if (INDEXABLE_EXTENSIONS.has(ext)) {
+              diskFiles.add(full);
+            }
+          }
+        } catch {
+          /* skip unreadable */
+        }
+      }
+    } catch {
+      /* notesDir not accessible */
+    }
+
+    if (diskFiles.size > 0 || db.getAllFiles().size > 0) {
+      checks.push(checkFilesystemSync(db.getAllFiles(), diskFiles));
+    }
+  }
 
   const summary = {
     ok: checks.filter((c) => c.status === 'ok').length,

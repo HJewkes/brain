@@ -1,0 +1,14 @@
+{
+  "enforcement": {
+    "ownership": true,
+    "dod": true,
+    "wipLimit": 4,
+    "workspaceClean": true,
+    "complexityLimit": 30
+  },
+  "brain": {
+    "global": "~/.brain",
+    "local": ".brain"
+  },
+  "ownershipManifest": ".claude/ownership.json"
+}

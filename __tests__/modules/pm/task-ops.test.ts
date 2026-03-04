@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { indexSingleFile } from '../../../src/services/indexing.js';
+import { createHash } from 'node:crypto';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
@@ -16,6 +18,7 @@ import {
   updateTask,
   deleteTask,
 } from '../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -48,7 +51,7 @@ afterEach(() => {
 
 describe('createTask', () => {
   it('creates task with correct metadata, auto-number, and display_id format', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Build login page',
@@ -74,12 +77,12 @@ describe('createTask', () => {
   });
 
   it('auto-numbers tasks: first = 1, second = 2', async () => {
-    const r1 = await createTask(db, config, embedder, {
+    const r1 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task 1',
     });
-    const r2 = await createTask(db, config, embedder, {
+    const r2 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task 2',
@@ -92,14 +95,14 @@ describe('createTask', () => {
   });
 
   it('creates task with depends_on and stores relations', async () => {
-    const r1 = await createTask(db, config, embedder, {
+    const r1 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task A',
     });
     expect(r1.ok).toBe(true);
 
-    const r2 = await createTask(db, config, embedder, {
+    const r2 = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task B',
@@ -120,12 +123,12 @@ describe('createTask', () => {
     expect(noteB).toBeDefined();
 
     const relations = db.getRelationsFrom(noteB!);
-    expect(relations).toHaveLength(1);
-    expect(relations[0].type).toBe('depends_on');
+    const depRelations = relations.filter((r) => r.type === 'depends_on');
+    expect(depRelations).toHaveLength(1);
   });
 
   it('returns NOT_FOUND for invalid dependency', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task with bad dep',
@@ -139,7 +142,7 @@ describe('createTask', () => {
   });
 
   it('returns NOT_FOUND when project does not exist', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'NOPE',
       workstream: 1,
       name: 'Orphan',
@@ -150,7 +153,7 @@ describe('createTask', () => {
   });
 
   it('returns NOT_FOUND when workstream does not exist', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 99,
       name: 'Orphan',
@@ -161,7 +164,7 @@ describe('createTask', () => {
   });
 
   it('creates content directory for task', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'With content dir',
@@ -175,8 +178,8 @@ describe('createTask', () => {
 describe('listTasks', () => {
   it('lists tasks filtered by workstream', async () => {
     await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Backend' });
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'FE Task' });
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 2, name: 'BE Task' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'FE Task' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 2, name: 'BE Task' });
 
     const ws1Result = listTasks(db, 'WEB', { workstream: 1 });
     expect(ws1Result.ok).toBe(true);
@@ -187,8 +190,8 @@ describe('listTasks', () => {
   });
 
   it('lists tasks filtered by status', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 2' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 2' });
     await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'claimed');
 
     const claimedResult = listTasks(db, 'WEB', { status: 'claimed' });
@@ -200,9 +203,12 @@ describe('listTasks', () => {
   });
 
   it('filters by virtual state blocked', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dep task' });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Blocked task', dependsOn: ['WEB-01.01'],
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dep task' });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Blocked task',
+      dependsOn: ['WEB-01.01'],
     });
 
     const blockedResult = listTasks(db, 'WEB', { status: 'blocked' });
@@ -215,7 +221,11 @@ describe('listTasks', () => {
   });
 
   it('filters by virtual state ready', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Ready task',
+    });
 
     const readyResult = listTasks(db, 'WEB', { status: 'ready' });
     expect(readyResult.ok).toBe(true);
@@ -226,7 +236,7 @@ describe('listTasks', () => {
   });
 
   it('includes virtualStates in listed tasks', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task 1' });
 
     const result = listTasks(db, 'WEB');
     expect(result.ok).toBe(true);
@@ -242,11 +252,17 @@ describe('listTasks', () => {
   });
 
   it('filters by priority', async () => {
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'High task', priority: 'high',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'High task',
+      priority: 'high',
     });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Low task', priority: 'low',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Low task',
+      priority: 'low',
     });
 
     const result = listTasks(db, 'WEB', { priority: 'high' });
@@ -257,11 +273,17 @@ describe('listTasks', () => {
   });
 
   it('filters by category', async () => {
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Impl task', category: 'implementation',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Impl task',
+      category: 'implementation',
     });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Test task', category: 'testing',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Test task',
+      category: 'testing',
     });
 
     const result = listTasks(db, 'WEB', { category: 'testing' });
@@ -272,11 +294,15 @@ describe('listTasks', () => {
   });
 
   it('filters by title search (case-insensitive)', async () => {
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Setup Auth',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Setup Auth',
     });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Deploy Pipeline',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Deploy Pipeline',
     });
 
     const result = listTasks(db, 'WEB', { search: 'auth' });
@@ -287,14 +313,26 @@ describe('listTasks', () => {
   });
 
   it('combines multiple filters', async () => {
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'High impl', priority: 'high', category: 'implementation',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'High impl',
+      priority: 'high',
+      category: 'implementation',
     });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'High test', priority: 'high', category: 'testing',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'High test',
+      priority: 'high',
+      category: 'testing',
     });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Low impl', priority: 'low', category: 'implementation',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Low impl',
+      priority: 'low',
+      category: 'implementation',
     });
 
     const result = listTasks(db, 'WEB', { priority: 'high', category: 'testing' });
@@ -305,8 +343,11 @@ describe('listTasks', () => {
   });
 
   it('returns empty array when no tasks match filters', async () => {
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 1, name: 'Medium task', priority: 'medium',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Medium task',
+      priority: 'medium',
     });
 
     const result = listTasks(db, 'WEB', { priority: 'low' });
@@ -317,11 +358,15 @@ describe('listTasks', () => {
 
   it('search matches task title only, not workstream name (O-63)', async () => {
     await createWorkstream(db, config, embedder, { project: 'WEB', name: 'Integration' });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 2, name: 'Setup CI',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 2,
+      name: 'Setup CI',
     });
-    await createTask(db, config, embedder, {
-      project: 'WEB', workstream: 2, name: 'Integration test harness',
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 2,
+      name: 'Integration test harness',
     });
 
     const result = listTasks(db, 'WEB', { search: 'integration' });
@@ -334,7 +379,11 @@ describe('listTasks', () => {
 
 describe('getTask', () => {
   it('returns task with virtual states (+READY for no deps)', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Ready task' });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Ready task',
+    });
 
     const result = getTask(db, 'WEB-01.01');
     expect(result.ok).toBe(true);
@@ -347,8 +396,8 @@ describe('getTask', () => {
   });
 
   it('returns +BLOCKED when dependencies are incomplete', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task A' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Task A' });
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Task B',
@@ -369,7 +418,11 @@ describe('getTask', () => {
   });
 
   it('suggests correct prefix when task ID has wrong prefix (O-58)', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Real task' });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Real task',
+    });
 
     const result = getTask(db, 'VLT-01.01');
     expect(result.ok).toBe(false);
@@ -391,7 +444,7 @@ describe('getTask', () => {
 
 describe('updateTaskStatus', () => {
   it('valid transition: pending → blocked succeeds', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Block me' });
+    await createTestTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Block me' });
 
     const result = await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'blocked');
     expect(result.ok).toBe(true);
@@ -401,7 +454,11 @@ describe('updateTaskStatus', () => {
   });
 
   it('invalid transition: pending → done fails with INVALID_TRANSITION', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Skip ahead' });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Skip ahead',
+    });
 
     const result = await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'done');
     expect(result.ok).toBe(false);
@@ -411,7 +468,7 @@ describe('updateTaskStatus', () => {
   });
 
   it('valid lifecycle: pending → claimed → in-progress → done', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Full lifecycle',
@@ -431,7 +488,11 @@ describe('updateTaskStatus', () => {
 
 describe('updateTask', () => {
   it('updates mode and priority', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Update me' });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Update me',
+    });
 
     const result = await updateTask(db, config, embedder, 'WEB-01.01', {
       mode: 'interactive',
@@ -454,7 +515,11 @@ describe('updateTask', () => {
 
 describe('deleteTask', () => {
   it('deletes task with no dependents', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Delete me' });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Delete me',
+    });
 
     const result = await deleteTask(db, config, 'WEB-01.01');
     expect(result.ok).toBe(true);
@@ -470,8 +535,12 @@ describe('deleteTask', () => {
   });
 
   it('fails with HAS_DEPENDENTS when other tasks depend on it', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dependency' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Dependency',
+    });
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Dependent',
@@ -486,8 +555,12 @@ describe('deleteTask', () => {
   });
 
   it('force deletes task even with dependents', async () => {
-    await createTask(db, config, embedder, { project: 'WEB', workstream: 1, name: 'Dependency' });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Dependency',
+    });
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Dependent',
@@ -502,5 +575,190 @@ describe('deleteTask', () => {
     const result = await deleteTask(db, config, 'WEB-01.99');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('description validation', () => {
+  it('rejects task with empty description', async () => {
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'No body task',
+      description: '',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('INVALID_INPUT');
+      expect(result.error.message).toContain('description is required');
+    }
+  });
+
+  it('rejects task with whitespace-only description', async () => {
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Whitespace body',
+      description: '   \n\t  ',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('INVALID_INPUT');
+    }
+  });
+
+  it('accepts task with valid description and indexes chunks', async () => {
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Rich body task',
+      description:
+        'Implement the authentication flow using JWT tokens. This task covers login, logout, and token refresh endpoints.',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const filePath = join(notesDir, 'modules', 'pm', 'WEB', 'WEB-01.01.md');
+    const content = readFileSync(filePath, 'utf-8');
+    expect(content).toContain('Implement the authentication flow');
+
+    const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+    expect(noteIds).toHaveLength(1);
+    const chunks = db.getChunksForNote(noteIds[0]);
+    expect(chunks.length).toBeGreaterThan(0);
+  });
+});
+
+describe('depends_on in task list JSON', () => {
+  it('returns empty array when task has no dependencies', async () => {
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Independent task',
+    });
+
+    const result = listTasks(db, 'WEB');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data[0].depends_on).toEqual([]);
+  });
+
+  it('returns dependency display IDs when task has deps', async () => {
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Task A',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Task B',
+      dependsOn: ['WEB-01.01'],
+    });
+
+    const result = listTasks(db, 'WEB');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const taskB = result.data.find((t) => t.display_id === 'WEB-01.02');
+    expect(taskB?.depends_on).toEqual(['WEB-01.01']);
+  });
+});
+
+describe('task auto-link preservation', () => {
+  it('preserves auto-link relations after createTask', async () => {
+    // Create a research note with content about bluetooth protocol
+    const researchContent = [
+      '---',
+      'id: bluetooth-protocol-research',
+      'title: Bluetooth Protocol Research',
+      'type: research',
+      'tier: slow',
+      '---',
+      '',
+      '# Bluetooth Protocol Research',
+      '',
+      'The bluetooth protocol adapter handles BLE communication between devices.',
+      'It manages connection state, handles reconnection logic, and provides',
+      'a reliable message transport layer for the node SDK.',
+    ].join('\n');
+    const researchPath = join(notesDir, 'research', 'bluetooth-protocol.md');
+    mkdirSync(join(notesDir, 'research'), { recursive: true });
+    writeFileSync(researchPath, researchContent, 'utf-8');
+    const researchHash = createHash('sha256').update(researchContent).digest('hex');
+    await indexSingleFile(db, embedder, researchPath, researchContent, researchHash, Date.now());
+
+    // Create a task with similar content — should auto-link to research note
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Implement bluetooth protocol adapter',
+      description:
+        'Build the bluetooth protocol adapter for BLE communication. Handle connection state and reconnection logic for the node SDK transport layer.',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Find the task note ID
+    const taskNotes = db.getAllNotes().filter((n) => {
+      const meta = JSON.parse(n.metadata ?? '{}');
+      return meta.display_id === 'WEB-01.01';
+    });
+    expect(taskNotes.length).toBe(1);
+
+    // Task should have related edges (auto-links) preserved
+    const relations = db.getRelationsFrom(taskNotes[0].id);
+    const relatedEdges = relations.filter((r) => r.type === 'related');
+    expect(relatedEdges.length).toBeGreaterThan(0);
+  });
+
+  it('preserves depends_on relations alongside auto-links', async () => {
+    // Create a research note
+    const researchContent = [
+      '---',
+      'id: api-design-notes',
+      'title: API Design Notes',
+      'type: research',
+      'tier: slow',
+      '---',
+      '',
+      '# API Design',
+      '',
+      'The REST API follows standard conventions for resource endpoints.',
+    ].join('\n');
+    const researchPath = join(notesDir, 'research', 'api-design.md');
+    mkdirSync(join(notesDir, 'research'), { recursive: true });
+    writeFileSync(researchPath, researchContent, 'utf-8');
+    const hash = createHash('sha256').update(researchContent).digest('hex');
+    await indexSingleFile(db, embedder, researchPath, researchContent, hash, Date.now());
+
+    // Create task A (dependency target)
+    await createTestTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Design REST API endpoints',
+      description: 'Design the REST API resource endpoints following standard conventions.',
+    });
+
+    // Create task B depending on A
+    const result = await createTask(db, config, embedder, {
+      project: 'WEB',
+      workstream: 1,
+      name: 'Implement REST API endpoints',
+      description: 'Implement the REST API resource endpoints following the design conventions.',
+      dependsOn: ['WEB-01.01'],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const taskNotes = db.getAllNotes().filter((n) => {
+      const meta = JSON.parse(n.metadata ?? '{}');
+      return meta.display_id === 'WEB-01.02';
+    });
+    expect(taskNotes.length).toBe(1);
+
+    const relations = db.getRelationsFrom(taskNotes[0].id);
+    const depEdges = relations.filter((r) => r.type === 'depends_on');
+    expect(depEdges.length).toBe(1);
   });
 });

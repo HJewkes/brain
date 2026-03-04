@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -183,7 +183,7 @@ describe('activity note creation during onboard', () => {
 
     const meta = JSON.parse(activityNotes[0].metadata!) as Record<string, unknown>;
     expect(typeof meta.created_relations).toBe('number');
-    expect((meta.created_relations as number)).toBeGreaterThanOrEqual(0);
+    expect(meta.created_relations as number).toBeGreaterThanOrEqual(0);
   });
 
   it('activity note includes project note ID in created_notes', async () => {

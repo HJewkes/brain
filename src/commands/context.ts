@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 
 const PM_ID_PATTERN = /^[A-Z]{2,5}(-\d{2}(\.\d{2})?)?$/;
 
@@ -7,7 +8,7 @@ export const contextCommand = new Command('context')
   .description('Show context for a note: related notes, memories, and graph connections')
   .argument('<id>', 'Note ID')
   .option('--json', 'Output as JSON')
-  .action(async (id, opts) => {
+  .action(async (id, opts, cmd) => {
     await withDb(({ db }) => {
       const note = db.getNoteById(id);
       if (!note) {
@@ -85,5 +86,5 @@ export const contextCommand = new Command('context')
       if (memories.length === 0 && relatedNotes.length === 0 && allRelations.length === 0) {
         process.stdout.write('No context found for this note.\n');
       }
-    });
+    }, parentResolveOpts(cmd));
   });

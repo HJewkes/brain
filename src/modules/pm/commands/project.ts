@@ -141,14 +141,22 @@ export function createProjectCommands(): Command {
         }
 
         if (opts.json) {
-          process.stdout.write(JSON.stringify({
-            deleted: true,
-            prefix: upper,
-            deletedCount: result.data.deletedCount,
-            untrackedCount: result.data.untrackedCount,
-          }, null, 2) + '\n');
+          process.stdout.write(
+            JSON.stringify(
+              {
+                deleted: true,
+                prefix: upper,
+                deletedCount: result.data.deletedCount,
+                untrackedCount: result.data.untrackedCount,
+              },
+              null,
+              2
+            ) + '\n'
+          );
         } else {
-          process.stdout.write(`Deleted project ${upper} (${result.data.deletedCount} notes removed)\n`);
+          process.stdout.write(
+            `Deleted project ${upper} (${result.data.deletedCount} notes removed)\n`
+          );
           if (result.data.untrackedCount > 0) {
             process.stderr.write(
               `Warning: ${result.data.untrackedCount} note(s) were not in activity lineage\n`
@@ -225,8 +233,7 @@ export function createProjectCommands(): Command {
         }
 
         const activeWs = workstreams.filter((w) => w.status === 'active').length;
-        const wsStatus =
-          activeWs === workstreams.length ? 'all active' : `${activeWs} active`;
+        const wsStatus = activeWs === workstreams.length ? 'all active' : `${activeWs} active`;
         lines.push(`  Workstreams: ${workstreams.length} (${wsStatus})`);
 
         const pending = taskCounts.pending;

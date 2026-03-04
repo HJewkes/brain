@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 
 export const lineageCommand = new Command('lineage').description(
   'View and manage note lineage (derived-from trees)'
@@ -10,7 +11,7 @@ lineageCommand
   .description('Show lineage tree for a note')
   .argument('<noteId>', 'Root note ID')
   .option('--depth <n>', 'Max depth to display', '10')
-  .action(async (noteId, opts) => {
+  .action(async (noteId, opts, cmd) => {
     await withDb(({ db }) => {
       const note = db.getNoteById(noteId);
       if (!note) {
@@ -53,7 +54,7 @@ lineageCommand
 
       printTree(noteId, '');
       process.stdout.write(`\n${descendants.length} derived note(s)\n`);
-    });
+    }, parentResolveOpts(cmd));
   });
 
 lineageCommand
@@ -61,7 +62,7 @@ lineageCommand
   .description('Cascade delete a note and all its descendants')
   .argument('<noteId>', 'Root note ID')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (noteId, opts) => {
+  .action(async (noteId, opts, cmd) => {
     await withDb(({ db }) => {
       const preview = db.cascadeDeletePreview(noteId);
       if (preview.noteCount === 0) {
@@ -84,14 +85,14 @@ lineageCommand
 
       db.cascadeDelete(noteId);
       process.stdout.write(`\nDeleted ${preview.noteCount} note(s).\n`);
-    });
+    }, parentResolveOpts(cmd));
   });
 
 lineageCommand
   .command('archive')
   .description('Archive a note and mark its children as orphaned')
   .argument('<noteId>', 'Root note ID')
-  .action(async (noteId) => {
+  .action(async (noteId, _opts, cmd) => {
     await withDb(({ db, config }) => {
       const note = db.getNoteById(noteId);
       if (!note) {
@@ -108,5 +109,5 @@ lineageCommand
           process.stdout.write(`  - ${id}\n`);
         }
       }
-    });
+    }, parentResolveOpts(cmd));
   });

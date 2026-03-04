@@ -114,6 +114,33 @@ describe('frontmatterToRecord', () => {
     expect(record.confidence).toBeNull();
     expect(record.status).toBe('current');
   });
+
+  it('frontmatterToRecord stores raw frontmatter as metadata for non-module notes', () => {
+    const parsed = {
+      id: 'test-note',
+      filePath: '/tmp/test.md',
+      frontmatter: {
+        title: 'Test Note',
+        type: 'insight' as const,
+        tier: 'fast' as const,
+      },
+      rawFrontmatter: {
+        title: 'Test Note',
+        type: 'insight',
+        tier: 'fast',
+        'architecture-layer': [1, 3],
+        'enforcement-strength': 'deterministic',
+      },
+      chunks: [],
+      links: [],
+    };
+
+    const record = frontmatterToRecord(parsed);
+    expect(record.metadata).not.toBeNull();
+    const meta = JSON.parse(record.metadata!);
+    expect(meta['architecture-layer']).toEqual([1, 3]);
+    expect(meta['enforcement-strength']).toBe('deterministic');
+  });
 });
 
 describe('rawChunksToChunks', () => {

@@ -8,7 +8,8 @@ import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { setActiveProject } from '../../../../src/modules/pm/data/queries.js';
-import { createTask } from '../../../../src/modules/pm/data/task-ops.js';
+
+import { createTestTask } from '../../../helpers.js';
 
 vi.mock('../../../../src/services/brain-service.js', () => ({
   withBrain: vi.fn(),
@@ -69,9 +70,8 @@ afterEach(() => {
 });
 
 async function run(args: string[]): Promise<void> {
-  const { createWorkstreamCommands } = await import(
-    '../../../../src/modules/pm/commands/workstream.js'
-  );
+  const { createWorkstreamCommands } =
+    await import('../../../../src/modules/pm/commands/workstream.js');
   const cmd = createWorkstreamCommands();
   await cmd.parseAsync(args, { from: 'user' });
 }
@@ -199,11 +199,17 @@ describe('workstream show', () => {
 
   it('shows task counts by status', async () => {
     await run(['add', 'Backend']);
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Task A',
+      priority: 'high',
     });
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Task B',
+      priority: 'medium',
     });
     stdoutData = '';
 
@@ -215,14 +221,23 @@ describe('workstream show', () => {
 
   it('shows task counts by priority', async () => {
     await run(['add', 'Backend']);
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Task A',
+      priority: 'high',
     });
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Task B',
+      priority: 'medium',
     });
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task C', priority: 'high',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Task C',
+      priority: 'high',
     });
     stdoutData = '';
 
@@ -234,11 +249,17 @@ describe('workstream show', () => {
 
   it('shows top eligible tasks', async () => {
     await run(['add', 'Backend']);
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Eligible One', priority: 'high',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Eligible One',
+      priority: 'high',
     });
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Eligible Two', priority: 'medium',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Eligible Two',
+      priority: 'medium',
     });
     stdoutData = '';
 
@@ -250,11 +271,17 @@ describe('workstream show', () => {
 
   it('--json includes enriched fields', async () => {
     await run(['add', 'Backend', '--description', 'Core API services']);
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task A', priority: 'high',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Task A',
+      priority: 'high',
     });
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Task B', priority: 'medium',
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Task B',
+      priority: 'medium',
     });
     stdoutData = '';
 

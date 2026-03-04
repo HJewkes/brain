@@ -34,8 +34,8 @@ describe('discoverDocs', () => {
 
     const result = discoverDocs([rootDir]);
 
-    const readme = result.find(d => d.path.endsWith('README.md'));
-    const notes = result.find(d => d.path.endsWith('notes.md'));
+    const readme = result.find((d) => d.path.endsWith('README.md'));
+    const notes = result.find((d) => d.path.endsWith('notes.md'));
     expect(readme!.score).toBeGreaterThan(notes!.score);
   });
 
@@ -45,8 +45,8 @@ describe('discoverDocs', () => {
 
     const result = discoverDocs([rootDir]);
 
-    const arch = result.find(d => d.path.includes('ARCHITECTURE'));
-    const random = result.find(d => d.path.includes('random'));
+    const arch = result.find((d) => d.path.includes('ARCHITECTURE'));
+    const random = result.find((d) => d.path.includes('random'));
     expect(arch!.score).toBeGreaterThan(random!.score);
   });
 
@@ -58,8 +58,8 @@ describe('discoverDocs', () => {
 
     const result = discoverDocs([rootDir]);
 
-    const docsFile = result.find(d => d.path.includes('docs/'));
-    const srcFile = result.find(d => d.path.includes('src/'));
+    const docsFile = result.find((d) => d.path.includes('docs/'));
+    const srcFile = result.find((d) => d.path.includes('src/'));
     expect(docsFile!.score).toBeGreaterThan(srcFile!.score);
   });
 
@@ -91,8 +91,8 @@ describe('discoverDocs', () => {
     writeFileSync(join(rootDir, 'substantial.md'), '# Big\n\n' + 'x'.repeat(600));
 
     const result = discoverDocs([rootDir]);
-    const tiny = result.find(d => d.path.includes('tiny'));
-    const big = result.find(d => d.path.includes('substantial'));
+    const tiny = result.find((d) => d.path.includes('tiny'));
+    const big = result.find((d) => d.path.includes('substantial'));
 
     expect(big!.score).toBeGreaterThan(tiny!.score);
   });
@@ -103,7 +103,7 @@ describe('discoverDocs', () => {
 
     const result = discoverDocs([rootDir]);
 
-    expect(result.every(d => !d.path.includes('huge'))).toBe(true);
+    expect(result.every((d) => !d.path.includes('huge'))).toBe(true);
   });
 
   it('handles multiple component paths', () => {

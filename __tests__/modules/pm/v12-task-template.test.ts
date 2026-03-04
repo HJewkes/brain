@@ -8,11 +8,8 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import {
-  createTask,
-  listTasks,
-  getTask,
-} from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -45,7 +42,7 @@ afterEach(() => {
 
 describe('task creation template fields', () => {
   it('--done-when is stored in frontmatter and returned in task metadata', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Build login page',
@@ -70,7 +67,7 @@ describe('task creation template fields', () => {
 
   it('--ac items are stored as acceptance_criteria array in frontmatter', async () => {
     const criteria = ['Implements POST /api', 'Validates body', 'Returns errors'];
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'API endpoint',
@@ -98,7 +95,7 @@ describe('task creation template fields', () => {
 
   it('--refs is stored as references array in frontmatter', async () => {
     const refs = ['src/api/routes.ts', 'docs/api-spec.md'];
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Refactor routes',
@@ -124,7 +121,7 @@ describe('task creation template fields', () => {
   });
 
   it('acceptance_criteria from frontmatter takes precedence over body regex', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Mixed criteria',
@@ -146,7 +143,7 @@ describe('task creation template fields', () => {
 
   it('listTasks includes acceptance_criteria in default mode', async () => {
     const criteria = ['Unit tests pass', 'No regressions'];
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Add tests',
@@ -162,7 +159,7 @@ describe('task creation template fields', () => {
   });
 
   it('done_when with quotes is escaped in frontmatter', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'WEB',
       workstream: 1,
       name: 'Test quoting',

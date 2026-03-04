@@ -10,12 +10,13 @@ import type { BrainConfig } from '../../../src/types.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, listTasks, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createDecision } from '../../../src/modules/pm/data/decision-ops.js';
 import { computeWaves, computeEligible } from '../../../src/modules/pm/engine/dependency.js';
 import { assembleContext } from '../../../src/modules/pm/engine/dispatch.js';
 import { computeRouting } from '../../../src/modules/pm/engine/routing.js';
 import { renderAgentPrompt } from '../../../src/modules/pm/engine/template.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -51,7 +52,7 @@ async function setupDemoProject(): Promise<void> {
   await createWorkstream(db, config, embedder, { project: 'DEMO', name: 'Testing' });
 
   // Wave 0: design (no deps)
-  await createTask(db, config, embedder, {
+  await createTestTask(db, config, embedder, {
     project: 'DEMO',
     workstream: 1,
     name: 'Design data model',
@@ -59,7 +60,7 @@ async function setupDemoProject(): Promise<void> {
     mode: 'agent',
   });
   // Wave 1: implement (depends on design)
-  await createTask(db, config, embedder, {
+  await createTestTask(db, config, embedder, {
     project: 'DEMO',
     workstream: 1,
     name: 'Implement CRUD',
@@ -68,7 +69,7 @@ async function setupDemoProject(): Promise<void> {
     dependsOn: ['DEMO-01.01'],
   });
   // Wave 1: docs (depends on design)
-  await createTask(db, config, embedder, {
+  await createTestTask(db, config, embedder, {
     project: 'DEMO',
     workstream: 1,
     name: 'Write README',
@@ -77,7 +78,7 @@ async function setupDemoProject(): Promise<void> {
     dependsOn: ['DEMO-01.01'],
   });
   // Wave 2: tests (depends on CRUD)
-  await createTask(db, config, embedder, {
+  await createTestTask(db, config, embedder, {
     project: 'DEMO',
     workstream: 2,
     name: 'Unit tests',
@@ -86,7 +87,7 @@ async function setupDemoProject(): Promise<void> {
     dependsOn: ['DEMO-01.02'],
   });
   // Wave 2: config (depends on CRUD)
-  await createTask(db, config, embedder, {
+  await createTestTask(db, config, embedder, {
     project: 'DEMO',
     workstream: 1,
     name: 'CI configuration',
@@ -95,7 +96,7 @@ async function setupDemoProject(): Promise<void> {
     dependsOn: ['DEMO-01.02'],
   });
   // Wave 3: integration (depends on tests + config)
-  await createTask(db, config, embedder, {
+  await createTestTask(db, config, embedder, {
     project: 'DEMO',
     workstream: 2,
     name: 'Integration tests',

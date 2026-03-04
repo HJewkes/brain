@@ -88,7 +88,9 @@ describe('context command', () => {
   it('shows related notes via relations', async () => {
     db.upsertNote(makeNote({ id: 'src-note', title: 'Source' }));
     db.upsertNote(makeNote({ id: 'tgt-note', title: 'Target' }));
-    db.upsertRelations('src-note', [{ sourceId: 'src-note', targetId: 'tgt-note', type: 'related-to' }]);
+    db.upsertRelations('src-note', [
+      { sourceId: 'src-note', targetId: 'tgt-note', type: 'related-to' },
+    ]);
 
     await run('src-note');
     const out = stdout();

@@ -4,8 +4,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { assembleWorkstreamContext } from '../../../src/modules/pm/engine/dispatch.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 const embedder = createMockEmbedder();
@@ -37,7 +38,7 @@ describe('O-149: workstream context includes relatedNotes', () => {
       name: 'Backend API Development',
     });
 
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'API',
       workstream: 1,
       name: 'Design REST endpoints',
@@ -80,7 +81,7 @@ describe('O-149: workstream context includes relatedNotes', () => {
       name: 'API Design',
     });
 
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'NTP',
       workstream: 1,
       name: 'REST API patterns',

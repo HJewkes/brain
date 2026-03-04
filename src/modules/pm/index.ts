@@ -18,6 +18,7 @@ import { createCheckCommand } from './commands/check.js';
 import { createOnboardCommand } from './commands/onboard.js';
 import { createRelateCommand } from './commands/relate.js';
 import { createActivityCommand } from './commands/activity.js';
+import { PmContentHandler } from './content-handler.js';
 
 export type EntityType = 'task' | 'workstream' | 'project';
 
@@ -199,7 +200,17 @@ export const pmModule: BrainModule = {
           project: { type: 'string', description: 'Project prefix' },
           activity_type: {
             type: 'string',
-            enum: ['onboard', 'import', 'delete', 'complete', 'claim', 'start', 'block', 'unblock', 'cancel'],
+            enum: [
+              'onboard',
+              'import',
+              'delete',
+              'complete',
+              'claim',
+              'start',
+              'block',
+              'unblock',
+              'cancel',
+            ],
             description: 'Type of activity',
           },
           created_notes: {
@@ -249,6 +260,8 @@ export const pmModule: BrainModule = {
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
 
     ctx.registerFilter({ visibility: 'private' });
+
+    ctx.registerContentHandler(new PmContentHandler());
 
     ctx.registerMigration({
       version: 1,
@@ -339,8 +352,17 @@ export const pmModule: BrainModule = {
 
     // Plural aliases — delegate to subcommand
     const taskSubcommands = new Set([
-      'add', 'list', 'show', 'update', 'done', 'block', 'unblock',
-      'delete', 'claim', 'start', 'release',
+      'add',
+      'list',
+      'show',
+      'update',
+      'done',
+      'block',
+      'unblock',
+      'delete',
+      'claim',
+      'start',
+      'release',
       'complete',
     ]);
     const tasksAlias = new Command('tasks')
@@ -356,7 +378,9 @@ export const pmModule: BrainModule = {
         if (hasSubcommand) {
           if (tail[0] === 'complete') {
             // Route "tasks complete <id>" to "pm complete <id>"
-            await pmCmd.parseAsync(['node', 'brain-pm', 'complete', ...tail.slice(1)], { from: 'node' });
+            await pmCmd.parseAsync(['node', 'brain-pm', 'complete', ...tail.slice(1)], {
+              from: 'node',
+            });
             return;
           }
           prefix = [];
@@ -380,7 +404,9 @@ export const pmModule: BrainModule = {
         const tail = process.argv.slice(idx + 1);
         const hasSubcommand = tail.length > 0 && wsSubcommands.has(tail[0]);
         const prefix = hasSubcommand ? [] : ['list'];
-        await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', ...prefix, ...tail], { from: 'node' });
+        await pmCmd.parseAsync(['node', 'brain-pm', 'workstream', ...prefix, ...tail], {
+          from: 'node',
+        });
       });
     pmCmd.addCommand(workstreamsAlias);
 
@@ -395,7 +421,9 @@ export const pmModule: BrainModule = {
         const tail = process.argv.slice(idx + 1);
         const hasSubcommand = tail.length > 0 && projectSubcommands.has(tail[0]);
         const prefix = hasSubcommand ? [] : ['list'];
-        await pmCmd.parseAsync(['node', 'brain-pm', 'project', ...prefix, ...tail], { from: 'node' });
+        await pmCmd.parseAsync(['node', 'brain-pm', 'project', ...prefix, ...tail], {
+          from: 'node',
+        });
       });
     pmCmd.addCommand(projectsAlias);
 

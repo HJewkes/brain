@@ -56,7 +56,7 @@ describe('detectComponents', () => {
     const result = detectComponents(rootDir);
 
     expect(result).toHaveLength(2);
-    expect(result.map(c => c.name).sort()).toEqual(['api', 'web']);
+    expect(result.map((c) => c.name).sort()).toEqual(['api', 'web']);
     expect(result[0].path).toMatch(/^packages\//);
   });
 
@@ -124,7 +124,7 @@ describe('detectComponents', () => {
     const result = detectComponents(rootDir);
 
     expect(result.length).toBeGreaterThanOrEqual(2);
-    const types = result.map(c => c.type).sort();
+    const types = result.map((c) => c.type).sort();
     expect(types).toContain('go');
     expect(types).toContain('node');
   });

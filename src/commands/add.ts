@@ -2,7 +2,8 @@ import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
-import { loadConfig } from '../services/config.js';
+import { loadConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
+import type { ResolveOptions } from '../services/config.js';
 import { withBrain } from '../services/brain-service.js';
 import { indexSingleFile } from '../services/indexing.js';
 import { parseMarkdown } from '../services/markdown-parser.js';
@@ -88,20 +89,23 @@ function resolveOutputPath(notesDir: string, tier: NoteTier, type: string, id: s
   return join(notesDir, typeDir, `${id}.md`);
 }
 
-async function handleUrlAdd(opts: {
-  url?: string;
-  title?: string;
-  type?: string;
-  tier?: string;
-  tags?: string;
-  summary?: string;
-  confidence?: string;
-  status?: string;
-  category?: string;
-  related?: string;
-  reviewInterval?: string;
-  created?: string;
-}): Promise<void> {
+async function handleUrlAdd(
+  opts: {
+    url?: string;
+    title?: string;
+    type?: string;
+    tier?: string;
+    tags?: string;
+    summary?: string;
+    confidence?: string;
+    status?: string;
+    category?: string;
+    related?: string;
+    reviewInterval?: string;
+    created?: string;
+  },
+  resolveOpts?: ResolveOptions
+): Promise<void> {
   const { fetchAndExtract } = await import('../services/web-extract.js');
   const result = await fetchAndExtract(opts.url!);
 
@@ -162,7 +166,7 @@ async function handleUrlAdd(opts: {
     const hash = createHash('sha256').update(markdown).digest('hex');
     await indexSingleFile(db, embedder, outPath, markdown, hash, Date.now());
     process.stdout.write(`Created: ${outPath}\n`);
-  });
+  }, resolveOpts);
 }
 
 function validateEnum<T extends string>(
@@ -195,7 +199,7 @@ export const addCommand = new Command('add')
   .option('--review-interval <interval>', 'Review interval (e.g. 90d, 30d, 180d)')
   .option('--created <date>', 'Created date (YYYY-MM-DD), defaults to today')
   .option('--url <url>', 'Fetch URL and create note from extracted content')
-  .action(async (file, opts) => {
+  .action(async (file, opts, cmd) => {
     if (opts.type && !VALID_CORE_NOTE_TYPES.includes(opts.type as CoreNoteType)) {
       process.stderr.write(
         `Error: invalid type "${opts.type}". Valid types: ${VALID_CORE_NOTE_TYPES.join(', ')}\n`
@@ -230,8 +234,10 @@ export const addCommand = new Command('add')
       return;
     }
 
+    const resolveOpts = parentResolveOpts(cmd);
+
     if (opts.url) {
-      await handleUrlAdd(opts);
+      await handleUrlAdd(opts, resolveOpts);
       return;
     }
 
@@ -257,7 +263,8 @@ export const addCommand = new Command('add')
     const tier = (opts.tier ?? parsed.frontmatter.tier ?? 'slow') as NoteTier;
     const type = (opts.type ?? parsed.frontmatter.type ?? 'note') as CoreNoteType;
 
-    const config = loadConfig();
+    const instance = resolveInstance(resolveOpts);
+    const config = loadConfig(instance);
     const outPath = resolveOutputPath(config.notesDir, tier, type, id);
     const dir = dirname(outPath);
 

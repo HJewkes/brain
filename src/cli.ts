@@ -13,7 +13,7 @@ import { archiveCommand } from './commands/archive.js';
 import { configCommand } from './commands/config.js';
 import { quickCommand } from './commands/quick.js';
 import { inboxCommand } from './commands/inbox.js';
-import { ingestCommand } from './commands/ingest.js';
+import { importCommand } from './commands/import.js';
 import { feedCommand } from './commands/feed.js';
 import { extractCommand } from './commands/extract.js';
 import { memoriesCommand } from './commands/memories.js';
@@ -27,13 +27,14 @@ import { resetCommand } from './commands/reset.js';
 import { notesCommand } from './commands/notes.js';
 import { loadModules } from './modules/loader.js';
 import { pmModule } from './modules/pm/index.js';
+import { instancesCommand } from './commands/instances.js';
 
 const program = new Command()
   .name('brain')
   .description('Developer second brain with hybrid RAG search')
   .version((createRequire(import.meta.url)('../package.json') as { version: string }).version)
-  .option('--config-dir <path>', 'override config directory')
-  .option('--db-path <path>', 'override database path');
+  .option('--global', 'Force use of global brain instance')
+  .option('--instance <path>', 'Use specific brain instance at path');
 
 program.addCommand(initCommand);
 program.addCommand(indexCommand);
@@ -47,7 +48,7 @@ program.addCommand(archiveCommand);
 program.addCommand(configCommand);
 program.addCommand(quickCommand);
 program.addCommand(inboxCommand);
-program.addCommand(ingestCommand);
+program.addCommand(importCommand);
 program.addCommand(feedCommand);
 program.addCommand(extractCommand);
 program.addCommand(memoriesCommand);
@@ -59,6 +60,7 @@ program.addCommand(doctorCommand);
 program.addCommand(lineageCommand);
 program.addCommand(resetCommand);
 program.addCommand(notesCommand);
+program.addCommand(instancesCommand);
 
 async function main(): Promise<void> {
   const { registry } = await loadModules({ modules: [pmModule] });

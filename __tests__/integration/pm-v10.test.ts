@@ -9,10 +9,10 @@ import type { BrainConfig } from '../../src/types.js';
 import { createStandardProject } from '../fixtures/pm-project.js';
 import { computeWaves, computeImpact } from '../../src/modules/pm/engine/dependency.js';
 import { traverseGraph } from '../../src/services/graph.js';
-import { listTasks } from '../../src/modules/pm/data/task-ops.js';
-import { createTask, updateTaskStatus } from '../../src/modules/pm/data/task-ops.js';
+import { listTasks, updateTaskStatus } from '../../src/modules/pm/data/task-ops.js';
 import { resolveDisplayId } from '../../src/modules/pm/data/queries.js';
 import type { Relation } from '../../src/types.js';
+import { createTestTask } from '../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -223,7 +223,7 @@ describe('V10 Integration: Task Enrichment Pipeline', () => {
 describe('V10 Integration: Task Update with --depends-on', () => {
   it('adding dependency via relation creates depends_on edge and affects waves', async () => {
     // Create a new task with no dependencies
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Independent task',
@@ -265,7 +265,7 @@ describe('V10 Integration: Task Update with --depends-on', () => {
   });
 
   it('impact analysis reflects dynamically added dependencies', async () => {
-    const newTask = await createTask(db, config, embedder, {
+    const newTask = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 2,
       name: 'Dynamic dep task',

@@ -7,7 +7,14 @@ let db: BrainDB;
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
+  withDb: vi.fn(async (fn) =>
+    fn({
+      db,
+      config,
+      instance: { root: '/tmp/test-status', isLocal: false, source: 'test' },
+      close: () => {},
+    })
+  ),
 }));
 
 import { statusCommand } from '../../src/commands/status.js';

@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync } from 'node:fs';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 import { requireOllama } from '../services/ollama.js';
 
 /** Max characters of note content sent to the tidy LLM call */
@@ -25,7 +26,7 @@ export const tidyCommand = new Command('tidy')
   .option('--model <model>', 'Ollama model to use')
   .option('--json', 'Output as JSON')
   .option('--limit <n>', 'Max notes to analyze', '10')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     if (!opts.note && !opts.all) {
       process.stderr.write('Error: specify --note <id> or --all\n');
       process.exitCode = 1;
@@ -85,5 +86,5 @@ export const tidyCommand = new Command('tidy')
         process.stdout.write(`\n${r.title} (${r.noteId})\n`);
         process.stdout.write(r.suggestions + '\n');
       }
-    });
+    }, parentResolveOpts(cmd));
   });

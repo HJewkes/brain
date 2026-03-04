@@ -13,6 +13,7 @@ import { resolveDisplayId } from '../data/queries.js';
 
 export interface ImportTaskDef {
   name: string;
+  description: string;
   priority?: TaskPriority;
   depends_on?: string[];
 }
@@ -142,6 +143,7 @@ export async function executeImport(
         project: prefix,
         workstream: wsNumber,
         name: taskDef.name,
+        description: taskDef.description,
         priority: taskDef.priority,
       });
 

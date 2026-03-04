@@ -4,6 +4,7 @@ import { addFrontmatterField } from './indexing.js';
 import { rerank } from './reranker.js';
 import type {
   Embedder,
+  FacetResult,
   FusionStrategy,
   MemorySearchResult,
   SearchOptions,
@@ -252,6 +253,12 @@ export async function search(
     }
   }
 
+  // Custom frontmatter filters via json_extract
+  if (options.filters?.length) {
+    const metaIds = db.getFilteredNoteIdsByMetadata(options.filters, allowedNoteIds ?? undefined);
+    allowedNoteIds = metaIds;
+  }
+
   // Step 1: BM25 search via FTS5
   const ftsResults = db.searchFTS(query, overfetchLimit);
   const filteredFts = allowedNoteIds
@@ -284,11 +291,7 @@ export async function search(
   scored.sort((a, b) => b.score - a.score);
   const DEFAULT_MIN_SCORE = 0.25;
   const effectiveMinScore =
-    options.minScore != null
-      ? options.minScore
-      : strategy === 'score'
-        ? DEFAULT_MIN_SCORE
-        : null;
+    options.minScore != null ? options.minScore : strategy === 'score' ? DEFAULT_MIN_SCORE : null;
   const filtered =
     effectiveMinScore != null ? scored.filter((s) => s.score >= effectiveMinScore) : scored;
   const afterDropoff =
@@ -309,6 +312,17 @@ export async function search(
   }
 
   return results;
+}
+
+export function computeFacets(
+  db: BrainDB,
+  facetFields: string[],
+  noteIds: Set<string>
+): FacetResult[] {
+  return facetFields.map((field) => ({
+    field,
+    values: db.getFacetCounts(field, noteIds),
+  }));
 }
 
 function buildSearchResults(db: BrainDB, topResults: ScoredResult[]): SearchResult[] {
@@ -403,7 +417,7 @@ export function checkAndPromote(
 function getPrivateModuleNoteIds(
   db: BrainDB,
   registry: ModuleRegistry,
-  skipModule?: string,
+  skipModule?: string
 ): Set<string> {
   const privateIds = new Set<string>();
   for (const { module: moduleName, filter } of registry.getFilters()) {

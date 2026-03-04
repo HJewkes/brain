@@ -8,8 +8,9 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
-import { createTask, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import { getTask } from '../../../src/modules/pm/data/task-ops.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -45,8 +46,11 @@ describe('O-163: projects plural alias', () => {
       registerRelationType: () => {},
       registerExtractionStrategy: () => {},
       registerFilter: () => {},
+      registerContentHandler: () => {},
       registerMigration: () => {},
-      registerCommand: (cmd: Command) => { registered.push(cmd); },
+      registerCommand: (cmd: Command) => {
+        registered.push(cmd);
+      },
     };
     pmModule.register(mockCtx as never);
 
@@ -60,7 +64,7 @@ describe('O-163: projects plural alias', () => {
 describe('O-143: task JSON has non-null id field', () => {
   it('task JSON has non-null id field matching display_id', async () => {
     await createStandardProject(db, config, embedder);
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'ID field test',
@@ -74,7 +78,7 @@ describe('O-143: task JSON has non-null id field', () => {
 
   it('getTask returns id matching display_id', async () => {
     await createStandardProject(db, config, embedder);
-    const createResult = await createTask(db, config, embedder, {
+    const createResult = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Get task id test',
@@ -92,7 +96,7 @@ describe('O-143: task JSON has non-null id field', () => {
 describe('O-152: createTask returns title', () => {
   it('createTask returns title in result for human-readable output', async () => {
     await createStandardProject(db, config, embedder);
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Output test task',

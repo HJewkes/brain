@@ -61,7 +61,9 @@ describe('notes list', () => {
   });
 
   it('lists notes with type, title, and file path', async () => {
-    db.upsertNote(makeNote({ title: 'My Note', type: 'note', tier: 'slow', filePath: '/notes/my-note.md' }));
+    db.upsertNote(
+      makeNote({ title: 'My Note', type: 'note', tier: 'slow', filePath: '/notes/my-note.md' })
+    );
     await run('list');
     const out = stdout();
     expect(out).toContain('My Note');

@@ -126,3 +126,13 @@ Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts
 - Deferred review items tracked in `docs/review-deferred.md`
 - Module notes use `module` field in frontmatter for namespace isolation
 - PM notes are `visibility: 'private'` — kept separate from the user's knowledge base
+
+## Enforcement (ao plugin)
+
+This project uses the `ao` enforcement plugin. Hooks enforce automatically:
+- **File ownership**: Writes scoped to src/, __tests__/, docs/, scripts/, skill/, templates/
+- **WIP limits**: Max 4 concurrent agents
+- **Clean workspace**: Tasks require clean git state
+- **Definition of Done**: Completion requires passing typecheck + tests + lint
+
+Query research insights: `ao query-insights --mechanism hook --status not-started --limit 10`

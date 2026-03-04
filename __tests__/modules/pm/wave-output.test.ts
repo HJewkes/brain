@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { computeWaves } from '../../../src/modules/pm/engine/dependency.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -33,8 +34,8 @@ afterEach(() => {
 describe('wave output improvements', () => {
   // O-92: waves produce correct wave grouping
   it('O-92: computeWaves groups independent tasks in wave 1', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'A' });
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'B' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'A' });
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'B' });
     const waves = computeWaves(db, 'TST');
     expect(waves.length).toBeGreaterThan(0);
     expect(waves[0].wave).toBe(0);
@@ -42,9 +43,12 @@ describe('wave output improvements', () => {
   });
 
   it('tasks with dependencies go to later waves', async () => {
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
-    await createTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
+    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Second',
+      dependsOn: ['TST-01.01'],
     });
     const waves = computeWaves(db, 'TST');
     expect(waves.length).toBe(2);
@@ -60,18 +64,28 @@ describe('wave output improvements', () => {
 
   it('workstream filter narrows wave results', async () => {
     await createWorkstream(db, config, embedder, { project: 'TST', name: 'Other' });
-    await createTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Core task' });
-    await createTask(db, config, embedder, { project: 'TST', workstream: 2, name: 'Other task' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Core task',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 2,
+      name: 'Other task',
+    });
 
     const waves = computeWaves(db, 'TST');
     expect(waves.length).toBe(1);
     expect(waves[0].taskIds.length).toBe(2);
 
     // Simulate workstream filter (as done in the command)
-    const filtered = waves.map(w => ({
-      ...w,
-      taskIds: w.taskIds.filter(id => id.startsWith('TST-01')),
-    })).filter(w => w.taskIds.length > 0);
+    const filtered = waves
+      .map((w) => ({
+        ...w,
+        taskIds: w.taskIds.filter((id) => id.startsWith('TST-01')),
+      }))
+      .filter((w) => w.taskIds.length > 0);
 
     expect(filtered.length).toBe(1);
     expect(filtered[0].taskIds).toEqual(['TST-01.01']);

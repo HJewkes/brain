@@ -8,8 +8,12 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask, updateTaskStatus, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
-import { validateTransition, computeVirtualState } from '../../../src/modules/pm/engine/state-machine.js';
+import { updateTaskStatus, listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
+import {
+  validateTransition,
+  computeVirtualState,
+} from '../../../src/modules/pm/engine/state-machine.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -32,7 +36,7 @@ afterEach(() => {
 
 describe('state machine regressions', () => {
   it('O-52: pending to claimed transition succeeds', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
     const result = await updateTaskStatus(db, config, embedder, 'VOLT-01.01', 'claimed');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -41,7 +45,7 @@ describe('state machine regressions', () => {
   });
 
   it('O-57: claimed task metadata includes claim_token field', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
     const statusResult = await updateTaskStatus(db, config, embedder, 'VOLT-01.01', 'claimed');
     expect(statusResult.ok).toBe(true);
     if (!statusResult.ok) return;
@@ -69,7 +73,7 @@ describe('state machine regressions', () => {
   });
 
   it('O-61: updateTaskStatus rejects done to claimed', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
+    await createTestTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'Test' });
     await updateTaskStatus(db, config, embedder, 'VOLT-01.01', 'claimed');
     await updateTaskStatus(db, config, embedder, 'VOLT-01.01', 'in-progress');
     await updateTaskStatus(db, config, embedder, 'VOLT-01.01', 'done');
@@ -91,20 +95,40 @@ describe('state machine regressions', () => {
   });
 
   it('O-63: listTasks returns tasks with distinct priorities preserved', async () => {
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'A', priority: 'critical' });
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'B', priority: 'high' });
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'C', priority: 'medium' });
-    await createTask(db, config, embedder, { project: 'VOLT', workstream: 1, name: 'D', priority: 'low' });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'A',
+      priority: 'critical',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'B',
+      priority: 'high',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'C',
+      priority: 'medium',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'VOLT',
+      workstream: 1,
+      name: 'D',
+      priority: 'low',
+    });
     const result = listTasks(db, 'VOLT');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.length).toBe(4);
-    const priorities = result.data.map(t => t.priority);
+    const priorities = result.data.map((t) => t.priority);
     expect(priorities).toContain('critical');
     expect(priorities).toContain('high');
     expect(priorities).toContain('medium');
     expect(priorities).toContain('low');
-    const byName = Object.fromEntries(result.data.map(t => [t.title, t.priority]));
+    const byName = Object.fromEntries(result.data.map((t) => [t.title, t.priority]));
     expect(byName['A']).toBe('critical');
     expect(byName['D']).toBe('low');
   });

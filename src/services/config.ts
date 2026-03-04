@@ -1,10 +1,37 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import envPaths from 'env-paths';
+import type { Command } from '@commander-js/extra-typings';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyCommand = Command<any[], any, any>;
 import type { BrainConfig, EmbedderBackend } from '../types.js';
 
-const paths = envPaths('brain', { suffix: '' });
+export const GLOBAL_BRAIN_DIR = join(homedir(), '.brain');
+
+/**
+ * Extract ResolveOptions from the parent command's --global and --instance flags.
+ * Pass the Command object (last arg in action handlers) to pick up program-level flags.
+ */
+export function parentResolveOpts(cmd: AnyCommand): ResolveOptions {
+  const parent = cmd.parent?.opts() as { global?: boolean; instance?: string } | undefined;
+  return {
+    forceGlobal: parent?.global,
+    instancePath: parent?.instance,
+  };
+}
+
+export interface InstancePaths {
+  root: string;
+  isLocal: boolean;
+  source: string;
+}
+
+export interface ResolveOptions {
+  cwd?: string;
+  forceGlobal?: boolean;
+  instancePath?: string;
+}
 
 const VALID_EMBEDDERS: readonly EmbedderBackend[] = ['local', 'ollama', 'remote'];
 
@@ -31,68 +58,143 @@ function validateConfig(config: Partial<BrainConfig>): void {
   }
 }
 
+export function resolveInstance(opts: ResolveOptions = {}): InstancePaths {
+  if (opts.instancePath) {
+    return { root: resolve(opts.instancePath), isLocal: true, source: 'flag:--instance' };
+  }
+
+  if (opts.forceGlobal) {
+    return { root: GLOBAL_BRAIN_DIR, isLocal: false, source: 'flag:--global' };
+  }
+
+  let dir = resolve(opts.cwd ?? process.cwd());
+
+  while (true) {
+    const candidate = join(dir, '.brain');
+    if (existsSync(candidate)) {
+      return { root: candidate, isLocal: true, source: `local:${candidate}` };
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  return { root: GLOBAL_BRAIN_DIR, isLocal: false, source: 'global' };
+}
+
 export function getConfigDir(override?: string): string {
-  const dir = override ?? paths.config;
+  const dir = override ?? GLOBAL_BRAIN_DIR;
   ensureDir(dir);
   return dir;
 }
 
 export function getDataDir(override?: string): string {
-  const dir = override ?? paths.data;
+  const dir = override ?? GLOBAL_BRAIN_DIR;
   ensureDir(dir);
   return dir;
 }
 
-export function getConfigPath(configDir?: string): string {
-  return join(getConfigDir(configDir), 'config.json');
+export function getConfigPath(instanceRoot?: string): string {
+  const root = instanceRoot ?? GLOBAL_BRAIN_DIR;
+  ensureDir(root);
+  return join(root, 'config.json');
 }
 
-export function getDefaultConfig(dataDir?: string): BrainConfig {
+export function getDefaultConfig(instanceRoot?: string): BrainConfig {
+  const root = instanceRoot ?? GLOBAL_BRAIN_DIR;
   return {
     notesDir: join(homedir(), 'brain'),
-    dbPath: join(getDataDir(dataDir), 'brain.db'),
+    dbPath: join(root, 'brain.db'),
     embedder: 'local',
     fusionWeights: { bm25: 0.3, vector: 0.7 },
   };
 }
 
-export function loadConfig(configDir?: string, dataDir?: string): BrainConfig {
-  const defaults = getDefaultConfig(dataDir);
-  const filePath = getConfigPath(configDir);
+export function loadConfig(instance?: InstancePaths): BrainConfig {
+  const globalDefaults = getDefaultConfig(GLOBAL_BRAIN_DIR);
+  const globalPath = getConfigPath(GLOBAL_BRAIN_DIR);
 
-  if (!existsSync(filePath)) {
-    return defaults;
+  let config = { ...globalDefaults };
+
+  if (existsSync(globalPath)) {
+    const raw = JSON.parse(readFileSync(globalPath, 'utf-8')) as Partial<BrainConfig>;
+    config = {
+      ...config,
+      ...raw,
+      fusionWeights: { ...config.fusionWeights, ...raw.fusionWeights },
+    };
   }
 
-  const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as Partial<BrainConfig>;
+  if (instance && instance.isLocal) {
+    const localDefaults = getDefaultConfig(instance.root);
+    config.dbPath = localDefaults.dbPath;
+    config.notesDir = join(instance.root, 'notes');
 
-  return {
-    ...defaults,
-    ...raw,
-    fusionWeights: {
-      ...defaults.fusionWeights,
-      ...raw.fusionWeights,
-    },
-  };
+    const localPath = getConfigPath(instance.root);
+    if (existsSync(localPath)) {
+      const raw = JSON.parse(readFileSync(localPath, 'utf-8')) as Partial<BrainConfig>;
+      config = {
+        ...config,
+        ...raw,
+        fusionWeights: { ...config.fusionWeights, ...raw.fusionWeights },
+      };
+    }
+  }
+
+  return config;
 }
 
-export function saveConfig(
-  config: Partial<BrainConfig>,
-  configDir?: string,
-  dataDir?: string
-): void {
+export function saveConfig(config: Partial<BrainConfig>, instanceRoot?: string): void {
   validateConfig(config);
 
-  const existing = loadConfig(configDir, dataDir);
+  const root = instanceRoot ?? GLOBAL_BRAIN_DIR;
+  const filePath = getConfigPath(root);
+
+  const defaults = getDefaultConfig(root);
+  let existing: BrainConfig;
+  if (existsSync(filePath)) {
+    const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as Partial<BrainConfig>;
+    existing = {
+      ...defaults,
+      ...raw,
+      fusionWeights: { ...defaults.fusionWeights, ...raw.fusionWeights },
+    };
+  } else {
+    existing = defaults;
+  }
+
   const merged: BrainConfig = {
     ...existing,
     ...config,
-    fusionWeights: {
-      ...existing.fusionWeights,
-      ...config.fusionWeights,
-    },
+    fusionWeights: { ...existing.fusionWeights, ...config.fusionWeights },
   };
 
-  const filePath = getConfigPath(configDir);
   writeFileSync(filePath, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
+}
+
+export function migrateFromEnvPaths(
+  oldConfigDir: string,
+  oldDataDir: string,
+  newGlobalDir: string
+): boolean {
+  const oldConfigPath = join(oldConfigDir, 'config.json');
+  const oldDbPath = join(oldDataDir, 'brain.db');
+
+  if (!existsSync(oldConfigPath) && !existsSync(oldDbPath)) {
+    return false;
+  }
+
+  ensureDir(newGlobalDir);
+
+  if (existsSync(oldDbPath)) {
+    copyFileSync(oldDbPath, join(newGlobalDir, 'brain.db'));
+  }
+
+  if (existsSync(oldConfigPath)) {
+    const raw = JSON.parse(readFileSync(oldConfigPath, 'utf-8')) as Record<string, unknown>;
+    raw.dbPath = join(newGlobalDir, 'brain.db');
+    writeFileSync(join(newGlobalDir, 'config.json'), JSON.stringify(raw, null, 2) + '\n', 'utf-8');
+  }
+
+  return true;
 }

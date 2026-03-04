@@ -89,6 +89,7 @@ describe('Wave 8: Capture + Audit + Import', () => {
       project: 'CAP',
       workstream: 1,
       name: 'Build notification service',
+      description: 'Build the notification service for the application.',
     });
 
     expect(taskResult.ok).toBe(true);
@@ -214,9 +215,9 @@ describe('Wave 8: Capture + Audit + Import', () => {
         {
           name: 'Core',
           tasks: [
-            { name: 'Setup', priority: 'high' },
-            { name: 'Implement' },
-            { name: 'Test', priority: 'low' },
+            { name: 'Setup', description: 'Set up project infrastructure.', priority: 'high' },
+            { name: 'Implement', description: 'Implement core features.' },
+            { name: 'Test', description: 'Run test suite.', priority: 'low' },
           ],
         },
       ],
@@ -243,9 +244,17 @@ describe('Wave 8: Capture + Audit + Import', () => {
         {
           name: 'Main',
           tasks: [
-            { name: 'Foundation' },
-            { name: 'Build on foundation', depends_on: ['DIM-01.01'] },
-            { name: 'Final step', depends_on: ['DIM-01.01', 'DIM-01.02'] },
+            { name: 'Foundation', description: 'Lay the foundation.' },
+            {
+              name: 'Build on foundation',
+              description: 'Build on the foundation.',
+              depends_on: ['DIM-01.01'],
+            },
+            {
+              name: 'Final step',
+              description: 'Complete the final step.',
+              depends_on: ['DIM-01.01', 'DIM-01.02'],
+            },
           ],
         },
       ],

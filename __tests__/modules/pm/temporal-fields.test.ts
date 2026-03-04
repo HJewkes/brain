@@ -8,12 +8,8 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import {
-  createTask,
-  listTasks,
-  getTask,
-  updateTask,
-} from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks, getTask, updateTask } from '../../../src/modules/pm/data/task-ops.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -46,7 +42,7 @@ afterEach(() => {
 
 describe('temporal fields', () => {
   it('task add with due_date sets due_date in frontmatter', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Deadline task',
@@ -64,7 +60,7 @@ describe('temporal fields', () => {
   });
 
   it('task add with milestone sets milestone in frontmatter', async () => {
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Milestone task',
@@ -82,7 +78,7 @@ describe('temporal fields', () => {
   });
 
   it('task list --json includes due_date and milestone', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Full task',
@@ -100,19 +96,19 @@ describe('temporal fields', () => {
   });
 
   it('task list --due-before filters by date', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Soon',
       dueDate: '2026-03-10',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Later',
       dueDate: '2026-06-01',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'No date',
@@ -127,13 +123,13 @@ describe('temporal fields', () => {
   });
 
   it('task list --milestone filters by milestone', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Alpha work',
       milestone: 'alpha',
     });
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Beta work',
@@ -149,7 +145,7 @@ describe('temporal fields', () => {
   });
 
   it('task update --due updates due_date', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Update me',
@@ -167,7 +163,7 @@ describe('temporal fields', () => {
   });
 
   it('+OVERDUE virtual state for past due tasks', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Overdue task',
@@ -182,7 +178,7 @@ describe('temporal fields', () => {
   });
 
   it('+OVERDUE not applied to done tasks', async () => {
-    const createResult = await createTask(db, config, embedder, {
+    const createResult = await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Done overdue',
@@ -191,9 +187,7 @@ describe('temporal fields', () => {
     expect(createResult.ok).toBe(true);
 
     // Transition through claim -> in-progress -> done
-    const { updateTaskStatus } = await import(
-      '../../../src/modules/pm/data/task-ops.js'
-    );
+    const { updateTaskStatus } = await import('../../../src/modules/pm/data/task-ops.js');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'in-progress');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'done');
@@ -206,16 +200,14 @@ describe('temporal fields', () => {
   });
 
   it('+OVERDUE not applied to cancelled tasks', async () => {
-    await createTask(db, config, embedder, {
+    await createTestTask(db, config, embedder, {
       project: 'TST',
       workstream: 1,
       name: 'Cancelled overdue',
       dueDate: '2020-01-01',
     });
 
-    const { updateTaskStatus } = await import(
-      '../../../src/modules/pm/data/task-ops.js'
-    );
+    const { updateTaskStatus } = await import('../../../src/modules/pm/data/task-ops.js');
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'cancelled');
 
     const result = getTask(db, 'TST-01.01');

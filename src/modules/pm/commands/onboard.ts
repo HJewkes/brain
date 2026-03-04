@@ -10,7 +10,6 @@ import { ok, fail, formatError } from '../errors.js';
 import { detectComponents } from '../engine/detect.js';
 import { discoverDocs } from '../engine/doc-scanner.js';
 import { createProject } from '../data/project-ops.js';
-import { createWorkstream } from '../data/workstream-ops.js';
 import { getPmNotes, setActiveProject } from '../data/queries.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { slugify } from '../../../utils.js';
@@ -43,7 +42,7 @@ export function onboardSlug(title: string, component?: string, usedSlugs?: Set<s
 export function synthesizeProjectBody(
   name: string,
   components: DetectedComponent[],
-  docs: ScoredDoc[],
+  docs: ScoredDoc[]
 ): string {
   const lines: string[] = [];
   lines.push(`## Overview`);
@@ -85,14 +84,17 @@ export async function runOnboard(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  opts: OnboardOptions,
+  opts: OnboardOptions
 ): Promise<Result<OnboardManifest>> {
   const now = () => new Date().toISOString();
 
   // Check for existing project (fail unless --reset)
   const existing = getPmNotes(db, 'project', { prefix: opts.prefix });
   if (existing.length > 0 && !opts.reset) {
-    return fail('PROJECT_EXISTS', `Project "${opts.prefix}" already exists. Use --reset to re-onboard.`);
+    return fail(
+      'PROJECT_EXISTS',
+      `Project "${opts.prefix}" already exists. Use --reset to re-onboard.`
+    );
   }
 
   // Check for duplicate project name (different prefix, same name)
@@ -107,7 +109,7 @@ export async function runOnboard(
       return fail(
         'PROJECT_EXISTS',
         `A project named "${opts.projectName}" already exists as ${projMeta.prefix}. ` +
-        `Use --prefix ${projMeta.prefix} --reset to re-onboard, or brain pm use ${projMeta.prefix}.`
+          `Use --prefix ${projMeta.prefix} --reset to re-onboard, or brain pm use ${projMeta.prefix}.`
       );
     }
   }
@@ -129,7 +131,7 @@ export async function runOnboard(
   const detectPhase = { completedAt: now(), componentCount: components.length };
 
   // Phase 2: Discover docs (moved before create so we have data for body)
-  const componentPaths = components.map(c =>
+  const componentPaths = components.map((c) =>
     c.path === '.' ? opts.cwd : join(opts.cwd, c.path)
   );
   const scoredDocs = discoverDocs(componentPaths, { maxDocs: opts.maxDocs ?? 20 });
@@ -236,7 +238,7 @@ export async function runOnboard(
   syncProjectHierarchyEdges(db, opts.prefix);
 
   // Phase 5: Two-pass auto-linking (all docs now in vector store)
-  const AUTO_LINK_THRESHOLD = 0.60;
+  const AUTO_LINK_THRESHOLD = 0.6;
   let autoLinkCount = 0;
   const createdNoteIds: string[] = [];
 
@@ -261,7 +263,7 @@ export async function runOnboard(
     if (autoLinks.length > 0) {
       const existingRels = db.getRelationsFrom(noteId);
       const newLinks = autoLinks.filter(
-        link => !existingRels.some(e => e.targetId === link.targetId && e.type === link.type)
+        (link) => !existingRels.some((e) => e.targetId === link.targetId && e.type === link.type)
       );
       if (newLinks.length > 0) {
         db.upsertRelations(noteId, [...existingRels, ...newLinks]);
@@ -271,7 +273,9 @@ export async function runOnboard(
   }
 
   const autoLinkPhase = { completedAt: now(), edgesCreated: autoLinkCount };
-  process.stderr.write(`  Auto-linked: ${autoLinkCount} edges across ${createdNoteIds.length} notes (threshold: ${AUTO_LINK_THRESHOLD})\n`);
+  process.stderr.write(
+    `  Auto-linked: ${autoLinkCount} edges across ${createdNoteIds.length} notes (threshold: ${AUTO_LINK_THRESHOLD})\n`
+  );
 
   // Create activity note
   const activitySlug = `${opts.prefix.toLowerCase()}-onboard-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
@@ -291,7 +295,7 @@ export async function runOnboard(
     `created: ${now()}`,
     `modified: ${now()}`,
     `created_notes:`,
-    ...createdNoteIds.map(id => `  - "${id}"`),
+    ...createdNoteIds.map((id) => `  - "${id}"`),
     `created_relations: ${autoLinkCount}`,
     '---',
     '',
@@ -388,7 +392,7 @@ function buildManifestNote(manifest: OnboardManifest, slug: string, projectName:
     '',
     '| Component | Path | Type | Docs |',
     '|-----------|------|------|------|',
-    ...manifest.components.map(c => `| ${c.name} | ${c.path} | ${c.type} | ${c.docCount} |`),
+    ...manifest.components.map((c) => `| ${c.name} | ${c.path} | ${c.type} | ${c.docCount} |`),
     '',
     '## Documentation',
     '',
@@ -396,7 +400,7 @@ function buildManifestNote(manifest: OnboardManifest, slug: string, projectName:
     '',
   ];
 
-  const ingested = manifest.docs.items.filter(d => d.ingested);
+  const ingested = manifest.docs.items.filter((d) => d.ingested);
   if (ingested.length > 0) {
     lines.push('### Ingested');
     for (const doc of ingested) {
@@ -406,11 +410,18 @@ function buildManifestNote(manifest: OnboardManifest, slug: string, projectName:
   }
 
   lines.push('## Phase Log', '');
-  if (manifest.phases.detect) lines.push(`- **Detect:** ${manifest.phases.detect.componentCount} components found`);
-  if (manifest.phases.create) lines.push(`- **Create:** Project ${manifest.phases.create.projectCreated ? 'created' : 'already existed'}`);
-  if (manifest.phases.discover) lines.push(`- **Discover:** ${manifest.phases.discover.docsFound} docs found`);
-  if (manifest.phases.ingest) lines.push(`- **Ingest:** ${manifest.phases.ingest.docsIngested} docs ingested`);
-  if (manifest.phases.autoLink) lines.push(`- **Auto-link:** ${manifest.phases.autoLink.edgesCreated} edges created`);
+  if (manifest.phases.detect)
+    lines.push(`- **Detect:** ${manifest.phases.detect.componentCount} components found`);
+  if (manifest.phases.create)
+    lines.push(
+      `- **Create:** Project ${manifest.phases.create.projectCreated ? 'created' : 'already existed'}`
+    );
+  if (manifest.phases.discover)
+    lines.push(`- **Discover:** ${manifest.phases.discover.docsFound} docs found`);
+  if (manifest.phases.ingest)
+    lines.push(`- **Ingest:** ${manifest.phases.ingest.docsIngested} docs ingested`);
+  if (manifest.phases.autoLink)
+    lines.push(`- **Auto-link:** ${manifest.phases.autoLink.edgesCreated} edges created`);
   lines.push('');
 
   return lines.join('\n');
@@ -418,9 +429,13 @@ function buildManifestNote(manifest: OnboardManifest, slug: string, projectName:
 
 export function createOnboardCommand(): Command {
   const cmd = new Command('onboard');
-  cmd.description('Set up a PM project from a codebase')
+  cmd
+    .description('Set up a PM project from a codebase')
     .argument('<project-name>', 'Project name')
-    .option('--prefix <prefix>', 'Project prefix (2-5 uppercase chars, derived from name if omitted)')
+    .option(
+      '--prefix <prefix>',
+      'Project prefix (2-5 uppercase chars, derived from name if omitted)'
+    )
     .option('--max-docs <n>', 'Max docs to ingest (default: 20)', parseInt)
     .option('--skip-ingest', 'Skip doc ingestion phase')
     .option('--reset', 'Wipe existing onboard data and start fresh')
@@ -428,9 +443,16 @@ export function createOnboardCommand(): Command {
     .option('--json', 'Output JSON')
     .action(async (projectName, opts) => {
       await withBrain(async (svc) => {
-        const prefix = opts.prefix ?? projectName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+        const prefix =
+          opts.prefix ??
+          projectName
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '')
+            .slice(0, 5);
         if (prefix.length < 2 || prefix.length > 5) {
-          process.stderr.write('Error: prefix must be 2-5 uppercase alphanumeric chars. Use --prefix to specify.\n');
+          process.stderr.write(
+            'Error: prefix must be 2-5 uppercase alphanumeric chars. Use --prefix to specify.\n'
+          );
           process.exitCode = 1;
           return;
         }
@@ -455,7 +477,9 @@ export function createOnboardCommand(): Command {
         } else {
           const m = result.data;
           process.stdout.write(`Onboarded "${projectName}" (${m.project})\n`);
-          process.stdout.write(`  Components: ${m.components.length} (${m.components.map(c => c.name).join(', ')})\n`);
+          process.stdout.write(
+            `  Components: ${m.components.length} (${m.components.map((c) => c.name).join(', ')})\n`
+          );
           process.stdout.write(`  Docs: ${m.docs.ingested}/${m.docs.discovered} ingested\n`);
           process.stdout.write(`  Manifest note: ${m.project.toLowerCase()}-onboard-manifest\n`);
         }

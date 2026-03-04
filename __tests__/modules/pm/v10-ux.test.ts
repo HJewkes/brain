@@ -9,8 +9,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createStandardProject } from '../../fixtures/pm-project.js';
 import { resolveProject } from '../../../src/modules/pm/data/queries.js';
-import { createTask, listTasks } from '../../../src/modules/pm/data/task-ops.js';
+import { listTasks } from '../../../src/modules/pm/data/task-ops.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -74,7 +75,7 @@ describe('O-138: case-insensitive project lookup', () => {
 describe('O-143: task JSON id vs display_id', () => {
   it('createTask result contains display_id', async () => {
     await createStandardProject(db, config, embedder);
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'ID field test',
@@ -92,7 +93,7 @@ describe('O-143: task JSON id vs display_id', () => {
   // When serialized via outputResult with --json, the object has no `id` key.
   it('task JSON output has a non-null id field', async () => {
     await createStandardProject(db, config, embedder);
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'ID field test',
@@ -109,7 +110,7 @@ describe('O-143: task JSON id vs display_id', () => {
 describe('O-152: task add produces human-readable output', () => {
   it('createTask returns data with display_id and title for output', async () => {
     await createStandardProject(db, config, embedder);
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Output test task',
@@ -129,7 +130,7 @@ describe('O-152: task add produces human-readable output', () => {
   // Let's verify that title is actually returned so the output is meaningful.
   it('createTask result includes title for human-readable output', async () => {
     await createStandardProject(db, config, embedder);
-    const result = await createTask(db, config, embedder, {
+    const result = await createTestTask(db, config, embedder, {
       project: 'TEST',
       workstream: 1,
       name: 'Output test task',
@@ -149,8 +150,11 @@ describe('O-163: projects plural alias', () => {
       registerRelationType: () => {},
       registerExtractionStrategy: () => {},
       registerFilter: () => {},
+      registerContentHandler: () => {},
       registerMigration: () => {},
-      registerCommand: (cmd: Command) => { registered.push(cmd); },
+      registerCommand: (cmd: Command) => {
+        registered.push(cmd);
+      },
     };
     pmModule.register(mockCtx as never);
 
@@ -167,8 +171,11 @@ describe('O-163: projects plural alias', () => {
       registerRelationType: () => {},
       registerExtractionStrategy: () => {},
       registerFilter: () => {},
+      registerContentHandler: () => {},
       registerMigration: () => {},
-      registerCommand: (cmd: Command) => { registered.push(cmd); },
+      registerCommand: (cmd: Command) => {
+        registered.push(cmd);
+      },
     };
     pmModule.register(mockCtx as never);
 
@@ -186,8 +193,11 @@ describe('O-163: projects plural alias', () => {
       registerRelationType: () => {},
       registerExtractionStrategy: () => {},
       registerFilter: () => {},
+      registerContentHandler: () => {},
       registerMigration: () => {},
-      registerCommand: (cmd: Command) => { registered.push(cmd); },
+      registerCommand: (cmd: Command) => {
+        registered.push(cmd);
+      },
     };
     pmModule.register(mockCtx as never);
 

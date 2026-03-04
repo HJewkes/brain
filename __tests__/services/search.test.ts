@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { search, searchMemories, checkAndPromote } from '../../src/services/search.js';
+import {
+  search,
+  searchMemories,
+  checkAndPromote,
+  computeFacets,
+} from '../../src/services/search.js';
 import { unlinkSync } from 'node:fs';
 import type { Chunk, NoteRecord, SearchResult } from '../../src/types.js';
 import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
@@ -974,5 +979,112 @@ describe('searchMemories', () => {
   it('respects limit parameter', async () => {
     const results = await searchMemories(db, embedder, 'TypeScript React CSS', 1);
     expect(results.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('metadata filtering', () => {
+  let db: BrainDB;
+  let dbPath: string;
+  let embedder: Embedder;
+
+  function addFtsAndChunks(testDb: BrainDB, id: string, title: string): void {
+    testDb.upsertNoteFTS(id, title, '', title);
+    const content = title;
+    const chunk: Chunk = {
+      id: `${id}:chunk:0`,
+      noteId: id,
+      heading: null,
+      headingAncestry: null,
+      content,
+      tokenCount: content.split(/\s+/).length,
+      chunkType: 'section',
+      cutType: 'heading_boundary',
+      position: 0,
+    };
+    const vec = new Array<number>(384).fill(0);
+    for (let i = 0; i < content.length; i++) {
+      vec[i % 384] += content.charCodeAt(i) / 1000;
+    }
+    const magnitude = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
+    if (magnitude > 0) {
+      for (let i = 0; i < vec.length; i++) {
+        vec[i] /= magnitude;
+      }
+    }
+    testDb.upsertChunks(id, [chunk], [new Float32Array(vec)]);
+  }
+
+  beforeEach(() => {
+    dbPath = tmpDbPath();
+    db = new BrainDB(dbPath);
+    embedder = createMockEmbedder();
+  });
+
+  afterEach(() => {
+    db.close();
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      // ignore
+    }
+  });
+
+  it('search with filters returns only matching notes', async () => {
+    db.upsertNote(
+      makeNote({
+        id: 'insight-1',
+        title: 'WIP limits enforcement',
+        metadata: JSON.stringify({ 'enforcement-strength': 'deterministic', type: 'insight' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'insight-2',
+        title: 'WIP limits discussion',
+        metadata: JSON.stringify({ 'enforcement-strength': 'structural', type: 'insight' }),
+      })
+    );
+    addFtsAndChunks(db, 'insight-1', 'WIP limits enforcement');
+    addFtsAndChunks(db, 'insight-2', 'WIP limits discussion');
+
+    const results = await search(db, embedder, 'WIP limits', {
+      limit: 10,
+      filters: [{ field: 'enforcement-strength', value: 'deterministic' }],
+    });
+
+    expect(results.every((r) => r.noteId === 'insight-1')).toBe(true);
+  });
+});
+
+describe('facet computation', () => {
+  let db: BrainDB;
+  let dbPath: string;
+
+  beforeEach(() => {
+    dbPath = tmpDbPath();
+    db = new BrainDB(dbPath);
+  });
+
+  afterEach(() => {
+    db.close();
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      // ignore
+    }
+  });
+
+  it('computeFacets returns counts per field', () => {
+    db.upsertNote(makeNote({ id: 'f1', metadata: JSON.stringify({ strength: 'high' }) }));
+    db.upsertNote(makeNote({ id: 'f2', metadata: JSON.stringify({ strength: 'high' }) }));
+    db.upsertNote(makeNote({ id: 'f3', metadata: JSON.stringify({ strength: 'low' }) }));
+
+    const facets = computeFacets(db, ['strength'], new Set(['f1', 'f2', 'f3']));
+    expect(facets).toHaveLength(1);
+    expect(facets[0].field).toBe('strength');
+    expect(facets[0].values).toEqual([
+      { value: 'high', count: 2 },
+      { value: 'low', count: 1 },
+    ]);
   });
 });

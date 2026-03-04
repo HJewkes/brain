@@ -14,7 +14,7 @@ let docsDir: string;
 
 function cli(args: string): string {
   return execSync(`${CLI} ${args}`, {
-    cwd: PROJECT_ROOT,
+    cwd: tmpDir,
     encoding: 'utf-8',
     timeout: 60_000,
     env: { ...process.env, HOME: fakeHome, NODE_NO_WARNINGS: '1' },
@@ -23,20 +23,6 @@ function cli(args: string): string {
 
 function pm(args: string): string {
   return cli(`pm ${args}`);
-}
-
-function tryPm(args: string): { stdout: string; stderr: string; exitCode: number } {
-  try {
-    const stdout = pm(args);
-    return { stdout, stderr: '', exitCode: 0 };
-  } catch (err: unknown) {
-    const e = err as { stdout?: string; stderr?: string; status?: number };
-    return {
-      stdout: (e.stdout ?? '').toString().trim(),
-      stderr: (e.stderr ?? '').toString().trim(),
-      exitCode: e.status ?? 1,
-    };
-  }
 }
 
 beforeAll(() => {
@@ -70,9 +56,7 @@ afterAll(() => {
 describe('PM V9 integration', { timeout: 60_000 }, () => {
   describe('onboard creates hierarchy with parent edges', () => {
     it('onboard creates project, workstreams, and tasks', () => {
-      const output = pm(
-        `onboard "Test V9 Project" --prefix TV9 --cwd "${docsDir}" --json`
-      );
+      const output = pm(`onboard "Test V9 Project" --prefix TV9 --cwd "${docsDir}" --json`);
       const result = JSON.parse(output);
 
       expect(result.project).toBe('TV9');
@@ -124,18 +108,18 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
     it('creates tasks with categories for auto-dependency', () => {
       // Implementation tasks in ws1
       pm(
-        'task add "Build API endpoint" --workstream 1 --priority high --category implementation --json'
+        'task add "Build API endpoint" --workstream 1 --priority high --category implementation --description "Build the REST API endpoint for the service." --json'
       );
       pm(
-        'task add "Build data model" --workstream 1 --priority medium --category implementation --json'
+        'task add "Build data model" --workstream 1 --priority medium --category implementation --description "Build the database data model." --json'
       );
       // Testing task in ws1
       pm(
-        'task add "Write API tests" --workstream 1 --priority medium --category testing --json'
+        'task add "Write API tests" --workstream 1 --priority medium --category testing --description "Write tests for the API endpoints." --json'
       );
       // Implementation task in ws2
       pm(
-        'task add "Setup test framework" --workstream 2 --priority high --category implementation --json'
+        'task add "Setup test framework" --workstream 2 --priority high --category implementation --description "Set up the test framework for the project." --json'
       );
     });
 
@@ -164,7 +148,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
     it('creates task with --due and --milestone', () => {
       pm('use VNM');
       const output = pm(
-        'task add "Deadline task" --workstream 1 --due 2026-06-01 --milestone v1.0 --json'
+        'task add "Deadline task" --workstream 1 --due 2026-06-01 --milestone v1.0 --description "Task with a deadline and milestone." --json'
       );
       const result = JSON.parse(output);
 
@@ -191,7 +175,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
       pm('use VNM');
       // Create a task - body is set via the title for search
       pm(
-        'task add "Implement xylophone parser" --workstream 1 --category implementation --json'
+        'task add "Implement xylophone parser" --workstream 1 --category implementation --description "Implement a parser for xylophone notation format." --json'
       );
     });
 
@@ -246,9 +230,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
 
   describe('slug collision handling', () => {
     it('onboardSlug deduplicates', async () => {
-      const { onboardSlug } = await import(
-        '../../src/modules/pm/commands/onboard.js'
-      );
+      const { onboardSlug } = await import('../../src/modules/pm/commands/onboard.js');
 
       const used = new Set<string>();
       const first = onboardSlug('architecture', undefined, used);
@@ -260,9 +242,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
     });
 
     it('onboardSlug handles component prefix', async () => {
-      const { onboardSlug } = await import(
-        '../../src/modules/pm/commands/onboard.js'
-      );
+      const { onboardSlug } = await import('../../src/modules/pm/commands/onboard.js');
 
       const used = new Set<string>();
       const slug1 = onboardSlug('readme', 'frontend', used);

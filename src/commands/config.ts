@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig, saveConfig } from '../services/config.js';
+import { loadConfig, saveConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
 import type { BrainConfig } from '../types.js';
 
 type ConfigValue = string | number | boolean | Record<string, unknown>;
@@ -59,8 +59,9 @@ function camelCasePath(path: string): string {
 const getSubcommand = new Command('get')
   .description('Get config value(s)')
   .argument('[key]', 'Config key (dot-notation for nested, e.g. fusion-weights.bm25)')
-  .action((key) => {
-    const config = loadConfig();
+  .action((key, _opts, cmd) => {
+    const instance = resolveInstance(parentResolveOpts(cmd));
+    const config = loadConfig(instance);
 
     if (!key) {
       process.stdout.write(JSON.stringify(config, null, 2) + '\n');
@@ -87,10 +88,11 @@ const setSubcommand = new Command('set')
   .description('Set a config value')
   .argument('<key>', 'Config key (dot-notation for nested)')
   .argument('<value>', 'Value to set')
-  .action((key, rawValue) => {
+  .action((key, rawValue, _opts, cmd) => {
+    const instance = resolveInstance(parentResolveOpts(cmd));
     const camelKey = camelCasePath(key);
     const value = parseValue(rawValue);
-    const config = loadConfig() as unknown as Record<string, unknown>;
+    const config = loadConfig(instance) as unknown as Record<string, unknown>;
 
     const existing = getNestedValue(config, camelKey);
     if (existing === undefined) {
@@ -110,7 +112,7 @@ const setSubcommand = new Command('set')
     const updated = setNestedValue(config, camelKey, value);
 
     try {
-      saveConfig(updated as unknown as Partial<BrainConfig>);
+      saveConfig(updated as unknown as Partial<BrainConfig>, instance.root);
       process.stdout.write(`Set ${key} = ${String(value)}\n`);
     } catch (err) {
       process.stderr.write(`Error: ${(err as Error).message}\n`);

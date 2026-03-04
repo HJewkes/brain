@@ -77,6 +77,10 @@ export function createCaptureCommands(): Command<any, any, any>[] {
     .argument('<capture-id>', 'Capture note ID')
     .requiredOption('--task-name <n>', 'Name for the new task')
     .requiredOption('--workstream <ws>', 'Workstream number', parseInt)
+    .requiredOption(
+      '--description <text>',
+      'Task description/body content (required for search indexing)'
+    )
     .option('--project <p>', 'Project prefix (uses active if omitted)')
     .option('--json', 'Output JSON')
     .action(async (captureId, opts) => {
@@ -92,6 +96,7 @@ export function createCaptureCommands(): Command<any, any, any>[] {
           project,
           workstream: opts.workstream,
           name: opts.taskName,
+          description: opts.description,
         });
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');

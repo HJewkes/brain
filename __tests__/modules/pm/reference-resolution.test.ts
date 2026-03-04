@@ -8,8 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+
 import { indexSingleFile } from '../../../src/services/indexing.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -35,42 +36,47 @@ describe('reference resolution', () => {
   it('creates references relation when target note exists', async () => {
     // Index a source doc first
     const docPath = join(notesDir, 'api-spec.md');
-    const docContent = '---\nid: api-spec\ntitle: "API Spec"\ntype: research\ntier: slow\n---\n\nAPI specification document.';
+    const docContent =
+      '---\nid: api-spec\ntitle: "API Spec"\ntype: research\ntier: slow\n---\n\nAPI specification document.';
     writeFileSync(docPath, docContent);
     const hash = createHash('sha256').update(docContent).digest('hex');
     await indexSingleFile(db, embedder, docPath, docContent, hash, Date.now());
 
     // Create task with reference to that doc
-    const result = await createTask(db, config, embedder, {
-      project: 'REF', workstream: 1, name: 'Implement API',
+    const result = await createTestTask(db, config, embedder, {
+      project: 'REF',
+      workstream: 1,
+      name: 'Implement API',
       references: ['api-spec'],
     });
     expect(result.ok).toBe(true);
 
     // Verify relation edge was created
-    const taskNotes = db.getAllNotes().filter(n => {
+    const taskNotes = db.getAllNotes().filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.display_id === 'REF-01.01';
     });
     expect(taskNotes).toHaveLength(1);
     const relations = db.getRelationsFrom(taskNotes[0].id);
-    const refRels = relations.filter(r => r.type === 'references');
+    const refRels = relations.filter((r) => r.type === 'references');
     expect(refRels).toHaveLength(1);
   });
 
   it('skips references when target note not found', async () => {
-    const result = await createTask(db, config, embedder, {
-      project: 'REF', workstream: 1, name: 'Task with bad ref',
+    const result = await createTestTask(db, config, embedder, {
+      project: 'REF',
+      workstream: 1,
+      name: 'Task with bad ref',
       references: ['nonexistent-doc'],
     });
     expect(result.ok).toBe(true);
 
-    const taskNotes = db.getAllNotes().filter(n => {
+    const taskNotes = db.getAllNotes().filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.display_id === 'REF-01.01';
     });
     const relations = db.getRelationsFrom(taskNotes[0].id);
-    const refRels = relations.filter(r => r.type === 'references');
+    const refRels = relations.filter((r) => r.type === 'references');
     expect(refRels).toHaveLength(0);
   });
 
@@ -84,18 +90,20 @@ describe('reference resolution', () => {
       await indexSingleFile(db, embedder, path, content, hash, Date.now());
     }
 
-    const result = await createTask(db, config, embedder, {
-      project: 'REF', workstream: 1, name: 'Multi-ref task',
+    const result = await createTestTask(db, config, embedder, {
+      project: 'REF',
+      workstream: 1,
+      name: 'Multi-ref task',
       references: ['doc-a', 'doc-b'],
     });
     expect(result.ok).toBe(true);
 
-    const taskNotes = db.getAllNotes().filter(n => {
+    const taskNotes = db.getAllNotes().filter((n) => {
       const meta = JSON.parse(n.metadata ?? '{}');
       return meta.display_id === 'REF-01.01';
     });
     const relations = db.getRelationsFrom(taskNotes[0].id);
-    const refRels = relations.filter(r => r.type === 'references');
+    const refRels = relations.filter((r) => r.type === 'references');
     expect(refRels).toHaveLength(2);
   });
 });

@@ -13,7 +13,7 @@ export async function relateAction(
   db: BrainDB,
   source: string,
   target: string,
-  opts: RelateOptions,
+  opts: RelateOptions
 ): Promise<{ ok: boolean; message: string }> {
   const relType = opts.type ?? 'related';
 
@@ -29,16 +29,12 @@ export async function relateAction(
   const existing = db.getRelationsFrom(source);
 
   if (opts.remove) {
-    const filtered = existing.filter(
-      (r) => !(r.targetId === target && r.type === relType),
-    );
+    const filtered = existing.filter((r) => !(r.targetId === target && r.type === relType));
     db.upsertRelations(source, filtered);
     return { ok: true, message: `Removed ${relType} relation: ${source} -> ${target}` };
   }
 
-  const alreadyExists = existing.some(
-    (r) => r.targetId === target && r.type === relType,
-  );
+  const alreadyExists = existing.some((r) => r.targetId === target && r.type === relType);
   if (alreadyExists) {
     return { ok: true, message: `Relation already exists: ${source} -[${relType}]-> ${target}` };
   }
@@ -64,7 +60,7 @@ export function createRelateCommand() {
       await withDb(async ({ db }) => {
         const result = await relateAction(db, source, target, opts);
         if (opts.json) {
-          process.stdout.write(JSON.stringify(result) + '\n');
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
         } else {
           process.stdout.write(result.message + '\n');
         }

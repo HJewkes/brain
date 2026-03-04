@@ -122,6 +122,10 @@ describe('doctor command', () => {
     mockReport.summary = { ok: 2, warnings: 1, errors: 0 };
 
     await run('--fix');
-    expect(execFileSync).toHaveBeenCalledWith('ollama', ['pull', expect.any(String)], expect.any(Object));
+    expect(execFileSync).toHaveBeenCalledWith(
+      'ollama',
+      ['pull', expect.any(String)],
+      expect.any(Object)
+    );
   });
 });

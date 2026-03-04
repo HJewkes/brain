@@ -8,9 +8,9 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { listTasks, createTask } from '../../../src/modules/pm/data/task-ops.js';
-import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
-import { detectCycles, buildDependencyGraph } from '../../../src/modules/pm/engine/dependency.js';
+import { listTasks } from '../../../src/modules/pm/data/task-ops.js';
+import { detectCycles } from '../../../src/modules/pm/engine/dependency.js';
+import { createTestTask } from '../../helpers.js';
 
 let db: BrainDB;
 let dbPath: string;
@@ -46,14 +46,14 @@ afterEach(() => {
 describe('blocked_by semantics', () => {
   it('blocked_by contains upstream prerequisites, not downstream dependents', async () => {
     // A depends_on B: A waits on B, so A.blocked_by should include B
-    const tB = await createTask(db, config, embedder, {
+    const tB = await createTestTask(db, config, embedder, {
       project: 'BLK',
       workstream: 1,
       name: 'Task B (prerequisite)',
     });
     expect(tB.ok).toBe(true);
 
-    const tA = await createTask(db, config, embedder, {
+    const tA = await createTestTask(db, config, embedder, {
       project: 'BLK',
       workstream: 1,
       name: 'Task A (depends on B)',
@@ -76,14 +76,14 @@ describe('blocked_by semantics', () => {
 
   it('blocks field contains downstream dependents', async () => {
     // A depends_on B: B blocks A, so B.blocks should include A
-    const tB = await createTask(db, config, embedder, {
+    const tB = await createTestTask(db, config, embedder, {
       project: 'BLK',
       workstream: 1,
       name: 'Task B (prerequisite)',
     });
     expect(tB.ok).toBe(true);
 
-    const tA = await createTask(db, config, embedder, {
+    const tA = await createTestTask(db, config, embedder, {
       project: 'BLK',
       workstream: 1,
       name: 'Task A (depends on B)',

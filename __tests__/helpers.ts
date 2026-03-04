@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { inject } from 'vitest';
 import type {
   ActivityRecord,
   Chunk,
@@ -9,10 +11,21 @@ import type {
   InboxItem,
   MemoryEntry,
   NoteRecord,
+  BrainConfig,
 } from '../src/types.js';
+import { BrainDB } from '../src/services/brain-db.js';
+import { createTask } from '../src/modules/pm/data/task-ops.js';
+import type { CreateTaskInput } from '../src/modules/pm/data/task-ops.js';
 
 export function tmpDbPath(prefix = 'brain-test'): string {
   return join(tmpdir(), `${prefix}-${randomUUID()}.db`);
+}
+
+export function cloneTemplateDb(): { dbPath: string; db: BrainDB } {
+  const templatePath = inject('templateDbPath');
+  const dbPath = tmpDbPath('brain-clone');
+  copyFileSync(templatePath, dbPath);
+  return { dbPath, db: new BrainDB(dbPath) };
 }
 
 export function makeChunk(overrides: Partial<Chunk> = {}): Chunk {
@@ -123,6 +136,19 @@ export function makeNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
     moduleInstance: overrides.moduleInstance ?? null,
     contentDir: overrides.contentDir ?? null,
   };
+}
+
+export function createTestTask(
+  db: BrainDB,
+  config: BrainConfig,
+  embedder: Embedder,
+  input: Omit<CreateTaskInput, 'description'> & { description?: string }
+) {
+  return createTask(db, config, embedder, {
+    ...input,
+    description:
+      input.description ?? `Test task: ${input.name}. This is a test task for automated testing.`,
+  });
 }
 
 export function makeActivity(overrides: Partial<ActivityRecord> = {}): ActivityRecord {

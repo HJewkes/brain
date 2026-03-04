@@ -13,7 +13,7 @@ export function computeAutoLinks(
   noteId: string,
   threshold = 0.65,
   maxLinks = 5,
-  embedding?: Float32Array,
+  embedding?: Float32Array
 ): Relation[] {
   let queryEmbedding = embedding;
   if (!queryEmbedding) {

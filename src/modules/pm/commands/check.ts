@@ -46,9 +46,7 @@ function formatCheckReport(report: ConsistencyReport): void {
   }
 
   if (structural.blockedWithoutCause.length > 0) {
-    process.stdout.write(
-      `\n  Blocked without cause (${structural.blockedWithoutCause.length}):\n`
-    );
+    process.stdout.write(`\n  Blocked without cause (${structural.blockedWithoutCause.length}):\n`);
     for (const b of structural.blockedWithoutCause) {
       process.stdout.write(`    ${b.id} - ${b.title}: ${b.reason}\n`);
     }
@@ -67,9 +65,7 @@ function formatCheckReport(report: ConsistencyReport): void {
     if (semantic.decisionPairs.length > 0) {
       process.stdout.write(`\n  Decision conflicts (${semantic.decisionPairs.length}):\n`);
       for (const p of semantic.decisionPairs) {
-        process.stdout.write(
-          `    ${p.decision1.id} vs ${p.decision2.id}: ${p.reason}\n`
-        );
+        process.stdout.write(`    ${p.decision1.id} vs ${p.decision2.id}: ${p.reason}\n`);
       }
     }
 
