@@ -35,7 +35,11 @@ export function convertToMarkdown(filePath: string, content: string): ConvertRes
   if (format === 'csv') {
     const parsed = parseCsv(content);
     const flavor = detectCsvFlavor(parsed.headers);
-    const title = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Import';
+    const title =
+      filePath
+        .split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '') ?? 'Import';
     const table = csvToMarkdownTable(parsed);
     const markdown = `---\ntitle: "${title}"\ntype: note\ntier: fast\nstatus: draft\n---\n\n## ${title} (${parsed.rows.length} rows)\n\n${table}\n`;
     return {
@@ -47,23 +51,39 @@ export function convertToMarkdown(filePath: string, content: string): ConvertRes
 
   if (format === 'linear') {
     const parsed = parseCsv(content);
-    const title = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Import';
+    const title =
+      filePath
+        .split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '') ?? 'Import';
     const table = csvToMarkdownTable(parsed);
     const markdown = `---\ntitle: "${title}"\ntype: note\ntier: fast\nstatus: draft\n---\n\n## ${title} (${parsed.rows.length} rows)\n\n${table}\n`;
     return {
       markdown,
       format,
-      meta: { csvFlavor: 'linear' as CsvFlavor, rowCount: parsed.rows.length, columnNames: parsed.headers },
+      meta: {
+        csvFlavor: 'linear' as CsvFlavor,
+        rowCount: parsed.rows.length,
+        columnNames: parsed.headers,
+      },
     };
   }
 
   if (format === 'notion') {
     const result = cleanNotionMarkdown(content);
-    return { markdown: result.markdown, format, meta: { notionProperties: result.extractedProperties } };
+    return {
+      markdown: result.markdown,
+      format,
+      meta: { notionProperties: result.extractedProperties },
+    };
   }
 
   if (format === 'plaintext') {
-    const title = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Import';
+    const title =
+      filePath
+        .split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '') ?? 'Import';
     const markdown = `---\ntitle: "${title}"\ntype: note\ntier: fast\nstatus: draft\n---\n\n${content}\n`;
     return { markdown, format, meta: {} };
   }

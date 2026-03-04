@@ -594,7 +594,10 @@ tier: slow
   });
 
   it('does not split table rows across chunks', () => {
-    const rows = Array.from({ length: 30 }, (_, i) => `| Task ${i} | Status ${i} | Priority ${i} |`);
+    const rows = Array.from(
+      { length: 30 },
+      (_, i) => `| Task ${i} | Status ${i} | Priority ${i} |`
+    );
     const table = `| Name | Status | Priority |\n| --- | --- | --- |\n${rows.join('\n')}`;
     const content = `---\ntitle: Big Table\ntype: note\ntier: slow\n---\n\n## Tasks\n\n${table}\n`;
     const result = parseMarkdown('test.md', content);

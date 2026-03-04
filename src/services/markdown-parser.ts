@@ -290,13 +290,15 @@ function splitOversizedSection(
     const bufferIsTable = TABLE_LINE.test(buffer);
 
     // Force a boundary when transitioning between table and non-table content
-    const boundaryChange =
-      buffer.length > 0 && (isTablePara !== bufferIsTable);
+    const boundaryChange = buffer.length > 0 && isTablePara !== bufferIsTable;
 
     const budgetForContent =
       overlapPrefix.length > 0 ? chunkBudget - estimateTokens(overlapPrefix + '\n\n') : chunkBudget;
     const bufferWithPara = buffer.length > 0 ? buffer + '\n\n' + para : para;
-    if ((estimateTokens(bufferWithPara) > budgetForContent || boundaryChange) && buffer.length > 0) {
+    if (
+      (estimateTokens(bufferWithPara) > budgetForContent || boundaryChange) &&
+      buffer.length > 0
+    ) {
       const rawText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
       const chunkText = ancestryPrefix + rawText.trim();
       const tokenCount = estimateTokens(chunkText);

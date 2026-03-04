@@ -18,11 +18,11 @@ export interface SplitResult {
 const CLASS_TO_TYPE: Record<ContentClass, { type: NoteType; tier: 'slow' | 'fast' }> = {
   'task-list': { type: 'note', tier: 'fast' },
   'bug-report': { type: 'note', tier: 'fast' },
-  'architecture': { type: 'research', tier: 'slow' },
-  'requirements': { type: 'research', tier: 'slow' },
+  architecture: { type: 'research', tier: 'slow' },
+  requirements: { type: 'research', tier: 'slow' },
   'meeting-notes': { type: 'meeting', tier: 'fast' },
-  'reference': { type: 'note', tier: 'slow' },
-  'general': { type: 'note', tier: 'slow' },
+  reference: { type: 'note', tier: 'slow' },
+  general: { type: 'note', tier: 'slow' },
 };
 
 const MIN_SECTION_LENGTH = 20;

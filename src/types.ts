@@ -223,9 +223,26 @@ export interface GraphResult {
 
 // === Inbox Types ===
 
-export type InboxSource = 'cli' | 'rss' | 'crawler' | 'alert' | 'api' | 'file' | 'notion' | 'linear';
+export type InboxSource =
+  | 'cli'
+  | 'rss'
+  | 'crawler'
+  | 'alert'
+  | 'api'
+  | 'file'
+  | 'notion'
+  | 'linear';
 
-export const VALID_INBOX_SOURCES: InboxSource[] = ['cli', 'rss', 'crawler', 'alert', 'api', 'file', 'notion', 'linear'];
+export const VALID_INBOX_SOURCES: InboxSource[] = [
+  'cli',
+  'rss',
+  'crawler',
+  'alert',
+  'api',
+  'file',
+  'notion',
+  'linear',
+];
 
 export type InboxStatus = 'pending' | 'processing' | 'indexed' | 'failed' | 'discarded';
 

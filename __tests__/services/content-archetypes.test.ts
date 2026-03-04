@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ARCHETYPE_TEXTS, getArchetypeEmbeddings, clearArchetypeCache } from '../../src/services/content-archetypes.js';
+import {
+  ARCHETYPE_TEXTS,
+  getArchetypeEmbeddings,
+  clearArchetypeCache,
+} from '../../src/services/content-archetypes.js';
 import type { Embedder } from '../../src/types.js';
 
 describe('ARCHETYPE_TEXTS', () => {

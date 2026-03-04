@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { parseCsv, csvToMarkdownTable, detectCsvFlavor } from '../../../src/services/format-adapters/csv-adapter.js';
+import {
+  parseCsv,
+  csvToMarkdownTable,
+  detectCsvFlavor,
+} from '../../../src/services/format-adapters/csv-adapter.js';
 
 describe('parseCsv', () => {
   it('parses simple CSV', () => {
     const result = parseCsv('Name,Age\nAlice,30\nBob,25');
     expect(result.headers).toEqual(['Name', 'Age']);
-    expect(result.rows).toEqual([['Alice', '30'], ['Bob', '25']]);
+    expect(result.rows).toEqual([
+      ['Alice', '30'],
+      ['Bob', '25'],
+    ]);
   });
 
   it('handles quoted fields with commas', () => {
@@ -53,7 +60,9 @@ describe('detectCsvFlavor', () => {
   });
 
   it('detects Notion database export', () => {
-    expect(detectCsvFlavor(['Name', 'Tags', 'Status', 'Created time', 'Last edited time'])).toBe('notion-db');
+    expect(detectCsvFlavor(['Name', 'Tags', 'Status', 'Created time', 'Last edited time'])).toBe(
+      'notion-db'
+    );
   });
 
   it('returns generic for unknown headers', () => {

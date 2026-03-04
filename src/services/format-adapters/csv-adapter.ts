@@ -55,8 +55,25 @@ export function csvToMarkdownTable(parsed: CsvParsed): string {
   return [header, separator, ...rows].join('\n');
 }
 
-const LINEAR_COLUMNS = new Set(['id', 'title', 'status', 'priority', 'assignee', 'labels', 'team', 'cycle', 'estimate']);
-const NOTION_COLUMNS = new Set(['name', 'tags', 'status', 'created time', 'last edited time', 'url']);
+const LINEAR_COLUMNS = new Set([
+  'id',
+  'title',
+  'status',
+  'priority',
+  'assignee',
+  'labels',
+  'team',
+  'cycle',
+  'estimate',
+]);
+const NOTION_COLUMNS = new Set([
+  'name',
+  'tags',
+  'status',
+  'created time',
+  'last edited time',
+  'url',
+]);
 
 export type CsvFlavor = 'linear' | 'notion-db' | 'generic';
 

@@ -130,13 +130,18 @@ export async function classifyTableWithLlm(
   const cached = classificationCache.get(sig);
   if (cached) return cached;
 
-  const typesDesc = registeredTypes.length > 0
-    ? `Registered note types:\n${registeredTypes.map((t) => `- ${t.name}: fields [${t.fields.join(', ')}]`).join('\n')}`
-    : 'No specific note types registered.';
+  const typesDesc =
+    registeredTypes.length > 0
+      ? `Registered note types:\n${registeredTypes.map((t) => `- ${t.name}: fields [${t.fields.join(', ')}]`).join('\n')}`
+      : 'No specific note types registered.';
 
-  const rowsPreview = sampleRows.slice(0, 5).map((r) => r.join(' | ')).join('\n');
+  const rowsPreview = sampleRows
+    .slice(0, 5)
+    .map((r) => r.join(' | '))
+    .join('\n');
 
-  const system = 'You classify tables for a knowledge base. Respond with valid JSON only, no markdown fences. Schema: { "decompose": boolean, "noteType": string, "schemaMapping"?: { column: field }, "suggestedTitle"?: string, "reason": string }';
+  const system =
+    'You classify tables for a knowledge base. Respond with valid JSON only, no markdown fences. Schema: { "decompose": boolean, "noteType": string, "schemaMapping"?: { column: field }, "suggestedTitle"?: string, "reason": string }';
 
   const prompt = `Table headers: ${headers.join(', ')}\nSample rows:\n${rowsPreview}\n\n${typesDesc}\n\nShould this table be decomposed into individual notes (rows are independent actionable items) or kept as a single reference note (rows are related and only meaningful together)? If decomposed, map columns to note type fields.`;
 
@@ -153,7 +158,9 @@ export function clearClassificationCache(): void {
 // Embedding-based classification
 
 function cosineSimilarity(a: Float32Array | number[], b: Float32Array | number[]): number {
-  let dot = 0, normA = 0, normB = 0;
+  let dot = 0,
+    normA = 0,
+    normB = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
     normA += a[i] * a[i];

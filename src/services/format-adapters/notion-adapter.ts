@@ -16,7 +16,10 @@ export function extractNotionProperties(content: string): {
   const properties: Record<string, string> = {};
   const rows = match[1].trim().split('\n');
   for (const row of rows) {
-    const cells = row.split('|').map((c) => c.trim()).filter(Boolean);
+    const cells = row
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean);
     if (cells.length >= 2) {
       properties[cells[0]] = cells[1];
     }
@@ -26,9 +29,10 @@ export function extractNotionProperties(content: string): {
   return { properties, cleanedContent };
 }
 
-export function cleanNotionMarkdown(
-  content: string,
-): { markdown: string; extractedProperties: Record<string, string> } {
+export function cleanNotionMarkdown(content: string): {
+  markdown: string;
+  extractedProperties: Record<string, string>;
+} {
   const { properties, cleanedContent } = extractNotionProperties(content);
 
   let markdown = cleanedContent;

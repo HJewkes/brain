@@ -7,7 +7,8 @@ import {
 
 describe('isNotionExport', () => {
   it('detects Notion UUID link pattern', () => {
-    const content = 'Check [My Page](https://www.notion.so/My-Page-abc123def456abc123def456abc123de)';
+    const content =
+      'Check [My Page](https://www.notion.so/My-Page-abc123def456abc123def456abc123de)';
     expect(isNotionExport(content)).toBe(true);
   });
 
@@ -61,7 +62,8 @@ The actual content here.`;
 
 describe('cleanNotionMarkdown', () => {
   it('normalizes Notion internal links to plain text', () => {
-    const content = 'See [Design Doc](https://www.notion.so/Design-Doc-abc123def456abc123def456abc123de)';
+    const content =
+      'See [Design Doc](https://www.notion.so/Design-Doc-abc123def456abc123def456abc123de)';
     const result = cleanNotionMarkdown(content);
     expect(result.markdown).toContain('Design Doc');
     expect(result.markdown).not.toContain('notion.so');

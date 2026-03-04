@@ -148,9 +148,10 @@ export function checkFilesystemSync(
     name: 'Filesystem sync',
     status: 'warning',
     message: parts.join(', '),
-    detail: unindexed.length > 0
-      ? `Run 'brain index' to index new files`
-      : `Run 'brain doctor --fix' to clean orphaned records`,
+    detail:
+      unindexed.length > 0
+        ? `Run 'brain index' to index new files`
+        : `Run 'brain doctor --fix' to clean orphaned records`,
   };
 }
 
@@ -188,9 +189,13 @@ export async function runAllChecks(
               diskFiles.add(full);
             }
           }
-        } catch { /* skip unreadable */ }
+        } catch {
+          /* skip unreadable */
+        }
       }
-    } catch { /* notesDir not accessible */ }
+    } catch {
+      /* notesDir not accessible */
+    }
 
     if (diskFiles.size > 0 || db.getAllFiles().size > 0) {
       checks.push(checkFilesystemSync(db.getAllFiles(), diskFiles));

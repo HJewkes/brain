@@ -13,10 +13,7 @@ import { indexSingleFile } from '../../../src/services/indexing.js';
 function createMockDb(projectNotes: Array<{ id: string; metadata: string; type: string }> = []) {
   const noteIds = projectNotes.map((n) => n.id);
   const noteMap = new Map(
-    projectNotes.map((n) => [
-      n.id,
-      { id: n.id, metadata: n.metadata, type: n.type, module: 'pm' },
-    ])
+    projectNotes.map((n) => [n.id, { id: n.id, metadata: n.metadata, type: n.type, module: 'pm' }])
   );
   return {
     getModuleNoteIds: vi.fn().mockReturnValue(noteIds),

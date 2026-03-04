@@ -53,7 +53,13 @@ export const doctorCommand = new Command('doctor')
   .option('--json', 'output as JSON')
   .action(async (opts, cmd) => {
     await withDb(async ({ db, config }) => {
-      const report = await runAllChecks(db, config.embedder, config.ollamaUrl, config.ollamaModel, config.notesDir);
+      const report = await runAllChecks(
+        db,
+        config.embedder,
+        config.ollamaUrl,
+        config.ollamaModel,
+        config.notesDir
+      );
 
       if (opts.json) {
         process.stdout.write(JSON.stringify(report) + '\n');

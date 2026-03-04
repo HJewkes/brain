@@ -45,7 +45,14 @@ export const importCommand = new Command('import')
             const result = await fetchAndExtract(url);
             const markdown = result.markdown || `Could not extract content from ${url}`;
             const hash = createHash('sha256').update(markdown).digest('hex');
-            await indexSingleFile(db, embedder, `url-${slugify(url)}.md`, markdown, hash, Date.now());
+            await indexSingleFile(
+              db,
+              embedder,
+              `url-${slugify(url)}.md`,
+              markdown,
+              hash,
+              Date.now()
+            );
             imported++;
             if (!opts.quiet) process.stdout.write(`Fetched: ${url}\n`);
           } catch (err) {

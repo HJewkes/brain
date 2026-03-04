@@ -1,5 +1,13 @@
 const LINEAR_REQUIRED = new Set(['title', 'status']);
-const LINEAR_COLUMNS = new Set(['title', 'status', 'priority', 'assignee', 'project', 'labels', 'estimate']);
+const LINEAR_COLUMNS = new Set([
+  'title',
+  'status',
+  'priority',
+  'assignee',
+  'project',
+  'labels',
+  'estimate',
+]);
 
 export function isLinearCsv(headers: string[]): boolean {
   const lower = headers.map((h) => h.toLowerCase());
@@ -33,9 +41,10 @@ export function mapLinearStatus(value: string): string {
   return lower;
 }
 
-export function linearCsvToTaskNotes(
-  parsed: { headers: string[]; rows: string[][] },
-): LinearTaskRecord[] {
+export function linearCsvToTaskNotes(parsed: {
+  headers: string[];
+  rows: string[][];
+}): LinearTaskRecord[] {
   const headerMap = new Map<string, number>();
   for (let i = 0; i < parsed.headers.length; i++) {
     headerMap.set(parsed.headers[i].toLowerCase(), i);
@@ -43,7 +52,7 @@ export function linearCsvToTaskNotes(
 
   const get = (row: string[], field: string): string => {
     const idx = headerMap.get(field);
-    return idx !== undefined ? row[idx] ?? '' : '';
+    return idx !== undefined ? (row[idx] ?? '') : '';
   };
 
   return parsed.rows.map((row) => ({

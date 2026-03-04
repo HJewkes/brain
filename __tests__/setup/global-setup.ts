@@ -8,10 +8,7 @@ import {
   TEMPLATE_EMBEDDER_MODEL,
 } from './template-seed.js';
 
-const TEMPLATE_PATH = join(
-  tmpdir(),
-  `brain-template-v${TEMPLATE_SCHEMA_VERSION}.db`,
-);
+const TEMPLATE_PATH = join(tmpdir(), `brain-template-v${TEMPLATE_SCHEMA_VERSION}.db`);
 
 export default async function setup({ provide }: GlobalSetupContext) {
   if (existsSync(TEMPLATE_PATH)) {

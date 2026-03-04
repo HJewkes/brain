@@ -41,7 +41,8 @@ describe('mapLinearStatus', () => {
   it('maps Todo to pending', () => expect(mapLinearStatus('Todo')).toBe('pending'));
   it('maps Backlog to pending', () => expect(mapLinearStatus('Backlog')).toBe('pending'));
   it('maps Triage to pending', () => expect(mapLinearStatus('Triage')).toBe('pending'));
-  it('maps In Progress to in-progress', () => expect(mapLinearStatus('In Progress')).toBe('in-progress'));
+  it('maps In Progress to in-progress', () =>
+    expect(mapLinearStatus('In Progress')).toBe('in-progress'));
   it('maps Done to done', () => expect(mapLinearStatus('Done')).toBe('done'));
   it('maps Completed to done', () => expect(mapLinearStatus('Completed')).toBe('done'));
   it('maps Cancelled to cancelled', () => expect(mapLinearStatus('Cancelled')).toBe('cancelled'));
