@@ -9,11 +9,12 @@ import { INDEXABLE_EXTENSIONS } from '../services/file-scanner.js';
 import { indexSingleFile } from '../services/indexing.js';
 import { splitDocument } from '../services/document-splitter.js';
 import { slugify } from '../utils.js';
-import type { ContentClass } from '../types.js';
 
 interface ImportStats {
   imported: Map<string, number>;
+  classified: Map<string, number>;
   derived: number;
+  handlerDispatches: Map<string, number>;
   skipped: Array<{ path: string; reason: string }>;
   noteIds: string[];
 }
@@ -69,7 +70,14 @@ export const importCommand = new Command('import')
     }
 
     await withBrain(async ({ db, embedder, config, modules }) => {
-      const stats: ImportStats = { imported: new Map(), derived: 0, skipped: [], noteIds: [] };
+      const stats: ImportStats = {
+        imported: new Map(),
+        classified: new Map(),
+        derived: 0,
+        handlerDispatches: new Map(),
+        skipped: [],
+        noteIds: [],
+      };
       const contentHandlers = modules.getContentHandlers();
 
       const filePaths: string[] = [];
@@ -127,6 +135,11 @@ export const importCommand = new Command('import')
         stats.imported.set(format, (stats.imported.get(format) ?? 0) + 1);
 
         for (const derived of splitResult.derivedNotes) {
+          stats.classified.set(
+            derived.contentClass,
+            (stats.classified.get(derived.contentClass) ?? 0) + 1
+          );
+
           const handler = contentHandlers.find(
             (h) =>
               h.handler.contentClasses.includes(derived.contentClass) &&
@@ -154,6 +167,10 @@ export const importCommand = new Command('import')
               sourceId
             );
             stats.noteIds.push(...ids);
+            stats.handlerDispatches.set(
+              handler.module,
+              (stats.handlerDispatches.get(handler.module) ?? 0) + 1
+            );
           } else {
             const derivedTitle = slugify(derived.suggestedTitle);
             const derivedPath = join(config.notesDir, 'imports', `${derivedTitle}.md`);
@@ -177,12 +194,51 @@ export const importCommand = new Command('import')
         }
       }
 
-      if (!opts.quiet) {
+      if (opts.json) {
+        const report = {
+          imported: Object.fromEntries(stats.imported),
+          classified: Object.fromEntries(stats.classified),
+          derived: stats.derived,
+          handlers: Object.fromEntries(stats.handlerDispatches),
+          skipped: stats.skipped,
+          noteIds: stats.noteIds,
+        };
+        process.stdout.write(JSON.stringify(report) + '\n');
+      } else if (!opts.quiet) {
         const total = [...stats.imported.values()].reduce((a, b) => a + b, 0);
-        process.stderr.write(`Imported ${total} file(s)`);
-        if (stats.derived > 0) process.stderr.write(`, ${stats.derived} derived note(s)`);
-        if (stats.skipped.length > 0) process.stderr.write(`, skipped ${stats.skipped.length}`);
-        process.stderr.write('\n');
+
+        const formats = [...stats.imported.entries()]
+          .map(([fmt, count]) => `${count} ${fmt}`)
+          .join(', ');
+        process.stderr.write(`Imported ${total} file(s) (${formats})\n`);
+
+        if (stats.classified.size > 0) {
+          const classes = [...stats.classified.entries()]
+            .map(([cls, count]) => `${count} ${cls}`)
+            .join(', ');
+          process.stderr.write(`  Classified: ${classes}\n`);
+        }
+
+        if (stats.derived > 0) {
+          process.stderr.write(`  Derived: ${stats.derived} note(s)\n`);
+        }
+
+        if (stats.handlerDispatches.size > 0) {
+          const handlers = [...stats.handlerDispatches.entries()]
+            .map(([mod, count]) => `${count} via ${mod}`)
+            .join(', ');
+          process.stderr.write(`  Handlers: ${handlers}\n`);
+        }
+
+        if (stats.skipped.length > 0) {
+          process.stderr.write(`  Skipped: ${stats.skipped.length} file(s)\n`);
+          for (const s of stats.skipped.slice(0, 5)) {
+            process.stderr.write(`    ${s.path}: ${s.reason}\n`);
+          }
+          if (stats.skipped.length > 5) {
+            process.stderr.write(`    ... and ${stats.skipped.length - 5} more\n`);
+          }
+        }
       }
     }, resolveOpts);
   });
