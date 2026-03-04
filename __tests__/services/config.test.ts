@@ -1,12 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import {
-  mkdtempSync,
-  mkdirSync,
-  rmSync,
-  readFileSync,
-  writeFileSync,
-  existsSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import {
@@ -152,9 +145,9 @@ describe('config service', () => {
     });
 
     it('throws when fusion weights do not sum to 1.0', () => {
-      expect(() =>
-        saveConfig({ fusionWeights: { bm25: 0.5, vector: 0.3 } }, instanceRoot)
-      ).toThrow(/fusion weights must sum to 1/i);
+      expect(() => saveConfig({ fusionWeights: { bm25: 0.5, vector: 0.3 } }, instanceRoot)).toThrow(
+        /fusion weights must sum to 1/i
+      );
     });
 
     it('accepts fusion weights that sum to 1.0 within float tolerance', () => {
@@ -271,7 +264,11 @@ describe('migrateFromEnvPaths', () => {
   });
 
   it('returns false when no old data exists', () => {
-    const result = migrateFromEnvPaths('/nonexistent/config', '/nonexistent/data', '/nonexistent/global');
+    const result = migrateFromEnvPaths(
+      '/nonexistent/config',
+      '/nonexistent/data',
+      '/nonexistent/global'
+    );
     expect(result).toBe(false);
   });
 

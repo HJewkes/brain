@@ -1,15 +1,25 @@
-import {
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  existsSync,
-  copyFileSync,
-} from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import type { Command } from '@commander-js/extra-typings';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyCommand = Command<any[], any, any>;
 import type { BrainConfig, EmbedderBackend } from '../types.js';
 
 export const GLOBAL_BRAIN_DIR = join(homedir(), '.brain');
+
+/**
+ * Extract ResolveOptions from the parent command's --global and --instance flags.
+ * Pass the Command object (last arg in action handlers) to pick up program-level flags.
+ */
+export function parentResolveOpts(cmd: AnyCommand): ResolveOptions {
+  const parent = cmd.parent?.opts() as { global?: boolean; instance?: string } | undefined;
+  return {
+    forceGlobal: parent?.global,
+    instancePath: parent?.instance,
+  };
+}
 
 export interface InstancePaths {
   root: string;
@@ -134,10 +144,7 @@ export function loadConfig(instance?: InstancePaths): BrainConfig {
   return config;
 }
 
-export function saveConfig(
-  config: Partial<BrainConfig>,
-  instanceRoot?: string
-): void {
+export function saveConfig(config: Partial<BrainConfig>, instanceRoot?: string): void {
   validateConfig(config);
 
   const root = instanceRoot ?? GLOBAL_BRAIN_DIR;
@@ -186,11 +193,7 @@ export function migrateFromEnvPaths(
   if (existsSync(oldConfigPath)) {
     const raw = JSON.parse(readFileSync(oldConfigPath, 'utf-8')) as Record<string, unknown>;
     raw.dbPath = join(newGlobalDir, 'brain.db');
-    writeFileSync(
-      join(newGlobalDir, 'config.json'),
-      JSON.stringify(raw, null, 2) + '\n',
-      'utf-8'
-    );
+    writeFileSync(join(newGlobalDir, 'config.json'), JSON.stringify(raw, null, 2) + '\n', 'utf-8');
   }
 
   return true;

@@ -19,10 +19,12 @@ const listSubcommand = new Command('list')
     const instances = listInstances(globalDir);
 
     if (opts.json) {
-      process.stdout.write(JSON.stringify({
-        global: { path: globalDir, name: 'global' },
-        instances,
-      }) + '\n');
+      process.stdout.write(
+        JSON.stringify({
+          global: { path: globalDir, name: 'global' },
+          instances,
+        }) + '\n'
+      );
     } else {
       process.stderr.write(`Global: ${globalDir}\n`);
       if (instances.length === 0) {

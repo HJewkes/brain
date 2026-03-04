@@ -1,6 +1,14 @@
 import { Command } from '@commander-js/extra-typings';
 import { createHash } from 'node:crypto';
-import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync, symlinkSync, lstatSync } from 'node:fs';
+import {
+  mkdirSync,
+  existsSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+  lstatSync,
+} from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
@@ -158,7 +166,10 @@ async function promptEmbedderChoice(): Promise<'ollama' | 'local' | null> {
 function installSkills(): string[] {
   const brainSkillsDir = join(
     dirname(new URL(import.meta.url).pathname),
-    '..', '..', '.claude', 'skills'
+    '..',
+    '..',
+    '.claude',
+    'skills'
   );
   const globalSkillsDir = join(homedir(), '.claude', 'skills');
 
@@ -204,7 +215,10 @@ export async function ingestBrainReferenceDocs(
 
   const sourceDocsDir = join(
     dirname(new URL(import.meta.url).pathname),
-    '..', '..', 'docs', 'pm-module'
+    '..',
+    '..',
+    'docs',
+    'pm-module'
   );
   const commandsDir = join(sourceDocsDir, 'commands');
 
@@ -212,7 +226,7 @@ export async function ingestBrainReferenceDocs(
 
   // Decomposed command files
   if (existsSync(commandsDir)) {
-    const files = readdirSync(commandsDir).filter(f => f.endsWith('.md'));
+    const files = readdirSync(commandsDir).filter((f) => f.endsWith('.md'));
     for (const file of files) {
       const name = basename(file, '.md');
       const slug = `pm-ref-${name === '_index' ? 'overview' : name}`;
@@ -280,12 +294,12 @@ export async function ingestBrainReferenceDocs(
 
   // Create relations between reference notes (overview -> children)
   if (db && createdNoteIds.length > 1) {
-    const overviewId = createdNoteIds.find(id => id.includes('pm-ref-overview'));
+    const overviewId = createdNoteIds.find((id) => id.includes('pm-ref-overview'));
     if (overviewId) {
       const existingRelations = db.getRelationsFrom(overviewId);
       const newRelations = createdNoteIds
-        .filter(id => id !== overviewId)
-        .map(targetId => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
+        .filter((id) => id !== overviewId)
+        .map((targetId) => ({ sourceId: overviewId, targetId, type: 'parent' as const }));
       db.upsertRelations(overviewId, [...existingRelations, ...newRelations]);
     }
   }
@@ -367,9 +381,10 @@ export const initCommand = new Command('init')
             rl.close();
 
             if (!answer || answer.toLowerCase().startsWith('y')) {
-              const newContent = gitignoreContent.endsWith('\n') || gitignoreContent === ''
-                ? gitignoreContent + '.brain/\n'
-                : gitignoreContent + '\n.brain/\n';
+              const newContent =
+                gitignoreContent.endsWith('\n') || gitignoreContent === ''
+                  ? gitignoreContent + '.brain/\n'
+                  : gitignoreContent + '\n.brain/\n';
               writeFileSync(gitignorePath, newContent, 'utf-8');
               process.stderr.write('Added .brain/ to .gitignore\n');
             }
@@ -378,18 +393,24 @@ export const initCommand = new Command('init')
       }
 
       if (opts.json) {
-        process.stdout.write(JSON.stringify({
-          type: 'local',
-          brainDir,
-          notesDir: opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes'),
-          dbPath: join(brainDir, 'brain.db'),
-        }) + '\n');
+        process.stdout.write(
+          JSON.stringify({
+            type: 'local',
+            brainDir,
+            notesDir: opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes'),
+            dbPath: join(brainDir, 'brain.db'),
+          }) + '\n'
+        );
       } else {
         process.stderr.write('Local brain initialized!\n\n');
         process.stderr.write(`Instance: ${brainDir}\n`);
-        process.stderr.write(`Notes: ${opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes')}\n`);
+        process.stderr.write(
+          `Notes: ${opts.notesDir ? join(process.cwd(), opts.notesDir) : join(brainDir, 'notes')}\n`
+        );
         process.stderr.write(`Database: ${join(brainDir, 'brain.db')}\n`);
-        process.stderr.write('\nAll brain commands in this directory will use the local instance.\n');
+        process.stderr.write(
+          '\nAll brain commands in this directory will use the local instance.\n'
+        );
       }
       return;
     }

@@ -48,13 +48,17 @@ afterEach(() => {
 
 describe('Frontmatter-aware search filtering (integration)', () => {
   it('indexes custom frontmatter fields into metadata column', async () => {
-    const filePath = writeNote('insight-1.md', {
-      title: 'WIP Limits Enforcement',
-      type: 'insight',
-      tier: 'fast',
-      'enforcement-strength': 'deterministic',
-      'architecture-layer': [1, 3],
-    }, 'WIP limits prevent overload by enforcing hard gates.');
+    const filePath = writeNote(
+      'insight-1.md',
+      {
+        title: 'WIP Limits Enforcement',
+        type: 'insight',
+        tier: 'fast',
+        'enforcement-strength': 'deterministic',
+        'architecture-layer': [1, 3],
+      },
+      'WIP limits prevent overload by enforcing hard gates.'
+    );
 
     await indexNote(filePath);
 
@@ -67,19 +71,27 @@ describe('Frontmatter-aware search filtering (integration)', () => {
   });
 
   it('--filter narrows search results by scalar metadata field', async () => {
-    const f1 = writeNote('insight-det.md', {
-      title: 'Deterministic Enforcement',
-      type: 'insight',
-      tier: 'fast',
-      'enforcement-strength': 'deterministic',
-    }, 'Hard gates prevent violations deterministically.');
+    const f1 = writeNote(
+      'insight-det.md',
+      {
+        title: 'Deterministic Enforcement',
+        type: 'insight',
+        tier: 'fast',
+        'enforcement-strength': 'deterministic',
+      },
+      'Hard gates prevent violations deterministically.'
+    );
 
-    const f2 = writeNote('insight-struct.md', {
-      title: 'Structural Enforcement',
-      type: 'insight',
-      tier: 'fast',
-      'enforcement-strength': 'structural',
-    }, 'Structural patterns guide behavior through architecture.');
+    const f2 = writeNote(
+      'insight-struct.md',
+      {
+        title: 'Structural Enforcement',
+        type: 'insight',
+        tier: 'fast',
+        'enforcement-strength': 'structural',
+      },
+      'Structural patterns guide behavior through architecture.'
+    );
 
     await indexNote(f1);
     await indexNote(f2);
@@ -98,19 +110,27 @@ describe('Frontmatter-aware search filtering (integration)', () => {
   });
 
   it('--filter matches array field values', async () => {
-    const f1 = writeNote('layer-13.md', {
-      title: 'Multi-layer insight',
-      type: 'insight',
-      tier: 'fast',
-      'architecture-layer': [1, 3],
-    }, 'Spans layer 1 and layer 3.');
+    const f1 = writeNote(
+      'layer-13.md',
+      {
+        title: 'Multi-layer insight',
+        type: 'insight',
+        tier: 'fast',
+        'architecture-layer': [1, 3],
+      },
+      'Spans layer 1 and layer 3.'
+    );
 
-    const f2 = writeNote('layer-2.md', {
-      title: 'Layer 2 only',
-      type: 'insight',
-      tier: 'fast',
-      'architecture-layer': [2],
-    }, 'Only layer 2.');
+    const f2 = writeNote(
+      'layer-2.md',
+      {
+        title: 'Layer 2 only',
+        type: 'insight',
+        tier: 'fast',
+        'architecture-layer': [2],
+      },
+      'Only layer 2.'
+    );
 
     await indexNote(f1);
     await indexNote(f2);
@@ -131,21 +151,29 @@ describe('Frontmatter-aware search filtering (integration)', () => {
   });
 
   it('multiple --filter flags apply AND logic', async () => {
-    const f1 = writeNote('both.md', {
-      title: 'Both match',
-      type: 'insight',
-      tier: 'fast',
-      'enforcement-strength': 'deterministic',
-      'research-quality': 'empirical',
-    }, 'Empirically validated deterministic enforcement.');
+    const f1 = writeNote(
+      'both.md',
+      {
+        title: 'Both match',
+        type: 'insight',
+        tier: 'fast',
+        'enforcement-strength': 'deterministic',
+        'research-quality': 'empirical',
+      },
+      'Empirically validated deterministic enforcement.'
+    );
 
-    const f2 = writeNote('one.md', {
-      title: 'One match',
-      type: 'insight',
-      tier: 'fast',
-      'enforcement-strength': 'deterministic',
-      'research-quality': 'anecdotal',
-    }, 'Anecdotal deterministic enforcement.');
+    const f2 = writeNote(
+      'one.md',
+      {
+        title: 'One match',
+        type: 'insight',
+        tier: 'fast',
+        'enforcement-strength': 'deterministic',
+        'research-quality': 'anecdotal',
+      },
+      'Anecdotal deterministic enforcement.'
+    );
 
     await indexNote(f1);
     await indexNote(f2);
@@ -169,14 +197,24 @@ describe('Frontmatter-aware search filtering (integration)', () => {
 
   it('facet computation returns correct distribution', async () => {
     let idx = 0;
-    for (const strength of ['deterministic', 'deterministic', 'structural', 'structural', 'procedural']) {
+    for (const strength of [
+      'deterministic',
+      'deterministic',
+      'structural',
+      'structural',
+      'procedural',
+    ]) {
       idx += 1;
-      const f = writeNote(`facet-${strength}-${randomUUID().slice(0, 4)}.md`, {
-        title: `${strength} insight ${idx}`,
-        type: 'insight',
-        tier: 'fast',
-        'enforcement-strength': strength,
-      }, `Insight about ${strength} enforcement.`);
+      const f = writeNote(
+        `facet-${strength}-${randomUUID().slice(0, 4)}.md`,
+        {
+          title: `${strength} insight ${idx}`,
+          type: 'insight',
+          tier: 'fast',
+          'enforcement-strength': strength,
+        },
+        `Insight about ${strength} enforcement.`
+      );
       await indexNote(f);
     }
 

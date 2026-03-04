@@ -621,10 +621,7 @@ export class BrainDB {
     return this.noteRepo.getFilteredNoteIdsByMetadata(filters, baseIds);
   }
 
-  getFacetCounts(
-    field: string,
-    noteIds: Set<string>
-  ): Array<{ value: string; count: number }> {
+  getFacetCounts(field: string, noteIds: Set<string>): Array<{ value: string; count: number }> {
     return this.noteRepo.getFacetCounts(field, noteIds);
   }
 

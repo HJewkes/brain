@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 import { parseIntervalDays } from '../utils.js';
 import type { NoteRecord, NoteTier } from '../types.js';
 
@@ -32,7 +33,7 @@ export const staleCommand = new Command('stale')
   .option('--days <n>', 'Show notes not reviewed in N days', parseInt)
   .option('--tier <tier>', 'Filter by tier (slow, fast)')
   .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     await withDb(({ db }) => {
       let notes = db.getAllNotes();
 
@@ -66,5 +67,5 @@ export const staleCommand = new Command('stale')
           );
         }
       }
-    });
+    }, parentResolveOpts(cmd));
   });

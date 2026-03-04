@@ -10,7 +10,10 @@ import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
 
 import { getPmNotes } from '../../../../src/modules/pm/data/queries.js';
-import { buildDependencyGraph, inferDependencies } from '../../../../src/modules/pm/engine/dependency.js';
+import {
+  buildDependencyGraph,
+  inferDependencies,
+} from '../../../../src/modules/pm/engine/dependency.js';
 import { createTestTask } from '../../../helpers.js';
 
 let db: BrainDB;
@@ -44,10 +47,16 @@ describe('inferDependencies', () => {
     await createProject(db, config, embedder, { name: 'Proj', prefix: 'INF' });
     await createWorkstream(db, config, embedder, { project: 'INF', name: 'WS1' });
     await createTestTask(db, config, embedder, {
-      project: 'INF', workstream: 1, name: 'Build feature', category: 'implementation',
+      project: 'INF',
+      workstream: 1,
+      name: 'Build feature',
+      category: 'implementation',
     });
     await createTestTask(db, config, embedder, {
-      project: 'INF', workstream: 1, name: 'Test feature', category: 'testing',
+      project: 'INF',
+      workstream: 1,
+      name: 'Test feature',
+      category: 'testing',
     });
 
     const created = inferDependencies(db, 'INF');
@@ -61,10 +70,16 @@ describe('inferDependencies', () => {
     await createProject(db, config, embedder, { name: 'Proj', prefix: 'DOC' });
     await createWorkstream(db, config, embedder, { project: 'DOC', name: 'WS1' });
     await createTestTask(db, config, embedder, {
-      project: 'DOC', workstream: 1, name: 'Build it', category: 'implementation',
+      project: 'DOC',
+      workstream: 1,
+      name: 'Build it',
+      category: 'implementation',
     });
     await createTestTask(db, config, embedder, {
-      project: 'DOC', workstream: 1, name: 'Document it', category: 'documentation',
+      project: 'DOC',
+      workstream: 1,
+      name: 'Document it',
+      category: 'documentation',
     });
 
     const created = inferDependencies(db, 'DOC');
@@ -78,13 +93,22 @@ describe('inferDependencies', () => {
     await createProject(db, config, embedder, { name: 'Proj', prefix: 'REV' });
     await createWorkstream(db, config, embedder, { project: 'REV', name: 'WS1' });
     await createTestTask(db, config, embedder, {
-      project: 'REV', workstream: 1, name: 'Build', category: 'implementation',
+      project: 'REV',
+      workstream: 1,
+      name: 'Build',
+      category: 'implementation',
     });
     await createTestTask(db, config, embedder, {
-      project: 'REV', workstream: 1, name: 'Test', category: 'testing',
+      project: 'REV',
+      workstream: 1,
+      name: 'Test',
+      category: 'testing',
     });
     await createTestTask(db, config, embedder, {
-      project: 'REV', workstream: 1, name: 'Review', category: 'review',
+      project: 'REV',
+      workstream: 1,
+      name: 'Review',
+      category: 'review',
     });
 
     const created = inferDependencies(db, 'REV');
@@ -99,10 +123,16 @@ describe('inferDependencies', () => {
     await createProject(db, config, embedder, { name: 'Proj', prefix: 'RES' });
     await createWorkstream(db, config, embedder, { project: 'RES', name: 'WS1' });
     await createTestTask(db, config, embedder, {
-      project: 'RES', workstream: 1, name: 'Investigate', category: 'research',
+      project: 'RES',
+      workstream: 1,
+      name: 'Investigate',
+      category: 'research',
     });
     await createTestTask(db, config, embedder, {
-      project: 'RES', workstream: 1, name: 'Build', category: 'implementation',
+      project: 'RES',
+      workstream: 1,
+      name: 'Build',
+      category: 'implementation',
     });
 
     const created = inferDependencies(db, 'RES');
@@ -119,10 +149,16 @@ describe('inferDependencies', () => {
     await createWorkstream(db, config, embedder, { project: 'CRS', name: 'WS1' });
     await createWorkstream(db, config, embedder, { project: 'CRS', name: 'WS2' });
     await createTestTask(db, config, embedder, {
-      project: 'CRS', workstream: 1, name: 'Build in WS1', category: 'implementation',
+      project: 'CRS',
+      workstream: 1,
+      name: 'Build in WS1',
+      category: 'implementation',
     });
     await createTestTask(db, config, embedder, {
-      project: 'CRS', workstream: 2, name: 'Test in WS2', category: 'testing',
+      project: 'CRS',
+      workstream: 2,
+      name: 'Test in WS2',
+      category: 'testing',
     });
 
     const created = inferDependencies(db, 'CRS');
@@ -137,7 +173,10 @@ describe('inferDependencies', () => {
     await createProject(db, config, embedder, { name: 'Proj', prefix: 'SLF' });
     await createWorkstream(db, config, embedder, { project: 'SLF', name: 'WS1' });
     await createTestTask(db, config, embedder, {
-      project: 'SLF', workstream: 1, name: 'Solo impl', category: 'implementation',
+      project: 'SLF',
+      workstream: 1,
+      name: 'Solo impl',
+      category: 'implementation',
     });
 
     const created = inferDependencies(db, 'SLF');
@@ -153,11 +192,17 @@ describe('inferDependencies', () => {
     const ws = await createWorkstream(db, config, embedder, { project: 'EXP', name: 'WS1' });
     if (!ws.ok) throw new Error(ws.error.message);
     const t1 = await createTestTask(db, config, embedder, {
-      project: 'EXP', workstream: 1, name: 'Build', category: 'implementation',
+      project: 'EXP',
+      workstream: 1,
+      name: 'Build',
+      category: 'implementation',
     });
     if (!t1.ok) throw new Error(t1.error.message);
     const t2 = await createTestTask(db, config, embedder, {
-      project: 'EXP', workstream: 1, name: 'Test', category: 'testing',
+      project: 'EXP',
+      workstream: 1,
+      name: 'Test',
+      category: 'testing',
     });
     if (!t2.ok) throw new Error(t2.error.message);
 
@@ -184,16 +229,28 @@ describe('inferDependencies', () => {
     await createProject(db, config, embedder, { name: 'Proj', prefix: 'CNT' });
     await createWorkstream(db, config, embedder, { project: 'CNT', name: 'WS1' });
     await createTestTask(db, config, embedder, {
-      project: 'CNT', workstream: 1, name: 'Build A', category: 'implementation',
+      project: 'CNT',
+      workstream: 1,
+      name: 'Build A',
+      category: 'implementation',
     });
     await createTestTask(db, config, embedder, {
-      project: 'CNT', workstream: 1, name: 'Build B', category: 'implementation',
+      project: 'CNT',
+      workstream: 1,
+      name: 'Build B',
+      category: 'implementation',
     });
     await createTestTask(db, config, embedder, {
-      project: 'CNT', workstream: 1, name: 'Test', category: 'testing',
+      project: 'CNT',
+      workstream: 1,
+      name: 'Test',
+      category: 'testing',
     });
     await createTestTask(db, config, embedder, {
-      project: 'CNT', workstream: 1, name: 'Docs', category: 'documentation',
+      project: 'CNT',
+      workstream: 1,
+      name: 'Docs',
+      category: 'documentation',
     });
 
     const created = inferDependencies(db, 'CNT');

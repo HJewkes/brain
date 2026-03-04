@@ -3,13 +3,32 @@ import { resolve, basename, relative, dirname, join } from 'node:path';
 import type { ScoredDoc } from '../data/onboard-types.js';
 
 const IGNORED_DIRS = new Set([
-  'node_modules', 'vendor', 'dist', 'build', '.git', '.next', '.turbo',
-  '__pycache__', '.venv', 'venv', 'target', 'coverage', '.cache',
+  'node_modules',
+  'vendor',
+  'dist',
+  'build',
+  '.git',
+  '.next',
+  '.turbo',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'target',
+  'coverage',
+  '.cache',
 ]);
 
 const HIGH_VALUE_NAMES = new Set([
-  'readme', 'architecture', 'contributing', 'changelog', 'design',
-  'overview', 'getting-started', 'quickstart', 'api', 'guide',
+  'readme',
+  'architecture',
+  'contributing',
+  'changelog',
+  'design',
+  'overview',
+  'getting-started',
+  'quickstart',
+  'api',
+  'guide',
 ]);
 
 const DOC_DIRS = new Set(['docs', 'doc', 'documentation']);
@@ -36,16 +55,18 @@ function scoreDoc(filePath: string, rootDir: string): number {
 
   // In docs/ directory
   const parts = rel.split('/');
-  if (parts.some(p => DOC_DIRS.has(p.toLowerCase()))) score += 20;
+  if (parts.some((p) => DOC_DIRS.has(p.toLowerCase()))) score += 20;
 
   // ADR pattern
-  if (ADR_PATTERNS.some(p => p.test(rel))) score += 15;
+  if (ADR_PATTERNS.some((p) => p.test(rel))) score += 15;
 
   // File size bonus (reasonable size)
   try {
     const size = statSync(filePath).size;
     if (size >= MIN_FILE_SIZE && size <= MAX_FILE_SIZE) score += 10;
-  } catch { /* no bonus */ }
+  } catch {
+    /* no bonus */
+  }
 
   return score;
 }
@@ -74,13 +95,21 @@ function walkForDocs(dir: string): string[] {
 
   function walk(d: string): void {
     let entries: string[];
-    try { entries = readdirSync(d); } catch { return; }
+    try {
+      entries = readdirSync(d);
+    } catch {
+      return;
+    }
 
     for (const entry of entries) {
       if (IGNORED_DIRS.has(entry)) continue;
       const full = join(d, entry);
       let stat;
-      try { stat = statSync(full); } catch { continue; }
+      try {
+        stat = statSync(full);
+      } catch {
+        continue;
+      }
 
       if (stat.isDirectory()) {
         walk(full);

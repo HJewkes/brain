@@ -179,9 +179,7 @@ function areDependenciesComplete(db: BrainDB, dependsOn: string[] | undefined): 
 
 export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string[] {
   const relations = db.getRelationsFrom(taskNoteId);
-  const depNoteIds = relations
-    .filter((r) => r.type === 'depends_on')
-    .map((r) => r.targetId);
+  const depNoteIds = relations.filter((r) => r.type === 'depends_on').map((r) => r.targetId);
 
   const displayIds: string[] = [];
   for (const noteId of depNoteIds) {
@@ -194,7 +192,11 @@ export function getDependencyDisplayIds(db: BrainDB, taskNoteId: string): string
   return displayIds;
 }
 
-function mergeDependsOn(db: BrainDB, noteId: string, frontmatterDeps: string[] | undefined): string[] {
+function mergeDependsOn(
+  db: BrainDB,
+  noteId: string,
+  frontmatterDeps: string[] | undefined
+): string[] {
   const relationDeps = getDependencyDisplayIds(db, noteId);
   return relationDeps.length > 0 ? relationDeps : (frontmatterDeps ?? []);
 }
@@ -217,7 +219,10 @@ export async function createTask(
   }
 
   if (!input.description?.trim()) {
-    return fail('INVALID_INPUT', 'Task description is required — tasks without body content are invisible to search');
+    return fail(
+      'INVALID_INPUT',
+      'Task description is required — tasks without body content are invisible to search'
+    );
   }
 
   const resolvedDepIds: Array<{ displayId: string; noteId: string }> = [];
@@ -253,7 +258,7 @@ export async function createTask(
 
   // Lower-threshold auto-link pass for PM tasks (0.60 vs indexing's 0.85)
   // to catch task↔research doc connections that short descriptions miss
-  const pmAutoLinks = computeAutoLinks(db, noteId, 0.60, 5);
+  const pmAutoLinks = computeAutoLinks(db, noteId, 0.6, 5);
 
   // Preserve auto-links created by indexSingleFile (0.85 threshold)
   const existingRelations = db.getRelationsFrom(noteId);
@@ -338,7 +343,8 @@ export function listTasks(
   if (filters?.workstream !== undefined) filterObj.workstream = filters.workstream;
   // When searching, query all statuses by default (unless explicit --status)
   // 'all' means no status filter; virtual state filters are handled post-hoc
-  if (filters?.status !== undefined && !virtualStateFilter && !isStatusAll) filterObj.status = filters.status;
+  if (filters?.status !== undefined && !virtualStateFilter && !isStatusAll)
+    filterObj.status = filters.status;
   if (filters?.mode !== undefined) filterObj.mode = filters.mode;
   if (filters?.priority !== undefined) filterObj.priority = filters.priority;
   if (filters?.category !== undefined) filterObj.category = filters.category;
@@ -451,8 +457,8 @@ export function listTasks(
 
   if (virtualStateFilter) {
     const filterName = filters!.status!.toLowerCase();
-    tasks = tasks.filter((t) =>
-      t.virtualStates.includes(virtualStateFilter) || t.status === filterName
+    tasks = tasks.filter(
+      (t) => t.virtualStates.includes(virtualStateFilter) || t.status === filterName
     );
   }
 
@@ -562,14 +568,12 @@ export async function updateTaskStatus(
   };
 
   // Unblock is: blocked -> pending
-  const activityType = currentStatus === 'blocked' && newStatus === 'pending'
-    ? 'unblock'
-    : activityTypeMap[newStatus];
+  const activityType =
+    currentStatus === 'blocked' && newStatus === 'pending' ? 'unblock' : activityTypeMap[newStatus];
 
   if (activityType) {
-    const newlyEligible = activityType === 'complete'
-      ? computeNewlyEligible(db, noteId)
-      : undefined;
+    const newlyEligible =
+      activityType === 'complete' ? computeNewlyEligible(db, noteId) : undefined;
 
     await createActivityNote(db, config, embedder, {
       project: refreshedMeta.project as string,

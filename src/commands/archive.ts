@@ -2,11 +2,12 @@ import { Command } from '@commander-js/extra-typings';
 import { renameSync, mkdirSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 
 export const archiveCommand = new Command('archive')
   .description('Move expired fast-tier notes to archive')
   .option('--dry-run', 'List files that would be archived without moving them')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     await withDb(({ db, config }) => {
       const notes = db.getAllNotes();
       const now = Date.now();
@@ -47,5 +48,5 @@ export const archiveCommand = new Command('archive')
 
       const verb = opts.dryRun ? 'Would archive' : 'Archived';
       process.stdout.write(`${verb} ${expired.length} note${expired.length === 1 ? '' : 's'}.\n`);
-    });
+    }, parentResolveOpts(cmd));
   });

@@ -25,7 +25,7 @@ describe('prompt drift guard', () => {
 
   describe('test bench prompts', () => {
     it('each P-*.md is at most 50 lines', () => {
-      const files = readdirSync(TEST_BENCH_DIR).filter(f => f.match(/^P-\d{2}\.md$/));
+      const files = readdirSync(TEST_BENCH_DIR).filter((f) => f.match(/^P-\d{2}\.md$/));
       expect(files.length).toBeGreaterThan(0);
 
       for (const file of files) {

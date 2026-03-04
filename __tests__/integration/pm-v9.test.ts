@@ -56,9 +56,7 @@ afterAll(() => {
 describe('PM V9 integration', { timeout: 60_000 }, () => {
   describe('onboard creates hierarchy with parent edges', () => {
     it('onboard creates project, workstreams, and tasks', () => {
-      const output = pm(
-        `onboard "Test V9 Project" --prefix TV9 --cwd "${docsDir}" --json`
-      );
+      const output = pm(`onboard "Test V9 Project" --prefix TV9 --cwd "${docsDir}" --json`);
       const result = JSON.parse(output);
 
       expect(result.project).toBe('TV9');
@@ -232,9 +230,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
 
   describe('slug collision handling', () => {
     it('onboardSlug deduplicates', async () => {
-      const { onboardSlug } = await import(
-        '../../src/modules/pm/commands/onboard.js'
-      );
+      const { onboardSlug } = await import('../../src/modules/pm/commands/onboard.js');
 
       const used = new Set<string>();
       const first = onboardSlug('architecture', undefined, used);
@@ -246,9 +242,7 @@ describe('PM V9 integration', { timeout: 60_000 }, () => {
     });
 
     it('onboardSlug handles component prefix', async () => {
-      const { onboardSlug } = await import(
-        '../../src/modules/pm/commands/onboard.js'
-      );
+      const { onboardSlug } = await import('../../src/modules/pm/commands/onboard.js');
 
       const used = new Set<string>();
       const slug1 = onboardSlug('readme', 'frontend', used);

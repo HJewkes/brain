@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
+import type { ResolveOptions } from '../services/config.js';
 import type { InboxItem, InboxSource } from '../types.js';
 import { VALID_INBOX_SOURCES } from '../types.js';
 
@@ -12,9 +14,10 @@ export const ingestCommand = new Command('ingest')
   .option('--source <source>', 'Source label (file, crawler, api)', 'file')
   .option('--url <url>', 'Source URL for all items')
   .option('--urls <file>', 'File containing URLs to import (one per line)')
-  .action(async (files, opts) => {
+  .action(async (files, opts, cmd) => {
+    const resolveOpts = parentResolveOpts(cmd);
     if (opts.urls) {
-      await handleUrlsFile(opts.urls);
+      await handleUrlsFile(opts.urls, resolveOpts);
       return;
     }
 
@@ -68,10 +71,10 @@ export const ingestCommand = new Command('ingest')
       }
 
       process.stdout.write(`Ingested ${ingested} item${ingested !== 1 ? 's' : ''} into inbox.\n`);
-    });
+    }, resolveOpts);
   });
 
-async function handleUrlsFile(urlsPath: string): Promise<void> {
+async function handleUrlsFile(urlsPath: string, resolveOpts?: ResolveOptions): Promise<void> {
   const { fetchAndExtract } = await import('../services/web-extract.js');
   const urlFile = resolve(urlsPath);
   const content = readFileSync(urlFile, 'utf-8');
@@ -110,5 +113,5 @@ async function handleUrlsFile(urlsPath: string): Promise<void> {
     process.stdout.write(`Ingested ${ingested} URL(s) into inbox.`);
     if (failed > 0) process.stdout.write(` ${failed} failed.`);
     process.stdout.write('\n');
-  });
+  }, resolveOpts);
 }

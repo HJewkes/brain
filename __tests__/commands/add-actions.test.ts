@@ -25,6 +25,8 @@ vi.mock('../../src/services/config.js', () => ({
     embedder: 'local',
     fusionWeights: { bm25: 0.3, vector: 0.7 },
   })),
+  resolveInstance: vi.fn(() => ({ root: '/tmp', isLocal: false, source: 'global' })),
+  parentResolveOpts: vi.fn(() => ({})),
 }));
 
 vi.mock('../../src/services/brain-service.js', () => ({
@@ -32,7 +34,12 @@ vi.mock('../../src/services/brain-service.js', () => ({
     await fn({
       db: { upsertNote: vi.fn(), upsertChunks: vi.fn() },
       embedder: { model: 'mock', dimensions: 384, embed: vi.fn().mockResolvedValue([]) },
-      config: { notesDir: tmpNotesDir, dbPath: ':memory:', embedder: 'local', fusionWeights: { bm25: 0.3, vector: 0.7 } },
+      config: {
+        notesDir: tmpNotesDir,
+        dbPath: ':memory:',
+        embedder: 'local',
+        fusionWeights: { bm25: 0.3, vector: 0.7 },
+      },
       modules: {},
       close: () => {},
     });
@@ -136,7 +143,11 @@ describe('add command validation', () => {
 describe('add command with file input', () => {
   it('creates a note from a file with frontmatter', async () => {
     const filePath = join(tmpDir, 'with-fm.md');
-    writeFileSync(filePath, '---\nid: test-add\ntitle: Test Add\ntype: note\ntier: slow\n---\n\n# Content\n\nHello', 'utf-8');
+    writeFileSync(
+      filePath,
+      '---\nid: test-add\ntitle: Test Add\ntype: note\ntier: slow\n---\n\n# Content\n\nHello',
+      'utf-8'
+    );
 
     await run(filePath);
 

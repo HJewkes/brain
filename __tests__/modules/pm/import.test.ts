@@ -44,7 +44,11 @@ describe('executeImport', () => {
         {
           name: 'Backend',
           tasks: [
-            { name: 'Setup DB', description: 'Set up the database schema and migrations.', priority: 'high' },
+            {
+              name: 'Setup DB',
+              description: 'Set up the database schema and migrations.',
+              priority: 'high',
+            },
             { name: 'Build API', description: 'Build the REST API endpoints.', priority: 'medium' },
           ],
         },
@@ -91,7 +95,14 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [{ name: 'First task', description: 'The first task to complete.' }, { name: 'Second task', description: 'Depends on first task.', depends_on: ['DEP-01.01'] }],
+          tasks: [
+            { name: 'First task', description: 'The first task to complete.' },
+            {
+              name: 'Second task',
+              description: 'Depends on first task.',
+              depends_on: ['DEP-01.01'],
+            },
+          ],
         },
       ],
     };
@@ -163,7 +174,10 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [{ name: 'First', description: 'First task.' }, { name: 'Second', description: 'Second task with bad dep.', depends_on: ['BAD-99.99'] }],
+          tasks: [
+            { name: 'First', description: 'First task.' },
+            { name: 'Second', description: 'Second task with bad dep.', depends_on: ['BAD-99.99'] },
+          ],
         },
       ],
     };
@@ -200,7 +214,13 @@ describe('executeImport', () => {
         },
         {
           name: 'WS2',
-          tasks: [{ name: 'Depends on WS1', description: 'Cross-workstream dependency task.', depends_on: ['XDP-01.01'] }],
+          tasks: [
+            {
+              name: 'Depends on WS1',
+              description: 'Cross-workstream dependency task.',
+              depends_on: ['XDP-01.01'],
+            },
+          ],
         },
       ],
     };

@@ -133,13 +133,14 @@ export function createWorkstreamCommands(): Command {
         }
 
         const PRIORITY_ORDER: Record<string, number> = {
-          critical: 0, high: 1, medium: 2, low: 3,
+          critical: 0,
+          high: 1,
+          medium: 2,
+          low: 3,
         };
         const eligible = taskList
-          .filter(t => t.virtualStates.includes('+ELIGIBLE'))
-          .sort((a, b) =>
-            (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)
-          )
+          .filter((t) => t.virtualStates.includes('+ELIGIBLE'))
+          .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9))
           .slice(0, 3);
 
         if (opts.json) {
@@ -150,7 +151,7 @@ export function createWorkstreamCommands(): Command {
               byStatus,
               byPriority,
             },
-            eligibleTasks: eligible.map(t => ({
+            eligibleTasks: eligible.map((t) => ({
               display_id: t.display_id,
               title: t.title,
               priority: t.priority,

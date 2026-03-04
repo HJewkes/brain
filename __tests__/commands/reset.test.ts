@@ -18,6 +18,8 @@ vi.mock('../../src/services/config.js', () => ({
   })),
   getConfigDir: vi.fn(() => '/tmp/test-config'),
   getDataDir: vi.fn(() => '/tmp/test-data'),
+  resolveInstance: vi.fn(() => ({ root: '/tmp', isLocal: false, source: 'global' })),
+  parentResolveOpts: vi.fn(() => ({})),
 }));
 
 import { resetCommand } from '../../src/commands/reset.js';

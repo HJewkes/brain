@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { execFileSync } from 'node:child_process';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 import { runAllChecks } from '../services/health.js';
 import type { HealthCheckResult, HealthReport } from '../types.js';
 
@@ -50,7 +51,7 @@ export const doctorCommand = new Command('doctor')
   .description('Check system health and optionally auto-repair')
   .option('--fix', 'attempt to auto-repair warnings')
   .option('--json', 'output as JSON')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     await withDb(async ({ db, config }) => {
       const report = await runAllChecks(db, config.embedder, config.ollamaUrl, config.ollamaModel);
 
@@ -78,5 +79,5 @@ export const doctorCommand = new Command('doctor')
       } else if (report.summary.warnings > 0 || report.summary.errors > 0) {
         process.stderr.write('  Run "brain doctor --fix" to auto-repair.\n');
       }
-    });
+    }, parentResolveOpts(cmd));
   });

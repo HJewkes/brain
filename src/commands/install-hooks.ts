@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync, unlinkSync, statSync } from 'node
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { execSync } from 'node:child_process';
-import { loadConfig } from '../services/config.js';
+import { loadConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
 
 const PLIST_LABEL = 'com.brain.index';
 const PLIST_PATH = join(homedir(), 'Library', 'LaunchAgents', `${PLIST_LABEL}.plist`);
@@ -197,8 +197,9 @@ export const installHooksCommand = new Command('install-hooks')
   .option('--uninstall', 'remove scheduled processing')
   .option('--status', 'show current hook status')
   .option('--json', 'output as JSON')
-  .action((opts) => {
-    const config = loadConfig();
+  .action((opts, cmd) => {
+    const instance = resolveInstance(parentResolveOpts(cmd));
+    const config = loadConfig(instance);
     const os = platform();
 
     if (opts.status || opts.json) {

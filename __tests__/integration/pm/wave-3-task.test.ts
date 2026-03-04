@@ -105,12 +105,16 @@ describe('Wave 3: Task CRUD integration', () => {
     });
 
     const relations = db.getRelationsFrom(taskBNoteId!);
-    const depRelations = relations.filter(r => r.type === 'depends_on');
+    const depRelations = relations.filter((r) => r.type === 'depends_on');
     expect(depRelations).toHaveLength(1);
   });
 
   it('shows task with virtual states (+READY for no deps)', async () => {
-    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Ready task' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Ready task',
+    });
 
     const result = getTask(db, 'TST-01.01');
     expect(result.ok).toBe(true);
@@ -155,7 +159,11 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('block → unblock round-trip', async () => {
-    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Blockable' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Blockable',
+    });
 
     const r1 = await updateTaskStatus(db, config, embedder, 'TST-01.01', 'blocked');
     expect(r1.ok).toBe(true);
@@ -220,7 +228,11 @@ describe('Wave 3: Task CRUD integration', () => {
   });
 
   it('deletes task and removes note and content_dir', async () => {
-    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Delete me' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Delete me',
+    });
 
     const filePath = join(notesDir, 'modules', 'pm', 'TST', 'TST-01.01.md');
     const contentDir = join(notesDir, 'modules', 'pm', 'TST', 'TST-01.01');

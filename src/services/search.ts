@@ -291,11 +291,7 @@ export async function search(
   scored.sort((a, b) => b.score - a.score);
   const DEFAULT_MIN_SCORE = 0.25;
   const effectiveMinScore =
-    options.minScore != null
-      ? options.minScore
-      : strategy === 'score'
-        ? DEFAULT_MIN_SCORE
-        : null;
+    options.minScore != null ? options.minScore : strategy === 'score' ? DEFAULT_MIN_SCORE : null;
   const filtered =
     effectiveMinScore != null ? scored.filter((s) => s.score >= effectiveMinScore) : scored;
   const afterDropoff =
@@ -421,7 +417,7 @@ export function checkAndPromote(
 function getPrivateModuleNoteIds(
   db: BrainDB,
   registry: ModuleRegistry,
-  skipModule?: string,
+  skipModule?: string
 ): Set<string> {
   const privateIds = new Set<string>();
   for (const { module: moduleName, filter } of registry.getFilters()) {

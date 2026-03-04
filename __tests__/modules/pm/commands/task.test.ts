@@ -204,7 +204,16 @@ describe('task list', () => {
 
 describe('task add', () => {
   it('creates task with required fields', async () => {
-    await run('add', 'New task', '--project', 'TEST', '--workstream', '1', '--description', 'A new test task.');
+    await run(
+      'add',
+      'New task',
+      '--project',
+      'TEST',
+      '--workstream',
+      '1',
+      '--description',
+      'A new test task.'
+    );
 
     const out = stdout();
     expect(out).toContain('TEST-01.04');
@@ -212,14 +221,35 @@ describe('task add', () => {
   });
 
   it('--depends-on sets dependency', async () => {
-    await run('add', 'Dep task', '--project', 'TEST', '--workstream', '1', '--description', 'Task with dependency.', '--depends-on', 'TEST-01.01');
+    await run(
+      'add',
+      'Dep task',
+      '--project',
+      'TEST',
+      '--workstream',
+      '1',
+      '--description',
+      'Task with dependency.',
+      '--depends-on',
+      'TEST-01.01'
+    );
 
     const out = stdout();
     expect(out).toContain('TEST-01.04');
   });
 
   it('--json outputs created task', async () => {
-    await run('add', 'Json task', '--project', 'TEST', '--workstream', '1', '--description', 'JSON output test task.', '--json');
+    await run(
+      'add',
+      'Json task',
+      '--project',
+      'TEST',
+      '--workstream',
+      '1',
+      '--description',
+      'JSON output test task.',
+      '--json'
+    );
 
     const parsed = JSON.parse(stdout());
     expect(parsed.display_id).toBe('TEST-01.04');
@@ -655,7 +685,16 @@ describe('task list (output formatting)', () => {
   });
 
   it('text output single task shows display_id and status', async () => {
-    await run('add', 'Single task', '--project', 'TEST', '--workstream', '1', '--description', 'A single test task.');
+    await run(
+      'add',
+      'Single task',
+      '--project',
+      'TEST',
+      '--workstream',
+      '1',
+      '--description',
+      'A single test task.'
+    );
 
     const out = stdout();
     expect(out).toContain('TEST-01.04');

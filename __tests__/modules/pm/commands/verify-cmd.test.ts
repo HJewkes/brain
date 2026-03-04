@@ -115,8 +115,15 @@ describe('verify command handler', () => {
 
   it('all TaskCategory values produce verification output', async () => {
     const categories: TaskCategory[] = [
-      'implementation', 'testing', 'documentation', 'research',
-      'review', 'infrastructure', 'configuration', 'design', 'migration',
+      'implementation',
+      'testing',
+      'documentation',
+      'research',
+      'review',
+      'infrastructure',
+      'configuration',
+      'design',
+      'migration',
     ];
 
     for (const category of categories) {

@@ -137,7 +137,8 @@ export function createTestTask(
 ) {
   return createTask(db, config, embedder, {
     ...input,
-    description: input.description ?? `Test task: ${input.name}. This is a test task for automated testing.`,
+    description:
+      input.description ?? `Test task: ${input.name}. This is a test task for automated testing.`,
   });
 }
 

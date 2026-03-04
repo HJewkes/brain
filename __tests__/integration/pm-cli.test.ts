@@ -290,9 +290,7 @@ describe('PM CLI integration', { timeout: 60_000 }, () => {
 
   describe('decisions and check', () => {
     it('decision add creates', () => {
-      const output = pm(
-        'decision add "Use REST" --project TST --source-task TST-01.01 --json'
-      );
+      const output = pm('decision add "Use REST" --project TST --source-task TST-01.01 --json');
       const result = JSON.parse(output);
 
       expect(result).toHaveProperty('display_id');

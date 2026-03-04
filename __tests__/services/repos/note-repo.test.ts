@@ -525,48 +525,58 @@ describe('NoteRepo', () => {
 
   describe('metadata filtering', () => {
     it('getFilteredNoteIdsByMetadata filters by scalar field', () => {
-      db.upsertNote(makeNote({
-        id: 'n1',
-        metadata: JSON.stringify({ type: 'insight', 'enforcement-strength': 'deterministic' }),
-      }));
-      db.upsertNote(makeNote({
-        id: 'n2',
-        metadata: JSON.stringify({ type: 'insight', 'enforcement-strength': 'structural' }),
-      }));
-
-      const result = db.getFilteredNoteIdsByMetadata(
-        [{ field: 'enforcement-strength', value: 'deterministic' }]
+      db.upsertNote(
+        makeNote({
+          id: 'n1',
+          metadata: JSON.stringify({ type: 'insight', 'enforcement-strength': 'deterministic' }),
+        })
       );
+      db.upsertNote(
+        makeNote({
+          id: 'n2',
+          metadata: JSON.stringify({ type: 'insight', 'enforcement-strength': 'structural' }),
+        })
+      );
+
+      const result = db.getFilteredNoteIdsByMetadata([
+        { field: 'enforcement-strength', value: 'deterministic' },
+      ]);
       expect(result.has('n1')).toBe(true);
       expect(result.has('n2')).toBe(false);
     });
 
     it('getFilteredNoteIdsByMetadata filters by array field', () => {
-      db.upsertNote(makeNote({
-        id: 'n1',
-        metadata: JSON.stringify({ 'architecture-layer': [1, 3] }),
-      }));
-      db.upsertNote(makeNote({
-        id: 'n2',
-        metadata: JSON.stringify({ 'architecture-layer': [2] }),
-      }));
-
-      const result = db.getFilteredNoteIdsByMetadata(
-        [{ field: 'architecture-layer', value: '3' }]
+      db.upsertNote(
+        makeNote({
+          id: 'n1',
+          metadata: JSON.stringify({ 'architecture-layer': [1, 3] }),
+        })
       );
+      db.upsertNote(
+        makeNote({
+          id: 'n2',
+          metadata: JSON.stringify({ 'architecture-layer': [2] }),
+        })
+      );
+
+      const result = db.getFilteredNoteIdsByMetadata([{ field: 'architecture-layer', value: '3' }]);
       expect(result.has('n1')).toBe(true);
       expect(result.has('n2')).toBe(false);
     });
 
     it('getFilteredNoteIdsByMetadata intersects with baseIds', () => {
-      db.upsertNote(makeNote({
-        id: 'n1',
-        metadata: JSON.stringify({ category: 'context-management' }),
-      }));
-      db.upsertNote(makeNote({
-        id: 'n2',
-        metadata: JSON.stringify({ category: 'context-management' }),
-      }));
+      db.upsertNote(
+        makeNote({
+          id: 'n1',
+          metadata: JSON.stringify({ category: 'context-management' }),
+        })
+      );
+      db.upsertNote(
+        makeNote({
+          id: 'n2',
+          metadata: JSON.stringify({ category: 'context-management' }),
+        })
+      );
 
       const baseIds = new Set(['n1']);
       const result = db.getFilteredNoteIdsByMetadata(
@@ -578,14 +588,18 @@ describe('NoteRepo', () => {
     });
 
     it('getFilteredNoteIdsByMetadata applies AND logic across filters', () => {
-      db.upsertNote(makeNote({
-        id: 'n1',
-        metadata: JSON.stringify({ type: 'insight', quality: 'empirical' }),
-      }));
-      db.upsertNote(makeNote({
-        id: 'n2',
-        metadata: JSON.stringify({ type: 'insight', quality: 'anecdotal' }),
-      }));
+      db.upsertNote(
+        makeNote({
+          id: 'n1',
+          metadata: JSON.stringify({ type: 'insight', quality: 'empirical' }),
+        })
+      );
+      db.upsertNote(
+        makeNote({
+          id: 'n2',
+          metadata: JSON.stringify({ type: 'insight', quality: 'anecdotal' }),
+        })
+      );
 
       const result = db.getFilteredNoteIdsByMetadata([
         { field: 'type', value: 'insight' },
@@ -598,8 +612,12 @@ describe('NoteRepo', () => {
 
   describe('facet counts', () => {
     it('getFacetCounts returns value counts for scalar field', () => {
-      db.upsertNote(makeNote({ id: 'n1', metadata: JSON.stringify({ strength: 'deterministic' }) }));
-      db.upsertNote(makeNote({ id: 'n2', metadata: JSON.stringify({ strength: 'deterministic' }) }));
+      db.upsertNote(
+        makeNote({ id: 'n1', metadata: JSON.stringify({ strength: 'deterministic' }) })
+      );
+      db.upsertNote(
+        makeNote({ id: 'n2', metadata: JSON.stringify({ strength: 'deterministic' }) })
+      );
       db.upsertNote(makeNote({ id: 'n3', metadata: JSON.stringify({ strength: 'structural' }) }));
 
       const facets = db.getFacetCounts('strength', new Set(['n1', 'n2', 'n3']));

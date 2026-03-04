@@ -143,7 +143,11 @@ describe('findBlockedWithoutCause', () => {
 
 describe('findCancelledDependencies', () => {
   it('returns tasks depending on cancelled tasks', async () => {
-    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Will Cancel' });
+    await createTestTask(db, config, embedder, {
+      project: 'CHK',
+      workstream: 1,
+      name: 'Will Cancel',
+    });
     await createTestTask(db, config, embedder, {
       project: 'CHK',
       workstream: 1,
@@ -211,7 +215,11 @@ describe('findStalePrompts', () => {
 
 describe('computeDecisionPairs', () => {
   it('returns pairs of decisions sharing impact targets', async () => {
-    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'Shared Task' });
+    await createTestTask(db, config, embedder, {
+      project: 'CHK',
+      workstream: 1,
+      name: 'Shared Task',
+    });
     await createDecision(db, config, embedder, {
       project: 'CHK',
       name: 'Use REST',
@@ -275,7 +283,11 @@ describe('computeTaskDecisionAlignment', () => {
   });
 
   it('skips tasks with no impacting decisions', async () => {
-    await createTestTask(db, config, embedder, { project: 'CHK', workstream: 1, name: 'No decisions' });
+    await createTestTask(db, config, embedder, {
+      project: 'CHK',
+      workstream: 1,
+      name: 'No decisions',
+    });
     const alignments = computeTaskDecisionAlignment(db, 'CHK');
     expect(alignments).toHaveLength(0);
   });

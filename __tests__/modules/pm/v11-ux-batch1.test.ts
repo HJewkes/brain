@@ -47,7 +47,9 @@ describe('O-163: projects plural alias', () => {
       registerExtractionStrategy: () => {},
       registerFilter: () => {},
       registerMigration: () => {},
-      registerCommand: (cmd: Command) => { registered.push(cmd); },
+      registerCommand: (cmd: Command) => {
+        registered.push(cmd);
+      },
     };
     pmModule.register(mockCtx as never);
 

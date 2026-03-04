@@ -12,7 +12,9 @@ let db: BrainDB;
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })),
+  withBrain: vi.fn(async (fn) =>
+    fn({ db, embedder: createMockEmbedder(), config, modules: {}, close: () => {} })
+  ),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 

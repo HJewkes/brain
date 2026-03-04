@@ -168,7 +168,14 @@ describe('next', () => {
   it('shows "No eligible tasks" when none are eligible', async () => {
     // Complete the two eligible tasks, making the remaining ones depend on incomplete deps
     // Actually easier: mark all tasks as done so no pending remain
-    for (const id of ['TEST-01.01', 'TEST-02.01', 'TEST-01.02', 'TEST-02.02', 'TEST-01.03', 'TEST-02.03']) {
+    for (const id of [
+      'TEST-01.01',
+      'TEST-02.01',
+      'TEST-01.02',
+      'TEST-02.02',
+      'TEST-01.03',
+      'TEST-02.03',
+    ]) {
       await updateTaskStatus(db, config, embedder, id, 'claimed' as TaskStatus);
       await updateTaskStatus(db, config, embedder, id, 'in-progress' as TaskStatus);
       await updateTaskStatus(db, config, embedder, id, 'done' as TaskStatus);
@@ -200,15 +207,21 @@ describe('waves', () => {
     // Find a task that has dependencies
     const allTasks = parsed.flatMap((w: { tasks: unknown[] }) => w.tasks);
     const taskWithDeps = allTasks.find(
-      (t: { display_id: string; depends_on?: string[] }) =>
-        t.depends_on && t.depends_on.length > 0
+      (t: { display_id: string; depends_on?: string[] }) => t.depends_on && t.depends_on.length > 0
     );
     expect(taskWithDeps).toBeDefined();
     expect(taskWithDeps.depends_on).toEqual(expect.arrayContaining([expect.any(String)]));
   });
 
   it('shows "No active tasks" when all done', async () => {
-    for (const id of ['TEST-01.01', 'TEST-02.01', 'TEST-01.02', 'TEST-02.02', 'TEST-01.03', 'TEST-02.03']) {
+    for (const id of [
+      'TEST-01.01',
+      'TEST-02.01',
+      'TEST-01.02',
+      'TEST-02.02',
+      'TEST-01.03',
+      'TEST-02.03',
+    ]) {
       await updateTaskStatus(db, config, embedder, id, 'claimed' as TaskStatus);
       await updateTaskStatus(db, config, embedder, id, 'in-progress' as TaskStatus);
       await updateTaskStatus(db, config, embedder, id, 'done' as TaskStatus);
@@ -359,7 +372,9 @@ describe('briefing', () => {
     const parsed = JSON.parse(stdout());
     // No tasks have status='blocked', but tasks with unmet deps get +BLOCKED virtual state
     // TEST-01.02 depends on 01.01 (pending), TEST-01.03 depends on 01.02, etc.
-    const blockedIds = (parsed.tasks.blocked as Array<{ displayId: string }>).map((t) => t.displayId);
+    const blockedIds = (parsed.tasks.blocked as Array<{ displayId: string }>).map(
+      (t) => t.displayId
+    );
     expect(blockedIds.length).toBe(4);
     expect(blockedIds).toContain('TEST-01.02');
     expect(blockedIds).toContain('TEST-01.03');

@@ -245,8 +245,16 @@ describe('Wave 8: Capture + Audit + Import', () => {
           name: 'Main',
           tasks: [
             { name: 'Foundation', description: 'Lay the foundation.' },
-            { name: 'Build on foundation', description: 'Build on the foundation.', depends_on: ['DIM-01.01'] },
-            { name: 'Final step', description: 'Complete the final step.', depends_on: ['DIM-01.01', 'DIM-01.02'] },
+            {
+              name: 'Build on foundation',
+              description: 'Build on the foundation.',
+              depends_on: ['DIM-01.01'],
+            },
+            {
+              name: 'Final step',
+              description: 'Complete the final step.',
+              depends_on: ['DIM-01.01', 'DIM-01.02'],
+            },
           ],
         },
       ],

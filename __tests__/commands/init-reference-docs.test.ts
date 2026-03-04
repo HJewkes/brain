@@ -63,7 +63,7 @@ describe('ingestBrainReferenceDocs', () => {
     await ingestBrainReferenceDocs(config, db, embedder);
 
     const allNotes = db.getAllNotes();
-    const refNotes = allNotes.filter(n => n.id.startsWith('pm-ref-'));
+    const refNotes = allNotes.filter((n) => n.id.startsWith('pm-ref-'));
     expect(refNotes.length).toBeGreaterThan(0);
 
     // Should have module set to pm
@@ -79,10 +79,10 @@ describe('ingestBrainReferenceDocs', () => {
     await ingestBrainReferenceDocs(config, db, embedder);
 
     const allNotes = db.getAllNotes();
-    const overviewNote = allNotes.find(n => n.id === 'pm-ref-overview');
+    const overviewNote = allNotes.find((n) => n.id === 'pm-ref-overview');
     if (overviewNote) {
       const relations = db.getRelationsFrom(overviewNote.id);
-      const parentRelations = relations.filter(r => r.type === 'parent');
+      const parentRelations = relations.filter((r) => r.type === 'parent');
       expect(parentRelations.length).toBeGreaterThan(0);
     }
   });
@@ -92,12 +92,12 @@ describe('ingestBrainReferenceDocs', () => {
     const embedder = createMockEmbedder();
 
     await ingestBrainReferenceDocs(config, db, embedder);
-    const firstNotes = db.getAllNotes().filter(n => n.id.startsWith('pm-ref-'));
+    const firstNotes = db.getAllNotes().filter((n) => n.id.startsWith('pm-ref-'));
     const firstCount = firstNotes.length;
 
     // Second run should be a no-op (files unchanged)
     await ingestBrainReferenceDocs(config, db, embedder);
-    const secondNotes = db.getAllNotes().filter(n => n.id.startsWith('pm-ref-'));
+    const secondNotes = db.getAllNotes().filter((n) => n.id.startsWith('pm-ref-'));
     expect(secondNotes.length).toBe(firstCount);
   });
 

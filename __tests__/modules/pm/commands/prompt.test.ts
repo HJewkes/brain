@@ -86,7 +86,14 @@ describe('prompt write', () => {
 
 describe('prompt show', () => {
   it('displays prompt content', async () => {
-    await run('write', 'TEST-01.01', '--project', 'TEST', '--content', 'Detailed instructions here');
+    await run(
+      'write',
+      'TEST-01.01',
+      '--project',
+      'TEST',
+      '--content',
+      'Detailed instructions here'
+    );
 
     stdoutChunks = [];
     stderrChunks = [];

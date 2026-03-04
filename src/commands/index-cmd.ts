@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { readFileSync, watch } from 'node:fs';
-import { loadConfig } from '../services/config.js';
+import { loadConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel, createOllamaClient } from '../services/ollama.js';
@@ -25,10 +25,11 @@ export const indexCommand = new Command('index')
   .option('--extract-model <model>', 'Ollama model for extraction (default: qwen2.5:3b)')
   .option('--extract-tag <tag>', 'container tag for extracted memories', 'default')
   .option('--watch', 'watch for file changes and re-index automatically')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     // Bypasses withBrain/withDb because watch mode needs the DB open across
     // the entire process lifetime — the callback pattern can't express that.
-    const config = loadConfig();
+    const instance = resolveInstance(parentResolveOpts(cmd));
+    const config = loadConfig(instance);
     const db = new BrainDB(config.dbPath);
     const embedder = createEmbedder(config);
 

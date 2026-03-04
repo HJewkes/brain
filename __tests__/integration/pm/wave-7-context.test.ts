@@ -176,10 +176,23 @@ describe('Wave 7: Context + Verify + Briefing', () => {
         total: allTasks.length,
         eligible: eligible.map((id) => {
           const t = taskMap.get(id);
-          return { displayId: id, title: t?.title ?? id, priority: t?.priority ?? 'medium', workstream: t?.workstream ?? 0 };
+          return {
+            displayId: id,
+            title: t?.title ?? id,
+            priority: t?.priority ?? 'medium',
+            workstream: t?.workstream ?? 0,
+          };
         }),
-        inProgress: allTasks.filter((t) => t.status === 'in-progress').map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id, priority: t.priority })),
-        blocked: allTasks.filter((t) => t.status === 'blocked').map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id })),
+        inProgress: allTasks
+          .filter((t) => t.status === 'in-progress')
+          .map((t) => ({
+            displayId: t.display_id,
+            title: t.title ?? t.display_id,
+            priority: t.priority,
+          })),
+        blocked: allTasks
+          .filter((t) => t.status === 'blocked')
+          .map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id })),
         doneCount: allTasks.filter((t) => t.status === 'done').length,
         pendingCount: allTasks.filter((t) => t.status === 'pending').length,
       },
@@ -215,7 +228,12 @@ describe('Wave 7: Context + Verify + Briefing', () => {
       project: { display_id: 'TEST', prefix: 'TEST', status: 'active' },
       tasks: {
         total: 6,
-        eligible: eligible.map((id) => ({ displayId: id, title: id, priority: 'medium' as const, workstream: 0 })),
+        eligible: eligible.map((id) => ({
+          displayId: id,
+          title: id,
+          priority: 'medium' as const,
+          workstream: 0,
+        })),
         inProgress: [],
         blocked: [],
         doneCount: 0,

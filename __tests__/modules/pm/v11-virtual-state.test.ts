@@ -254,9 +254,7 @@ describe('waves JSON with relation-based dependencies', () => {
       }),
     }));
 
-    const task3 = jsonResult
-      .flatMap((w) => w.tasks)
-      .find((t) => t.display_id === 'VST-01.03');
+    const task3 = jsonResult.flatMap((w) => w.tasks).find((t) => t.display_id === 'VST-01.03');
     expect(task3).toBeDefined();
     expect(task3!.depends_on).toContain('VST-01.02');
     // Task 3 only directly depends on Task 2 (not transitive)

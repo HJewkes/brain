@@ -119,7 +119,13 @@ describe('O-95: task block --reason', () => {
     // Transition to in-progress first (pending -> claimed -> in-progress -> blocked)
     await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'claimed' as TaskStatus);
     await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'in-progress' as TaskStatus);
-    const blockResult = await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'blocked' as TaskStatus);
+    const blockResult = await updateTaskStatus(
+      db,
+      config,
+      embedder,
+      'WEB-01.01',
+      'blocked' as TaskStatus
+    );
     expect(blockResult.ok).toBe(true);
 
     // Verify the task is blocked
@@ -149,7 +155,10 @@ describe('O-95: task block --reason', () => {
 
     // Add block_reason to frontmatter
     const endOfFrontmatter = content.indexOf('\n---', 4);
-    content = content.slice(0, endOfFrontmatter) + '\nblock_reason: "Waiting on API keys"' + content.slice(endOfFrontmatter);
+    content =
+      content.slice(0, endOfFrontmatter) +
+      '\nblock_reason: "Waiting on API keys"' +
+      content.slice(endOfFrontmatter);
 
     const { writeFileSync } = await import('node:fs');
     writeFileSync(filePath, content, 'utf-8');
@@ -213,7 +222,13 @@ describe('O-127: task done --token', () => {
     expect(mismatch).toBe(true);
 
     // Completing still succeeds (warn, don't block)
-    const doneResult = await updateTaskStatus(db, config, embedder, 'WEB-01.01', 'done' as TaskStatus);
+    const doneResult = await updateTaskStatus(
+      db,
+      config,
+      embedder,
+      'WEB-01.01',
+      'done' as TaskStatus
+    );
     expect(doneResult.ok).toBe(true);
     if (!doneResult.ok) return;
     expect(doneResult.data.status).toBe('done');

@@ -213,7 +213,11 @@ export class NoteRepo {
       .prepare('SELECT embedding FROM chunk_vectors WHERE chunk_id = ?')
       .get(chunkId) as { embedding: Buffer } | undefined;
     if (!row) return null;
-    return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4);
+    return new Float32Array(
+      row.embedding.buffer,
+      row.embedding.byteOffset,
+      row.embedding.byteLength / 4
+    );
   }
 
   getChunkHeading(chunkId: string | null, noteId: string): string | null {
@@ -475,7 +479,9 @@ export class NoteRepo {
           : `SELECT n.id FROM notes n, json_each(json_extract(n.metadata, '$.' || ?)) AS je
              WHERE CAST(je.value AS TEXT) = ?`;
         rows = ids
-          ? (this.db.prepare(sql).all(filter.field, filter.value, JSON.stringify([...ids])) as { id: string }[])
+          ? (this.db.prepare(sql).all(filter.field, filter.value, JSON.stringify([...ids])) as {
+              id: string;
+            }[])
           : (this.db.prepare(sql).all(filter.field, filter.value) as { id: string }[]);
       } else {
         const sql = ids
@@ -483,7 +489,9 @@ export class NoteRepo {
              AND id IN (SELECT value FROM json_each(?))`
           : `SELECT id FROM notes WHERE json_extract(metadata, '$.' || ?) = ?`;
         rows = ids
-          ? (this.db.prepare(sql).all(filter.field, filter.value, JSON.stringify([...ids])) as { id: string }[])
+          ? (this.db.prepare(sql).all(filter.field, filter.value, JSON.stringify([...ids])) as {
+              id: string;
+            }[])
           : (this.db.prepare(sql).all(filter.field, filter.value) as { id: string }[]);
       }
 
@@ -493,10 +501,7 @@ export class NoteRepo {
     return ids ?? new Set();
   }
 
-  getFacetCounts(
-    field: string,
-    noteIds: Set<string>
-  ): Array<{ value: string; count: number }> {
+  getFacetCounts(field: string, noteIds: Set<string>): Array<{ value: string; count: number }> {
     if (noteIds.size === 0) return [];
 
     const idsJson = JSON.stringify([...noteIds]);

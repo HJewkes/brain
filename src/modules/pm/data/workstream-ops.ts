@@ -76,7 +76,7 @@ function extractDescription(filePath: string): string | undefined {
 
   const afterFm = content.slice(fmEnd + 4).trim();
   const lines = afterFm.split('\n');
-  const headingIdx = lines.findIndex(l => l.startsWith('# '));
+  const headingIdx = lines.findIndex((l) => l.startsWith('# '));
   if (headingIdx === -1) return undefined;
 
   const descLines: string[] = [];
@@ -92,7 +92,7 @@ function extractDescription(filePath: string): string | undefined {
 
 function workstreamMetaFromRecord(
   meta: Record<string, unknown>,
-  description?: string,
+  description?: string
 ): WorkstreamMetadata {
   return {
     title: (meta.title as string) ?? undefined,

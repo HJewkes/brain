@@ -89,8 +89,22 @@ describe('indexSingleFile creates related-to relations for links', () => {
       'See [target](target-note) for details.',
     ].join('\n');
 
-    await indexSingleFile(db, embedder, '/notes/target-note.md', targetContent, 'hash1', Date.now());
-    await indexSingleFile(db, embedder, '/notes/source-note.md', sourceContent, 'hash2', Date.now());
+    await indexSingleFile(
+      db,
+      embedder,
+      '/notes/target-note.md',
+      targetContent,
+      'hash1',
+      Date.now()
+    );
+    await indexSingleFile(
+      db,
+      embedder,
+      '/notes/source-note.md',
+      sourceContent,
+      'hash2',
+      Date.now()
+    );
 
     const relations = db.getRelationsFrom('source-note');
     const relatedTo = relations.filter(

@@ -45,7 +45,10 @@ describe('wave output improvements', () => {
   it('tasks with dependencies go to later waves', async () => {
     await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'First' });
     await createTestTask(db, config, embedder, {
-      project: 'TST', workstream: 1, name: 'Second', dependsOn: ['TST-01.01'],
+      project: 'TST',
+      workstream: 1,
+      name: 'Second',
+      dependsOn: ['TST-01.01'],
     });
     const waves = computeWaves(db, 'TST');
     expect(waves.length).toBe(2);
@@ -61,18 +64,28 @@ describe('wave output improvements', () => {
 
   it('workstream filter narrows wave results', async () => {
     await createWorkstream(db, config, embedder, { project: 'TST', name: 'Other' });
-    await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Core task' });
-    await createTestTask(db, config, embedder, { project: 'TST', workstream: 2, name: 'Other task' });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 1,
+      name: 'Core task',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'TST',
+      workstream: 2,
+      name: 'Other task',
+    });
 
     const waves = computeWaves(db, 'TST');
     expect(waves.length).toBe(1);
     expect(waves[0].taskIds.length).toBe(2);
 
     // Simulate workstream filter (as done in the command)
-    const filtered = waves.map(w => ({
-      ...w,
-      taskIds: w.taskIds.filter(id => id.startsWith('TST-01')),
-    })).filter(w => w.taskIds.length > 0);
+    const filtered = waves
+      .map((w) => ({
+        ...w,
+        taskIds: w.taskIds.filter((id) => id.startsWith('TST-01')),
+      }))
+      .filter((w) => w.taskIds.length > 0);
 
     expect(filtered.length).toBe(1);
     expect(filtered[0].taskIds).toEqual(['TST-01.01']);

@@ -40,7 +40,8 @@ export async function createStandardProject(
     project: 'TEST',
     workstream: 1,
     name: 'Task 01.01',
-    description: 'Set up the initial project scaffolding and configuration. This is the foundation task that all other tasks depend on.',
+    description:
+      'Set up the initial project scaffolding and configuration. This is the foundation task that all other tasks depend on.',
   });
   if (!t1.ok) throw new Error(`Failed to create TEST-01.01: ${t1.error.message}`);
 
@@ -49,7 +50,8 @@ export async function createStandardProject(
     project: 'TEST',
     workstream: 1,
     name: 'Task 01.02',
-    description: 'Implement the core business logic for the Alpha workstream. Requires scaffolding from the foundation task to be complete.',
+    description:
+      'Implement the core business logic for the Alpha workstream. Requires scaffolding from the foundation task to be complete.',
     dependsOn: ['TEST-01.01'],
   });
   if (!t2.ok) throw new Error(`Failed to create TEST-01.02: ${t2.error.message}`);
@@ -59,7 +61,8 @@ export async function createStandardProject(
     project: 'TEST',
     workstream: 1,
     name: 'Task 01.03',
-    description: 'Write unit and integration tests for the Alpha workstream logic. Validates the core business implementation.',
+    description:
+      'Write unit and integration tests for the Alpha workstream logic. Validates the core business implementation.',
     category: 'testing',
     dependsOn: ['TEST-01.02'],
   });
@@ -70,7 +73,8 @@ export async function createStandardProject(
     project: 'TEST',
     workstream: 2,
     name: 'Task 02.01',
-    description: 'Initialize the Beta workstream environment and dependencies. Can proceed independently of the Alpha workstream.',
+    description:
+      'Initialize the Beta workstream environment and dependencies. Can proceed independently of the Alpha workstream.',
   });
   if (!t4.ok) throw new Error(`Failed to create TEST-02.01: ${t4.error.message}`);
 
@@ -79,7 +83,8 @@ export async function createStandardProject(
     project: 'TEST',
     workstream: 2,
     name: 'Task 02.02',
-    description: 'Build the integration layer between Alpha and Beta workstreams. Requires both initial setup tasks to be complete.',
+    description:
+      'Build the integration layer between Alpha and Beta workstreams. Requires both initial setup tasks to be complete.',
     dependsOn: ['TEST-01.01', 'TEST-02.01'],
   });
   if (!t5.ok) throw new Error(`Failed to create TEST-02.02: ${t5.error.message}`);
@@ -89,7 +94,8 @@ export async function createStandardProject(
     project: 'TEST',
     workstream: 2,
     name: 'Task 02.03',
-    description: 'Write end-to-end documentation covering both workstreams. Requires all testing and integration work to be finalized.',
+    description:
+      'Write end-to-end documentation covering both workstreams. Requires all testing and integration work to be finalized.',
     category: 'documentation',
     priority: 'low',
     dependsOn: ['TEST-01.03', 'TEST-02.02'],

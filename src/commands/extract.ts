@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 import { requireOllama } from '../services/ollama.js';
 import { extractMemoriesFromNote } from '../services/memory-extractor.js';
 
@@ -11,7 +12,7 @@ export const extractCommand = new Command('extract')
   .option('--model <model>', 'Ollama model to use (default: qwen2.5:3b)')
   .option('--quiet', 'Suppress output')
   .option('--json', 'Output result as JSON')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     if (!opts.note && !opts.all) {
       process.stderr.write('Error: specify --note <id> or --all\n');
       process.exitCode = 1;
@@ -76,5 +77,5 @@ export const extractCommand = new Command('extract')
         );
         process.stderr.write(`Total active memories: ${summary.totalMemories}\n`);
       }
-    });
+    }, parentResolveOpts(cmd));
   });

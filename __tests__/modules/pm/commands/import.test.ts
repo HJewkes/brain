@@ -125,7 +125,13 @@ describe('executeImport', () => {
       workstreams: [
         {
           name: 'Main',
-          tasks: [{ name: 'Task with bad dep', description: 'Task with bad dependency.', depends_on: ['BAD-99.99'] }],
+          tasks: [
+            {
+              name: 'Task with bad dep',
+              description: 'Task with bad dependency.',
+              depends_on: ['BAD-99.99'],
+            },
+          ],
         },
       ],
     };
@@ -365,10 +371,7 @@ describe('import command (--from-json)', () => {
   it('sets exitCode=1 when all items fail', async () => {
     // Create a project first, then try to import it again (duplicate)
     const jsonFile = join(tempDir, 'dup.json');
-    writeFileSync(
-      jsonFile,
-      JSON.stringify({ name: 'Dup', prefix: 'DUP' })
-    );
+    writeFileSync(jsonFile, JSON.stringify({ name: 'Dup', prefix: 'DUP' }));
 
     await run('--from-json', jsonFile);
     stdoutChunks = [];
@@ -391,7 +394,9 @@ describe('import command (--from-json)', () => {
         workstreams: [
           {
             name: 'WS',
-            tasks: [{ name: 'T1', description: 'Task with invalid dep.', depends_on: ['DER-99.99'] }],
+            tasks: [
+              { name: 'T1', description: 'Task with invalid dep.', depends_on: ['DER-99.99'] },
+            ],
           },
         ],
       })

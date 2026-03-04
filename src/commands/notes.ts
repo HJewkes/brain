@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 
 export const notesCommand = new Command('notes')
   .description('List and browse notes')
@@ -8,7 +9,9 @@ export const notesCommand = new Command('notes')
   .action(async (opts) => {
     if (opts.module) {
       const listCmd = notesCommand.commands.find((c) => c.name() === 'list')!;
-      await listCmd.parseAsync(['node', 'brain', 'notes', 'list', '--module', opts.module], { from: 'node' });
+      await listCmd.parseAsync(['node', 'brain', 'notes', 'list', '--module', opts.module], {
+        from: 'node',
+      });
     } else {
       notesCommand.outputHelp();
     }
@@ -22,7 +25,7 @@ notesCommand
   .option('--tier <tier>', 'Filter by tier (slow, fast)')
   .option('--limit <n>', 'Max results (default: 50)', '50')
   .option('--json', 'Output JSON')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     await withBrain(async ({ db }) => {
       let notes = db.getAllNotes();
 
@@ -67,8 +70,8 @@ notesCommand
 
       if (notes.length > limit) {
         process.stderr.write(
-          `Showing ${limit} of ${notes.length} notes. Use --limit to see more.\n`,
+          `Showing ${limit} of ${notes.length} notes. Use --limit to see more.\n`
         );
       }
-    });
+    }, parentResolveOpts(cmd));
   });

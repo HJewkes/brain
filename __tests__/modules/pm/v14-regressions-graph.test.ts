@@ -32,7 +32,7 @@ async function indexDoc(id: string, title: string, content: string): Promise<str
 }
 
 function findTaskNoteId(displayId: string): string {
-  const notes = db.getAllNotes().filter(n => {
+  const notes = db.getAllNotes().filter((n) => {
     if (!n.metadata) return false;
     const meta = JSON.parse(n.metadata);
     return meta.display_id === displayId;
@@ -57,23 +57,29 @@ afterEach(() => {
 describe('O-224: references relation edges after task creation', () => {
   it('task with references gets references edges and parent edge', async () => {
     await seedProjectAndWorkstream('GR');
-    const docNoteId = await indexDoc('design-doc', 'Design Doc', 'System design for the API layer.');
+    const docNoteId = await indexDoc(
+      'design-doc',
+      'Design Doc',
+      'System design for the API layer.'
+    );
 
     const result = await createTestTask(db, config, embedder, {
-      project: 'GR', workstream: 1, name: 'Implement design',
+      project: 'GR',
+      workstream: 1,
+      name: 'Implement design',
       references: ['design-doc'],
     });
     expect(result.ok).toBe(true);
 
     const taskNoteId = findTaskNoteId('GR-01.01');
     const relations = db.getRelationsFrom(taskNoteId);
-    const refEdges = relations.filter(r => r.type === 'references');
+    const refEdges = relations.filter((r) => r.type === 'references');
     expect(refEdges).toHaveLength(1);
     expect(refEdges[0].targetId).toBe(docNoteId);
 
     // Should also have parent edge from workstream -> task
     const incomingRels = db.getRelationsTo(taskNoteId);
-    const parentEdges = incomingRels.filter(r => r.type === 'parent');
+    const parentEdges = incomingRels.filter((r) => r.type === 'parent');
     expect(parentEdges.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -83,17 +89,19 @@ describe('O-224: references relation edges after task creation', () => {
     const docB = await indexDoc('api-doc', 'API Guide', 'REST API patterns and conventions.');
 
     const result = await createTestTask(db, config, embedder, {
-      project: 'MR', workstream: 1, name: 'Build microservice',
+      project: 'MR',
+      workstream: 1,
+      name: 'Build microservice',
       references: ['arch-doc', 'api-doc'],
     });
     expect(result.ok).toBe(true);
 
     const taskNoteId = findTaskNoteId('MR-01.01');
     const relations = db.getRelationsFrom(taskNoteId);
-    const refEdges = relations.filter(r => r.type === 'references');
+    const refEdges = relations.filter((r) => r.type === 'references');
     expect(refEdges).toHaveLength(2);
 
-    const targetIds = new Set(refEdges.map(r => r.targetId));
+    const targetIds = new Set(refEdges.map((r) => r.targetId));
     expect(targetIds.has(docA)).toBe(true);
     expect(targetIds.has(docB)).toBe(true);
   });
@@ -103,8 +111,16 @@ describe('O-223: auto-links at lower threshold', () => {
   it('computeAutoLinks runs without error at default 0.65 threshold', async () => {
     await seedProjectAndWorkstream('AL');
 
-    await indexDoc('guide-a', 'Deployment Guide', 'How to deploy the application to production servers.');
-    const noteB = await indexDoc('guide-b', 'Deployment Checklist', 'Pre-deployment checks for production servers.');
+    await indexDoc(
+      'guide-a',
+      'Deployment Guide',
+      'How to deploy the application to production servers.'
+    );
+    const noteB = await indexDoc(
+      'guide-b',
+      'Deployment Checklist',
+      'Pre-deployment checks for production servers.'
+    );
 
     const links = computeAutoLinks(db, noteB);
     expect(Array.isArray(links)).toBe(true);
@@ -127,7 +143,7 @@ describe('O-225: re-ingesting docs does not create duplicates', () => {
     const hash1 = createHash('sha256').update(contentV1).digest('hex');
     await indexSingleFile(db, embedder, docPath, contentV1, hash1, Date.now());
 
-    const countAfterFirst = db.getAllNotes().filter(n => n.id === docId).length;
+    const countAfterFirst = db.getAllNotes().filter((n) => n.id === docId).length;
     expect(countAfterFirst).toBe(1);
 
     // Re-ingest with updated content but same ID
@@ -136,7 +152,7 @@ describe('O-225: re-ingesting docs does not create duplicates', () => {
     const hash2 = createHash('sha256').update(contentV2).digest('hex');
     await indexSingleFile(db, embedder, docPath, contentV2, hash2, Date.now());
 
-    const countAfterSecond = db.getAllNotes().filter(n => n.id === docId).length;
+    const countAfterSecond = db.getAllNotes().filter((n) => n.id === docId).length;
     expect(countAfterSecond).toBe(1);
   });
 });
@@ -146,7 +162,9 @@ describe('O-49: task notes are searchable', () => {
     await seedProjectAndWorkstream('SR');
 
     const result = await createTestTask(db, config, embedder, {
-      project: 'SR', workstream: 1, name: 'Searchable task with unique keywords',
+      project: 'SR',
+      workstream: 1,
+      name: 'Searchable task with unique keywords',
       description: 'This task involves refactoring the authentication middleware.',
     });
     expect(result.ok).toBe(true);
@@ -156,7 +174,7 @@ describe('O-49: task notes are searchable', () => {
     expect(chunks.length).toBeGreaterThan(0);
 
     // At least one chunk should contain task content
-    const hasContent = chunks.some(c => c.content.includes('Searchable task'));
+    const hasContent = chunks.some((c) => c.content.includes('Searchable task'));
     expect(hasContent).toBe(true);
   });
 });
@@ -167,7 +185,9 @@ describe('Graph traversal: computeGraphScores from task finds referenced docs', 
     const docNoteId = await indexDoc('ref-target', 'Target Doc', 'Important reference material.');
 
     const result = await createTestTask(db, config, embedder, {
-      project: 'GT', workstream: 1, name: 'Graph traversal task',
+      project: 'GT',
+      workstream: 1,
+      name: 'Graph traversal task',
       references: ['ref-target'],
     });
     expect(result.ok).toBe(true);
@@ -189,15 +209,15 @@ describe('Graph traversal: computeGraphScores from task finds referenced docs', 
 
     // Create task referencing spec-doc
     const result = await createTestTask(db, config, embedder, {
-      project: 'TH', workstream: 1, name: 'Two-hop task',
+      project: 'TH',
+      workstream: 1,
+      name: 'Two-hop task',
       references: ['spec-doc'],
     });
     expect(result.ok).toBe(true);
 
     // Manually add a relation from spec-doc -> impl-doc
-    db.upsertRelations(specDoc, [
-      { sourceId: specDoc, targetId: implDoc, type: 'related' },
-    ]);
+    db.upsertRelations(specDoc, [{ sourceId: specDoc, targetId: implDoc, type: 'related' }]);
 
     const taskNoteId = findTaskNoteId('TH-01.01');
     const scores = computeGraphScores(db, taskNoteId, 2);

@@ -61,7 +61,7 @@ describe('source doc dedup', () => {
     // Re-indexing the same ID should not create a duplicate
     await indexNote('sdk-readme', 'SDK Readme', 'Node SDK documentation v2');
 
-    const notes = db.getAllNotes().filter(n => n.id === 'sdk-readme');
+    const notes = db.getAllNotes().filter((n) => n.id === 'sdk-readme');
     expect(notes).toHaveLength(1);
   });
 

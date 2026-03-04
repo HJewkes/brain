@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { randomUUID } from 'node:crypto';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 import type { FeedRecord } from '../types.js';
 
 export const feedCommand = new Command('feed')
@@ -12,7 +13,7 @@ export const feedCommand = new Command('feed')
       .option('--name <name>', 'Display name for the feed')
       .option('--tag <tag>', 'Container tag for namespacing', 'default')
       .option('--filter <prompt>', 'Filter prompt to select relevant items')
-      .action(async (url, opts) => {
+      .action(async (url, opts, cmd) => {
         try {
           new URL(url);
         } catch {
@@ -44,11 +45,11 @@ export const feedCommand = new Command('feed')
             }
             process.exitCode = 1;
           }
-        });
+        }, parentResolveOpts(cmd));
       })
   )
   .addCommand(
-    new Command('list').description('List all subscribed feeds').action(async () => {
+    new Command('list').description('List all subscribed feeds').action(async (_opts, cmd) => {
       await withDb(({ db }) => {
         const feeds = db.getFeeds();
         if (feeds.length === 0) {
@@ -66,14 +67,14 @@ export const feedCommand = new Command('feed')
           }
           process.stdout.write('\n');
         }
-      });
+      }, parentResolveOpts(cmd));
     })
   )
   .addCommand(
     new Command('remove')
       .description('Unsubscribe from a feed')
       .argument('<id>', 'Feed ID to remove')
-      .action(async (id) => {
+      .action(async (id, _opts, cmd) => {
         await withDb(({ db }) => {
           const feed = db.getFeedById(id);
           if (!feed) {
@@ -83,6 +84,6 @@ export const feedCommand = new Command('feed')
           }
           db.removeFeed(id);
           process.stdout.write(`Removed feed: ${feed.name}\n`);
-        });
+        }, parentResolveOpts(cmd));
       })
   );

@@ -257,5 +257,4 @@ describe('install-hooks command', () => {
 
     process.env.HOME = origHome;
   });
-
 });

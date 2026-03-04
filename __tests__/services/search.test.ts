@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { search, searchMemories, checkAndPromote, computeFacets } from '../../src/services/search.js';
+import {
+  search,
+  searchMemories,
+  checkAndPromote,
+  computeFacets,
+} from '../../src/services/search.js';
 import { unlinkSync } from 'node:fs';
 import type { Chunk, NoteRecord, SearchResult } from '../../src/types.js';
 import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
@@ -982,8 +987,7 @@ describe('metadata filtering', () => {
   let dbPath: string;
   let embedder: Embedder;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function addFtsAndChunks(testDb: BrainDB, id: string, title: string, _testEmbedder: Embedder): void {
+  function addFtsAndChunks(testDb: BrainDB, id: string, title: string): void {
     testDb.upsertNoteFTS(id, title, '', title);
     const content = title;
     const chunk: Chunk = {
@@ -1026,25 +1030,29 @@ describe('metadata filtering', () => {
   });
 
   it('search with filters returns only matching notes', async () => {
-    db.upsertNote(makeNote({
-      id: 'insight-1',
-      title: 'WIP limits enforcement',
-      metadata: JSON.stringify({ 'enforcement-strength': 'deterministic', type: 'insight' }),
-    }));
-    db.upsertNote(makeNote({
-      id: 'insight-2',
-      title: 'WIP limits discussion',
-      metadata: JSON.stringify({ 'enforcement-strength': 'structural', type: 'insight' }),
-    }));
-    addFtsAndChunks(db, 'insight-1', 'WIP limits enforcement', embedder);
-    addFtsAndChunks(db, 'insight-2', 'WIP limits discussion', embedder);
+    db.upsertNote(
+      makeNote({
+        id: 'insight-1',
+        title: 'WIP limits enforcement',
+        metadata: JSON.stringify({ 'enforcement-strength': 'deterministic', type: 'insight' }),
+      })
+    );
+    db.upsertNote(
+      makeNote({
+        id: 'insight-2',
+        title: 'WIP limits discussion',
+        metadata: JSON.stringify({ 'enforcement-strength': 'structural', type: 'insight' }),
+      })
+    );
+    addFtsAndChunks(db, 'insight-1', 'WIP limits enforcement');
+    addFtsAndChunks(db, 'insight-2', 'WIP limits discussion');
 
     const results = await search(db, embedder, 'WIP limits', {
       limit: 10,
       filters: [{ field: 'enforcement-strength', value: 'deterministic' }],
     });
 
-    expect(results.every(r => r.noteId === 'insight-1')).toBe(true);
+    expect(results.every((r) => r.noteId === 'insight-1')).toBe(true);
   });
 });
 

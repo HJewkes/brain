@@ -131,8 +131,7 @@ describe('V11 Integration: Wave computation with relations', () => {
     // Standard fixture has TEST-01.01 -> TEST-01.02 -> TEST-01.03
     const waves = computeWaves(db, 'TEST');
 
-    const waveOf = (displayId: string) =>
-      waves.find((w) => w.taskIds.includes(displayId))?.wave;
+    const waveOf = (displayId: string) => waves.find((w) => w.taskIds.includes(displayId))?.wave;
 
     expect(waveOf('TEST-01.01')).toBe(0);
     expect(waveOf('TEST-01.02')).toBe(1);
@@ -214,15 +213,9 @@ describe('V11 Integration: Cycle detection', () => {
     if (!aN.ok || !bN.ok || !cN.ok) return;
 
     // A depends_on B, B depends_on C, C depends_on A
-    db.upsertRelations(aN.data, [
-      { sourceId: aN.data, targetId: bN.data, type: 'depends_on' },
-    ]);
-    db.upsertRelations(bN.data, [
-      { sourceId: bN.data, targetId: cN.data, type: 'depends_on' },
-    ]);
-    db.upsertRelations(cN.data, [
-      { sourceId: cN.data, targetId: aN.data, type: 'depends_on' },
-    ]);
+    db.upsertRelations(aN.data, [{ sourceId: aN.data, targetId: bN.data, type: 'depends_on' }]);
+    db.upsertRelations(bN.data, [{ sourceId: bN.data, targetId: cN.data, type: 'depends_on' }]);
+    db.upsertRelations(cN.data, [{ sourceId: cN.data, targetId: aN.data, type: 'depends_on' }]);
 
     const graph = buildDependencyGraph(db, 'TEST');
     const cycles = detectCycles(graph);

@@ -3,8 +3,19 @@ import { join, basename, relative } from 'node:path';
 import type { DetectedComponent, ComponentType } from '../data/onboard-types.js';
 
 const IGNORED_DIRS = new Set([
-  'node_modules', 'vendor', 'dist', 'build', '.git', '.next', '.turbo',
-  '__pycache__', '.venv', 'venv', 'target', 'coverage', '.cache',
+  'node_modules',
+  'vendor',
+  'dist',
+  'build',
+  '.git',
+  '.next',
+  '.turbo',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'target',
+  'coverage',
+  '.cache',
 ]);
 
 const MANIFEST_FILES: Record<string, ComponentType> = {
@@ -18,13 +29,13 @@ const MANIFEST_FILES: Record<string, ComponentType> = {
 };
 
 const ENTRY_PATTERNS: Record<ComponentType, string[]> = {
-  'node': ['src/index.ts', 'src/index.js', 'src/main.ts', 'src/main.js', 'index.ts', 'index.js'],
+  node: ['src/index.ts', 'src/index.js', 'src/main.ts', 'src/main.js', 'index.ts', 'index.js'],
   'react-native': ['src/App.tsx', 'App.tsx', 'src/App.js', 'App.js', 'src/index.ts', 'index.js'],
-  'go': ['main.go', 'cmd/main.go'],
-  'rust': ['src/main.rs', 'src/lib.rs'],
-  'python': ['src/main.py', 'main.py', '__main__.py', 'app.py'],
-  'java': ['src/main/java'],
-  'unknown': [],
+  go: ['main.go', 'cmd/main.go'],
+  rust: ['src/main.rs', 'src/lib.rs'],
+  python: ['src/main.py', 'main.py', '__main__.py', 'app.py'],
+  java: ['src/main/java'],
+  unknown: [],
 };
 
 function detectType(dir: string): ComponentType {
@@ -35,7 +46,9 @@ function detectType(dir: string): ComponentType {
           const pkg = JSON.parse(readFileSync(join(dir, file), 'utf-8'));
           const deps = { ...pkg.dependencies, ...pkg.devDependencies };
           if (deps['react-native']) return 'react-native';
-        } catch { /* ignore malformed package.json */ }
+        } catch {
+          /* ignore malformed package.json */
+        }
       }
       return type;
     }
@@ -45,7 +58,7 @@ function detectType(dir: string): ComponentType {
 
 function findEntryPoints(componentPath: string, type: ComponentType): string[] {
   const patterns = ENTRY_PATTERNS[type] ?? [];
-  return patterns.filter(p => existsSync(join(componentPath, p)));
+  return patterns.filter((p) => existsSync(join(componentPath, p)));
 }
 
 function findDocPaths(componentPath: string): string[] {
@@ -53,13 +66,21 @@ function findDocPaths(componentPath: string): string[] {
 
   function walk(dir: string): void {
     let entries: string[];
-    try { entries = readdirSync(dir); } catch { return; }
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
 
     for (const entry of entries) {
       if (IGNORED_DIRS.has(entry)) continue;
       const full = join(dir, entry);
       let stat;
-      try { stat = statSync(full); } catch { continue; }
+      try {
+        stat = statSync(full);
+      } catch {
+        continue;
+      }
 
       if (stat.isDirectory()) {
         walk(full);
@@ -85,9 +106,13 @@ function resolveWorkspaceGlobs(rootDir: string, patterns: string[]): string[] {
           const full = join(parent, entry);
           try {
             if (statSync(full).isDirectory()) dirs.push(full);
-          } catch { continue; }
+          } catch {
+            continue;
+          }
         }
-      } catch { continue; }
+      } catch {
+        continue;
+      }
     } else {
       const full = join(rootDir, pattern);
       if (existsSync(full)) dirs.push(full);
@@ -104,7 +129,9 @@ function resolveComponentName(dir: string, relPath: string, rootDir: string): st
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
       return (pkg.name as string)?.replace(/^@[^/]+\//, '') ?? basename(dir);
-    } catch { /* fall through */ }
+    } catch {
+      /* fall through */
+    }
   }
   return basename(dir);
 }
@@ -138,11 +165,13 @@ export function detectComponents(rootDir: string): DetectedComponent[] {
         const dirs = resolveWorkspaceGlobs(rootDir, workspaces);
         if (dirs.length > 0) {
           return dirs
-            .map(d => buildComponent(d, rootDir))
+            .map((d) => buildComponent(d, rootDir))
             .sort((a, b) => a.name.localeCompare(b.name));
         }
       }
-    } catch { /* fall through */ }
+    } catch {
+      /* fall through */
+    }
   }
 
   // 2. Check for multi-language siblings (subdirs with their own manifest files)
@@ -153,16 +182,20 @@ export function detectComponents(rootDir: string): DetectedComponent[] {
       const full = join(rootDir, entry);
       try {
         if (!statSync(full).isDirectory()) continue;
-      } catch { continue; }
+      } catch {
+        continue;
+      }
       if (detectType(full) !== 'unknown') {
         siblings.push(full);
       }
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
 
   if (siblings.length >= 2) {
     return siblings
-      .map(d => buildComponent(d, rootDir))
+      .map((d) => buildComponent(d, rootDir))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 

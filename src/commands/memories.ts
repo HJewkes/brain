@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 
 const listCommand = new Command('list')
   .description('List active memories')
@@ -8,7 +9,7 @@ const listCommand = new Command('list')
   .option('--note <id>', 'Only memories from a specific note')
   .option('--json', 'Output as JSON')
   .option('--limit <n>', 'Max results', '50')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     await withDb(({ db }) => {
       db.forgetExpiredMemories();
 
@@ -51,7 +52,7 @@ const listCommand = new Command('list')
       process.stdout.write(
         `Total: ${limited.length}${memories.length > limit ? ` (showing ${limit} of ${memories.length})` : ''}\n`
       );
-    });
+    }, parentResolveOpts(cmd));
   });
 
 export const memoriesCommand = new Command('memories')
@@ -62,7 +63,7 @@ export const memoriesCommand = new Command('memories')
       .description('View version history of a memory')
       .argument('<id>', 'Memory ID or root memory ID')
       .option('--json', 'Output as JSON')
-      .action(async (id, opts) => {
+      .action(async (id, opts, cmd) => {
         await withDb(({ db }) => {
           const chain = db.getMemoryVersionChain(id);
           const history = db.getMemoryHistory(id);
@@ -100,14 +101,14 @@ export const memoriesCommand = new Command('memories')
               if (h.newMemory) process.stdout.write(`    new: ${h.newMemory}\n`);
             }
           }
-        });
+        }, parentResolveOpts(cmd));
       })
   )
   .addCommand(
     new Command('stats')
       .description('Show memory statistics')
       .option('--json', 'Output as JSON')
-      .action(async (opts) => {
+      .action(async (opts, cmd) => {
         await withDb(({ db }) => {
           const forgotten = db.forgetExpiredMemories();
           const count = db.getMemoryCount();
@@ -123,6 +124,6 @@ export const memoriesCommand = new Command('memories')
           if (forgotten > 0) {
             process.stdout.write(`Expired this run: ${forgotten}\n`);
           }
-        });
+        }, parentResolveOpts(cmd));
       })
   );

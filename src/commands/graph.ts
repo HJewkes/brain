@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
+import { parentResolveOpts } from '../services/config.js';
 import { traverseGraph } from '../services/graph.js';
 import type { GraphResult, Relation } from '../types.js';
 
@@ -66,7 +67,7 @@ export const graphCommand = new Command('graph')
   .argument('<note-id>', 'Root note ID')
   .option('--depth <n>', 'Traversal depth', parseInt, 2)
   .option('--json', 'Output as JSON')
-  .action(async (noteId, opts) => {
+  .action(async (noteId, opts, cmd) => {
     await withDb(({ db }) => {
       let resolvedId = noteId;
 
@@ -75,7 +76,9 @@ export const graphCommand = new Command('graph')
         if (note) {
           resolvedId = note.id;
         } else {
-          process.stderr.write(`Warning: No note found at path "${noteId}", trying as note ID...\n`);
+          process.stderr.write(
+            `Warning: No note found at path "${noteId}", trying as note ID...\n`
+          );
         }
       }
 
@@ -87,5 +90,5 @@ export const graphCommand = new Command('graph')
         const tree = buildTree(result);
         printTree(result.root.id, result.root.type, tree);
       }
-    });
+    }, parentResolveOpts(cmd));
   });

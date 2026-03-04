@@ -9,7 +9,9 @@ const embedder = createMockEmbedder();
 let config: BrainConfig;
 
 vi.mock('../../src/services/brain-service.js', () => ({
-  withBrain: vi.fn(async (fn) => fn({ db, embedder, config, modules: { getFilters: () => [] }, close: () => {} })),
+  withBrain: vi.fn(async (fn) =>
+    fn({ db, embedder, config, modules: { getFilters: () => [] }, close: () => {} })
+  ),
   withDb: vi.fn(async (fn) => fn({ db, config, close: () => {} })),
 }));
 
@@ -127,7 +129,7 @@ describe('search command', () => {
 
 async function indexNote(
   noteOverrides: Parameters<typeof makeNote>[0],
-  content: string,
+  content: string
 ): Promise<void> {
   const note = makeNote(noteOverrides);
   db.upsertNote(note);
@@ -140,11 +142,11 @@ describe('O-69: --workstream filter', () => {
   it('filters search results by workstream number', async () => {
     await indexNote(
       { id: 'ws1-note', type: 'task', metadata: JSON.stringify({ workstream: 1 }) },
-      'TypeScript workstream one task',
+      'TypeScript workstream one task'
     );
     await indexNote(
       { id: 'ws2-note', type: 'task', metadata: JSON.stringify({ workstream: 2 }) },
-      'TypeScript workstream two task',
+      'TypeScript workstream two task'
     );
 
     await run('TypeScript', '--json', '--workstream', '1');
@@ -157,12 +159,20 @@ describe('O-69: --workstream filter', () => {
 
   it('filters search results by workstream display ID', async () => {
     await indexNote(
-      { id: 'ws-alpha', type: 'task', metadata: JSON.stringify({ workstream: 1, workstream_display_id: 'ALPHA' }) },
-      'TypeScript alpha workstream task',
+      {
+        id: 'ws-alpha',
+        type: 'task',
+        metadata: JSON.stringify({ workstream: 1, workstream_display_id: 'ALPHA' }),
+      },
+      'TypeScript alpha workstream task'
     );
     await indexNote(
-      { id: 'ws-beta', type: 'task', metadata: JSON.stringify({ workstream: 2, workstream_display_id: 'BETA' }) },
-      'TypeScript beta workstream task',
+      {
+        id: 'ws-beta',
+        type: 'task',
+        metadata: JSON.stringify({ workstream: 2, workstream_display_id: 'BETA' }),
+      },
+      'TypeScript beta workstream task'
     );
 
     await run('TypeScript', '--json', '--workstream', 'alpha');
@@ -185,11 +195,11 @@ describe('--filter and --facet flags', () => {
   it('--filter flag parses field=value and filters results by frontmatter metadata field', async () => {
     await indexNote(
       { id: 'alpha-note', filePath: '/tmp/alpha.md', metadata: JSON.stringify({ env: 'alpha' }) },
-      'TypeScript alpha content',
+      'TypeScript alpha content'
     );
     await indexNote(
       { id: 'beta-note', filePath: '/tmp/beta.md', metadata: JSON.stringify({ env: 'beta' }) },
-      'TypeScript beta content',
+      'TypeScript beta content'
     );
 
     await run('TypeScript', '--json', '--filter', 'env=alpha');
@@ -202,12 +212,20 @@ describe('--filter and --facet flags', () => {
 
   it('--facet flag includes facet counts in JSON output', async () => {
     await indexNote(
-      { id: 'facet-task', filePath: '/tmp/facet-task.md', metadata: JSON.stringify({ env: 'prod' }) },
-      'TypeScript facet prod content',
+      {
+        id: 'facet-task',
+        filePath: '/tmp/facet-task.md',
+        metadata: JSON.stringify({ env: 'prod' }),
+      },
+      'TypeScript facet prod content'
     );
     await indexNote(
-      { id: 'facet-project', filePath: '/tmp/facet-project.md', metadata: JSON.stringify({ env: 'staging' }) },
-      'TypeScript facet staging content',
+      {
+        id: 'facet-project',
+        filePath: '/tmp/facet-project.md',
+        metadata: JSON.stringify({ env: 'staging' }),
+      },
+      'TypeScript facet staging content'
     );
 
     await run('TypeScript', '--json', '--facet', 'env');
@@ -223,8 +241,12 @@ describe('--filter and --facet flags', () => {
 
   it('--facet in text mode prints facet summary after results', async () => {
     await indexNote(
-      { id: 'text-facet-note', filePath: '/tmp/text-facet.md', metadata: JSON.stringify({ env: 'dev' }) },
-      'TypeScript text facet content',
+      {
+        id: 'text-facet-note',
+        filePath: '/tmp/text-facet.md',
+        metadata: JSON.stringify({ env: 'dev' }),
+      },
+      'TypeScript text facet content'
     );
 
     await run('TypeScript', '--facet', 'env');
@@ -234,7 +256,9 @@ describe('--filter and --facet flags', () => {
   });
 
   it('--filter with missing = sign exits with error', async () => {
-    const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as (code?: number) => never);
+    const mockExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => {}) as (code?: number) => never);
 
     await run('TypeScript', '--filter', 'invalidformat');
 
@@ -245,14 +269,8 @@ describe('--filter and --facet flags', () => {
 
 describe('O-107: --type and --module filters', () => {
   it('filters search results by note type', async () => {
-    await indexNote(
-      { id: 'task-note', type: 'task' },
-      'TypeScript task planning',
-    );
-    await indexNote(
-      { id: 'project-note', type: 'project' },
-      'TypeScript project overview',
-    );
+    await indexNote({ id: 'task-note', type: 'task' }, 'TypeScript task planning');
+    await indexNote({ id: 'project-note', type: 'project' }, 'TypeScript project overview');
 
     await run('TypeScript', '--json', '--type', 'task');
 
@@ -264,14 +282,8 @@ describe('O-107: --type and --module filters', () => {
   });
 
   it('filters search results by module', async () => {
-    await indexNote(
-      { id: 'pm-note', module: 'pm' },
-      'TypeScript PM module note',
-    );
-    await indexNote(
-      { id: 'other-note', module: 'other' },
-      'TypeScript other module note',
-    );
+    await indexNote({ id: 'pm-note', module: 'pm' }, 'TypeScript PM module note');
+    await indexNote({ id: 'other-note', module: 'other' }, 'TypeScript other module note');
 
     await run('TypeScript', '--json', '--module', 'pm');
 
@@ -283,17 +295,14 @@ describe('O-107: --type and --module filters', () => {
   });
 
   it('combines type and module filters', async () => {
-    await indexNote(
-      { id: 'pm-task', type: 'task', module: 'pm' },
-      'TypeScript PM task item',
-    );
+    await indexNote({ id: 'pm-task', type: 'task', module: 'pm' }, 'TypeScript PM task item');
     await indexNote(
       { id: 'pm-project', type: 'project', module: 'pm' },
-      'TypeScript PM project item',
+      'TypeScript PM project item'
     );
     await indexNote(
       { id: 'other-task', type: 'task', module: 'other' },
-      'TypeScript other task item',
+      'TypeScript other task item'
     );
 
     await run('TypeScript', '--json', '--type', 'task', '--module', 'pm');
@@ -308,7 +317,7 @@ describe('O-107: --type and --module filters', () => {
   it('filters work with text output mode', async () => {
     await indexNote(
       { id: 'task-only', type: 'task', filePath: '/tmp/task-only.md' },
-      'TypeScript task content',
+      'TypeScript task content'
     );
 
     await run('TypeScript', '--type', 'task');

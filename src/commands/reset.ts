@@ -1,20 +1,26 @@
 import { Command } from '@commander-js/extra-typings';
 import { rmSync, existsSync } from 'node:fs';
-import { loadConfig } from '../services/config.js';
-import { getConfigDir, getDataDir } from '../services/config.js';
+import {
+  loadConfig,
+  resolveInstance,
+  parentResolveOpts,
+  getConfigDir,
+  getDataDir,
+} from '../services/config.js';
 
 export const resetCommand = new Command('reset')
   .description('Remove all brain data and start fresh')
   .option('--confirm', 'required flag to confirm destructive operation')
   .option('--keep-config', 'keep configuration, only remove database and notes')
   .option('--json', 'output result as JSON')
-  .action((opts) => {
+  .action((opts, cmd) => {
+    const instance = resolveInstance(parentResolveOpts(cmd));
     if (!opts.confirm) {
       process.stderr.write('This will permanently delete all brain data:\n');
-      process.stderr.write(`  Database:  ${getDataDir()}\n`);
-      process.stderr.write(`  Config:    ${getConfigDir()}\n`);
+      process.stderr.write(`  Database:  ${getDataDir(instance.root)}\n`);
+      process.stderr.write(`  Config:    ${getConfigDir(instance.root)}\n`);
       try {
-        const config = loadConfig();
+        const config = loadConfig(instance);
         process.stderr.write(`  Notes:     ${config.notesDir}\n`);
       } catch {
         // config may not exist yet
@@ -27,7 +33,7 @@ export const resetCommand = new Command('reset')
     const removed: string[] = [];
 
     // Remove database and data directory
-    const dataDir = getDataDir();
+    const dataDir = getDataDir(instance.root);
     if (existsSync(dataDir)) {
       rmSync(dataDir, { recursive: true });
       removed.push(dataDir);
@@ -35,7 +41,7 @@ export const resetCommand = new Command('reset')
 
     // Remove notes directory
     try {
-      const config = loadConfig();
+      const config = loadConfig(instance);
       if (existsSync(config.notesDir)) {
         rmSync(config.notesDir, { recursive: true });
         removed.push(config.notesDir);
@@ -46,7 +52,7 @@ export const resetCommand = new Command('reset')
 
     // Remove config (unless --keep-config)
     if (!opts.keepConfig) {
-      const configDir = getConfigDir();
+      const configDir = getConfigDir(instance.root);
       if (existsSync(configDir)) {
         rmSync(configDir, { recursive: true });
         removed.push(configDir);
