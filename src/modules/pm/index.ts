@@ -18,6 +18,7 @@ import { createCheckCommand } from './commands/check.js';
 import { createOnboardCommand } from './commands/onboard.js';
 import { createRelateCommand } from './commands/relate.js';
 import { createActivityCommand } from './commands/activity.js';
+import { PmContentHandler } from './content-handler.js';
 
 export type EntityType = 'task' | 'workstream' | 'project';
 
@@ -259,6 +260,8 @@ export const pmModule: BrainModule = {
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
 
     ctx.registerFilter({ visibility: 'private' });
+
+    ctx.registerContentHandler(new PmContentHandler());
 
     ctx.registerMigration({
       version: 1,

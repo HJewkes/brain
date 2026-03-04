@@ -46,6 +46,7 @@ describe('O-163: projects plural alias', () => {
       registerRelationType: () => {},
       registerExtractionStrategy: () => {},
       registerFilter: () => {},
+      registerContentHandler: () => {},
       registerMigration: () => {},
       registerCommand: (cmd: Command) => {
         registered.push(cmd);
