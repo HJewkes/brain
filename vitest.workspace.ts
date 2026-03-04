@@ -15,7 +15,7 @@ export default defineWorkspace([
       pool: 'forks',
       poolOptions: {
         forks: {
-          maxForks: 4,
+          singleFork: true,
         },
       },
     },
