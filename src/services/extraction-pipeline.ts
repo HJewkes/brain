@@ -2,7 +2,10 @@ import type { ExtractedItem, Embedder, BrainConfig } from '../types.js';
 import type { ModuleRegistry } from '../modules/registry.js';
 import type { BrainDB } from './brain-db.js';
 import type { ContentHandler } from '../modules/types.js';
+import type { OllamaClient } from './ollama.js';
 import { extractDeterministic } from './extraction-tiers/deterministic.js';
+import { classifyWithLlm } from './extraction-tiers/llm-classifier.js';
+import { writeQueueFile } from './extraction-tiers/agent-queue.js';
 
 export interface ExtractionResult {
   items: ExtractedItem[];
@@ -25,7 +28,7 @@ export async function runExtractionPipeline(
   db: BrainDB,
   config: BrainConfig,
   sourceNoteId: string,
-  opts?: { maxTier?: 1 | 2 | 3 }
+  opts?: { maxTier?: 1 | 2 | 3; ollamaClient?: OllamaClient }
 ): Promise<PipelineResult> {
   const maxTier = opts?.maxTier ?? 3;
   const result: PipelineResult = { extracted: [], materializedNoteIds: [], queuedFiles: [] };
@@ -34,16 +37,43 @@ export async function runExtractionPipeline(
   const tier1 = await extractDeterministic(content, filePath, registry, embedder);
   result.extracted.push(...tier1.items);
 
+  let tier2Remainder: string | null = tier1.remainder;
+  const tier2Items: ExtractedItem[] = [];
+
   if (tier1.remainder && maxTier >= 2) {
-    // Tier 2 (LLM classification) and Tier 3 (queued review) are stubs for Tasks 8/9
-    if (tier1.remainder.trim().length > 20) {
+    const ollamaClient = opts?.ollamaClient;
+    if (ollamaClient) {
+      const tier2 = await classifyWithLlm(tier1.remainder, filePath, registry, ollamaClient);
+      result.extracted.push(...tier2.items);
+      tier2Items.push(...tier2.items);
+      tier2Remainder = tier2.remainder;
+    } else if (tier1.remainder.trim().length > 20) {
+      // No Ollama available — fallback to generic note
       result.extracted.push({
         noteType: 'note',
         title: filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Imported',
         content: tier1.remainder,
         fields: {},
       });
+      tier2Remainder = null;
     }
+  }
+
+  // Tier 3: Queue for agent/human review when there is unclassified remainder
+  if (tier2Remainder && tier2Remainder.trim().length > 20 && maxTier >= 3) {
+    const lineCount = content.split('\n').length;
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? 'txt';
+    const format = detectFormat(ext);
+    const queueResult = writeQueueFile(config.notesDir, {
+      sourcePath: filePath,
+      format,
+      lineCount,
+      tier1Items: tier1.items,
+      tier2Items,
+      lowConfidenceRegions: [],
+      remainderContent: tier2Remainder,
+    }, registry);
+    result.queuedFiles.push({ path: queueResult.queuePath, reason: queueResult.reason });
   }
 
   // Dispatch to content handlers
@@ -81,4 +111,13 @@ function findHandler(
     }
   }
   return null;
+}
+
+const FORMAT_MAP: Record<string, string> = {
+  md: 'markdown', txt: 'text', csv: 'csv', tsv: 'tsv',
+  json: 'json', yaml: 'yaml', yml: 'yaml',
+};
+
+function detectFormat(ext: string): string {
+  return FORMAT_MAP[ext] ?? ext;
 }
