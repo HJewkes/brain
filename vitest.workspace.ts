@@ -4,6 +4,7 @@ export default defineWorkspace([
   {
     test: {
       name: 'unit',
+      globalSetup: ['__tests__/setup/global-setup.ts'],
       include: [
         '__tests__/commands/**/*.test.ts',
         '__tests__/services/**/*.test.ts',
@@ -22,6 +23,7 @@ export default defineWorkspace([
   {
     test: {
       name: 'integration',
+      globalSetup: ['__tests__/setup/global-setup.ts'],
       include: ['__tests__/integration/**/*.test.ts'],
       pool: 'forks',
       poolOptions: {
