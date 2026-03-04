@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { inject } from 'vitest';
 import type {
   ActivityRecord,
   Chunk,
@@ -11,12 +13,19 @@ import type {
   NoteRecord,
   BrainConfig,
 } from '../src/types.js';
-import type { BrainDB } from '../src/services/brain-db.js';
+import { BrainDB } from '../src/services/brain-db.js';
 import { createTask } from '../src/modules/pm/data/task-ops.js';
 import type { CreateTaskInput } from '../src/modules/pm/data/task-ops.js';
 
 export function tmpDbPath(prefix = 'brain-test'): string {
   return join(tmpdir(), `${prefix}-${randomUUID()}.db`);
+}
+
+export function cloneTemplateDb(): { dbPath: string; db: BrainDB } {
+  const templatePath = inject('templateDbPath');
+  const dbPath = tmpDbPath('brain-clone');
+  copyFileSync(templatePath, dbPath);
+  return { dbPath, db: new BrainDB(dbPath) };
 }
 
 export function makeChunk(overrides: Partial<Chunk> = {}): Chunk {
