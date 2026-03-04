@@ -1,21 +1,32 @@
 import { extname } from 'node:path';
 import { parseCsv, csvToMarkdownTable, detectCsvFlavor } from './csv-adapter.js';
 import type { CsvFlavor } from './csv-adapter.js';
+import { isNotionExport, cleanNotionMarkdown } from './notion-adapter.js';
+import { isLinearCsv } from './linear-adapter.js';
 
-export type SupportedFormat = 'markdown' | 'csv' | 'plaintext';
+export type SupportedFormat = 'markdown' | 'csv' | 'plaintext' | 'notion' | 'linear';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function detectFormat(filePath: string, _content: string): SupportedFormat {
+export function detectFormat(filePath: string, content: string): SupportedFormat {
   const ext = extname(filePath).toLowerCase();
-  if (ext === '.csv') return 'csv';
+  if (ext === '.csv') {
+    const parsed = parseCsv(content);
+    if (isLinearCsv(parsed.headers)) return 'linear';
+    return 'csv';
+  }
   if (ext === '.txt') return 'plaintext';
+  if ((ext === '.md' || ext === '.markdown') && isNotionExport(content)) return 'notion';
   return 'markdown';
 }
 
 export interface ConvertResult {
   markdown: string;
   format: SupportedFormat;
-  meta: { csvFlavor?: CsvFlavor; rowCount?: number; columnNames?: string[] };
+  meta: {
+    csvFlavor?: CsvFlavor;
+    rowCount?: number;
+    columnNames?: string[];
+    notionProperties?: Record<string, string>;
+  };
 }
 
 export function convertToMarkdown(filePath: string, content: string): ConvertResult {
@@ -32,6 +43,23 @@ export function convertToMarkdown(filePath: string, content: string): ConvertRes
       format,
       meta: { csvFlavor: flavor, rowCount: parsed.rows.length, columnNames: parsed.headers },
     };
+  }
+
+  if (format === 'linear') {
+    const parsed = parseCsv(content);
+    const title = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Import';
+    const table = csvToMarkdownTable(parsed);
+    const markdown = `---\ntitle: "${title}"\ntype: note\ntier: fast\nstatus: draft\n---\n\n## ${title} (${parsed.rows.length} rows)\n\n${table}\n`;
+    return {
+      markdown,
+      format,
+      meta: { csvFlavor: 'linear' as CsvFlavor, rowCount: parsed.rows.length, columnNames: parsed.headers },
+    };
+  }
+
+  if (format === 'notion') {
+    const result = cleanNotionMarkdown(content, filePath);
+    return { markdown: result.markdown, format, meta: { notionProperties: result.extractedProperties } };
   }
 
   if (format === 'plaintext') {
