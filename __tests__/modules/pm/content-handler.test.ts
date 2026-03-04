@@ -1,14 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PmContentHandler } from '../../../src/modules/pm/content-handler.js';
+import { PmContentHandler, mapPriority } from '../../../src/modules/pm/content-handler.js';
 import type { BrainDB } from '../../../src/services/brain-db.js';
-import type { Embedder } from '../../../src/types.js';
+import type { BrainConfig, Embedder, ExtractedItem } from '../../../src/types.js';
 import type { ClassifiedSection } from '../../../src/services/content-classifier.js';
 
+// Mock all PM data operations
+vi.mock('../../../src/modules/pm/data/task-ops.js', () => ({
+  createTask: vi.fn(),
+}));
+vi.mock('../../../src/modules/pm/data/project-ops.js', () => ({
+  createProject: vi.fn(),
+}));
+vi.mock('../../../src/modules/pm/data/workstream-ops.js', () => ({
+  createWorkstream: vi.fn(),
+}));
+vi.mock('../../../src/modules/pm/data/queries.js', () => ({
+  getPmNotes: vi.fn(),
+}));
 vi.mock('../../../src/services/indexing.js', () => ({
   indexSingleFile: vi.fn().mockResolvedValue('mock-note-id'),
 }));
 
+import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+import { createProject } from '../../../src/modules/pm/data/project-ops.js';
+import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
+import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import { indexSingleFile } from '../../../src/services/indexing.js';
+
+const mockConfig: BrainConfig = {
+  notesDir: '/tmp/test-brain',
+  dbPath: '/tmp/test-brain/brain.db',
+  embedder: { type: 'local' },
+} as BrainConfig;
 
 function createMockDb(projectNotes: Array<{ id: string; metadata: string; type: string }> = []) {
   const noteIds = projectNotes.map((n) => n.id);
@@ -28,195 +51,413 @@ const mockEmbedder: Embedder = {
   dimensions: 3,
 };
 
+function makeItem(overrides: Partial<ExtractedItem> = {}): ExtractedItem {
+  return {
+    noteType: 'task',
+    title: 'Test task',
+    content: 'Task description',
+    fields: {},
+    ...overrides,
+  };
+}
+
+let taskCounter = 0;
+
+function setupMocksForNewProject(): void {
+  taskCounter = 0;
+  (createProject as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ok: true,
+    data: { prefix: 'IMPT', status: 'active' },
+  });
+  (createWorkstream as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ok: true,
+    data: { number: 1, display_id: 'IMPT-01', project: 'IMPT', status: 'active' },
+  });
+  (createTask as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+    taskCounter++;
+    const displayId = `IMPT-01.0${taskCounter}`;
+    return {
+      ok: true,
+      data: {
+        display_id: displayId,
+        project: 'IMPT',
+        workstream: 1,
+        number: taskCounter,
+        status: 'pending',
+        mode: 'auto',
+        category: 'implementation',
+        priority: 'medium',
+      },
+    };
+  });
+  (getPmNotes as ReturnType<typeof vi.fn>).mockImplementation(
+    (_db: BrainDB, type: string, filters?: Record<string, unknown>) => {
+      if (type === 'workstream') return [];
+      if (type === 'task' && filters?.display_id) {
+        return [{ id: `note-${filters.display_id}`, metadata: '{}' }];
+      }
+      return [];
+    }
+  );
+}
+
+function setupMocksForExistingProject(prefix: string): void {
+  taskCounter = 0;
+  (createTask as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+    taskCounter++;
+    const displayId = `${prefix}-01.0${taskCounter}`;
+    return {
+      ok: true,
+      data: {
+        display_id: displayId,
+        project: prefix,
+        workstream: 1,
+        number: taskCounter,
+        status: 'pending',
+        mode: 'auto',
+        category: 'implementation',
+        priority: 'medium',
+      },
+    };
+  });
+  (getPmNotes as ReturnType<typeof vi.fn>).mockImplementation(
+    (_db: BrainDB, type: string, filters?: Record<string, unknown>) => {
+      if (type === 'workstream' && filters?.project === prefix) {
+        return [{ id: 'ws-1', metadata: JSON.stringify({ number: 1 }) }];
+      }
+      if (type === 'task' && filters?.display_id) {
+        return [{ id: `note-${filters.display_id}`, metadata: '{}' }];
+      }
+      return [];
+    }
+  );
+}
+
 describe('PmContentHandler', () => {
   let handler: PmContentHandler;
 
   beforeEach(() => {
     handler = new PmContentHandler();
+    handler.setConfig(mockConfig);
     vi.clearAllMocks();
-    (indexSingleFile as ReturnType<typeof vi.fn>).mockResolvedValue('mock-note-id');
+    taskCounter = 0;
   });
 
-  it('claims task-list content class', () => {
-    expect(handler.contentClasses).toContain('task-list');
+  describe('interface declarations', () => {
+    it('declares task note type', () => {
+      expect(handler.noteTypes).toContain('task');
+    });
+
+    it('declares task-list content class for legacy', () => {
+      expect(handler.contentClasses).toContain('task-list');
+    });
   });
 
-  it('canHandle returns true for task-list classification', () => {
-    const section: ClassifiedSection = {
-      content: '| Title | Status | Priority |\n| --- | --- | --- |\n| Fix bug | Open | High |',
-      contentClass: 'task-list',
-      confidence: 0.9,
-      method: 'deterministic',
-      heading: 'Tasks',
-    };
-    expect(handler.canHandle(section)).toBe(true);
+  describe('canHandle', () => {
+    it('returns true for task note type (new interface)', () => {
+      expect(handler.canHandle('task', 'some content')).toBe(true);
+    });
+
+    it('returns false for non-task note type (new interface)', () => {
+      expect(handler.canHandle('project', 'some content')).toBe(false);
+    });
+
+    it('returns true for task-list classification (legacy interface)', () => {
+      const section: ClassifiedSection = {
+        content: '| Title |\n| --- |\n| Task |',
+        contentClass: 'task-list',
+        confidence: 0.9,
+        method: 'deterministic',
+        heading: 'Tasks',
+      };
+      expect(handler.canHandle(section)).toBe(true);
+    });
+
+    it('returns false for non-task-list classification (legacy interface)', () => {
+      const section: ClassifiedSection = {
+        content: 'Architecture text',
+        contentClass: 'architecture',
+        confidence: 0.8,
+        method: 'deterministic',
+        heading: 'Architecture',
+      };
+      expect(handler.canHandle(section)).toBe(false);
+    });
   });
 
-  it('canHandle returns false for non-task-list content', () => {
-    const section: ClassifiedSection = {
-      content: 'Some architecture text',
-      contentClass: 'architecture',
-      confidence: 0.8,
-      method: 'deterministic',
-      heading: 'Architecture',
-    };
-    expect(handler.canHandle(section)).toBe(false);
+  describe('new interface: materialize with ExtractedItem[]', () => {
+    it('creates real PM tasks from extracted items', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items: ExtractedItem[] = [
+        makeItem({ title: 'Fix login bug', fields: { name: 'Fix login bug', priority: 'high' } }),
+        makeItem({ title: 'Add tests', fields: { name: 'Add tests', priority: 'medium' } }),
+      ];
+
+      const ids = await handler.materialize(mockDb, mockEmbedder, items, 'source-note-1');
+
+      expect(ids).toHaveLength(2);
+      expect(createTask).toHaveBeenCalledTimes(2);
+    });
+
+    it('auto-creates project when none exists', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [makeItem({ title: 'Task 1', fields: { name: 'Task 1' } })];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      expect(createProject).toHaveBeenCalledWith(mockDb, mockConfig, mockEmbedder, {
+        name: 'Imported',
+        prefix: 'IMPT',
+      });
+    });
+
+    it('auto-creates workstream when none exists', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [makeItem({ title: 'Task 1', fields: { name: 'Task 1' } })];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      expect(createWorkstream).toHaveBeenCalledWith(mockDb, mockConfig, mockEmbedder, {
+        project: 'IMPT',
+        name: 'General',
+      });
+    });
+
+    it('uses existing active project if one exists', async () => {
+      const mockDb = createMockDb([
+        {
+          id: 'proj-1',
+          metadata: JSON.stringify({ prefix: 'TEST', status: 'active' }),
+          type: 'project',
+        },
+      ]);
+      setupMocksForExistingProject('TEST');
+
+      const items = [makeItem({ title: 'Task 1', fields: { name: 'Task 1' } })];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      expect(createProject).not.toHaveBeenCalled();
+      expect(createTask).toHaveBeenCalledWith(
+        mockDb,
+        mockConfig,
+        mockEmbedder,
+        expect.objectContaining({ project: 'TEST' })
+      );
+    });
+
+    it('maps priority values correctly', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [
+        makeItem({ fields: { name: 'Critical task', priority: 'critical' } }),
+        makeItem({ fields: { name: 'Urgent task', priority: 'urgent' } }),
+        makeItem({ fields: { name: 'High task', priority: 'high' } }),
+        makeItem({ fields: { name: 'P1 task', priority: 'P1' } }),
+        makeItem({ fields: { name: 'Low task', priority: 'P3' } }),
+        makeItem({ fields: { name: 'Normal task', priority: 'medium' } }),
+      ];
+
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      const calls = (createTask as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls[0][3].priority).toBe('critical');
+      expect(calls[1][3].priority).toBe('critical');
+      expect(calls[2][3].priority).toBe('high');
+      expect(calls[3][3].priority).toBe('high');
+      expect(calls[4][3].priority).toBe('low');
+      expect(calls[5][3].priority).toBe('medium');
+    });
+
+    it('creates derived-from relations to source note', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [makeItem({ title: 'Task A', fields: { name: 'Task A' } })];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-42');
+
+      expect(mockDb.upsertRelations).toHaveBeenCalledWith(
+        expect.stringContaining('note-'),
+        [
+          expect.objectContaining({
+            targetId: 'source-42',
+            type: 'derived-from',
+          }),
+        ]
+      );
+    });
+
+    it('returns empty array for empty items list', async () => {
+      const mockDb = createMockDb();
+      const ids = await handler.materialize(mockDb, mockEmbedder, [], 'source-1');
+      expect(ids).toHaveLength(0);
+    });
+
+    it('maps category field', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [
+        makeItem({ fields: { name: 'Task', category: 'testing' } }),
+      ];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      expect(createTask).toHaveBeenCalledWith(
+        mockDb,
+        mockConfig,
+        mockEmbedder,
+        expect.objectContaining({ category: 'testing' })
+      );
+    });
+
+    it('maps due_date field', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [
+        makeItem({ fields: { name: 'Task', due_date: '2026-04-01' } }),
+      ];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      expect(createTask).toHaveBeenCalledWith(
+        mockDb,
+        mockConfig,
+        mockEmbedder,
+        expect.objectContaining({ dueDate: '2026-04-01' })
+      );
+    });
+
+    it('throws if config is not set', async () => {
+      const noConfigHandler = new PmContentHandler();
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [makeItem({ title: 'Task 1' })];
+      await expect(
+        noConfigHandler.materialize(mockDb, mockEmbedder, items, 'source-1')
+      ).rejects.toThrow('requires config');
+    });
+
+    it('uses item.title when fields.name is absent', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [makeItem({ title: 'From title', fields: {} })];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      expect(createTask).toHaveBeenCalledWith(
+        mockDb,
+        mockConfig,
+        mockEmbedder,
+        expect.objectContaining({ name: 'From title' })
+      );
+    });
+
+    it('uses item.content when fields.description is absent', async () => {
+      const mockDb = createMockDb();
+      setupMocksForNewProject();
+
+      const items = [makeItem({ title: 'Task', content: 'Content description', fields: { name: 'Task' } })];
+      await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
+
+      expect(createTask).toHaveBeenCalledWith(
+        mockDb,
+        mockConfig,
+        mockEmbedder,
+        expect.objectContaining({ description: 'Content description' })
+      );
+    });
   });
 
-  it('parses table rows and creates notes via indexSingleFile', async () => {
-    const content = `| Title | Status | Priority | Assignee |
+  describe('legacy interface: materialize with content string', () => {
+    it('parses table rows and creates notes via indexSingleFile', async () => {
+      const content = `| Title | Status | Priority | Assignee |
 | --- | --- | --- | --- |
 | Fix login bug | Open | High | Alice |
 | Add tests | Done | Medium | Bob |`;
 
-    const section: ClassifiedSection = {
-      content,
-      contentClass: 'task-list',
-      confidence: 0.9,
-      method: 'deterministic',
-      heading: 'Tasks',
-    };
+      const section: ClassifiedSection = {
+        content,
+        contentClass: 'task-list',
+        confidence: 0.9,
+        method: 'deterministic',
+        heading: 'Tasks',
+      };
 
-    const mockDb = createMockDb();
-    const ids = await handler.materialize(mockDb, mockEmbedder, content, section, 'source-note-1');
+      const mockDb = createMockDb();
+      (indexSingleFile as ReturnType<typeof vi.fn>).mockResolvedValue('mock-note-id');
+      const ids = await handler.materialize(mockDb, mockEmbedder, content, section, 'source-note-1');
 
-    expect(ids).toHaveLength(2);
-    expect(indexSingleFile).toHaveBeenCalledTimes(2);
-    expect(mockDb.upsertRelations).toHaveBeenCalledTimes(2);
-  });
+      expect(ids).toHaveLength(2);
+      expect(indexSingleFile).toHaveBeenCalledTimes(2);
+      expect(mockDb.upsertRelations).toHaveBeenCalledTimes(2);
+    });
 
-  it('creates derived-from relations to source note', async () => {
-    const content = `| Title | Status |
+    it('creates derived-from relations to source note', async () => {
+      const content = `| Title | Status |
 | --- | --- |
 | Task A | Open |`;
 
-    const section: ClassifiedSection = {
-      content,
-      contentClass: 'task-list',
-      confidence: 0.9,
-      method: 'deterministic',
-      heading: 'Tasks',
-    };
+      const section: ClassifiedSection = {
+        content,
+        contentClass: 'task-list',
+        confidence: 0.9,
+        method: 'deterministic',
+        heading: 'Tasks',
+      };
 
-    const mockDb = createMockDb();
-    await handler.materialize(mockDb, mockEmbedder, content, section, 'source-42');
+      const mockDb = createMockDb();
+      (indexSingleFile as ReturnType<typeof vi.fn>).mockResolvedValue('mock-note-id');
+      await handler.materialize(mockDb, mockEmbedder, content, section, 'source-42');
 
-    expect(mockDb.upsertRelations).toHaveBeenCalledWith('mock-note-id', [
-      { sourceId: 'mock-note-id', targetId: 'source-42', type: 'derived-from' },
-    ]);
+      expect(mockDb.upsertRelations).toHaveBeenCalledWith('mock-note-id', [
+        { sourceId: 'mock-note-id', targetId: 'source-42', type: 'derived-from' },
+      ]);
+    });
+
+    it('returns empty array for content without a valid table', async () => {
+      const content = 'Just some plain text without any table';
+      const section: ClassifiedSection = {
+        content,
+        contentClass: 'task-list',
+        confidence: 0.6,
+        method: 'deterministic',
+        heading: null,
+      };
+
+      const mockDb = createMockDb();
+      const ids = await handler.materialize(mockDb, mockEmbedder, content, section, 'source-1');
+
+      expect(ids).toHaveLength(0);
+      expect(indexSingleFile).not.toHaveBeenCalled();
+    });
   });
 
-  it('returns empty array for content without a valid table', async () => {
-    const content = 'Just some plain text without any table';
-    const section: ClassifiedSection = {
-      content,
-      contentClass: 'task-list',
-      confidence: 0.6,
-      method: 'deterministic',
-      heading: null,
-    };
+  describe('mapPriority', () => {
+    it('maps critical/urgent/p0 to critical', () => {
+      expect(mapPriority('critical')).toBe('critical');
+      expect(mapPriority('urgent')).toBe('critical');
+      expect(mapPriority('p0')).toBe('critical');
+    });
 
-    const mockDb = createMockDb();
-    const ids = await handler.materialize(mockDb, mockEmbedder, content, section, 'source-1');
+    it('maps high/p1 to high', () => {
+      expect(mapPriority('high')).toBe('high');
+      expect(mapPriority('p1')).toBe('high');
+    });
 
-    expect(ids).toHaveLength(0);
-    expect(indexSingleFile).not.toHaveBeenCalled();
-  });
+    it('maps low/p3 to low', () => {
+      expect(mapPriority('low')).toBe('low');
+      expect(mapPriority('p3')).toBe('low');
+    });
 
-  it('maps priority values correctly', async () => {
-    const content = `| Title | Priority |
-| --- | --- |
-| Urgent task | Critical |
-| Normal task | Medium |
-| Low task | P3 |`;
-
-    const section: ClassifiedSection = {
-      content,
-      contentClass: 'task-list',
-      confidence: 0.9,
-      method: 'deterministic',
-      heading: 'Tasks',
-    };
-
-    const mockDb = createMockDb();
-    await handler.materialize(mockDb, mockEmbedder, content, section, 'src-1');
-
-    expect(indexSingleFile).toHaveBeenCalledTimes(3);
-    const calls = (indexSingleFile as ReturnType<typeof vi.fn>).mock.calls;
-
-    expect(calls[0][3]).toContain('import_priority: "critical"');
-    expect(calls[1][3]).toContain('import_priority: "medium"');
-    expect(calls[2][3]).toContain('import_priority: "low"');
-  });
-
-  it('attaches PM module and project when active project exists', async () => {
-    const content = `| Title | Status |
-| --- | --- |
-| My task | Open |`;
-
-    const section: ClassifiedSection = {
-      content,
-      contentClass: 'task-list',
-      confidence: 0.9,
-      method: 'deterministic',
-      heading: 'Tasks',
-    };
-
-    const mockDb = createMockDb([
-      {
-        id: 'proj-1',
-        metadata: JSON.stringify({ prefix: 'TEST', status: 'active' }),
-        type: 'project',
-      },
-    ]);
-
-    await handler.materialize(mockDb, mockEmbedder, content, section, 'src-1');
-
-    const call = (indexSingleFile as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[3]).toContain('module: pm');
-    expect(call[3]).toContain('project: TEST');
-  });
-
-  it('uses name column as fallback when title column is absent', async () => {
-    const content = `| Name | Status |
-| --- | --- |
-| Deploy fix | Pending |`;
-
-    const section: ClassifiedSection = {
-      content,
-      contentClass: 'task-list',
-      confidence: 0.9,
-      method: 'deterministic',
-      heading: 'Tasks',
-    };
-
-    const mockDb = createMockDb();
-    await handler.materialize(mockDb, mockEmbedder, content, section, 'src-1');
-
-    const call = (indexSingleFile as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[3]).toContain('title: "Deploy fix"');
-    expect(call[3]).toContain('# Deploy fix');
-  });
-
-  it('includes extra columns as body content', async () => {
-    const content = `| Title | Status | Assignee | Notes |
-| --- | --- | --- | --- |
-| Review PR | Open | Carol | Check edge cases |`;
-
-    const section: ClassifiedSection = {
-      content,
-      contentClass: 'task-list',
-      confidence: 0.9,
-      method: 'deterministic',
-      heading: 'Tasks',
-    };
-
-    const mockDb = createMockDb();
-    await handler.materialize(mockDb, mockEmbedder, content, section, 'src-1');
-
-    const call = (indexSingleFile as ReturnType<typeof vi.fn>).mock.calls[0];
-    const markdown = call[3] as string;
-    expect(markdown).toContain('**assignee:** Carol');
-    expect(markdown).toContain('**notes:** Check edge cases');
+    it('defaults to medium', () => {
+      expect(mapPriority(undefined)).toBe('medium');
+      expect(mapPriority('whatever')).toBe('medium');
+      expect(mapPriority('p2')).toBe('medium');
+    });
   });
 });
