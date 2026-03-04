@@ -6,6 +6,11 @@ export default defineConfig({
     include: ['__tests__/**/*.test.ts'],
     passWithNoTests: true,
     pool: 'forks',
+    poolOptions: {
+      forks: {
+        maxForks: 4,
+      },
+    },
     teardownTimeout: 30_000,
     hookTimeout: 30_000,
     coverage: {
