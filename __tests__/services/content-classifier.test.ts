@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { classifySection } from '../../src/services/content-classifier.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { classifySection, classifySectionWithEmbedding, classifyTableWithLlm, clearClassificationCache } from '../../src/services/content-classifier.js';
+import { clearArchetypeCache } from '../../src/services/content-archetypes.js';
+import type { OllamaClient } from '../../src/services/ollama.js';
+import type { Embedder } from '../../src/types.js';
 
 describe('classifySection — deterministic', () => {
   describe('task-list detection', () => {
@@ -77,5 +80,151 @@ describe('classifySection — deterministic', () => {
       const result = classifySection(text, null);
       expect(result.contentClass).toBe('general');
     });
+  });
+});
+
+describe('classifyTableWithLlm', () => {
+  const mockClient: OllamaClient = {
+    model: 'test',
+    generate: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.mocked(mockClient.generate).mockReset();
+    clearClassificationCache();
+  });
+
+  it('returns decompose=true for task tables', async () => {
+    vi.mocked(mockClient.generate).mockResolvedValue(JSON.stringify({
+      decompose: true,
+      noteType: 'task',
+      schemaMapping: { Title: 'title', Status: 'status', Priority: 'priority' },
+      reason: 'Independent actionable items with status tracking',
+    }));
+
+    const result = await classifyTableWithLlm(
+      mockClient,
+      ['Title', 'Status', 'Priority'],
+      [['Fix bug', 'Open', 'High'], ['Add test', 'Done', 'Low']],
+      [{ name: 'task', fields: ['title', 'status', 'priority'] }]
+    );
+
+    expect(result.decompose).toBe(true);
+    expect(result.noteType).toBe('task');
+    expect(result.schemaMapping).toEqual({ Title: 'title', Status: 'status', Priority: 'priority' });
+  });
+
+  it('returns decompose=false for comparison tables', async () => {
+    vi.mocked(mockClient.generate).mockResolvedValue(JSON.stringify({
+      decompose: false,
+      noteType: 'reference',
+      suggestedTitle: 'Feature Comparison Matrix',
+      reason: 'Rows represent options for comparison, not independent items',
+    }));
+
+    const result = await classifyTableWithLlm(
+      mockClient,
+      ['Feature', 'Option A', 'Option B', 'Notes'],
+      [['Auth', 'OAuth', 'JWT', 'Prefer OAuth for SSO']],
+      []
+    );
+
+    expect(result.decompose).toBe(false);
+    expect(result.suggestedTitle).toBe('Feature Comparison Matrix');
+  });
+
+  it('caches results by table signature', async () => {
+    vi.mocked(mockClient.generate).mockResolvedValue(JSON.stringify({
+      decompose: true, noteType: 'task', schemaMapping: {}, reason: 'test',
+    }));
+
+    await classifyTableWithLlm(mockClient, ['A', 'B'], [['1', '2']], []);
+    await classifyTableWithLlm(mockClient, ['A', 'B'], [['1', '2']], []);
+
+    expect(mockClient.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes registered type schemas in prompt', async () => {
+    vi.mocked(mockClient.generate).mockResolvedValue(JSON.stringify({
+      decompose: false, noteType: 'general', reason: 'test',
+    }));
+
+    await classifyTableWithLlm(
+      mockClient,
+      ['Name', 'Value'],
+      [['a', '1']],
+      [{ name: 'config', fields: ['key', 'value', 'default'] }]
+    );
+
+    const promptArg = vi.mocked(mockClient.generate).mock.calls[0][0];
+    expect(promptArg).toContain('config');
+    expect(promptArg).toContain('key, value, default');
+  });
+
+  it('treats tables with same headers in different order as same signature', async () => {
+    vi.mocked(mockClient.generate).mockResolvedValue(JSON.stringify({
+      decompose: false, noteType: 'general', reason: 'test',
+    }));
+
+    await classifyTableWithLlm(mockClient, ['B', 'A'], [['1', '2']], []);
+    await classifyTableWithLlm(mockClient, ['A', 'B'], [['1', '2']], []);
+
+    expect(mockClient.generate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('classifySectionWithEmbedding', () => {
+  beforeEach(() => clearArchetypeCache());
+
+  it('returns general when no archetype exceeds threshold', async () => {
+    // All zeros = no similarity to any archetype
+    const embedder: Embedder = {
+      embed: vi.fn().mockResolvedValue([[0, 0, 0, 0, 0, 0]]),
+      model: 'test',
+      dimensions: 6,
+    };
+    const result = await classifySectionWithEmbedding('random text', null, embedder);
+    expect(result.contentClass).toBe('general');
+    expect(result.method).toBe('embedding');
+  });
+
+  it('returns best matching archetype when above threshold', async () => {
+    // First call: archetype embeddings (6 archetypes)
+    // Second call: text embedding that is identical to the first archetype (task-list)
+    const archetypeVecs = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5]];
+    const textVec = [[1, 0, 0]]; // identical to task-list archetype
+
+    const embedder: Embedder = {
+      embed: vi.fn()
+        .mockResolvedValueOnce(archetypeVecs)
+        .mockResolvedValueOnce(textVec),
+      model: 'test',
+      dimensions: 3,
+    };
+
+    const result = await classifySectionWithEmbedding('some task text', 'Tasks', embedder);
+    expect(result.contentClass).toBe('task-list');
+    expect(result.confidence).toBeGreaterThan(0.6);
+    expect(result.method).toBe('embedding');
+  });
+
+  it('preserves heading in result', async () => {
+    const embedder: Embedder = {
+      embed: vi.fn().mockResolvedValue([[0, 0, 0]]),
+      model: 'test',
+      dimensions: 3,
+    };
+    const result = await classifySectionWithEmbedding('text', 'My Heading', embedder);
+    expect(result.heading).toBe('My Heading');
+  });
+
+  it('returns confidence of 0.5 when falling back to general', async () => {
+    const embedder: Embedder = {
+      embed: vi.fn().mockResolvedValue([[0, 0, 0, 0, 0, 0]]),
+      model: 'test',
+      dimensions: 6,
+    };
+    const result = await classifySectionWithEmbedding('text', null, embedder);
+    expect(result.confidence).toBe(0.5);
   });
 });

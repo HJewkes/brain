@@ -1,4 +1,7 @@
-import type { ContentClass } from '../types.js';
+import { createHash } from 'node:crypto';
+import type { ContentClass, Embedder } from '../types.js';
+import type { OllamaClient } from './ollama.js';
+import { getArchetypeEmbeddings } from './content-archetypes.js';
 
 export interface ClassifiedSection {
   content: string;
@@ -6,6 +9,19 @@ export interface ClassifiedSection {
   confidence: number;
   method: 'deterministic' | 'llm' | 'embedding';
   heading: string | null;
+}
+
+export interface NoteTypeSchema {
+  name: string;
+  fields: string[];
+}
+
+export interface TableClassification {
+  decompose: boolean;
+  noteType: string;
+  schemaMapping?: Record<string, string>;
+  suggestedTitle?: string;
+  reason: string;
 }
 
 const TASK_TABLE_COLUMNS = ['status', 'priority', 'assignee', 'due', 'estimate', 'owner'];
@@ -93,4 +109,84 @@ export function classifySection(text: string, heading: string | null): Classifie
   }
 
   return { ...base, contentClass: 'general', confidence: 0.5 };
+}
+
+// LLM table classification
+
+const classificationCache = new Map<string, TableClassification>();
+
+function tableSignature(headers: string[], sampleRows: string[][]): string {
+  const key = JSON.stringify({ h: [...headers].sort(), r: sampleRows.slice(0, 3) });
+  return createHash('sha256').update(key).digest('hex').slice(0, 16);
+}
+
+export async function classifyTableWithLlm(
+  client: OllamaClient,
+  headers: string[],
+  sampleRows: string[][],
+  registeredTypes: NoteTypeSchema[]
+): Promise<TableClassification> {
+  const sig = tableSignature(headers, sampleRows);
+  const cached = classificationCache.get(sig);
+  if (cached) return cached;
+
+  const typesDesc = registeredTypes.length > 0
+    ? `Registered note types:\n${registeredTypes.map((t) => `- ${t.name}: fields [${t.fields.join(', ')}]`).join('\n')}`
+    : 'No specific note types registered.';
+
+  const rowsPreview = sampleRows.slice(0, 5).map((r) => r.join(' | ')).join('\n');
+
+  const system = 'You classify tables for a knowledge base. Respond with valid JSON only, no markdown fences. Schema: { "decompose": boolean, "noteType": string, "schemaMapping"?: { column: field }, "suggestedTitle"?: string, "reason": string }';
+
+  const prompt = `Table headers: ${headers.join(', ')}\nSample rows:\n${rowsPreview}\n\n${typesDesc}\n\nShould this table be decomposed into individual notes (rows are independent actionable items) or kept as a single reference note (rows are related and only meaningful together)? If decomposed, map columns to note type fields.`;
+
+  const response = await client.generate(prompt, system);
+  const result = JSON.parse(response) as TableClassification;
+  classificationCache.set(sig, result);
+  return result;
+}
+
+export function clearClassificationCache(): void {
+  classificationCache.clear();
+}
+
+// Embedding-based classification
+
+function cosineSimilarity(a: Float32Array | number[], b: Float32Array | number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+export async function classifySectionWithEmbedding(
+  text: string,
+  heading: string | null,
+  embedder: Embedder
+): Promise<ClassifiedSection> {
+  const archetypes = await getArchetypeEmbeddings(embedder);
+  const [embedding] = await embedder.embed([text]);
+  const vec = new Float32Array(embedding);
+
+  let bestClass: ContentClass = 'general';
+  let bestScore = 0.6; // minimum threshold
+
+  for (const [cls, archVec] of archetypes) {
+    const score = cosineSimilarity(vec, archVec);
+    if (score > bestScore) {
+      bestScore = score;
+      bestClass = cls;
+    }
+  }
+
+  return {
+    content: text,
+    contentClass: bestClass,
+    confidence: bestClass === 'general' ? 0.5 : bestScore,
+    method: 'embedding',
+    heading,
+  };
 }
