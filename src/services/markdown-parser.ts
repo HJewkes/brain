@@ -21,6 +21,7 @@ const FENCE_OPEN = /^```/;
 const FENCE_CLOSE = /^```\s*$/;
 const TABLE_LINE = /^\|.+\|/;
 const MIN_CHUNK_LENGTH = 20;
+const IMAGE_REF = /!\[([^\]]*)\]\(([^)]+)\)/g;
 
 export function estimateTokens(text: string): number {
   if (text.length === 0) return 0;
@@ -34,8 +35,18 @@ export function parseMarkdown(filePath: string, content: string): ParsedNote {
   const frontmatter = coerceFrontmatter(filePath, data);
   const chunks = chunkBody(body);
   const relations = extractRelations(id, data);
+  const imageRefs = extractImageReferences(body);
 
-  return { id, filePath, frontmatter, rawFrontmatter: data, content: body, chunks, relations };
+  return {
+    id,
+    filePath,
+    frontmatter,
+    rawFrontmatter: data,
+    content: body,
+    chunks,
+    relations,
+    imageRefs: imageRefs.length > 0 ? imageRefs : undefined,
+  };
 }
 
 function deriveId(filePath: string, data: Record<string, unknown>): string {
@@ -227,7 +238,7 @@ function chunkBody(body: string): RawChunk[] {
   let position = 0;
 
   for (const section of sections) {
-    const text = section.lines.join('\n').trim();
+    const text = synthesizeImageParagraphs(section.lines.join('\n').trim());
     if (text.length < MIN_CHUNK_LENGTH) continue;
 
     const contentWithAncestry = prependAncestry(section.headingAncestry, text);
@@ -399,7 +410,7 @@ function splitParagraphsProtectingFences(text: string): string[] {
     if (line.trim() === '') {
       if (current.length > 0) {
         const joined = current.join('\n').trim();
-        if (joined.length > 0) paragraphs.push(joined);
+        if (joined.length > 0) paragraphs.push(synthesizeImageContext(joined));
         current = [];
       }
     } else {
@@ -408,9 +419,39 @@ function splitParagraphsProtectingFences(text: string): string[] {
   }
 
   const joined = current.join('\n').trim();
-  if (joined.length > 0) paragraphs.push(joined);
+  if (joined.length > 0) paragraphs.push(synthesizeImageContext(joined));
 
   return paragraphs;
+}
+
+export function extractImageReferences(content: string): Array<{ alt: string; path: string }> {
+  const refs: Array<{ alt: string; path: string }> = [];
+  const regex = new RegExp(IMAGE_REF.source, IMAGE_REF.flags);
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    refs.push({ alt: match[1], path: match[2] });
+  }
+  return refs;
+}
+
+function synthesizeImageParagraphs(text: string): string {
+  return text
+    .split(/\n\n/)
+    .map((p) => synthesizeImageContext(p))
+    .join('\n\n');
+}
+
+function synthesizeImageContext(paragraph: string): string {
+  const imageMatch = paragraph.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+  if (!imageMatch) return paragraph;
+
+  const alt = imageMatch[1];
+  const textWithoutImage = paragraph.replace(/!\[[^\]]*\]\([^)]+\)/, '').trim();
+
+  if (textWithoutImage.length < 50 && alt.length > 0) {
+    return `[Image: ${alt}] ${textWithoutImage}`.trim();
+  }
+  return paragraph;
 }
 
 export function extractNoteLinks(content: string): string[] {

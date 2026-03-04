@@ -3,6 +3,7 @@ import {
   parseMarkdown,
   estimateTokens,
   coerceFrontmatter,
+  extractImageReferences,
 } from '../../src/services/markdown-parser.js';
 
 describe('estimateTokens', () => {
@@ -787,5 +788,108 @@ describe('frontmatter coercion', () => {
     expect(fm['last-reviewed']).toBe('2026-03-01T00:00:00.000Z');
     expect(fm.expires).toBe('never');
     expect(fm.date).toBe('2026-03-01T00:00:00.000Z');
+  });
+});
+
+describe('extractImageReferences', () => {
+  it('extracts image references with alt text and paths', () => {
+    const content = `## Architecture
+
+![System Diagram](./images/arch-diagram.png)
+
+The system uses a microservices pattern.
+
+![Data Flow](../diagrams/data-flow.svg)`;
+
+    const refs = extractImageReferences(content);
+    expect(refs).toHaveLength(2);
+    expect(refs[0]).toEqual({ alt: 'System Diagram', path: './images/arch-diagram.png' });
+    expect(refs[1]).toEqual({ alt: 'Data Flow', path: '../diagrams/data-flow.svg' });
+  });
+
+  it('returns empty array when no images', () => {
+    const content = '# Just Text\n\nNo images here.';
+    expect(extractImageReferences(content)).toHaveLength(0);
+  });
+
+  it('handles images with empty alt text', () => {
+    const content = '![](photo.jpg)';
+    const refs = extractImageReferences(content);
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toEqual({ alt: '', path: 'photo.jpg' });
+  });
+});
+
+describe('parseMarkdown image context', () => {
+  it('populates imageRefs on ParsedNote', () => {
+    const content = `---
+title: Design Doc
+type: research
+tier: slow
+---
+
+## Diagrams
+
+![Component Layout](./component-layout.png)
+
+This shows the main components.`;
+
+    const result = parseMarkdown('design.md', content);
+    expect(result.imageRefs).toBeDefined();
+    expect(result.imageRefs).toHaveLength(1);
+    expect(result.imageRefs![0].alt).toBe('Component Layout');
+  });
+
+  it('synthesizes searchable text for image-only sections', () => {
+    const content = `---
+title: Screenshots
+type: note
+tier: fast
+---
+
+## Login Screen
+
+![Login Form with validation errors](./screenshots/login.png)`;
+
+    const result = parseMarkdown('screenshots.md', content);
+    const chunks = result.chunks;
+    const imageChunk = chunks.find((c) => c.text.includes('Login Form'));
+    expect(imageChunk).toBeDefined();
+    expect(imageChunk!.text).toContain('[Image: Login Form with validation errors]');
+  });
+
+  it('does not synthesize text when surrounding text exceeds 50 chars', () => {
+    const content = `---
+title: Doc
+type: note
+tier: slow
+---
+
+## Section
+
+This is a long paragraph that provides extensive context about the image below and exceeds fifty characters easily.
+![Diagram](./diagram.png)
+More text follows the image reference with additional context about the diagram shown above.`;
+
+    const result = parseMarkdown('doc.md', content);
+    const chunks = result.chunks;
+    const imageChunk = chunks.find((c) => c.text.includes('Diagram'));
+    expect(imageChunk).toBeDefined();
+    expect(imageChunk!.text).not.toContain('[Image:');
+  });
+
+  it('returns undefined imageRefs when no images present', () => {
+    const content = `---
+title: Plain
+type: note
+tier: slow
+---
+
+## Section
+
+Just plain text with no images at all in this document whatsoever.`;
+
+    const result = parseMarkdown('plain.md', content);
+    expect(result.imageRefs).toBeUndefined();
   });
 });
