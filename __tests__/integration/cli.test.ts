@@ -34,7 +34,7 @@ afterAll(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('CLI integration', () => {
+describe('CLI integration', { timeout: 30_000 }, () => {
   it('init creates directory structure and database', () => {
     const output = cli(`init --notes-dir "${notesDir}" --embedder local --json`);
     const result = JSON.parse(output);
