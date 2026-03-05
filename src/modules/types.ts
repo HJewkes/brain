@@ -1,6 +1,5 @@
 import type { Command } from '@commander-js/extra-typings';
-import type { NoteRecord, ContentClass, Embedder } from '../types.js';
-import type { ClassifiedSection } from '../services/content-classifier.js';
+import type { NoteRecord, Embedder, ExtractedItem } from '../types.js';
 import type { BrainDB } from '../services/brain-db.js';
 
 /** Schema for validating module note frontmatter (JSON Schema subset) */
@@ -20,6 +19,12 @@ export interface DirectorySchema {
   }>;
 }
 
+/** Hints for the import pipeline to improve classification and extraction */
+export interface ImportHints {
+  tableColumnAliases?: Record<string, string[]>;
+  archetypeText?: string;
+}
+
 /** A note type registered by a module */
 export interface ModuleNoteType {
   name: string;
@@ -27,6 +32,7 @@ export interface ModuleNoteType {
   tier: 'slow' | 'fast';
   schema?: ModuleConfigSchema;
   directorySchema?: DirectorySchema;
+  importHints?: ImportHints;
 }
 
 /** A relation type registered by a module */
@@ -58,17 +64,15 @@ export interface ModuleMigration {
   up: (db: unknown) => void;
 }
 
-/** Handler for materializing classified content into module-specific notes */
+/** Handler for materializing extracted items into module-specific notes */
 export interface ContentHandler {
-  contentClasses: ContentClass[];
-  canHandle(classification: ClassifiedSection): boolean;
+  noteTypes: string[];
+  canHandle(noteType: string, content: string): boolean;
   materialize(
     db: BrainDB,
     embedder: Embedder,
-    content: string,
-    classification: ClassifiedSection,
-    sourceNoteId: string,
-    schemaMapping?: Record<string, string>
+    items: ExtractedItem[],
+    sourceNoteId: string
   ): Promise<string[]>;
 }
 

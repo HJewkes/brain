@@ -1,0 +1,94 @@
+{
+  "planId": "2026-03-04-smart-import-v2",
+  "createdAt": "2026-03-04T00:00:00Z",
+  "goal": "Replace hardcoded content classification with module-registered note types and three-tier extraction pipeline for end-to-end import",
+  "tasks": [
+    {
+      "id": "task-01",
+      "name": "ExtractedItem type + ContentHandler interface",
+      "briefing": "briefings/task-01.md",
+      "wave": 1,
+      "dependsOn": [],
+      "fileOwnership": ["src/types.ts", "src/modules/types.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-02",
+      "name": "Registry importHints methods",
+      "briefing": "briefings/task-02.md",
+      "wave": 1,
+      "dependsOn": [],
+      "fileOwnership": ["src/modules/registry.ts", "src/modules/context.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-03",
+      "name": "Knowledge module",
+      "briefing": "briefings/task-03.md",
+      "wave": 1,
+      "dependsOn": [],
+      "fileOwnership": ["src/modules/knowledge/index.ts", "__tests__/modules/knowledge/index.test.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-04",
+      "name": "PM module importHints + content handler rewrite",
+      "briefing": "briefings/task-04.md",
+      "wave": 1,
+      "dependsOn": [],
+      "fileOwnership": ["src/modules/pm/index.ts", "src/modules/pm/content-handler.ts", "__tests__/modules/pm/content-handler.test.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-05",
+      "name": "Remove ContentClass enum + migrate references",
+      "briefing": "briefings/task-05.md",
+      "wave": 2,
+      "dependsOn": ["task-03", "task-04"],
+      "fileOwnership": ["src/types.ts", "src/services/content-classifier.ts", "src/services/content-archetypes.ts", "src/services/document-splitter.ts", "src/modules/types.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-06",
+      "name": "Tier 1: Deterministic extraction",
+      "briefing": "briefings/task-06.md",
+      "wave": 2,
+      "dependsOn": ["task-02", "task-03", "task-04"],
+      "fileOwnership": ["src/services/extraction-pipeline.ts", "src/services/extraction-tiers/deterministic.ts", "__tests__/services/extraction-tiers/deterministic.test.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-07",
+      "name": "Import command refactor",
+      "briefing": "briefings/task-07.md",
+      "wave": 3,
+      "dependsOn": ["task-05", "task-06"],
+      "fileOwnership": ["src/commands/import.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-08",
+      "name": "Tier 2: LLM classifier",
+      "briefing": "briefings/task-08.md",
+      "wave": 4,
+      "dependsOn": ["task-07"],
+      "fileOwnership": ["src/services/extraction-tiers/llm-classifier.ts", "__tests__/services/extraction-tiers/llm-classifier.test.ts"],
+      "status": "pending"
+    },
+    {
+      "id": "task-09",
+      "name": "Tier 3: Agent queue",
+      "briefing": "briefings/task-09.md",
+      "wave": 4,
+      "dependsOn": ["task-07"],
+      "fileOwnership": ["src/services/extraction-tiers/agent-queue.ts", "__tests__/services/extraction-tiers/agent-queue.test.ts"],
+      "status": "pending"
+    }
+  ],
+  "waves": [
+    { "id": 1, "tasks": ["task-01", "task-02", "task-03", "task-04"], "gate": "npm run typecheck && npm test" },
+    { "id": 2, "tasks": ["task-05", "task-06"], "gate": "npm run typecheck && npm test" },
+    { "id": 3, "tasks": ["task-07"], "gate": "npm run typecheck && npm test" },
+    { "id": 4, "tasks": ["task-08", "task-09"], "gate": "npm run typecheck && npm test && npm run lint" }
+  ]
+}

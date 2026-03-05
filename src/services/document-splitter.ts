@@ -1,4 +1,4 @@
-import type { ContentClass, Embedder, NoteType } from '../types.js';
+import type { Embedder, NoteType } from '../types.js';
 import { splitIntoSections } from './markdown-parser.js';
 import { classifySection, classifySectionWithEmbedding } from './content-classifier.js';
 import type { ClassifiedSection } from './content-classifier.js';
@@ -8,22 +8,12 @@ export interface SplitResult {
   sourceNote: { frontmatter: Record<string, unknown>; content: string };
   derivedNotes: Array<{
     content: string;
-    contentClass: ContentClass;
+    contentClass: string;
     suggestedType: NoteType;
     suggestedTitle: string;
     confidence: number;
   }>;
 }
-
-const CLASS_TO_TYPE: Record<ContentClass, { type: NoteType; tier: 'slow' | 'fast' }> = {
-  'task-list': { type: 'note', tier: 'fast' },
-  'bug-report': { type: 'note', tier: 'fast' },
-  architecture: { type: 'research', tier: 'slow' },
-  requirements: { type: 'research', tier: 'slow' },
-  'meeting-notes': { type: 'meeting', tier: 'fast' },
-  reference: { type: 'note', tier: 'slow' },
-  general: { type: 'note', tier: 'slow' },
-};
 
 const MIN_SECTION_LENGTH = 20;
 
@@ -43,7 +33,7 @@ export async function splitDocument(
     if (text.length < MIN_SECTION_LENGTH) continue;
 
     let result = classifySection(text, section.heading);
-    if (result.contentClass === 'general' && result.confidence < minConfidence) {
+    if (result.contentClass === 'note' && result.confidence < minConfidence) {
       result = await classifySectionWithEmbedding(text, section.heading, embedder);
     }
     classified.push(result);
@@ -53,7 +43,7 @@ export async function splitDocument(
     return { sourceNote: { frontmatter, content: body }, derivedNotes: [] };
   }
 
-  const classCounts = new Map<ContentClass, number>();
+  const classCounts = new Map<string, number>();
   for (const c of classified) {
     classCounts.set(c.contentClass, (classCounts.get(c.contentClass) ?? 0) + 1);
   }
@@ -70,7 +60,7 @@ export async function splitDocument(
 
   const derivedNotes: SplitResult['derivedNotes'] = [];
   let currentGroup: ClassifiedSection[] = [];
-  let currentClass: ContentClass | null = null;
+  let currentClass: string | null = null;
 
   for (const section of classified) {
     if (section.contentClass === dominantClass) {
@@ -102,7 +92,7 @@ export async function splitDocument(
 
 function flushGroup(
   group: ClassifiedSection[],
-  contentClass: ContentClass,
+  contentClass: string,
   derivedNotes: SplitResult['derivedNotes'],
   minConfidence: number
 ): void {
@@ -111,12 +101,11 @@ function flushGroup(
 
   const content = group.map((c) => c.content).join('\n\n');
   const title = group[0].heading ?? `${contentClass} section`;
-  const mapping = CLASS_TO_TYPE[contentClass];
 
   derivedNotes.push({
     content,
     contentClass,
-    suggestedType: mapping.type,
+    suggestedType: contentClass as NoteType,
     suggestedTitle: title,
     confidence: avgConfidence,
   });

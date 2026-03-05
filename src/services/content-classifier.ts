@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { ContentClass, Embedder } from '../types.js';
+import type { Embedder } from '../types.js';
 import type { OllamaClient } from './ollama.js';
 import { getArchetypeEmbeddings } from './content-archetypes.js';
 
 export interface ClassifiedSection {
   content: string;
-  contentClass: ContentClass;
+  contentClass: string;
   confidence: number;
   method: 'deterministic' | 'llm' | 'embedding';
   heading: string | null;
@@ -66,49 +66,49 @@ export function classifySection(text: string, heading: string | null): Classifie
   if (headers) {
     const taskHits = headers.filter((h) => TASK_TABLE_COLUMNS.includes(h)).length;
     if (taskHits >= 2) {
-      return { ...base, contentClass: 'task-list', confidence: 0.9 };
+      return { ...base, contentClass: 'task', confidence: 0.9 };
     }
   }
 
   // Task-list: checkbox lists
   const checkboxCount = (text.match(/^[-*]\s+\[[ x]\]/gm) || []).length;
   if (checkboxCount >= 2) {
-    return { ...base, contentClass: 'task-list', confidence: 0.8 };
+    return { ...base, contentClass: 'task', confidence: 0.8 };
   }
 
-  // Bug-report
+  // Bug-report → task
   const bugHits = BUG_PATTERNS.filter((p) => p.test(text)).length;
   const headingBugHit = heading && /bug/i.test(heading) ? 1 : 0;
   if (bugHits + headingBugHit >= 2) {
-    return { ...base, contentClass: 'bug-report', confidence: 0.85 };
+    return { ...base, contentClass: 'task', confidence: 0.85 };
   }
 
-  // Architecture
+  // Architecture → research
   const archHeading = heading && ARCH_HEADINGS.test(heading);
   const archContent = ARCH_CONTENT.test(text) && (text.match(/```/g) || []).length >= 2;
   if (archHeading || archContent) {
-    return { ...base, contentClass: 'architecture', confidence: archHeading ? 0.9 : 0.75 };
+    return { ...base, contentClass: 'research', confidence: archHeading ? 0.9 : 0.75 };
   }
 
-  // Requirements
+  // Requirements → guide
   const reqHeading = heading && REQ_HEADINGS.test(heading);
   const reqBullets = REQ_CONTENT.test(text) && /^[-*]\s+/m.test(text);
   if (reqHeading || (reqBullets && (text.match(REQ_CONTENT) || []).length >= 3)) {
-    return { ...base, contentClass: 'requirements', confidence: reqHeading ? 0.9 : 0.7 };
+    return { ...base, contentClass: 'guide', confidence: reqHeading ? 0.9 : 0.7 };
   }
 
-  // Meeting notes
+  // Meeting notes → meeting
   const meetHits = MEETING_PATTERNS.filter((p) => p.test(text)).length;
   if (meetHits >= 2) {
-    return { ...base, contentClass: 'meeting-notes', confidence: 0.85 };
+    return { ...base, contentClass: 'meeting', confidence: 0.85 };
   }
 
-  // Reference: large non-task table
+  // Reference: large non-task table → note
   if (headers && headers.length >= 3 && countTableRows(text) >= 10) {
-    return { ...base, contentClass: 'reference', confidence: 0.7 };
+    return { ...base, contentClass: 'note', confidence: 0.7 };
   }
 
-  return { ...base, contentClass: 'general', confidence: 0.5 };
+  return { ...base, contentClass: 'note', confidence: 0.5 };
 }
 
 // LLM table classification
@@ -172,13 +172,14 @@ function cosineSimilarity(a: Float32Array | number[], b: Float32Array | number[]
 export async function classifySectionWithEmbedding(
   text: string,
   heading: string | null,
-  embedder: Embedder
+  embedder: Embedder,
+  archetypeTexts?: Map<string, string>
 ): Promise<ClassifiedSection> {
-  const archetypes = await getArchetypeEmbeddings(embedder);
+  const archetypes = await getArchetypeEmbeddings(embedder, archetypeTexts);
   const [embedding] = await embedder.embed([text]);
   const vec = new Float32Array(embedding);
 
-  let bestClass: ContentClass = 'general';
+  let bestClass = 'note';
   let bestScore = 0.6; // minimum threshold
 
   for (const [cls, archVec] of archetypes) {
@@ -192,7 +193,7 @@ export async function classifySectionWithEmbedding(
   return {
     content: text,
     contentClass: bestClass,
-    confidence: bestClass === 'general' ? 0.5 : bestScore,
+    confidence: bestClass === 'note' ? 0.5 : bestScore,
     method: 'embedding',
     heading,
   };
