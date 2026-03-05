@@ -76,8 +76,20 @@ export const pmModule: BrainModule = {
 
     ctx.registerNoteType({
       name: 'task',
-      description: 'Actionable work item',
+      description: 'Actionable work item with status, priority, and ownership',
       tier: 'slow',
+      importHints: {
+        tableColumnAliases: {
+          name: ['title', 'name', 'task', 'item', 'summary', 'ticket'],
+          status: ['status', 'state', 'stage'],
+          priority: ['priority', 'urgency', 'p', 'pri', 'importance'],
+          description: ['description', 'details', 'notes', 'body', 'content'],
+          due_date: ['due', 'due_date', 'deadline', 'target_date', 'target'],
+          category: ['category', 'type', 'kind', 'area', 'label'],
+        },
+        archetypeText:
+          'A list of actionable work items with status, priority, or ownership. Includes to-do lists, sprint backlogs, checkbox checklists, task tables, action items from meetings, and bug reports with steps to reproduce.',
+      },
       schema: {
         type: 'object',
         properties: {

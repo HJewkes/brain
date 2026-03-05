@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ModuleRegistry } from '../../src/modules/registry.js';
+import type { ImportableNoteType } from '../../src/modules/registry.js';
 import type {
   BrainModule,
-  ModuleNoteType,
   ModuleRelationType,
   ModuleExtractionStrategy,
   FilterProvider,
@@ -18,7 +18,7 @@ function makeMockModule(name = 'test-module'): BrainModule {
   };
 }
 
-function makeMockNoteType(name = 'epic', overrides?: Partial<ModuleNoteType>): ModuleNoteType {
+function makeMockNoteType(name = 'epic', overrides?: Partial<ImportableNoteType>): ImportableNoteType {
   return {
     name,
     description: 'An epic note type',
@@ -243,6 +243,159 @@ describe('ModuleRegistry', () => {
 
     it('returns empty array when no migrations for module', () => {
       expect(registry.getMigrations('nonexistent')).toEqual([]);
+    });
+  });
+
+  // --- Import Hints Queries ---
+
+  describe('importHints queries', () => {
+    const taskNoteType = makeMockNoteType('task', {
+      importHints: {
+        tableColumnAliases: {
+          title: ['title', 'name', 'summary', 'task'],
+          status: ['status', 'state'],
+          priority: ['priority', 'prio', 'p'],
+          assignee: ['assignee', 'owner', 'assigned to'],
+        },
+        archetypeText: '# Task\n\nA work item to be completed with status tracking.',
+      },
+    });
+
+    const epicNoteType = makeMockNoteType('epic', {
+      importHints: {
+        tableColumnAliases: {
+          title: ['title', 'name', 'epic'],
+          status: ['status', 'state'],
+          description: ['description', 'summary', 'details'],
+        },
+        archetypeText: '# Epic\n\nA large body of work broken into tasks.',
+      },
+    });
+
+    const plainNoteType = makeMockNoteType('plain-note');
+
+    describe('getImportableNoteTypes', () => {
+      it('returns only note types with importHints', () => {
+        registry.registerNoteType('pm', taskNoteType);
+        registry.registerNoteType('pm', plainNoteType);
+
+        const importable = registry.getImportableNoteTypes();
+        expect(importable).toHaveLength(1);
+        expect(importable[0]).toEqual({ module: 'pm', noteType: taskNoteType });
+      });
+
+      it('returns empty array when no note types have importHints', () => {
+        registry.registerNoteType('pm', plainNoteType);
+
+        expect(registry.getImportableNoteTypes()).toEqual([]);
+      });
+
+      it('returns multiple importable types from different modules', () => {
+        registry.registerNoteType('pm', taskNoteType);
+        registry.registerNoteType('eng', epicNoteType);
+
+        const importable = registry.getImportableNoteTypes();
+        expect(importable).toHaveLength(2);
+      });
+    });
+
+    describe('matchColumnHeaders', () => {
+      it('returns best matching note type when 2+ columns match', () => {
+        registry.registerNoteType('pm', taskNoteType);
+
+        const result = registry.matchColumnHeaders(['Title', 'Status', 'Priority']);
+        expect(result).toEqual({
+          module: 'pm',
+          noteType: 'task',
+          columnMapping: {
+            title: 'title',
+            status: 'status',
+            priority: 'priority',
+          },
+        });
+      });
+
+      it('returns null when fewer than 2 columns match', () => {
+        registry.registerNoteType('pm', taskNoteType);
+
+        const result = registry.matchColumnHeaders(['Title', 'Foo', 'Bar']);
+        expect(result).toBeNull();
+      });
+
+      it('returns null when no note types registered', () => {
+        expect(registry.matchColumnHeaders(['Title', 'Status'])).toBeNull();
+      });
+
+      it('matches case-insensitively', () => {
+        registry.registerNoteType('pm', taskNoteType);
+
+        const result = registry.matchColumnHeaders(['TITLE', 'STATUS']);
+        expect(result).not.toBeNull();
+        expect(result!.noteType).toBe('task');
+      });
+
+      it('trims whitespace from headers', () => {
+        registry.registerNoteType('pm', taskNoteType);
+
+        const result = registry.matchColumnHeaders([' title ', ' status ']);
+        expect(result).not.toBeNull();
+      });
+
+      it('selects the type with the most column hits', () => {
+        registry.registerNoteType('pm', taskNoteType);
+        registry.registerNoteType('eng', epicNoteType);
+
+        const result = registry.matchColumnHeaders(['Title', 'Status', 'Priority', 'Assignee']);
+        expect(result).not.toBeNull();
+        expect(result!.noteType).toBe('task');
+        expect(result!.module).toBe('pm');
+      });
+
+      it('matches alias variants', () => {
+        registry.registerNoteType('pm', taskNoteType);
+
+        const result = registry.matchColumnHeaders(['Name', 'Prio']);
+        expect(result).not.toBeNull();
+        expect(result!.columnMapping).toEqual({
+          name: 'title',
+          prio: 'priority',
+        });
+      });
+    });
+
+    describe('getArchetypeTexts', () => {
+      it('returns map of type name to archetype text', () => {
+        registry.registerNoteType('pm', taskNoteType);
+        registry.registerNoteType('eng', epicNoteType);
+
+        const archetypes = registry.getArchetypeTexts();
+        expect(archetypes).toBeInstanceOf(Map);
+        expect(archetypes.size).toBe(2);
+        expect(archetypes.get('task')).toBe(taskNoteType.importHints!.archetypeText);
+        expect(archetypes.get('epic')).toBe(epicNoteType.importHints!.archetypeText);
+      });
+
+      it('excludes types without archetypeText', () => {
+        const noArchetype = makeMockNoteType('minimal', {
+          importHints: {
+            tableColumnAliases: { title: ['title'] },
+          },
+        });
+        registry.registerNoteType('pm', noArchetype);
+        registry.registerNoteType('pm', taskNoteType);
+
+        const archetypes = registry.getArchetypeTexts();
+        expect(archetypes.size).toBe(1);
+        expect(archetypes.has('minimal')).toBe(false);
+        expect(archetypes.has('task')).toBe(true);
+      });
+
+      it('returns empty map when no archetypes registered', () => {
+        registry.registerNoteType('pm', plainNoteType);
+
+        const archetypes = registry.getArchetypeTexts();
+        expect(archetypes.size).toBe(0);
+      });
     });
   });
 });

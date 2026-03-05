@@ -45,14 +45,13 @@ export const VALID_NOTE_TIERS: NoteTier[] = ['slow', 'fast'];
 export const VALID_NOTE_CONFIDENCES: NoteConfidence[] = ['high', 'medium', 'low', 'speculative'];
 export const VALID_NOTE_STATUSES: NoteStatus[] = ['current', 'outdated', 'deprecated', 'draft'];
 
-export type ContentClass =
-  | 'task-list'
-  | 'bug-report'
-  | 'architecture'
-  | 'requirements'
-  | 'meeting-notes'
-  | 'reference'
-  | 'general';
+export interface ExtractedItem {
+  noteType: string;
+  title: string;
+  content: string;
+  fields: Record<string, string>;
+  sourceRegion?: { startLine: number; endLine: number };
+}
 
 export type CoreRelationType = 'related-to' | 'supersedes' | 'informs' | 'parent' | 'derived-from';
 

@@ -10,89 +10,89 @@ import type { OllamaClient } from '../../src/services/ollama.js';
 import type { Embedder } from '../../src/types.js';
 
 describe('classifySection — deterministic', () => {
-  describe('task-list detection', () => {
+  describe('task detection', () => {
     it('detects a markdown table with Status + Priority columns', () => {
       const text =
         '| Title | Status | Priority | Assignee |\n| --- | --- | --- | --- |\n| Fix bug | Open | High | Alice |';
       const result = classifySection(text, 'Tasks');
-      expect(result.contentClass).toBe('task-list');
+      expect(result.contentClass).toBe('task');
       expect(result.method).toBe('deterministic');
       expect(result.confidence).toBeGreaterThanOrEqual(0.8);
     });
 
-    it('detects checkbox lists as task-list', () => {
+    it('detects checkbox lists as task', () => {
       const text = '- [ ] Ship feature A\n- [x] Write tests\n- [ ] Deploy to prod';
       const result = classifySection(text, null);
-      expect(result.contentClass).toBe('task-list');
+      expect(result.contentClass).toBe('task');
     });
   });
 
-  describe('bug-report detection', () => {
+  describe('bug-report detection maps to task', () => {
     it('detects steps to reproduce pattern', () => {
       const text =
         '## Steps to Reproduce\n1. Open the app\n2. Click submit\n\n## Expected Behavior\nForm submits\n\n## Actual Behavior\nCrash';
       const result = classifySection(text, 'Bug Report');
-      expect(result.contentClass).toBe('bug-report');
+      expect(result.contentClass).toBe('task');
     });
 
     it('detects bug bash content', () => {
       const text =
         'During the bug bash session, we found:\n- Table border disappears on scroll\n- severity: high';
       const result = classifySection(text, 'Bug Bash Results');
-      expect(result.contentClass).toBe('bug-report');
+      expect(result.contentClass).toBe('task');
     });
   });
 
-  describe('architecture detection', () => {
+  describe('architecture detection maps to research', () => {
     it('detects architecture heading', () => {
       const text = 'The system uses a microservice architecture with three layers.';
       const result = classifySection(text, 'System Architecture');
-      expect(result.contentClass).toBe('architecture');
+      expect(result.contentClass).toBe('research');
     });
 
     it('detects content with code blocks and design terminology', () => {
       const text =
         'The data flow works as follows:\n```\nAPI → Queue → Worker → DB\n```\nEach component is independently scalable.';
       const result = classifySection(text, 'Overview');
-      expect(result.contentClass).toBe('architecture');
+      expect(result.contentClass).toBe('research');
     });
   });
 
-  describe('requirements detection', () => {
+  describe('requirements detection maps to guide', () => {
     it('detects PRD-style content', () => {
       const text =
         'Users must be able to:\n- Create an account\n- Reset their password\n- The system shall support 1000 concurrent users';
       const result = classifySection(text, 'Product Requirements');
-      expect(result.contentClass).toBe('requirements');
+      expect(result.contentClass).toBe('guide');
     });
   });
 
-  describe('meeting-notes detection', () => {
+  describe('meeting-notes detection maps to meeting', () => {
     it('detects attendees and action items', () => {
       const text =
         'Attendees: Alice, Bob, Carol\n\nDiscussed:\n- Launch timeline\n\nAction items:\n- Alice: finalize spec by Friday';
       const result = classifySection(text, null);
-      expect(result.contentClass).toBe('meeting-notes');
+      expect(result.contentClass).toBe('meeting');
     });
   });
 
-  describe('reference detection', () => {
-    it('detects large non-task tables as reference', () => {
+  describe('reference detection maps to note', () => {
+    it('detects large non-task tables as note', () => {
       const rows = Array.from(
         { length: 15 },
         (_, i) => `| Config ${i} | Value ${i} | Default ${i} |`
       ).join('\n');
       const text = `| Setting | Value | Default |\n| --- | --- | --- |\n${rows}`;
       const result = classifySection(text, 'Configuration');
-      expect(result.contentClass).toBe('reference');
+      expect(result.contentClass).toBe('note');
     });
   });
 
-  describe('general fallback', () => {
-    it('returns general for unrecognized content', () => {
+  describe('general fallback maps to note', () => {
+    it('returns note for unrecognized content', () => {
       const text = 'Just some random thoughts about the project direction.';
       const result = classifySection(text, null);
-      expect(result.contentClass).toBe('general');
+      expect(result.contentClass).toBe('note');
     });
   });
 });
@@ -214,30 +214,29 @@ describe('classifyTableWithLlm', () => {
 describe('classifySectionWithEmbedding', () => {
   beforeEach(() => clearArchetypeCache());
 
-  it('returns general when no archetype exceeds threshold', async () => {
+  it('returns note when no archetype exceeds threshold', async () => {
     // All zeros = no similarity to any archetype
     const embedder: Embedder = {
-      embed: vi.fn().mockResolvedValue([[0, 0, 0, 0, 0, 0]]),
+      embed: vi.fn().mockResolvedValue([[0, 0, 0, 0, 0]]),
       model: 'test',
-      dimensions: 6,
+      dimensions: 5,
     };
     const result = await classifySectionWithEmbedding('random text', null, embedder);
-    expect(result.contentClass).toBe('general');
+    expect(result.contentClass).toBe('note');
     expect(result.method).toBe('embedding');
   });
 
   it('returns best matching archetype when above threshold', async () => {
-    // First call: archetype embeddings (6 archetypes)
-    // Second call: text embedding that is identical to the first archetype (task-list)
+    // First call: archetype embeddings (5 archetypes: task, research, guide, meeting, note)
+    // Second call: text embedding that is identical to the first archetype (task)
     const archetypeVecs = [
       [1, 0, 0],
       [0, 1, 0],
       [0, 0, 1],
       [0.5, 0.5, 0],
       [0, 0.5, 0.5],
-      [0.5, 0, 0.5],
     ];
-    const textVec = [[1, 0, 0]]; // identical to task-list archetype
+    const textVec = [[1, 0, 0]]; // identical to task archetype
 
     const embedder: Embedder = {
       embed: vi.fn().mockResolvedValueOnce(archetypeVecs).mockResolvedValueOnce(textVec),
@@ -246,7 +245,7 @@ describe('classifySectionWithEmbedding', () => {
     };
 
     const result = await classifySectionWithEmbedding('some task text', 'Tasks', embedder);
-    expect(result.contentClass).toBe('task-list');
+    expect(result.contentClass).toBe('task');
     expect(result.confidence).toBeGreaterThan(0.6);
     expect(result.method).toBe('embedding');
   });
@@ -261,11 +260,11 @@ describe('classifySectionWithEmbedding', () => {
     expect(result.heading).toBe('My Heading');
   });
 
-  it('returns confidence of 0.5 when falling back to general', async () => {
+  it('returns confidence of 0.5 when falling back to note', async () => {
     const embedder: Embedder = {
-      embed: vi.fn().mockResolvedValue([[0, 0, 0, 0, 0, 0]]),
+      embed: vi.fn().mockResolvedValue([[0, 0, 0, 0, 0]]),
       model: 'test',
-      dimensions: 6,
+      dimensions: 5,
     };
     const result = await classifySectionWithEmbedding('text', null, embedder);
     expect(result.confidence).toBe(0.5);

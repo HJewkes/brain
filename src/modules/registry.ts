@@ -10,6 +10,9 @@ import type {
   ContentHandler,
 } from './types.js';
 
+/** @deprecated Use ModuleNoteType.importHints directly — ImportHints is now in types.ts */
+export type ImportableNoteType = ModuleNoteType;
+
 export class ModuleRegistry {
   private modules = new Map<string, BrainModule>();
   private noteTypes = new Map<string, { module: string; noteType: ModuleNoteType }>();
@@ -134,5 +137,65 @@ export class ModuleRegistry {
 
   getContentHandlers(): Array<{ module: string; handler: ContentHandler }> {
     return [...this.contentHandlers];
+  }
+
+  // --- Import Hints ---
+
+  /** Returns all note types that have importHints configured */
+  getImportableNoteTypes(): Array<{ module: string; noteType: ImportableNoteType }> {
+    return (this.getAllNoteTypes() as Array<{ module: string; noteType: ImportableNoteType }>).filter(
+      ({ noteType }) => noteType.importHints
+    );
+  }
+
+  /** Match CSV/table column headers against registered tableColumnAliases.
+   *  Returns the best-matching note type if 2+ columns match, else null. */
+  matchColumnHeaders(
+    headers: string[]
+  ): { module: string; noteType: string; columnMapping: Record<string, string> } | null {
+    const lowerHeaders = headers.map((h) => h.toLowerCase().trim());
+    let bestMatch: {
+      module: string;
+      noteType: string;
+      columnMapping: Record<string, string>;
+      hits: number;
+    } | null = null;
+
+    for (const { module, noteType } of this.getImportableNoteTypes()) {
+      const aliases = noteType.importHints?.tableColumnAliases;
+      if (!aliases) continue;
+
+      const mapping: Record<string, string> = {};
+      let hits = 0;
+
+      for (const [schemaField, columnNames] of Object.entries(aliases)) {
+        const matched = lowerHeaders.find((h) =>
+          columnNames.map((c) => c.toLowerCase()).includes(h)
+        );
+        if (matched) {
+          mapping[matched] = schemaField;
+          hits++;
+        }
+      }
+
+      if (hits >= 2 && (!bestMatch || hits > bestMatch.hits)) {
+        bestMatch = { module, noteType: noteType.name, columnMapping: mapping, hits };
+      }
+    }
+
+    return bestMatch
+      ? { module: bestMatch.module, noteType: bestMatch.noteType, columnMapping: bestMatch.columnMapping }
+      : null;
+  }
+
+  /** Returns archetype texts for embedding-based classification */
+  getArchetypeTexts(): Map<string, string> {
+    const result = new Map<string, string>();
+    for (const { noteType } of this.getImportableNoteTypes()) {
+      if (noteType.importHints?.archetypeText) {
+        result.set(noteType.name, noteType.importHints.archetypeText);
+      }
+    }
+    return result;
   }
 }
