@@ -17,7 +17,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all tests (Vitest, 1,095 tests) |
+| `npm test` | Run all tests (Vitest, ~2,350 tests) |
 | `npm run build` | Build with tsup (output: `dist/cli.js`) |
 | `npm run typecheck` | TypeScript type checking |
 | `npm run lint` | ESLint |
@@ -33,6 +33,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 | `add` | Create a note from file/stdin |
 | `quick` | Capture text to inbox |
 | `inbox` | View/manage inbox items |
+| `import` | Smart import with three-tier extraction (`--dry-run`, `--tier`, `--urls`) |
 | `ingest` | Bulk-import files to inbox |
 | `feed` | Manage RSS feed subscriptions |
 | `extract` | Extract memories from notes (Ollama) |
@@ -72,6 +73,8 @@ src/
     search.ts           — Hybrid search orchestration (BM25 + vector + memory)
     graph.ts            — Note relation traversal (batch queries)
     memory-extractor.ts — LLM fact extraction and reconciliation
+    extraction-pipeline.ts — Three-tier extraction orchestrator
+    extraction-tiers/   — Deterministic, LLM classifier, agent queue
     ollama.ts           — Ollama client, health checks, hasModel/requireOllama helpers
     health.ts           — System health checks (database, embedder, LLM, inbox, stale notes)
     reranker.ts         — Cross-encoder reranking pipeline
@@ -82,6 +85,7 @@ src/
     context.ts          — Module context factory
     loader.ts           — Module discovery and loading
     validation.ts       — Frontmatter schema validation
+    knowledge/          — Knowledge module (core note types)
     pm/                 — Project management module (34 files)
       commands/         — 15 command groups (incl. check)
       data/             — CRUD operations and queries

@@ -54,6 +54,7 @@ See [PM Quick Start](docs/pm-module/quickstart.md) for the full 5-minute guide.
 | `brain add <file>` | Add a note from file or stdin |
 | `brain quick "text"` | Zero-friction capture to inbox |
 | `brain inbox` | View/manage inbox items |
+| `brain import <paths>` | Smart import with three-tier extraction (`--dry-run`, `--tier`) |
 | `brain ingest` | Bulk-import files to inbox |
 | `brain feed` | Manage RSS feed subscriptions |
 | `brain extract` | Extract memories from notes (Ollama) |
@@ -107,6 +108,7 @@ src/
     context.ts           — Module context factory
     loader.ts            — Module discovery and loading
     validation.ts        — Frontmatter schema validation
+    knowledge/           — Knowledge module (core note types)
     pm/                  — Project management module
       commands/          — 15 command groups (incl. check)
       data/              — CRUD operations and queries
@@ -149,7 +151,7 @@ Brain indexes markdown files with YAML frontmatter into a SQLite database. It co
 ## Testing
 
 ```bash
-npm test          # 1,095 tests (Vitest)
+npm test          # ~2,350 tests (Vitest)
 npm run typecheck # TypeScript checking
 npm run lint      # ESLint
 npm run build     # Production build (tsup)
