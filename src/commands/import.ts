@@ -102,16 +102,19 @@ export const importCommand = new Command('import')
         }
       }
 
+      const SKIP_DIRS = new Set([
+        'node_modules', '.git', '.hg', '.svn', 'dist', 'build',
+        '.next', '.nuxt', '.output', '__pycache__', '.tox',
+        'venv', '.venv', '.playwright-mcp',
+      ]);
+
       const filePaths: string[] = [];
       for (const p of paths) {
         const abs = resolve(p);
         try {
           const s = statSync(abs);
           if (s.isDirectory()) {
-            const entries = readdirSync(abs, { recursive: true }) as string[];
-            for (const e of entries) {
-              filePaths.push(join(abs, e));
-            }
+            collectFiles(abs, filePaths, SKIP_DIRS);
           } else {
             filePaths.push(abs);
           }
@@ -237,6 +240,19 @@ export const importCommand = new Command('import')
       printOutput(stats, opts, dryRun, maxTier);
     }, resolveOpts);
   });
+
+/** Walk a directory tree, skipping common non-content directories. */
+function collectFiles(dir: string, out: string[], skipDirs: Set<string>): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (skipDirs.has(entry.name)) continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectFiles(full, out, skipDirs);
+    } else if (entry.isFile() || entry.isSymbolicLink()) {
+      out.push(full);
+    }
+  }
+}
 
 /**
  * Dry-run extraction: runs the deterministic tier only (no DB writes).
