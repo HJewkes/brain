@@ -1,68 +1,16 @@
-import { existsSync, statSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { Command } from '@commander-js/extra-typings';
-import { installHooks } from './install-hooks.js';
 import { withBrain } from '../../../services/brain-service.js';
 import { createProject } from '../data/project-ops.js';
 import { createWorkstream } from '../data/workstream-ops.js';
 import { createTask } from '../data/task-ops.js';
 import { setActiveProject } from '../data/queries.js';
 
-interface CheckResult {
-  label: string;
-  passed: boolean;
-  error?: string;
-}
-
-function resolveClaudeDir(): string {
-  return process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
-}
-
-function checkFile(
-  path: string,
-  label: string,
-  contentCheck?: (c: string) => boolean
-): CheckResult {
-  if (!existsSync(path)) return { label, passed: false, error: `File missing: ${path}` };
-  if (contentCheck) {
-    const ok = contentCheck(readFileSync(path, 'utf-8'));
-    return { label, passed: ok, error: ok ? undefined : `Content check failed: ${path}` };
-  }
-  const stat = statSync(path);
-  return stat.mode & 0o100
-    ? { label, passed: true }
-    : { label, passed: false, error: `Not executable: ${path}` };
-}
-
-function validateInstallation(claudeDir: string): CheckResult[] {
-  const hooks = join(claudeDir, 'hooks');
-  return [
-    checkFile(join(hooks, 'brain-pm-session.sh'), 'SessionStart hook'),
-    checkFile(join(hooks, 'brain-pm-worktree.sh'), 'PreToolUse hook'),
-    checkFile(join(hooks, 'brain-pm-agent-done.sh'), 'SubagentStop hook'),
-    checkFile(join(claudeDir, 'settings.json'), 'Settings.json updated', (c) => {
-      try {
-        const s = JSON.parse(c);
-        return !!(s.hooks?.SessionStart && s.hooks?.PreToolUse && s.hooks?.SubagentStop);
-      } catch {
-        return false;
-      }
-    }),
-    checkFile(
-      join(claudeDir, 'skills', 'orchestrator', 'SKILL.md'),
-      'Orchestrator skill installed',
-      (c) => c.includes('Project Orchestrator')
-    ),
-  ];
-}
-
-async function validateDatabase(): Promise<CheckResult> {
+async function validateDatabase(): Promise<{ passed: boolean; error?: string }> {
   try {
     await withBrain(() => {});
-    return { label: 'Database accessible', passed: true };
+    return { passed: true };
   } catch (err) {
-    return { label: 'Database accessible', passed: false, error: (err as Error).message };
+    return { passed: false, error: (err as Error).message };
   }
 }
 
@@ -145,22 +93,21 @@ async function createDemoProject(): Promise<{ success: boolean; error?: string }
   }
 }
 
-function formatText(checks: CheckResult[], demo?: { success: boolean; error?: string }): string {
-  const lines = ['PM Module Setup Complete', ''];
-  for (const c of checks) {
-    lines.push(
-      `  ${c.passed ? '\u2713' : '\u2717'} ${c.label}${c.error ? ` \u2014 ${c.error}` : ''}`
-    );
-  }
-  if (demo) {
-    lines.push(
-      '',
-      demo.success
-        ? '  \u2713 Demo project created (DEMO)'
-        : `  \u2717 Demo project failed \u2014 ${demo.error}`
-    );
-  }
-  if (checks.every((c) => c.passed) && (!demo || demo.success)) {
+function formatText(
+  dbCheck: { passed: boolean; error?: string },
+  demo: { success: boolean; error?: string }
+): string {
+  const lines = ['PM Setup \u2014 Demo Project', ''];
+  lines.push(
+    `  ${dbCheck.passed ? '\u2713' : '\u2717'} Database accessible${dbCheck.error ? ` \u2014 ${dbCheck.error}` : ''}`
+  );
+  lines.push(
+    '',
+    demo.success
+      ? '  \u2713 Demo project created (DEMO)'
+      : `  \u2717 Demo project failed \u2014 ${demo.error}`
+  );
+  if (dbCheck.passed && demo.success) {
     lines.push('', 'Next steps:', '  brain pm init "My Project" --prefix MY', '  brain pm use MY');
   }
   lines.push('');
@@ -169,42 +116,40 @@ function formatText(checks: CheckResult[], demo?: { success: boolean; error?: st
 
 export function createSetupCommand(): Command {
   return new Command('setup')
-    .description('Install PM orchestration hooks, skill, and optionally create a demo project')
-    .option('--demo', 'Create a demo project after setup')
+    .description('[DEPRECATED] Use "ao hook install" for hooks. Use --demo for demo project only.')
+    .option('--demo', 'Create a demo project')
     .option('--json', 'Output JSON status')
-    .option('--dry-run', 'Show what would be installed')
+    .option('--dry-run', 'Show what would be done')
     .action(async (opts) => {
-      const claudeDir = resolveClaudeDir();
-
       if (opts.dryRun) {
-        const items = [
-          join(claudeDir, 'hooks', 'brain-pm-session.sh'),
-          join(claudeDir, 'hooks', 'brain-pm-worktree.sh'),
-          join(claudeDir, 'hooks', 'brain-pm-agent-done.sh'),
-          join(claudeDir, 'skills', 'orchestrator', 'SKILL.md'),
-          `Hook entries in ${join(claudeDir, 'settings.json')}`,
-        ];
+        const items: string[] = [];
         if (opts.demo) items.push('Demo project with 2 workstreams and 4 tasks');
+        else items.push('DEPRECATED: Hook installation moved to ao-cli. Use: ao hook install');
         process.stdout.write('Would install:\n' + items.map((i) => `  ${i}`).join('\n') + '\n');
         return;
       }
 
-      const hookResult = installHooks(claudeDir);
-      for (const err of hookResult.errors) process.stderr.write(`Error: ${err}\n`);
+      if (!opts.demo) {
+        process.stderr.write(
+          'DEPRECATED: Hook installation has moved to ao-cli.\n' +
+            'Run: ao hook install\n' +
+            'To create a demo project, use: brain pm setup --demo\n'
+        );
+        process.exitCode = 1;
+        return;
+      }
 
-      const checks = validateInstallation(claudeDir);
-      checks.push(await validateDatabase());
-
-      const demo = opts.demo ? await createDemoProject() : undefined;
-      const hasFailure = checks.some((c) => !c.passed) || (demo && !demo.success);
+      const dbCheck = await validateDatabase();
+      const demo = await createDemoProject();
+      const hasFailure = !dbCheck.passed || !demo.success;
       if (hasFailure) process.exitCode = 1;
 
       if (opts.json) {
         process.stdout.write(
           JSON.stringify(
             {
-              checks: checks.map((c) => ({ label: c.label, passed: c.passed, error: c.error })),
-              demo: demo ? { success: demo.success, error: demo.error } : undefined,
+              checks: [{ label: 'Database accessible', passed: dbCheck.passed, error: dbCheck.error }],
+              demo: { success: demo.success, error: demo.error },
               success: !hasFailure,
             },
             null,
@@ -212,7 +157,7 @@ export function createSetupCommand(): Command {
           ) + '\n'
         );
       } else {
-        process.stdout.write(formatText(checks, demo));
+        process.stdout.write(formatText(dbCheck, demo));
       }
     }) as unknown as Command;
 }

@@ -132,95 +132,6 @@ describe('orchestrate render', () => {
   });
 });
 
-describe('orchestrate worktree-alloc', () => {
-  it('not-found sets exitCode=1', async () => {
-    await run('worktree-alloc', 'TEST-99.99');
-
-    expect(process.exitCode).toBe(1);
-    expect(stderr()).toContain('NOT_FOUND');
-  });
-});
-
-describe('orchestrate worktree-check', () => {
-  it('fails when BRAIN_PM_WORKTREE not set', async () => {
-    const orig = process.env.BRAIN_PM_WORKTREE;
-    delete process.env.BRAIN_PM_WORKTREE;
-
-    await run('worktree-check');
-
-    expect(process.exitCode).toBe(1);
-    expect(stderr()).toContain('BRAIN_PM_WORKTREE not set');
-
-    if (orig !== undefined) process.env.BRAIN_PM_WORKTREE = orig;
-  });
-
-  it('succeeds when path matches worktree', async () => {
-    const cwd = process.cwd();
-    process.env.BRAIN_PM_WORKTREE = cwd;
-
-    await run('worktree-check', '--path', cwd);
-
-    expect(process.exitCode).toBe(0);
-
-    delete process.env.BRAIN_PM_WORKTREE;
-  });
-
-  it('fails when path does not match worktree', async () => {
-    process.env.BRAIN_PM_WORKTREE = '/some/expected/path';
-
-    await run('worktree-check', '--path', '/completely/different/path');
-
-    expect(process.exitCode).toBe(1);
-
-    delete process.env.BRAIN_PM_WORKTREE;
-  });
-});
-
-describe('orchestrate worktree-release', () => {
-  it('reports no allocation when none exists', async () => {
-    await run('worktree-release', 'TEST-01.01');
-
-    const out = stdout();
-    expect(out).toContain('No allocation found for TEST-01.01');
-  });
-
-  it('--json returns release status', async () => {
-    await run('worktree-release', 'TEST-01.01', '--json');
-
-    const parsed = JSON.parse(stdout());
-    expect(parsed.taskId).toBe('TEST-01.01');
-    expect(parsed).toHaveProperty('released');
-  });
-});
-
-describe('orchestrate worktree-status', () => {
-  it('shows budget as text', async () => {
-    await run('worktree-status');
-
-    const out = stdout();
-    expect(out).toContain('Budget:');
-    expect(out).toContain('available');
-  });
-
-  it('--json returns budget object', async () => {
-    await run('worktree-status', '--json');
-
-    const parsed = JSON.parse(stdout());
-    expect(parsed).toHaveProperty('used');
-    expect(parsed).toHaveProperty('max');
-    expect(parsed).toHaveProperty('available');
-    expect(parsed).toHaveProperty('allocations');
-  });
-
-  it('shows allocations list when present (json)', async () => {
-    // Just verify the structure works even with 0 allocations
-    await run('worktree-status', '--json');
-
-    const parsed = JSON.parse(stdout());
-    expect(Array.isArray(parsed.allocations)).toBe(true);
-  });
-});
-
 describe('orchestrate session-end', () => {
   it('outputs session summary as text', async () => {
     await run('session-end');
@@ -232,7 +143,7 @@ describe('orchestrate session-end', () => {
     expect(out).toContain('Worktrees:');
   });
 
-  it('--json returns structured summary', async () => {
+  it('--json returns structured summary with fallback worktree info', async () => {
     await run('session-end', '--json');
 
     const parsed = JSON.parse(stdout());
@@ -244,6 +155,10 @@ describe('orchestrate session-end', () => {
     expect(parsed.tasks).toHaveProperty('inProgress');
     expect(parsed.tasks).toHaveProperty('pending');
     expect(parsed).toHaveProperty('worktrees');
+    expect(parsed.worktrees).toHaveProperty('used');
+    expect(parsed.worktrees).toHaveProperty('max');
+    expect(parsed.worktrees).toHaveProperty('allocations');
+    expect(Array.isArray(parsed.worktrees.allocations)).toBe(true);
   });
 
   it('handles no active project', async () => {

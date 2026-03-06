@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -19,20 +19,7 @@ import {
 } from '../../../src/modules/pm/data/prompt-ops.js';
 import { assembleContext } from '../../../src/modules/pm/engine/dispatch.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
-import { allocateWorktree, getBudget } from '../../../src/modules/pm/engine/worktree.js';
 import { createTestTask } from '../../helpers.js';
-
-vi.mock('node:child_process', () => ({
-  execSync: vi.fn((cmd: string) => {
-    if (typeof cmd === 'string' && cmd.includes('rev-parse --show-toplevel')) {
-      return '/fake/repo\n';
-    }
-    if (typeof cmd === 'string' && cmd.includes('worktree add')) {
-      return '';
-    }
-    return '';
-  }),
-}));
 
 let db: BrainDB;
 let notesDir: string;
@@ -202,29 +189,6 @@ describe('Wave 10: Code Review Lifecycle Tests', () => {
       expect(history.data).toHaveLength(2);
       expect(history.data[0].version).toBe(1);
       expect(history.data[1].version).toBe(2);
-    });
-  });
-
-  describe('worktree budget enforcement', () => {
-    it('rejects allocation beyond budget limit', () => {
-      const budget = 2;
-
-      const a1 = allocateWorktree(db, 'task-a', 'ws-a', 'tok-a', budget);
-      expect(a1.ok).toBe(true);
-
-      const a2 = allocateWorktree(db, 'task-b', 'ws-b', 'tok-b', budget);
-      expect(a2.ok).toBe(true);
-
-      // Budget is full
-      const budgetStatus = getBudget(db, budget);
-      expect(budgetStatus.used).toBe(2);
-      expect(budgetStatus.available).toBe(0);
-
-      // Third allocation should fail
-      const a3 = allocateWorktree(db, 'task-c', 'ws-c', 'tok-c', budget);
-      expect(a3.ok).toBe(false);
-      if (a3.ok) return;
-      expect(a3.error.code).toBe('WIP_LIMIT');
     });
   });
 });

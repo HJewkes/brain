@@ -21,7 +21,6 @@ import {
   computeDecisionPairs,
   computeSupersessionGaps,
 } from '../../../src/modules/pm/engine/consistency.js';
-import { generateSanityCheckSkillContent } from '../../../src/modules/pm/commands/install-hooks.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -213,14 +212,6 @@ describe('Wave 11: Consistency Checks', () => {
     });
   });
 
-  describe('sanity-check skill content', () => {
-    it('generates valid skill markdown', () => {
-      const content = generateSanityCheckSkillContent();
-      expect(content).toContain('/sanity-check');
-      expect(content).toContain('brain pm check');
-      expect(content).toContain('--deep');
-    });
-  });
 
   describe('full report JSON shape', () => {
     it('produces valid JSON with all expected sections', async () => {

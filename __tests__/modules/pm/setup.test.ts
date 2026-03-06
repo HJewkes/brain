@@ -7,12 +7,6 @@ function makeTempClaudeDir(): string {
   return mkdtempSync(join(tmpdir(), 'brain-setup-test-'));
 }
 
-const mockInstallHooks = vi.fn<(dir?: string) => { installed: string[]; errors: string[] }>();
-
-vi.mock('../../../src/modules/pm/commands/install-hooks.js', () => ({
-  installHooks: (...args: unknown[]) => mockInstallHooks(args[0] as string | undefined),
-}));
-
 const mockWithBrain = vi.fn();
 
 vi.mock('../../../src/services/brain-service.js', () => ({
@@ -53,7 +47,7 @@ function captureOutput(): { stdout: () => string; stderr: () => string } {
   return { stdout: () => stdoutData, stderr: () => stderrData };
 }
 
-describe('setup command dry-run', () => {
+describe('setup command deprecation', () => {
   let claudeDir: string;
   let originalEnv: string | undefined;
   let output: ReturnType<typeof captureOutput>;
@@ -76,117 +70,33 @@ describe('setup command dry-run', () => {
     vi.restoreAllMocks();
   });
 
-  test('shows what would be installed without writing files', async () => {
+  test('shows deprecation message without --demo', async () => {
+    const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
+    const cmd = createSetupCommand();
+    await cmd.parseAsync([], { from: 'user' });
+
+    expect(output.stderr()).toContain('DEPRECATED');
+    expect(output.stderr()).toContain('ao hook install');
+    expect(process.exitCode).toBe(1);
+  });
+
+  test('--dry-run without --demo shows deprecation', async () => {
     const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
     const cmd = createSetupCommand();
     await cmd.parseAsync(['--dry-run'], { from: 'user' });
 
     const out = output.stdout();
     expect(out).toContain('Would install:');
-    expect(out).toContain('brain-pm-session.sh');
-    expect(out).toContain('brain-pm-worktree.sh');
-    expect(out).toContain('brain-pm-agent-done.sh');
-    expect(out).toContain('SKILL.md');
-    expect(out).toContain('settings.json');
+    expect(out).toContain('DEPRECATED');
     expect(existsSync(join(claudeDir, 'hooks'))).toBe(false);
   });
 
-  test('mentions demo project when --demo is given', async () => {
+  test('--dry-run --demo mentions demo project', async () => {
     const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
     const cmd = createSetupCommand();
     await cmd.parseAsync(['--dry-run', '--demo'], { from: 'user' });
 
     expect(output.stdout()).toContain('Demo project');
-  });
-});
-
-describe('setup validation', () => {
-  let claudeDir: string;
-  let originalEnv: string | undefined;
-  let output: ReturnType<typeof captureOutput>;
-
-  beforeEach(() => {
-    claudeDir = makeTempClaudeDir();
-    originalEnv = process.env.CLAUDE_CONFIG_DIR;
-    process.env.CLAUDE_CONFIG_DIR = claudeDir;
-    process.exitCode = undefined;
-    output = captureOutput();
-    mockWithBrain.mockImplementation(async (fn: (svc: unknown) => unknown) => fn({}));
-  });
-
-  afterEach(() => {
-    if (originalEnv !== undefined) {
-      process.env.CLAUDE_CONFIG_DIR = originalEnv;
-    } else {
-      delete process.env.CLAUDE_CONFIG_DIR;
-    }
-    process.exitCode = undefined;
-    vi.restoreAllMocks();
-    vi.clearAllMocks();
-  });
-
-  test('reports failure when hooks are not actually installed', async () => {
-    mockInstallHooks.mockReturnValue({ installed: [], errors: [] });
-
-    const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
-    const cmd = createSetupCommand();
-    await cmd.parseAsync(['--json'], { from: 'user' });
-
-    const parsed = JSON.parse(output.stdout());
-    expect(parsed.success).toBe(false);
-    const sessionCheck = parsed.checks.find(
-      (c: { label: string }) => c.label === 'SessionStart hook'
-    );
-    expect(sessionCheck.passed).toBe(false);
-  });
-
-  test('reports success when all components are installed', async () => {
-    const actual = await vi.importActual<
-      typeof import('../../../src/modules/pm/commands/install-hooks.js')
-    >('../../../src/modules/pm/commands/install-hooks.js');
-    mockInstallHooks.mockImplementation((dir) => actual.installHooks(dir));
-
-    const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
-    const cmd = createSetupCommand();
-    await cmd.parseAsync(['--json'], { from: 'user' });
-
-    const parsed = JSON.parse(output.stdout());
-    const hookChecks = parsed.checks.filter(
-      (c: { label: string }) =>
-        c.label.includes('hook') || c.label.includes('Settings') || c.label.includes('skill')
-    );
-    for (const check of hookChecks) {
-      expect(check.passed).toBe(true);
-    }
-  });
-
-  test('text output contains status and next steps', async () => {
-    const actual = await vi.importActual<
-      typeof import('../../../src/modules/pm/commands/install-hooks.js')
-    >('../../../src/modules/pm/commands/install-hooks.js');
-    mockInstallHooks.mockImplementation((dir) => actual.installHooks(dir));
-
-    const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
-    const cmd = createSetupCommand();
-    await cmd.parseAsync([], { from: 'user' });
-
-    const out = output.stdout();
-    expect(out).toContain('PM Module Setup Complete');
-    expect(out).toContain('\u2713');
-    expect(out).toContain('Next steps:');
-  });
-
-  test('reports installHooks errors to stderr', async () => {
-    mockInstallHooks.mockReturnValue({
-      installed: [],
-      errors: ['Failed to write hook file'],
-    });
-
-    const { createSetupCommand } = await import('../../../src/modules/pm/commands/setup.js');
-    const cmd = createSetupCommand();
-    await cmd.parseAsync(['--json'], { from: 'user' });
-
-    expect(output.stderr()).toContain('Failed to write hook file');
   });
 });
 
@@ -202,11 +112,6 @@ describe('setup --demo', () => {
     process.env.CLAUDE_CONFIG_DIR = claudeDir;
     process.exitCode = undefined;
     output = captureOutput();
-
-    const actual = await vi.importActual<
-      typeof import('../../../src/modules/pm/commands/install-hooks.js')
-    >('../../../src/modules/pm/commands/install-hooks.js');
-    mockInstallHooks.mockImplementation((dir) => actual.installHooks(dir));
 
     mockWithBrain.mockImplementation(async (fn: (svc: unknown) => unknown) => fn(fakeSvc));
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -18,33 +18,14 @@ import {
 } from '../../../src/modules/pm/engine/template.js';
 import type { ContextBundle } from '../../../src/modules/pm/engine/dispatch.js';
 import { assembleContext } from '../../../src/modules/pm/engine/dispatch.js';
-import {
-  allocateWorktree,
-  releaseWorktree,
-  getBudget,
-  checkWorktreePath,
-} from '../../../src/modules/pm/engine/worktree.js';
-
-vi.mock('node:child_process', () => ({
-  execSync: vi.fn((cmd: string) => {
-    if (typeof cmd === 'string' && cmd.includes('rev-parse --show-toplevel')) {
-      return '/fake/repo\n';
-    }
-    if (typeof cmd === 'string' && cmd.includes('worktree add')) {
-      return '';
-    }
-    return '';
-  }),
-}));
 
 let db: BrainDB;
-let dbPath: string;
 let notesDir: string;
 let config: BrainConfig;
 const embedder = createMockEmbedder();
 
 beforeEach(async () => {
-  dbPath = tmpDbPath('pm-wave9');
+  const dbPath = tmpDbPath('pm-wave9');
   db = new BrainDB(dbPath);
   db.setEmbeddingModel(embedder.model, embedder.dimensions);
   notesDir = join(tmpdir(), `pm-wave9-${randomUUID()}`);
@@ -200,70 +181,6 @@ describe('V8: Orchestrator Dry Run', () => {
     });
   });
 
-  describe('worktree budget', () => {
-    it('allocates worktree within budget', () => {
-      const result = allocateWorktree(db, 'task-1', 'ws-1', 'token-1', 3);
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.data.taskId).toBe('task-1');
-      expect(result.data.workstream).toBe('ws-1');
-      expect(result.data.path).toBe('/fake/repo/.worktrees/ws-1');
-      expect(result.data.branch).toBe('worktree/ws-1');
-
-      const budget = getBudget(db, 3);
-      expect(budget.used).toBe(1);
-      expect(budget.available).toBe(2);
-    });
-
-    it('rejects allocation when budget exceeded', () => {
-      allocateWorktree(db, 'task-1', 'ws-1', 'token-1', 2);
-      allocateWorktree(db, 'task-2', 'ws-2', 'token-2', 2);
-
-      const result = allocateWorktree(db, 'task-3', 'ws-3', 'token-3', 2);
-
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.error.code).toBe('WIP_LIMIT');
-    });
-
-    it('reuses worktree for same workstream', () => {
-      const first = allocateWorktree(db, 'task-1', 'ws-1', 'token-1', 3);
-      expect(first.ok).toBe(true);
-      if (!first.ok) return;
-
-      const second = allocateWorktree(db, 'task-2', 'ws-1', 'token-2', 3);
-      expect(second.ok).toBe(true);
-      if (!second.ok) return;
-
-      expect(second.data.path).toBe(first.data.path);
-      expect(second.data.branch).toBe(first.data.branch);
-
-      const budget = getBudget(db, 3);
-      expect(budget.used).toBe(1);
-      // Only 1 unique worktree path, so next different workstream should still work
-      const third = allocateWorktree(db, 'task-3', 'ws-2', 'token-3', 3);
-      expect(third.ok).toBe(true);
-    });
-
-    it('releases worktree and frees budget slot', () => {
-      allocateWorktree(db, 'task-1', 'ws-1', 'token-1', 3);
-      allocateWorktree(db, 'task-2', 'ws-2', 'token-2', 3);
-
-      const budgetBefore = getBudget(db, 3);
-      expect(budgetBefore.used).toBe(2);
-
-      const released = releaseWorktree(db, 'task-1');
-      expect(released.ok).toBe(true);
-      if (!released.ok) return;
-      expect(released.data.released).toBe(true);
-
-      const budgetAfter = getBudget(db, 3);
-      expect(budgetAfter.used).toBe(1);
-      expect(budgetAfter.available).toBe(2);
-    });
-  });
-
   describe('context assembly + routing integration', () => {
     it('assembles context and routes in sequence', async () => {
       await createStandardProject(db, config, embedder);
@@ -297,106 +214,6 @@ describe('V8: Orchestrator Dry Run', () => {
       expect(prompt).toContain('# Task TEST-01.01');
       expect(prompt).toContain('## Instructions');
       expect(prompt).toContain('Work in: `/fake/repo/.worktrees/ws-1`');
-    });
-  });
-});
-
-describe('V9: Session Lifecycle', () => {
-  describe('worktree lifecycle', () => {
-    it('alloc, check (in-worktree), release cycle', () => {
-      const allocResult = allocateWorktree(db, 'task-a', 'ws-a', 'tok-a', 3);
-      expect(allocResult.ok).toBe(true);
-      if (!allocResult.ok) return;
-
-      const worktreePath = allocResult.data.path;
-
-      const checkInside = checkWorktreePath(worktreePath, join(worktreePath, 'src/index.ts'));
-      expect(checkInside.ok).toBe(true);
-
-      const checkExact = checkWorktreePath(worktreePath, worktreePath);
-      expect(checkExact.ok).toBe(true);
-
-      const releaseResult = releaseWorktree(db, 'task-a');
-      expect(releaseResult.ok).toBe(true);
-      if (!releaseResult.ok) return;
-      expect(releaseResult.data.released).toBe(true);
-      expect(releaseResult.data.path).toBe(worktreePath);
-
-      const budget = getBudget(db, 3);
-      expect(budget.used).toBe(0);
-      expect(budget.available).toBe(3);
-    });
-
-    it('check rejects path outside worktree', () => {
-      const result = checkWorktreePath('/fake/repo/.worktrees/ws-a', '/some/other/path/file.ts');
-
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.error.code).toBe('INVALID_INPUT');
-      expect(result.error.message).toContain('outside expected worktree');
-    });
-
-    it('multiple allocations respect budget', () => {
-      const a1 = allocateWorktree(db, 'task-1', 'ws-1', 'tok-1', 2);
-      expect(a1.ok).toBe(true);
-
-      const a2 = allocateWorktree(db, 'task-2', 'ws-2', 'tok-2', 2);
-      expect(a2.ok).toBe(true);
-
-      const a3 = allocateWorktree(db, 'task-3', 'ws-3', 'tok-3', 2);
-      expect(a3.ok).toBe(false);
-      if (a3.ok) return;
-      expect(a3.error.code).toBe('WIP_LIMIT');
-
-      const budget = getBudget(db, 2);
-      expect(budget.max).toBe(2);
-      expect(budget.used).toBe(2);
-      expect(budget.available).toBe(0);
-    });
-  });
-
-  describe('budget tracking across operations', () => {
-    it('tracks allocations across multiple alloc/release cycles', () => {
-      allocateWorktree(db, 'task-1', 'ws-1', 'tok-1', 2);
-      allocateWorktree(db, 'task-2', 'ws-2', 'tok-2', 2);
-
-      expect(getBudget(db, 2).available).toBe(0);
-
-      releaseWorktree(db, 'task-1');
-      expect(getBudget(db, 2).available).toBe(1);
-
-      const a3 = allocateWorktree(db, 'task-3', 'ws-3', 'tok-3', 2);
-      expect(a3.ok).toBe(true);
-      expect(getBudget(db, 2).available).toBe(0);
-
-      releaseWorktree(db, 'task-2');
-      releaseWorktree(db, 'task-3');
-      expect(getBudget(db, 2).used).toBe(0);
-      expect(getBudget(db, 2).available).toBe(2);
-    });
-
-    it('persists in db_meta across db reopen', () => {
-      allocateWorktree(db, 'task-1', 'ws-1', 'tok-1', 3);
-      allocateWorktree(db, 'task-2', 'ws-2', 'tok-2', 3);
-
-      const budgetBefore = getBudget(db, 3);
-      expect(budgetBefore.used).toBe(2);
-
-      db.close();
-
-      const db2 = new BrainDB(dbPath);
-      db2.setEmbeddingModel(embedder.model, embedder.dimensions);
-
-      const budgetAfter = getBudget(db2, 3);
-      expect(budgetAfter.used).toBe(2);
-      expect(budgetAfter.allocations).toHaveLength(2);
-      expect(budgetAfter.allocations[0].taskId).toBe('task-1');
-      expect(budgetAfter.allocations[1].taskId).toBe('task-2');
-
-      db2.close();
-
-      // Reopen original for afterEach cleanup
-      db = new BrainDB(dbPath);
     });
   });
 });
