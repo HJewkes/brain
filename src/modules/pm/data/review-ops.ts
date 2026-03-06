@@ -1,0 +1,162 @@
+import type { BrainDB } from '../../../services/brain-db.js';
+import type { BrainConfig, Embedder, Relation } from '../../../types.js';
+import type { Result } from '../errors.js';
+import type { TaskMetadata } from '../types.js';
+import { ok, fail } from '../errors.js';
+import { createTask } from './task-ops.js';
+import { createWorkstream } from './workstream-ops.js';
+import { getPmNotes, resolveDisplayId } from './queries.js';
+import { createCapture } from './capture-ops.js';
+
+export interface ReviewCreateInput {
+  sourceTaskId: string;
+  prUrl: string;
+  branch: string;
+  agentId?: string;
+  rewireDeps?: boolean;
+}
+
+export interface ReviewCreateResult {
+  reviewTaskId: string;
+  reviewTaskMeta: TaskMetadata;
+  rewiredDeps: string[];
+  captureNoteId: string;
+}
+
+function extractPrNumber(url: string): string {
+  const match = /\/pull\/(\d+)/.exec(url);
+  return match ? match[1] : 'N/A';
+}
+
+function findReviewWorkstream(
+  db: BrainDB,
+  project: string
+): { found: true; number: number } | { found: false } {
+  const wsNotes = getPmNotes(db, 'workstream', { project });
+  for (const note of wsNotes) {
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    const title = (meta.title as string) ?? '';
+    if (title.toLowerCase().includes('review')) {
+      return { found: true, number: meta.number as number };
+    }
+  }
+  return { found: false };
+}
+
+export async function createReviewTask(
+  db: BrainDB,
+  config: BrainConfig,
+  embedder: Embedder,
+  input: ReviewCreateInput
+): Promise<Result<ReviewCreateResult>> {
+  const sourceDisplayId = input.sourceTaskId.toUpperCase();
+  const sourceNotes = getPmNotes(db, 'task', { display_id: sourceDisplayId });
+  if (sourceNotes.length === 0) {
+    return fail('NOT_FOUND', `Source task "${sourceDisplayId}" not found`);
+  }
+
+  const sourceMeta = JSON.parse(sourceNotes[0].metadata!) as Record<string, unknown>;
+  const project = sourceMeta.project as string;
+  const sourceTitle = (sourceMeta.title as string) ?? sourceDisplayId;
+  const sourcePriority = (sourceMeta.priority as string) ?? 'medium';
+
+  const prNumber = extractPrNumber(input.prUrl);
+
+  let reviewWsNumber: number;
+  const wsLookup = findReviewWorkstream(db, project);
+  if (wsLookup.found) {
+    reviewWsNumber = wsLookup.number;
+  } else {
+    const wsResult = await createWorkstream(db, config, embedder, {
+      project,
+      name: 'PR Review',
+      description: 'Pull request review tasks requiring human approval',
+    });
+    if (!wsResult.ok) {
+      return fail(wsResult.error.code, wsResult.error.message, wsResult.error.details);
+    }
+    reviewWsNumber = wsResult.data.number;
+  }
+
+  const reviewTitle = `Review PR #${prNumber}: ${sourceTitle}`;
+  const descriptionLines = [
+    `## PR Review`,
+    '',
+    `- **PR:** ${input.prUrl}`,
+    `- **Branch:** ${input.branch}`,
+    `- **Source task:** ${sourceDisplayId}`,
+  ];
+  if (input.agentId) {
+    descriptionLines.push(`- **Agent:** ${input.agentId}`);
+  }
+  descriptionLines.push('', 'Review and merge the pull request to unblock downstream work.');
+
+  const taskResult = await createTask(db, config, embedder, {
+    project,
+    workstream: reviewWsNumber,
+    name: reviewTitle,
+    mode: 'human',
+    category: 'review',
+    priority: sourcePriority as TaskMetadata['priority'],
+    dependsOn: [sourceDisplayId],
+    description: descriptionLines.join('\n'),
+  });
+
+  if (!taskResult.ok) {
+    return fail(taskResult.error.code, taskResult.error.message, taskResult.error.details);
+  }
+
+  const reviewDisplayId = taskResult.data.display_id;
+
+  const rewiredDeps: string[] = [];
+  if (input.rewireDeps !== false) {
+    const sourceResolved = resolveDisplayId(db, sourceDisplayId);
+    if (sourceResolved.ok) {
+      const sourceNoteId = sourceResolved.data;
+      const incomingRelations = db.getRelationsTo(sourceNoteId);
+      const dependents = incomingRelations.filter((r) => r.type === 'depends_on');
+
+      const reviewResolved = resolveDisplayId(db, reviewDisplayId);
+      if (reviewResolved.ok) {
+        const reviewNoteId = reviewResolved.data;
+
+        for (const rel of dependents) {
+          const dependentNote = db.getNoteById(rel.sourceId);
+          if (!dependentNote?.metadata) continue;
+          const depMeta = JSON.parse(dependentNote.metadata) as Record<string, unknown>;
+          const depDisplayId = depMeta.display_id as string;
+
+          if (depDisplayId === reviewDisplayId) continue;
+
+          const existingRelations = db.getRelationsFrom(rel.sourceId);
+          const withoutOldDep = existingRelations.filter(
+            (r) => !(r.type === 'depends_on' && r.targetId === sourceNoteId)
+          );
+          const newRelations: Relation[] = [
+            ...withoutOldDep,
+            { sourceId: rel.sourceId, targetId: reviewNoteId, type: 'depends_on' },
+          ];
+          db.upsertRelations(rel.sourceId, newRelations);
+          rewiredDeps.push(depDisplayId);
+        }
+      }
+    }
+  }
+
+  const agentStr = input.agentId ? ` | agent: ${input.agentId}` : '';
+  const captureContent = `${sourceDisplayId}: PR #${prNumber} at ${input.prUrl} | branch: ${input.branch}${agentStr}`;
+  const captureResult = await createCapture(db, config, embedder, {
+    content: captureContent,
+    source: 'review-create',
+    project,
+  });
+
+  const captureNoteId = captureResult.ok ? captureResult.data.noteId : '';
+
+  return ok({
+    reviewTaskId: reviewDisplayId,
+    reviewTaskMeta: taskResult.data,
+    rewiredDeps,
+    captureNoteId,
+  });
+}
