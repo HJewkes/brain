@@ -2,7 +2,6 @@ import { existsSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { Command } from '@commander-js/extra-typings';
-import { installHooks } from './install-hooks.js';
 import { withBrain } from '../../../services/brain-service.js';
 import { createProject } from '../data/project-ops.js';
 import { createWorkstream } from '../data/workstream-ops.js';
@@ -169,34 +168,36 @@ function formatText(checks: CheckResult[], demo?: { success: boolean; error?: st
 
 export function createSetupCommand(): Command {
   return new Command('setup')
-    .description('Install PM orchestration hooks, skill, and optionally create a demo project')
-    .option('--demo', 'Create a demo project after setup')
+    .description('[DEPRECATED] Use "ao hook install" for hooks. Use --demo for demo project only.')
+    .option('--demo', 'Create a demo project')
     .option('--json', 'Output JSON status')
-    .option('--dry-run', 'Show what would be installed')
+    .option('--dry-run', 'Show what would be done')
     .action(async (opts) => {
       const claudeDir = resolveClaudeDir();
 
       if (opts.dryRun) {
-        const items = [
-          join(claudeDir, 'hooks', 'brain-pm-session.sh'),
-          join(claudeDir, 'hooks', 'brain-pm-worktree.sh'),
-          join(claudeDir, 'hooks', 'brain-pm-agent-done.sh'),
-          join(claudeDir, 'skills', 'orchestrator', 'SKILL.md'),
-          `Hook entries in ${join(claudeDir, 'settings.json')}`,
-        ];
+        const items: string[] = [];
         if (opts.demo) items.push('Demo project with 2 workstreams and 4 tasks');
+        else items.push('DEPRECATED: Hook installation moved to ao-cli. Use: ao hook install');
         process.stdout.write('Would install:\n' + items.map((i) => `  ${i}`).join('\n') + '\n');
         return;
       }
 
-      const hookResult = installHooks(claudeDir);
-      for (const err of hookResult.errors) process.stderr.write(`Error: ${err}\n`);
+      if (!opts.demo) {
+        process.stderr.write(
+          'DEPRECATED: Hook installation has moved to ao-cli.\n' +
+            'Run: ao hook install\n' +
+            'To create a demo project, use: brain pm setup --demo\n'
+        );
+        process.exitCode = 1;
+        return;
+      }
 
       const checks = validateInstallation(claudeDir);
       checks.push(await validateDatabase());
 
-      const demo = opts.demo ? await createDemoProject() : undefined;
-      const hasFailure = checks.some((c) => !c.passed) || (demo && !demo.success);
+      const demo = await createDemoProject();
+      const hasFailure = checks.some((c) => !c.passed) || !demo.success;
       if (hasFailure) process.exitCode = 1;
 
       if (opts.json) {
@@ -204,7 +205,7 @@ export function createSetupCommand(): Command {
           JSON.stringify(
             {
               checks: checks.map((c) => ({ label: c.label, passed: c.passed, error: c.error })),
-              demo: demo ? { success: demo.success, error: demo.error } : undefined,
+              demo: { success: demo.success, error: demo.error },
               success: !hasFailure,
             },
             null,
