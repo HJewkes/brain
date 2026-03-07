@@ -149,6 +149,42 @@ export function resolveProject(db: BrainDB, explicit: string | undefined): Resul
   return fail('INVALID_INPUT', 'No projects found. Run "brain pm onboard <name>" to create one.');
 }
 
+/**
+ * Like resolveProject, but returns null when no project is specified
+ * (meaning "query all projects"). Used by commands that should show
+ * cross-project results by default.
+ */
+export function resolveProjectOrAll(
+  db: BrainDB,
+  explicit: string | undefined
+): Result<string | null> {
+  if (explicit) {
+    const result = resolveProject(db, explicit);
+    return result;
+  }
+  const active = getActiveProject(db);
+  if (active) return ok(active);
+
+  const projects = getPmNotes(db, 'project');
+  if (projects.length === 1) {
+    const meta = JSON.parse(projects[0].metadata!) as Record<string, unknown>;
+    const prefix = meta.prefix as string;
+    setActiveProject(db, prefix);
+    return ok(prefix);
+  }
+
+  // Multiple or zero projects: return null to indicate "all"
+  return ok(null);
+}
+
+export function getAllProjectPrefixes(db: BrainDB): string[] {
+  const projects = getPmNotes(db, 'project');
+  return projects.map((p) => {
+    const meta = JSON.parse(p.metadata!) as Record<string, unknown>;
+    return meta.prefix as string;
+  });
+}
+
 export function enrichNotFoundError(db: BrainDB, displayId: string): Result<never> {
   // Check if it's a workstream display ID (PREFIX-NN without .MM)
   if (/^[A-Z]+-\d{2}$/.test(displayId)) {

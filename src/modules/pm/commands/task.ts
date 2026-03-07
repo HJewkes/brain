@@ -8,7 +8,7 @@ import { indexSingleFile } from '../../../services/indexing.js';
 import { formatError, fail, pmError } from '../errors.js';
 import type { Result } from '../errors.js';
 import { resolveWorkstreamFilter, parseDisplayId } from '../ids.js';
-import type { TaskMetadata, TaskStatus } from '../types.js';
+import type { TaskMetadata, TaskStatus, VirtualState } from '../types.js';
 import {
   createTask,
   listTasks,
@@ -17,8 +17,8 @@ import {
   updateTaskStatus,
   deleteTask,
 } from '../data/task-ops.js';
-import type { ListMode } from '../data/task-ops.js';
-import { getPmNotes, resolveProject, resolveDisplayId } from '../data/queries.js';
+import type { ListMode, EnrichedTaskFields } from '../data/task-ops.js';
+import { getPmNotes, resolveProject, resolveProjectOrAll, getAllProjectPrefixes, resolveDisplayId } from '../data/queries.js';
 import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
@@ -158,9 +158,24 @@ export function createTaskCommands(): Command {
     .option('--limit <n>', 'Limit number of results', parseInt)
     .action(async (opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, opts.project);
+        const projectResult = resolveProjectOrAll(svc.db, opts.project);
         if (!projectResult.ok) {
           process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const prefixes = projectResult.data === null
+          ? getAllProjectPrefixes(svc.db)
+          : [projectResult.data];
+
+        if (prefixes.length === 0) {
+          process.stderr.write(
+            formatError(
+              pmError('INVALID_INPUT', 'No projects found. Run "brain pm onboard <name>" to create one.'),
+              !!opts.json
+            ) + '\n'
+          );
           process.exitCode = 1;
           return;
         }
@@ -217,27 +232,32 @@ export function createTaskCommands(): Command {
         }
 
         const mode: ListMode = opts.full ? 'full' : opts.short ? 'short' : 'default';
-        const result = listTasks(
-          svc.db,
-          projectResult.data,
-          {
-            workstream: workstreamNumber,
-            status: opts.status,
-            priority: opts.priority,
-            category: opts.category,
-            search: opts.search,
-            dueBefore: opts.dueBefore,
-            milestone: opts.milestone,
-          },
-          mode
-        );
-        if (!result.ok) {
-          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
-          process.exitCode = 1;
-          return;
+        let allTasks: (TaskMetadata & EnrichedTaskFields & { virtualStates: VirtualState[] })[] = [];
+
+        for (const prefix of prefixes) {
+          const result = listTasks(
+            svc.db,
+            prefix,
+            {
+              workstream: workstreamNumber,
+              status: opts.status,
+              priority: opts.priority,
+              category: opts.category,
+              search: opts.search,
+              dueBefore: opts.dueBefore,
+              milestone: opts.milestone,
+            },
+            mode
+          );
+          if (!result.ok) {
+            process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+          allTasks = allTasks.concat(result.data);
         }
 
-        let tasks = result.data;
+        let tasks = allTasks;
 
         if (opts.sort) {
           const PRIORITY_ORDER: Record<string, number> = {

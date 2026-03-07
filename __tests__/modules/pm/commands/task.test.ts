@@ -888,3 +888,74 @@ describe('task list search fixes', () => {
     expect(parsed.length).toBe(0);
   });
 });
+
+describe('cross-project task list', () => {
+  it('list without --project returns tasks from all projects', async () => {
+    const { createProject } = await import('../../../../src/modules/pm/data/project-ops.js');
+    const { createWorkstream } = await import('../../../../src/modules/pm/data/workstream-ops.js');
+
+    await createProject(db, config, embedder, { name: 'Other', prefix: 'OTH' });
+    await createWorkstream(db, config, embedder, { project: 'OTH', name: 'Main' });
+    await createTestTask(db, config, embedder, {
+      project: 'OTH',
+      workstream: 1,
+      name: 'Other task',
+    });
+
+    // Clear active project
+    db.setMetaValue('pm_active_project', '');
+
+    await run('list', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const ids = parsed.map((t: { display_id: string }) => t.display_id);
+    expect(ids).toContain('TEST-01.01');
+    expect(ids).toContain('OTH-01.01');
+    expect(parsed.length).toBe(7); // 6 from TEST + 1 from OTH
+  });
+
+  it('list with --project still scopes correctly', async () => {
+    const { createProject } = await import('../../../../src/modules/pm/data/project-ops.js');
+    const { createWorkstream } = await import('../../../../src/modules/pm/data/workstream-ops.js');
+
+    await createProject(db, config, embedder, { name: 'Other', prefix: 'OTH' });
+    await createWorkstream(db, config, embedder, { project: 'OTH', name: 'Main' });
+    await createTestTask(db, config, embedder, {
+      project: 'OTH',
+      workstream: 1,
+      name: 'Other task',
+    });
+
+    await run('list', '--project', 'TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const ids = parsed.map((t: { display_id: string }) => t.display_id);
+    expect(ids).toContain('TEST-01.01');
+    expect(ids).not.toContain('OTH-01.01');
+    expect(parsed.length).toBe(6);
+  });
+
+  it('list --status pending without --project returns pending tasks from all projects', async () => {
+    const { createProject } = await import('../../../../src/modules/pm/data/project-ops.js');
+    const { createWorkstream } = await import('../../../../src/modules/pm/data/workstream-ops.js');
+
+    await createProject(db, config, embedder, { name: 'Other', prefix: 'OTH' });
+    await createWorkstream(db, config, embedder, { project: 'OTH', name: 'Main' });
+    await createTestTask(db, config, embedder, {
+      project: 'OTH',
+      workstream: 1,
+      name: 'Other pending task',
+    });
+
+    // Clear active project
+    db.setMetaValue('pm_active_project', '');
+
+    await run('list', '--status', 'pending', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.length).toBe(7); // 6 pending from TEST + 1 from OTH
+    for (const task of parsed) {
+      expect(task.status).toBe('pending');
+    }
+  });
+});
