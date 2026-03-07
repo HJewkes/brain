@@ -14,6 +14,7 @@ export function createReviewCommands(): Command {
     .requiredOption('--branch <branch>', 'Branch name')
     .option('--agent <id>', 'Agent ID that created the PR')
     .option('--no-rewire', 'Skip dependency rewiring')
+    .option('--no-auto-complete', 'Skip auto-completing the source task')
     .option('--risk <number>', 'Risk score (1-5) for review routing advisory')
     .option('--json', 'Output JSON')
     .action(async (taskId, opts) => {
@@ -34,6 +35,7 @@ export function createReviewCommands(): Command {
           branch: opts.branch,
           agentId: opts.agent,
           rewireDeps: opts.rewire,
+          autoComplete: opts.autoComplete,
           risk,
         });
 
@@ -43,7 +45,7 @@ export function createReviewCommands(): Command {
           return;
         }
 
-        const { reviewTaskId, reviewTaskMeta, rewiredDeps } = result.data;
+        const { reviewTaskId, reviewTaskMeta, rewiredDeps, sourceAutoCompleted } = result.data;
 
         if (opts.json) {
           process.stdout.write(
@@ -54,6 +56,7 @@ export function createReviewCommands(): Command {
                 rewiredDeps,
                 captureNoteId: result.data.captureNoteId,
                 riskAdvisory: result.data.riskAdvisory,
+                sourceAutoCompleted,
               },
               null,
               2
@@ -64,6 +67,13 @@ export function createReviewCommands(): Command {
           process.stdout.write(
             `  ${reviewTaskMeta.title} [${reviewTaskMeta.priority}] (${reviewTaskMeta.mode})\n`
           );
+          if (sourceAutoCompleted) {
+            process.stdout.write(`  Auto-completed source task ${taskId.toUpperCase()}\n`);
+          } else if (!opts.autoComplete) {
+            // --no-auto-complete was set, no message needed
+          } else {
+            process.stdout.write(`  Source task ${taskId.toUpperCase()} already done\n`);
+          }
           if (rewiredDeps.length > 0) {
             process.stdout.write(`  Rewired deps: ${rewiredDeps.join(', ')}\n`);
           }
