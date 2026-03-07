@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -220,5 +220,91 @@ describe('createReviewTask', () => {
       display_id: result.data.reviewTaskId,
     });
     expect(reviewNotes.length).toBe(1);
+  });
+
+  it('includes risk in task description when --risk is provided', async () => {
+    const result = await createReviewTask(db, config, embedder, {
+      sourceTaskId: 'SDK-01.01',
+      prUrl: 'https://github.com/org/repo/pull/42',
+      branch: 'feat/feature-x',
+      risk: 3,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const reviewNotes = getPmNotes(db, 'task', {
+      display_id: result.data.reviewTaskId,
+    });
+    expect(reviewNotes.length).toBe(1);
+    const fileContent = readFileSync(reviewNotes[0].filePath, 'utf-8');
+    expect(fileContent).toContain('**Risk:** 3/5');
+  });
+
+  it('returns advisory for agent review when risk is low', async () => {
+    const result = await createReviewTask(db, config, embedder, {
+      sourceTaskId: 'SDK-01.01',
+      prUrl: 'https://github.com/org/repo/pull/42',
+      branch: 'feat/feature-x',
+      risk: 2,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.data.riskAdvisory).toBe('Advisory: risk 2 — agent review may be sufficient');
+  });
+
+  it('returns advisory for human review when risk is high', async () => {
+    const result = await createReviewTask(db, config, embedder, {
+      sourceTaskId: 'SDK-01.01',
+      prUrl: 'https://github.com/org/repo/pull/42',
+      branch: 'feat/feature-x',
+      risk: 4,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.data.riskAdvisory).toBe('Advisory: risk 4 — human review recommended');
+  });
+
+  it('rejects risk below 1', async () => {
+    const result = await createReviewTask(db, config, embedder, {
+      sourceTaskId: 'SDK-01.01',
+      prUrl: 'https://github.com/org/repo/pull/42',
+      branch: 'feat/feature-x',
+      risk: 0,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('INVALID_INPUT');
+  });
+
+  it('rejects risk above 5', async () => {
+    const result = await createReviewTask(db, config, embedder, {
+      sourceTaskId: 'SDK-01.01',
+      prUrl: 'https://github.com/org/repo/pull/42',
+      branch: 'feat/feature-x',
+      risk: 6,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('INVALID_INPUT');
+  });
+
+  it('works without --risk and has no riskAdvisory', async () => {
+    const result = await createReviewTask(db, config, embedder, {
+      sourceTaskId: 'SDK-01.01',
+      prUrl: 'https://github.com/org/repo/pull/42',
+      branch: 'feat/feature-x',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.data.riskAdvisory).toBeUndefined();
   });
 });
