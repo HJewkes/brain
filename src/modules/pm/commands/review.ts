@@ -14,15 +14,27 @@ export function createReviewCommands(): Command {
     .requiredOption('--branch <branch>', 'Branch name')
     .option('--agent <id>', 'Agent ID that created the PR')
     .option('--no-rewire', 'Skip dependency rewiring')
+    .option('--risk <number>', 'Risk score (1-5) for review routing advisory')
     .option('--json', 'Output JSON')
     .action(async (taskId, opts) => {
       await withBrain(async (svc) => {
+        let risk: number | undefined;
+        if (opts.risk !== undefined) {
+          risk = Number(opts.risk);
+          if (!Number.isInteger(risk) || risk < 1 || risk > 5) {
+            process.stderr.write('Error: --risk must be an integer between 1 and 5\n');
+            process.exitCode = 1;
+            return;
+          }
+        }
+
         const result = await createReviewTask(svc.db, svc.config, svc.embedder, {
           sourceTaskId: taskId,
           prUrl: opts.pr,
           branch: opts.branch,
           agentId: opts.agent,
           rewireDeps: opts.rewire,
+          risk,
         });
 
         if (!result.ok) {
@@ -41,6 +53,7 @@ export function createReviewCommands(): Command {
                 reviewTask: reviewTaskMeta,
                 rewiredDeps,
                 captureNoteId: result.data.captureNoteId,
+                riskAdvisory: result.data.riskAdvisory,
               },
               null,
               2
@@ -53,6 +66,9 @@ export function createReviewCommands(): Command {
           );
           if (rewiredDeps.length > 0) {
             process.stdout.write(`  Rewired deps: ${rewiredDeps.join(', ')}\n`);
+          }
+          if (result.data.riskAdvisory) {
+            process.stdout.write(`  ${result.data.riskAdvisory}\n`);
           }
         }
       });
