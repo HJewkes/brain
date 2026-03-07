@@ -436,16 +436,23 @@ export function createTaskCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
-        const redirectMsg = checkNamespaceMismatch(id.toUpperCase(), 'task');
+        const displayId = id.toUpperCase();
+        const redirectMsg = checkNamespaceMismatch(displayId, 'task');
         if (redirectMsg) {
           process.stderr.write(`Error: ${redirectMsg}\n`);
           process.exitCode = 1;
           return;
         }
+
+        const taskResult = getTask(svc.db, displayId);
+        if (!taskResult.ok) {
+          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
         if (opts.token) {
-          const taskResult = getTask(svc.db, id.toUpperCase());
           if (
-            taskResult.ok &&
             taskResult.data.claim_token &&
             taskResult.data.claim_token !== opts.token
           ) {
@@ -454,11 +461,51 @@ export function createTaskCommands(): Command {
             );
           }
         }
+
+        const currentStatus = taskResult.data.status;
+
+        if (currentStatus === 'pending') {
+          process.stderr.write(`Auto-claiming ${displayId}...\n`);
+          const claim = generateClaim();
+          const claimResult = await updateTaskMetadataFields(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            { status: 'claimed', claim_token: claim.token, claimed_at: claim.claimedAt }
+          );
+          if (!claimResult.ok) {
+            process.stderr.write(formatError(claimResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+
+          process.stderr.write(`Auto-starting ${displayId}...\n`);
+          const startResult = await updateTaskStatus(
+            svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus
+          );
+          if (!startResult.ok) {
+            process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+        } else if (currentStatus === 'claimed') {
+          process.stderr.write(`Auto-starting ${displayId}...\n`);
+          const startResult = await updateTaskStatus(
+            svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus
+          );
+          if (!startResult.ok) {
+            process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
+            process.exitCode = 1;
+            return;
+          }
+        }
+
         const result = await updateTaskStatus(
           svc.db,
           svc.config,
           svc.embedder,
-          id.toUpperCase(),
+          displayId,
           'done' as TaskStatus
         );
         if (!result.ok) {

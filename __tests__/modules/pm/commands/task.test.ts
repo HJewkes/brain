@@ -387,11 +387,41 @@ describe('task done', () => {
     expect(parsed.status).toBe('done');
   });
 
-  it('invalid transition from pending to done shows error', async () => {
-    await run('done', 'TEST-01.01');
+  it('auto-claims and auto-starts a pending task', async () => {
+    await run('done', 'TEST-01.01', '--json');
 
-    expect(process.exitCode).toBe(1);
-    expect(stderr()).toContain('INVALID_TRANSITION');
+    const parsed = JSON.parse(stdout());
+    expect(parsed.status).toBe('done');
+    expect(stderr()).toContain('Auto-claiming TEST-01.01');
+    expect(stderr()).toContain('Auto-starting TEST-01.01');
+  });
+
+  it('auto-starts a claimed task', async () => {
+    await run('claim', 'TEST-01.01');
+    stdoutChunks = [];
+    stderrChunks = [];
+    process.exitCode = undefined;
+
+    await run('done', 'TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.status).toBe('done');
+    expect(stderr()).not.toContain('Auto-claiming');
+    expect(stderr()).toContain('Auto-starting TEST-01.01');
+  });
+
+  it('directly completes an in-progress task without auto-transitions', async () => {
+    await run('claim', 'TEST-01.01', '--start');
+    stdoutChunks = [];
+    stderrChunks = [];
+    process.exitCode = undefined;
+
+    await run('done', 'TEST-01.01', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(parsed.status).toBe('done');
+    expect(stderr()).not.toContain('Auto-claiming');
+    expect(stderr()).not.toContain('Auto-starting');
   });
 });
 
