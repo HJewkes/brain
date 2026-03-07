@@ -8,7 +8,7 @@ import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
-import { createTask } from '../../../src/modules/pm/data/task-ops.js';
+import { createTask, updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 import { createReviewTask } from '../../../src/modules/pm/data/review-ops.js';
 import { getPmNotes, resolveDisplayId } from '../../../src/modules/pm/data/queries.js';
 
@@ -306,5 +306,98 @@ describe('createReviewTask', () => {
     if (!result.ok) return;
 
     expect(result.data.riskAdvisory).toBeUndefined();
+  });
+
+  describe('auto-complete source task', () => {
+    it('auto-completes a pending source task', async () => {
+      const result = await createReviewTask(db, config, embedder, {
+        sourceTaskId: 'SDK-01.01',
+        prUrl: 'https://github.com/org/repo/pull/50',
+        branch: 'feat/auto-pending',
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.data.sourceAutoCompleted).toBe(true);
+
+      const sourceNotes = getPmNotes(db, 'task', { display_id: 'SDK-01.01' });
+      const meta = JSON.parse(sourceNotes[0].metadata!) as Record<string, unknown>;
+      expect(meta.status).toBe('done');
+    });
+
+    it('auto-completes an in-progress source task', async () => {
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'claimed');
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'in-progress');
+
+      const result = await createReviewTask(db, config, embedder, {
+        sourceTaskId: 'SDK-01.01',
+        prUrl: 'https://github.com/org/repo/pull/51',
+        branch: 'feat/auto-inprogress',
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.data.sourceAutoCompleted).toBe(true);
+
+      const sourceNotes = getPmNotes(db, 'task', { display_id: 'SDK-01.01' });
+      const meta = JSON.parse(sourceNotes[0].metadata!) as Record<string, unknown>;
+      expect(meta.status).toBe('done');
+    });
+
+    it('is a no-op when source task is already done', async () => {
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'claimed');
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'in-progress');
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'done');
+
+      const result = await createReviewTask(db, config, embedder, {
+        sourceTaskId: 'SDK-01.01',
+        prUrl: 'https://github.com/org/repo/pull/52',
+        branch: 'feat/auto-done',
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.data.sourceAutoCompleted).toBe(false);
+    });
+
+    it('skips auto-completion when autoComplete is false', async () => {
+      const result = await createReviewTask(db, config, embedder, {
+        sourceTaskId: 'SDK-01.01',
+        prUrl: 'https://github.com/org/repo/pull/53',
+        branch: 'feat/no-auto',
+        autoComplete: false,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.data.sourceAutoCompleted).toBe(false);
+
+      const sourceNotes = getPmNotes(db, 'task', { display_id: 'SDK-01.01' });
+      const meta = JSON.parse(sourceNotes[0].metadata!) as Record<string, unknown>;
+      expect(meta.status).toBe('pending');
+    });
+
+    it('does not block review creation when auto-completion fails', async () => {
+      // Block the source task so transitions fail
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'claimed');
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'in-progress');
+      await updateTaskStatus(db, config, embedder, 'SDK-01.01', 'blocked');
+
+      const result = await createReviewTask(db, config, embedder, {
+        sourceTaskId: 'SDK-01.01',
+        prUrl: 'https://github.com/org/repo/pull/54',
+        branch: 'feat/auto-fail',
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.data.sourceAutoCompleted).toBe(false);
+      expect(result.data.reviewTaskId).toBeTruthy();
+    });
   });
 });
