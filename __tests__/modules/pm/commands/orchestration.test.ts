@@ -70,13 +70,14 @@ afterEach(() => {
 });
 
 describe('next (error paths)', () => {
-  it('error when no project and no active project', async () => {
+  it('shows no projects message when no project and no active project', async () => {
     db.close();
     db = new BrainDB(tmpDbPath('orch-next-empty'));
 
     await run('next');
 
-    expect(process.exitCode).toBe(1);
+    expect(process.exitCode).toBeUndefined();
+    expect(stdout()).toContain('No projects found');
   });
 
   it('--workstream with invalid format shows error', async () => {
@@ -561,5 +562,53 @@ describe('complete (detailed)', () => {
 
     // Task has no active claim, so this should fail
     expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('cross-project scoping', () => {
+  it('next without --project returns eligible tasks from all projects', async () => {
+    // Create a second project
+    const { createProject } = await import('../../../../src/modules/pm/data/project-ops.js');
+    const { createWorkstream } = await import('../../../../src/modules/pm/data/workstream-ops.js');
+
+    await createProject(db, config, embedder, { name: 'Second', prefix: 'SEC' });
+    await createWorkstream(db, config, embedder, { project: 'SEC', name: 'Main' });
+    await createTestTask(db, config, embedder, {
+      project: 'SEC',
+      workstream: 1,
+      name: 'SEC task one',
+    });
+
+    // Clear active project so it doesn't auto-scope
+    db.setMetaValue('pm_active_project', '');
+
+    await run('next', '--json');
+
+    const parsed = JSON.parse(stdout());
+    expect(Array.isArray(parsed)).toBe(true);
+    const ids = parsed.map((t: { display_id: string }) => t.display_id);
+    // Should include tasks from both TEST and SEC
+    expect(ids).toContain('TEST-01.01');
+    expect(ids).toContain('SEC-01.01');
+  });
+
+  it('next with --project still scopes to single project', async () => {
+    const { createProject } = await import('../../../../src/modules/pm/data/project-ops.js');
+    const { createWorkstream } = await import('../../../../src/modules/pm/data/workstream-ops.js');
+
+    await createProject(db, config, embedder, { name: 'Second', prefix: 'SEC' });
+    await createWorkstream(db, config, embedder, { project: 'SEC', name: 'Main' });
+    await createTestTask(db, config, embedder, {
+      project: 'SEC',
+      workstream: 1,
+      name: 'SEC task one',
+    });
+
+    await run('next', '--project', 'TEST', '--json');
+
+    const parsed = JSON.parse(stdout());
+    const ids = parsed.map((t: { display_id: string }) => t.display_id);
+    expect(ids).toContain('TEST-01.01');
+    expect(ids).not.toContain('SEC-01.01');
   });
 });

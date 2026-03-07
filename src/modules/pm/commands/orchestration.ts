@@ -7,7 +7,7 @@ import { formatError } from '../errors.js';
 import { resolveWorkstreamFilter } from '../ids.js';
 import type { Result } from '../errors.js';
 import { ok, fail } from '../errors.js';
-import { getPmNotes, resolveProject } from '../data/queries.js';
+import { getPmNotes, resolveProject, resolveProjectOrAll, getAllProjectPrefixes } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
 import { detectStalePrompts } from '../data/prompt-ops.js';
@@ -61,19 +61,31 @@ export function createOrchestrationCommands(): Command[] {
     .option('--json', 'Output JSON')
     .action(async (prefixArg, opts) => {
       await withBrain(async (svc) => {
-        const projectResult = resolveProject(svc.db, prefixArg ?? opts.project);
+        const projectResult = resolveProjectOrAll(svc.db, prefixArg ?? opts.project);
         if (!projectResult.ok) {
           process.stderr.write(formatError(projectResult.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
-        const prefix = projectResult.data;
+
+        const prefixes = projectResult.data === null
+          ? getAllProjectPrefixes(svc.db)
+          : [projectResult.data];
+
+        if (prefixes.length === 0) {
+          process.stdout.write('No projects found.\n');
+          return;
+        }
+
         const limit = opts.all ? Infinity : parseInt(opts.limit, 10);
 
-        const eligibleIds = computeEligible(svc.db, prefix);
+        const allEligibleIds: string[] = [];
+        for (const prefix of prefixes) {
+          allEligibleIds.push(...computeEligible(svc.db, prefix));
+        }
 
         const priorityOrder = ['critical', 'high', 'medium', 'low'];
-        const resolved = eligibleIds
+        const resolved = allEligibleIds
           .flatMap((id) => {
             const r = getTask(svc.db, id);
             return r.ok ? [r.data] : [];
@@ -88,7 +100,19 @@ export function createOrchestrationCommands(): Command[] {
 
         let filtered = resolved;
         if (opts.workstream) {
-          const wsResult = resolveWorkstreamByName(svc.db, prefix, opts.workstream);
+          // Workstream filter only works with a single project
+          const singlePrefix = prefixes.length === 1 ? prefixes[0] : null;
+          if (!singlePrefix) {
+            process.stderr.write(
+              formatError(
+                { error: true, code: 'INVALID_INPUT', message: '--workstream requires --project when multiple projects exist' },
+                !!opts.json
+              ) + '\n'
+            );
+            process.exitCode = 1;
+            return;
+          }
+          const wsResult = resolveWorkstreamByName(svc.db, singlePrefix, opts.workstream);
           if (!wsResult.ok) {
             process.stderr.write(formatError(wsResult.error, !!opts.json) + '\n');
             process.exitCode = 1;
@@ -109,20 +133,37 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
 
-        const byWorkstream = new Map<number, typeof limited>();
+        // Group by project then workstream for multi-project output
+        const byProject = new Map<string, typeof limited>();
         for (const t of limited) {
-          const ws = t.workstream;
-          if (!byWorkstream.has(ws)) byWorkstream.set(ws, []);
-          byWorkstream.get(ws)!.push(t);
+          const proj = t.project ?? 'UNKNOWN';
+          if (!byProject.has(proj)) byProject.set(proj, []);
+          byProject.get(proj)!.push(t);
         }
 
-        for (const [ws, tasks] of byWorkstream) {
-          process.stdout.write(`Workstream ${ws}:\n`);
-          for (const t of tasks) {
-            const title = t.title ? ` ${t.title}` : '';
-            const vs =
-              t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
-            process.stdout.write(`  ${t.display_id}${title}  [${t.priority}]${vs}\n`);
+        const multiProject = byProject.size > 1;
+
+        for (const [proj, projectTasks] of byProject) {
+          if (multiProject) {
+            process.stdout.write(`\n${proj}:\n`);
+          }
+
+          const byWorkstream = new Map<number, typeof limited>();
+          for (const t of projectTasks) {
+            const ws = t.workstream;
+            if (!byWorkstream.has(ws)) byWorkstream.set(ws, []);
+            byWorkstream.get(ws)!.push(t);
+          }
+
+          const indent = multiProject ? '  ' : '';
+          for (const [ws, tasks] of byWorkstream) {
+            process.stdout.write(`${indent}Workstream ${ws}:\n`);
+            for (const t of tasks) {
+              const title = t.title ? ` ${t.title}` : '';
+              const vs =
+                t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
+              process.stdout.write(`${indent}  ${t.display_id}${title}  [${t.priority}]${vs}\n`);
+            }
           }
         }
 
