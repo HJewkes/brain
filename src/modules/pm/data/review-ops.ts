@@ -1,9 +1,9 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder, Relation } from '../../../types.js';
 import type { Result } from '../errors.js';
-import type { TaskMetadata } from '../types.js';
+import type { TaskMetadata, TaskStatus } from '../types.js';
 import { ok, fail } from '../errors.js';
-import { createTask } from './task-ops.js';
+import { createTask, updateTaskStatus } from './task-ops.js';
 import { createWorkstream } from './workstream-ops.js';
 import { getPmNotes, resolveDisplayId } from './queries.js';
 import { createCapture } from './capture-ops.js';
@@ -15,6 +15,7 @@ export interface ReviewCreateInput {
   agentId?: string;
   rewireDeps?: boolean;
   risk?: number;
+  autoComplete?: boolean;
 }
 
 export interface ReviewCreateResult {
@@ -23,6 +24,7 @@ export interface ReviewCreateResult {
   rewiredDeps: string[];
   captureNoteId: string;
   riskAdvisory?: string;
+  sourceAutoCompleted: boolean;
 }
 
 function extractPrNumber(url: string): string {
@@ -43,6 +45,29 @@ function findReviewWorkstream(
     }
   }
   return { found: false };
+}
+
+const AUTO_COMPLETE_TRANSITIONS: Record<string, TaskStatus[]> = {
+  pending: ['claimed', 'in-progress', 'done'],
+  claimed: ['in-progress', 'done'],
+  'in-progress': ['done'],
+};
+
+async function autoCompleteSourceTask(
+  db: BrainDB,
+  config: BrainConfig,
+  embedder: Embedder,
+  displayId: string,
+  currentStatus: string
+): Promise<boolean> {
+  const steps = AUTO_COMPLETE_TRANSITIONS[currentStatus];
+  if (!steps) return false;
+
+  for (const targetStatus of steps) {
+    const result = await updateTaskStatus(db, config, embedder, displayId, targetStatus);
+    if (!result.ok) return false;
+  }
+  return true;
 }
 
 export async function createReviewTask(
@@ -165,6 +190,24 @@ export async function createReviewTask(
 
   const captureNoteId = captureResult.ok ? captureResult.data.noteId : '';
 
+  let sourceAutoCompleted = false;
+  if (input.autoComplete !== false) {
+    const sourceStatus = (sourceMeta.status as string) ?? 'pending';
+    if (sourceStatus !== 'done') {
+      try {
+        sourceAutoCompleted = await autoCompleteSourceTask(
+          db,
+          config,
+          embedder,
+          sourceDisplayId,
+          sourceStatus
+        );
+      } catch {
+        // Auto-completion failure must not block review creation
+      }
+    }
+  }
+
   let riskAdvisory: string | undefined;
   if (input.risk !== undefined) {
     riskAdvisory =
@@ -179,5 +222,6 @@ export async function createReviewTask(
     rewiredDeps,
     captureNoteId,
     riskAdvisory,
+    sourceAutoCompleted,
   });
 }
