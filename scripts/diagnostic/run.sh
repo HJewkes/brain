@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_DIR"
-WORKSPACE_DIR="${HOME}/Documents/projects/voltras-workspace"
+WORKSPACE_DIR="${WORKSPACE_DIR:-${PWD}}"
 
 VERSION="${1:?Usage: run.sh <version> [--skip-setup] [--phase <name>] [--concurrency <n>]}"
 shift

@@ -14,6 +14,7 @@ export interface ReviewCreateInput {
   branch: string;
   agentId?: string;
   rewireDeps?: boolean;
+  risk?: number;
 }
 
 export interface ReviewCreateResult {
@@ -21,6 +22,7 @@ export interface ReviewCreateResult {
   reviewTaskMeta: TaskMetadata;
   rewiredDeps: string[];
   captureNoteId: string;
+  riskAdvisory?: string;
 }
 
 function extractPrNumber(url: string): string {
@@ -49,6 +51,13 @@ export async function createReviewTask(
   embedder: Embedder,
   input: ReviewCreateInput
 ): Promise<Result<ReviewCreateResult>> {
+  if (
+    input.risk !== undefined &&
+    (!Number.isInteger(input.risk) || input.risk < 1 || input.risk > 5)
+  ) {
+    return fail('INVALID_INPUT', `Risk must be an integer between 1 and 5, got ${input.risk}`);
+  }
+
   const sourceDisplayId = input.sourceTaskId.toUpperCase();
   const sourceNotes = getPmNotes(db, 'task', { display_id: sourceDisplayId });
   if (sourceNotes.length === 0) {
@@ -88,6 +97,9 @@ export async function createReviewTask(
   ];
   if (input.agentId) {
     descriptionLines.push(`- **Agent:** ${input.agentId}`);
+  }
+  if (input.risk !== undefined) {
+    descriptionLines.push(`- **Risk:** ${input.risk}/5`);
   }
   descriptionLines.push('', 'Review and merge the pull request to unblock downstream work.');
 
@@ -153,10 +165,19 @@ export async function createReviewTask(
 
   const captureNoteId = captureResult.ok ? captureResult.data.noteId : '';
 
+  let riskAdvisory: string | undefined;
+  if (input.risk !== undefined) {
+    riskAdvisory =
+      input.risk >= 4
+        ? `Advisory: risk ${input.risk} — human review recommended`
+        : `Advisory: risk ${input.risk} — agent review may be sufficient`;
+  }
+
   return ok({
     reviewTaskId: reviewDisplayId,
     reviewTaskMeta: taskResult.data,
     rewiredDeps,
     captureNoteId,
+    riskAdvisory,
   });
 }
