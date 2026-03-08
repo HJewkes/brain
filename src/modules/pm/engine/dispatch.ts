@@ -425,8 +425,12 @@ export function assembleProjectContext(db: BrainDB, prefix: string): Result<Proj
 
   const allTasks = listTasks(db, prefix, { priority: 'critical' });
   const criticalTasks: TaskMetadata[] = (allTasks.ok ? allTasks.data : [])
-    .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
-
+    .filter(
+      (t) =>
+        t.status !== 'done' &&
+        t.status !== 'cancelled' &&
+        t.status !== 'pruned',
+    )
     .map(({ virtualStates: _vs, ...rest }) => rest);
 
   const allProjectTasks = listTasks(db, prefix);
