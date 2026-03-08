@@ -1,3 +1,9 @@
+import {
+  type Result as GenericResult,
+  ok as genericOk,
+  fail as genericFail,
+} from '../../errors.js';
+
 export type PmErrorCode =
   | 'PROJECT_EXISTS'
   | 'NOT_FOUND'
@@ -18,24 +24,24 @@ export interface PmError {
   details?: Record<string, unknown>;
 }
 
-export type Result<T> = { ok: true; data: T } | { ok: false; error: PmError };
+export type Result<T> = GenericResult<T, PmErrorCode>;
 
 export function ok<T>(data: T): Result<T> {
-  return { ok: true, data };
+  return genericOk(data);
 }
 
 export function fail(
   code: PmErrorCode,
   message: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
 ): Result<never> {
-  return { ok: false, error: pmError(code, message, details) };
+  return genericFail(code, message, details);
 }
 
 export function pmError(
   code: PmErrorCode,
   message: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
 ): PmError {
   const err: PmError = { error: true, code, message };
   if (details !== undefined) {
