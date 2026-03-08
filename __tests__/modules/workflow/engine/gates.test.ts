@@ -6,10 +6,10 @@ import { randomUUID } from 'node:crypto';
 import { evaluateGate, evaluateGates } from '../../../../src/modules/workflow/engine/gates.js';
 import type { Gate } from '../../../../src/modules/workflow/types.js';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, createTestTask } from '../../../helpers.js';
+import { tmpDbPath, createMockEmbedder, createTestTask, setTestTaskStatus } from '../../../helpers.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
-import { updateTaskStatus } from '../../../../src/modules/pm/data/task-ops.js';
+
 import type { BrainConfig } from '../../../../src/types.js';
 
 let db: BrainDB;
@@ -49,10 +49,8 @@ describe('evaluateGate', () => {
       if (!taskResult.ok) return;
       const displayId = taskResult.data.display_id;
 
-      // Move task to done: pending -> claimed -> in-progress -> done
-      await updateTaskStatus(db, config, displayId, 'claimed', { claimToken: 'test' });
-      await updateTaskStatus(db, config, displayId, 'in-progress', { claimToken: 'test' });
-      await updateTaskStatus(db, config, displayId, 'done', { claimToken: 'test' });
+      // Move task to done directly via test helper
+      setTestTaskStatus(db, displayId, 'done');
 
       const gate: Gate = { type: 'task-complete', target: displayId };
       const result = await evaluateGate(gate, db, config);
@@ -69,8 +67,8 @@ describe('evaluateGate', () => {
       if (!taskResult.ok) return;
       const displayId = taskResult.data.display_id;
 
-      await updateTaskStatus(db, config, displayId, 'claimed', { claimToken: 'test' });
-      await updateTaskStatus(db, config, displayId, 'in-progress', { claimToken: 'test' });
+      // Move task to in-progress directly via test helper
+      setTestTaskStatus(db, displayId, 'in-progress');
 
       const gate: Gate = { type: 'task-complete', target: displayId };
       const result = await evaluateGate(gate, db, config);

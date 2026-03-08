@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { tmpDbPath, createMockEmbedder, indexNoteFile } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
@@ -21,7 +21,7 @@ import type {
   WorkflowStep,
   WorkflowEdge,
 } from '../../../../src/modules/workflow/types.js';
-import { indexSingleFile } from '../../../../src/services/indexing.js';
+
 
 let db: BrainDB;
 let dbPath: string;
@@ -72,7 +72,7 @@ async function createAndRegisterWorkflow(
   const noteFilePath = join(notesDir, noteFileName);
   writeFileSync(noteFilePath, `---\ntype: workflow\n---\n\n${JSON.stringify(def)}`);
 
-  const noteId = await indexSingleFile(db, config, embedder, noteFilePath);
+  const noteId = await indexNoteFile(db, embedder, noteFilePath);
   expect(noteId).toBeTruthy();
 
   const result = await registerWorkflow(db, config, embedder, noteId!);

@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { tmpDbPath, createMockEmbedder, indexNoteFile } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { registerWorkflow } from '../../../src/modules/workflow/data/workflow-ops.js';
-import { indexSingleFile } from '../../../src/services/indexing.js';
+
 import type { WorkflowDefinition } from '../../../src/modules/workflow/types.js';
 
 let db: BrainDB;
@@ -38,7 +38,7 @@ async function createWorkflowNote(def: WorkflowDefinition): Promise<string> {
     noteFilePath,
     `---\ntype: workflow\n---\n\n${JSON.stringify(def)}`
   );
-  const noteId = await indexSingleFile(db, config, embedder, noteFilePath);
+  const noteId = await indexNoteFile(db, embedder, noteFilePath);
   expect(noteId).toBeTruthy();
   return noteId!;
 }
@@ -111,7 +111,7 @@ describe('registerWorkflow', () => {
     const noteFileName = `task-${randomUUID().slice(0, 8)}.md`;
     const noteFilePath = join(notesDir, noteFileName);
     writeFileSync(noteFilePath, `---\ntype: task\n---\n\nSome task content`);
-    const noteId = await indexSingleFile(db, config, embedder, noteFilePath);
+    const noteId = await indexNoteFile(db, embedder, noteFilePath);
     expect(noteId).toBeTruthy();
 
     const result = await registerWorkflow(db, config, embedder, noteId!);
