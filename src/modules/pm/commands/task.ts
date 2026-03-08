@@ -18,7 +18,13 @@ import {
   deleteTask,
 } from '../data/task-ops.js';
 import type { ListMode, EnrichedTaskFields } from '../data/task-ops.js';
-import { getPmNotes, resolveProject, resolveProjectOrAll, getAllProjectPrefixes, resolveDisplayId } from '../data/queries.js';
+import {
+  getPmNotes,
+  resolveProject,
+  resolveProjectOrAll,
+  getAllProjectPrefixes,
+  resolveDisplayId,
+} from '../data/queries.js';
 import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
@@ -165,14 +171,16 @@ export function createTaskCommands(): Command {
           return;
         }
 
-        const prefixes = projectResult.data === null
-          ? getAllProjectPrefixes(svc.db)
-          : [projectResult.data];
+        const prefixes =
+          projectResult.data === null ? getAllProjectPrefixes(svc.db) : [projectResult.data];
 
         if (prefixes.length === 0) {
           process.stderr.write(
             formatError(
-              pmError('INVALID_INPUT', 'No projects found. Run "brain pm onboard <name>" to create one.'),
+              pmError(
+                'INVALID_INPUT',
+                'No projects found. Run "brain pm onboard <name>" to create one.'
+              ),
               !!opts.json
             ) + '\n'
           );
@@ -232,7 +240,8 @@ export function createTaskCommands(): Command {
         }
 
         const mode: ListMode = opts.full ? 'full' : opts.short ? 'short' : 'default';
-        let allTasks: (TaskMetadata & EnrichedTaskFields & { virtualStates: VirtualState[] })[] = [];
+        let allTasks: (TaskMetadata & EnrichedTaskFields & { virtualStates: VirtualState[] })[] =
+          [];
 
         for (const prefix of prefixes) {
           const result = listTasks(
@@ -452,10 +461,7 @@ export function createTaskCommands(): Command {
         }
 
         if (opts.token) {
-          if (
-            taskResult.data.claim_token &&
-            taskResult.data.claim_token !== opts.token
-          ) {
+          if (taskResult.data.claim_token && taskResult.data.claim_token !== opts.token) {
             process.stderr.write(
               `Warning: Token mismatch (expected ${taskResult.data.claim_token}, got ${opts.token})\n`
             );
@@ -482,7 +488,11 @@ export function createTaskCommands(): Command {
 
           process.stderr.write(`Auto-starting ${displayId}...\n`);
           const startResult = await updateTaskStatus(
-            svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            'in-progress' as TaskStatus
           );
           if (!startResult.ok) {
             process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
@@ -492,7 +502,11 @@ export function createTaskCommands(): Command {
         } else if (currentStatus === 'claimed') {
           process.stderr.write(`Auto-starting ${displayId}...\n`);
           const startResult = await updateTaskStatus(
-            svc.db, svc.config, svc.embedder, displayId, 'in-progress' as TaskStatus
+            svc.db,
+            svc.config,
+            svc.embedder,
+            displayId,
+            'in-progress' as TaskStatus
           );
           if (!startResult.ok) {
             process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');

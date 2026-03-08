@@ -426,7 +426,7 @@ export function assembleProjectContext(db: BrainDB, prefix: string): Result<Proj
   const allTasks = listTasks(db, prefix, { priority: 'critical' });
   const criticalTasks: TaskMetadata[] = (allTasks.ok ? allTasks.data : [])
     .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     .map(({ virtualStates: _vs, ...rest }) => rest);
 
   const allProjectTasks = listTasks(db, prefix);

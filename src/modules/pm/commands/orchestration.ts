@@ -7,7 +7,12 @@ import { formatError } from '../errors.js';
 import { resolveWorkstreamFilter } from '../ids.js';
 import type { Result } from '../errors.js';
 import { ok, fail } from '../errors.js';
-import { getPmNotes, resolveProject, resolveProjectOrAll, getAllProjectPrefixes } from '../data/queries.js';
+import {
+  getPmNotes,
+  resolveProject,
+  resolveProjectOrAll,
+  getAllProjectPrefixes,
+} from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { listDecisions } from '../data/decision-ops.js';
 import { detectStalePrompts } from '../data/prompt-ops.js';
@@ -68,9 +73,8 @@ export function createOrchestrationCommands(): Command[] {
           return;
         }
 
-        const prefixes = projectResult.data === null
-          ? getAllProjectPrefixes(svc.db)
-          : [projectResult.data];
+        const prefixes =
+          projectResult.data === null ? getAllProjectPrefixes(svc.db) : [projectResult.data];
 
         if (prefixes.length === 0) {
           process.stdout.write('No projects found.\n');
@@ -105,7 +109,11 @@ export function createOrchestrationCommands(): Command[] {
           if (!singlePrefix) {
             process.stderr.write(
               formatError(
-                { error: true, code: 'INVALID_INPUT', message: '--workstream requires --project when multiple projects exist' },
+                {
+                  error: true,
+                  code: 'INVALID_INPUT',
+                  message: '--workstream requires --project when multiple projects exist',
+                },
                 !!opts.json
               ) + '\n'
             );
@@ -161,7 +169,9 @@ export function createOrchestrationCommands(): Command[] {
             for (const t of tasks) {
               const title = t.title ? ` ${t.title}` : '';
               const vs =
-                t.virtualStates && t.virtualStates.length > 0 ? ` ${t.virtualStates.join(' ')}` : '';
+                t.virtualStates && t.virtualStates.length > 0
+                  ? ` ${t.virtualStates.join(' ')}`
+                  : '';
               process.stdout.write(`${indent}  ${t.display_id}${title}  [${t.priority}]${vs}\n`);
             }
           }

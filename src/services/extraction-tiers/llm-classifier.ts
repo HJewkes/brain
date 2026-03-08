@@ -90,9 +90,7 @@ export async function classifyWithLlm(
   return { items, remainder };
 }
 
-function buildSystemPrompt(
-  noteTypes: Array<{ module: string; noteType: ModuleNoteType }>
-): string {
+function buildSystemPrompt(noteTypes: Array<{ module: string; noteType: ModuleNoteType }>): string {
   const typeDescriptions = noteTypes
     .map(({ noteType }) => {
       const schemaFields = noteType.schema

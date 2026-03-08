@@ -249,15 +249,12 @@ describe('PmContentHandler', () => {
       const items = [makeItem({ title: 'Task A', fields: { name: 'Task A' } })];
       await handler.materialize(mockDb, mockEmbedder, items, 'source-42');
 
-      expect(mockDb.upsertRelations).toHaveBeenCalledWith(
-        expect.stringContaining('note-'),
-        [
-          expect.objectContaining({
-            targetId: 'source-42',
-            type: 'derived-from',
-          }),
-        ]
-      );
+      expect(mockDb.upsertRelations).toHaveBeenCalledWith(expect.stringContaining('note-'), [
+        expect.objectContaining({
+          targetId: 'source-42',
+          type: 'derived-from',
+        }),
+      ]);
     });
 
     it('returns empty array for empty items list', async () => {
@@ -270,9 +267,7 @@ describe('PmContentHandler', () => {
       const mockDb = createMockDb();
       setupMocksForNewProject();
 
-      const items = [
-        makeItem({ fields: { name: 'Task', category: 'testing' } }),
-      ];
+      const items = [makeItem({ fields: { name: 'Task', category: 'testing' } })];
       await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
 
       expect(createTask).toHaveBeenCalledWith(
@@ -287,9 +282,7 @@ describe('PmContentHandler', () => {
       const mockDb = createMockDb();
       setupMocksForNewProject();
 
-      const items = [
-        makeItem({ fields: { name: 'Task', due_date: '2026-04-01' } }),
-      ];
+      const items = [makeItem({ fields: { name: 'Task', due_date: '2026-04-01' } })];
       await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
 
       expect(createTask).toHaveBeenCalledWith(
@@ -330,7 +323,9 @@ describe('PmContentHandler', () => {
       const mockDb = createMockDb();
       setupMocksForNewProject();
 
-      const items = [makeItem({ title: 'Task', content: 'Content description', fields: { name: 'Task' } })];
+      const items = [
+        makeItem({ title: 'Task', content: 'Content description', fields: { name: 'Task' } }),
+      ];
       await handler.materialize(mockDb, mockEmbedder, items, 'source-1');
 
       expect(createTask).toHaveBeenCalledWith(

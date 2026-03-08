@@ -1,6 +1,6 @@
 {
   "name": "@titan-design/brain",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "type": "module",
   "description": "Developer second brain with hybrid RAG search",
   "license": "MIT",

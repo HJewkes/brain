@@ -116,7 +116,11 @@ function extractFieldsFromFrontmatter(data: Record<string, unknown>): Record<str
     if (skip.has(key)) continue;
     if (value instanceof Date) {
       fields[key] = value.toISOString().split('T')[0];
-    } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    } else if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
       fields[key] = String(value);
     }
   }
@@ -215,7 +219,11 @@ async function tryEmbeddingMatch(
 
   if (!bestType) return null;
 
-  const title = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Untitled';
+  const title =
+    filePath
+      .split('/')
+      .pop()
+      ?.replace(/\.[^.]+$/, '') ?? 'Untitled';
   return {
     items: [
       {

@@ -5,7 +5,8 @@ export const ARCHETYPE_TEXTS: Record<string, string> = {
   task: 'A list of tasks with status, priority, and assignees. Work items, tickets, action items, to-do lists, sprint backlogs, and checkbox checklists tracking progress.',
   research:
     'System architecture documentation describing components, data flow, deployment topology, infrastructure, microservices, APIs, and technical design decisions.',
-  guide: 'Product requirements document with user stories, acceptance criteria, functional and non-functional requirements. PRDs, specs, and feature requests.',
+  guide:
+    'Product requirements document with user stories, acceptance criteria, functional and non-functional requirements. PRDs, specs, and feature requests.',
   meeting:
     'Meeting notes with attendees, agenda, discussion points, decisions made, and action items. Standup notes, retrospectives, and planning session summaries.',
   note: 'Reference material such as configuration tables, API documentation, glossaries, lookup tables, and comparison matrices. Structured data meant to be consulted, not acted upon.',
@@ -15,7 +16,10 @@ let cachedEmbeddings: Map<string, Float32Array> | null = null;
 let cachedTextsKey: string | null = null;
 
 function textsKey(texts: Map<string, string>): string {
-  return [...texts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v.length}`).join('|');
+  return [...texts.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v.length}`)
+    .join('|');
 }
 
 export async function getArchetypeEmbeddings(
