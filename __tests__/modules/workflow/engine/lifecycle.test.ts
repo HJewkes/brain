@@ -70,7 +70,7 @@ async function createAndRegisterWorkflow(
 
   const noteFileName = `workflow-${randomUUID().slice(0, 8)}.md`;
   const noteFilePath = join(notesDir, noteFileName);
-  writeFileSync(noteFilePath, `---\ntype: workflow\n---\n\n${JSON.stringify(def)}`);
+  writeFileSync(noteFilePath, `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`);
 
   const noteId = await indexNoteFile(db, embedder, noteFilePath);
   expect(noteId).toBeTruthy();

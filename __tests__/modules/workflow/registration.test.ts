@@ -36,7 +36,7 @@ async function createWorkflowNote(def: WorkflowDefinition): Promise<string> {
   const noteFilePath = join(notesDir, noteFileName);
   writeFileSync(
     noteFilePath,
-    `---\ntype: workflow\n---\n\n${JSON.stringify(def)}`
+    `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`
   );
   const noteId = await indexNoteFile(db, embedder, noteFilePath);
   expect(noteId).toBeTruthy();

@@ -52,7 +52,7 @@ describe('version conflict queries', () => {
     };
 
     const noteFilePath = join(notesDir, `wf-${randomUUID().slice(0, 8)}.md`);
-    writeFileSync(noteFilePath, `---\ntype: workflow\n---\n\n${JSON.stringify(def)}`);
+    writeFileSync(noteFilePath, `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`);
     const noteId = await indexNoteFile(db, embedder, noteFilePath);
     const reg1 = await registerWorkflow(db, config, embedder, noteId!);
     expect(reg1.ok).toBe(true);
