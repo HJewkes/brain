@@ -107,6 +107,7 @@ export async function instantiateWorkflow(
   workflowId: string,
   project: string,
   context: Record<string, string>,
+  options?: { iterationOf?: string },
 ): Promise<Result<InstantiateResult, InstantiateErrorCode>> {
   const defResult = getWorkflowDefinition(db, workflowId);
   if (!defResult.ok) {
@@ -164,9 +165,22 @@ export async function instantiateWorkflow(
   }
 
   if (taskNoteId) {
-    db.upsertRelations(taskNoteId, [
+    const relations = [
       { sourceId: taskNoteId, targetId: defNote.id, type: 'instance-of' },
-    ]);
+    ];
+
+    if (options?.iterationOf) {
+      const prevInstanceResult = getInstanceByDisplayId(db, options.iterationOf);
+      if (prevInstanceResult.ok) {
+        relations.push({
+          sourceId: taskNoteId,
+          targetId: prevInstanceResult.data.note.id,
+          type: 'iteration-of',
+        });
+      }
+    }
+
+    db.upsertRelations(taskNoteId, relations);
   }
 
   return ok({
