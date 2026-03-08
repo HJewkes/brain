@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "implementation",
+  "description": "Implementation lifecycle workflow",
+  "steps": [
+    { "id": "dispatch", "name": "Dispatch", "category": "infrastructure" },
+    { "id": "implement", "name": "Implement", "category": "implementation" },
+    { "id": "review", "name": "Review", "category": "review" },
+    { "id": "fix", "name": "Fix", "category": "implementation" },
+    { "id": "merge", "name": "Merge", "category": "infrastructure" }
+  ],
+  "edges": [
+    { "from": "dispatch", "to": "implement" },
+    { "from": "implement", "to": "review" },
+    { "from": "review", "to": "fix", "condition": "needs_fixes" },
+    { "from": "review", "to": "merge", "condition": "approved" },
+    { "from": "fix", "to": "merge" }
+  ]
+}
