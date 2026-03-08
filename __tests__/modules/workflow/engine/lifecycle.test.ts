@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, indexNoteFile } from '../../../helpers.js';
+import { tmpDbPath, createMockEmbedder, indexNoteFile, setTestTaskStatus } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
@@ -217,7 +217,10 @@ describe('expandWorkflow', () => {
     if (!instResult.ok) return;
 
     // Delete the workflow definition note
-    db.exec(`DELETE FROM notes WHERE module = 'workflow'`);
+    const wfNoteIds = db.getModuleNoteIds({ module: 'workflow', type: 'workflow' });
+    for (const wfNoteId of wfNoteIds) {
+      db.deleteNote(wfNoteId);
+    }
 
     const expandResult = await expandWorkflow(db, config, embedder, instResult.data.display_id);
     expect(expandResult.ok).toBe(false);
@@ -241,7 +244,14 @@ describe('advanceWorkflow', () => {
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
 
-    // Would need to complete step A's task first, then advance
+    // Complete step A's task first, then advance
+    const preStatus = getWorkflowStatus(db, instResult.data.display_id);
+    expect(preStatus.ok).toBe(true);
+    if (!preStatus.ok) return;
+    const stepA = preStatus.data.steps.find((s) => s.stepId === 'a');
+    expect(stepA).toBeDefined();
+    setTestTaskStatus(db, stepA!.taskDisplayId, 'done');
+
     const advanceResult = await advanceWorkflow(db, config, instResult.data.display_id);
     expect(advanceResult.ok).toBe(true);
     if (!advanceResult.ok) return;
@@ -258,6 +268,14 @@ describe('advanceWorkflow', () => {
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    // Complete step A so advance can evaluate downstream steps
+    const preStatus = getWorkflowStatus(db, instResult.data.display_id);
+    expect(preStatus.ok).toBe(true);
+    if (!preStatus.ok) return;
+    const stepA = preStatus.data.steps.find((s) => s.stepId === 'a');
+    expect(stepA).toBeDefined();
+    setTestTaskStatus(db, stepA!.taskDisplayId, 'done');
 
     const advanceResult = await advanceWorkflow(db, config, instResult.data.display_id);
     expect(advanceResult.ok).toBe(true);
@@ -276,7 +294,16 @@ describe('advanceWorkflow', () => {
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
 
-    // Would need to claim step C's task, then try to advance with pruning
+    // Complete step A, claim step C, then try to advance with pruning
+    const preStatus3 = getWorkflowStatus(db, instResult.data.display_id);
+    expect(preStatus3.ok).toBe(true);
+    if (!preStatus3.ok) return;
+    const stepA3 = preStatus3.data.steps.find((s) => s.stepId === 'a');
+    expect(stepA3).toBeDefined();
+    setTestTaskStatus(db, stepA3!.taskDisplayId, 'done');
+    const stepC3 = preStatus3.data.steps.find((s) => s.stepId === 'c');
+    if (stepC3) setTestTaskStatus(db, stepC3.taskDisplayId, 'claimed');
+
     const advanceResult = await advanceWorkflow(db, config, instResult.data.display_id);
     expect(advanceResult.ok).toBe(true);
   });
@@ -290,6 +317,13 @@ describe('advanceWorkflow', () => {
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
 
     // Complete the only task, then advance
+    const preStatus = getWorkflowStatus(db, instResult.data.display_id);
+    expect(preStatus.ok).toBe(true);
+    if (!preStatus.ok) return;
+    for (const s of preStatus.data.steps) {
+      setTestTaskStatus(db, s.taskDisplayId, 'done');
+    }
+
     const advanceResult = await advanceWorkflow(db, config, instResult.data.display_id);
     expect(advanceResult.ok).toBe(true);
     if (!advanceResult.ok) return;
@@ -311,17 +345,24 @@ describe('collapseWorkflow', () => {
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
 
-    // Simulate completing all tasks then collapse
+    // Complete all child tasks before collapse
+    const status = getWorkflowStatus(db, instResult.data.display_id);
+    if (status.ok) {
+      for (const s of status.data.steps) {
+        setTestTaskStatus(db, s.taskDisplayId, 'done');
+      }
+    }
+
     const collapseResult = await collapseWorkflow(db, config, embedder, instResult.data.display_id);
     expect(collapseResult.ok).toBe(true);
     if (!collapseResult.ok) return;
     expect(collapseResult.data.summaryNoteId).toBeDefined();
     expect(collapseResult.data.tasksArchived).toBeGreaterThan(0);
 
-    const status = getWorkflowStatus(db, instResult.data.display_id);
-    expect(status.ok).toBe(true);
-    if (!status.ok) return;
-    expect(status.data.instance.instance_status).toBe('collapsed');
+    const postStatus = getWorkflowStatus(db, instResult.data.display_id);
+    expect(postStatus.ok).toBe(true);
+    if (!postStatus.ok) return;
+    expect(postStatus.data.instance.instance_status).toBe('collapsed');
   });
 
   test('AC-E2/AC-09: fails with INCOMPLETE_WORKFLOW when tasks are still pending', async () => {

@@ -91,8 +91,12 @@ function detectCycle(
   for (const s of steps) {
     adj.set(s.id, []);
   }
+  // Only unconditional edges participate in cycle detection;
+  // conditional edges represent optional feedback loops
   for (const e of edges) {
-    adj.get(e.from)?.push(e.to);
+    if (!e.condition) {
+      adj.get(e.from)?.push(e.to);
+    }
   }
 
   const visited = new Set<string>();
@@ -145,9 +149,13 @@ export function topologicalSort(
     adj.set(s.id, []);
   }
 
+  // Only unconditional edges define topological order;
+  // conditional edges represent optional feedback loops
   for (const e of edges) {
-    adj.get(e.from)?.push(e.to);
-    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
+    if (!e.condition) {
+      adj.get(e.from)?.push(e.to);
+      inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
+    }
   }
 
   const queue: string[] = [];

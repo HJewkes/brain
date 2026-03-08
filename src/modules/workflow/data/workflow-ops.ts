@@ -267,25 +267,44 @@ export async function expandWorkflow(
         const updatedChildMeta = { ...meta, step_id: stepId };
         db.upsertNote({ ...childNote, metadata: JSON.stringify(updatedChildMeta) });
         stepToTaskNoteId.set(stepId, childNote.id);
-
-        db.upsertRelations(instanceNote.id, [
-          { sourceId: instanceNote.id, targetId: childNote.id, type: 'expands-to' },
-        ]);
         break;
       }
     }
   }
 
+  // Collect all instance relations (preserve instance-of, add expands-to)
+  const existingInstanceRelations = db.getRelationsFrom(instanceNote.id);
+  const instanceRelations = [...existingInstanceRelations];
+  for (const [, childNoteId] of stepToTaskNoteId) {
+    instanceRelations.push({
+      sourceId: instanceNote.id,
+      targetId: childNoteId,
+      type: 'expands-to',
+    });
+  }
+  db.upsertRelations(instanceNote.id, instanceRelations);
+
+  // Build edge relations, grouping by source note to avoid overwriting
+  const edgesBySource = new Map<string, Array<{ sourceId: string; targetId: string; type: string }>>();
   let edgeCount = 0;
   for (const edge of definition.edges) {
     const fromNoteId = stepToTaskNoteId.get(edge.from);
     const toNoteId = stepToTaskNoteId.get(edge.to);
     if (fromNoteId && toNoteId) {
-      db.upsertRelations(toNoteId, [
-        { sourceId: toNoteId, targetId: fromNoteId, type: 'depends_on' },
-      ]);
+      if (!edgesBySource.has(toNoteId)) {
+        edgesBySource.set(toNoteId, []);
+      }
+      edgesBySource.get(toNoteId)!.push({
+        sourceId: toNoteId,
+        targetId: fromNoteId,
+        type: 'depends_on',
+      });
       edgeCount++;
     }
+  }
+  for (const [sourceNoteId, rels] of edgesBySource) {
+    const existing = db.getRelationsFrom(sourceNoteId);
+    db.upsertRelations(sourceNoteId, [...existing, ...rels]);
   }
 
   const currentMeta = JSON.parse(instanceNote.metadata!) as Record<string, unknown>;
