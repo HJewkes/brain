@@ -46,53 +46,53 @@ See [PM Quick Start](docs/pm-module/quickstart.md) for the full 5-minute guide.
 
 ### Core
 
-| Command | Description |
-|---------|-------------|
-| `brain init` | Initialize workspace and database |
-| `brain index` | Index all markdown notes |
-| `brain search "query"` | Hybrid BM25 + vector search |
-| `brain add <file>` | Add a note from file or stdin |
-| `brain quick "text"` | Zero-friction capture to inbox |
-| `brain inbox` | View/manage inbox items |
-| `brain import <paths>` | Smart import with three-tier extraction (`--dry-run`, `--tier`) |
-| `brain ingest` | Bulk-import files to inbox |
-| `brain feed` | Manage RSS feed subscriptions |
-| `brain extract` | Extract memories from notes (Ollama) |
-| `brain memories` | List, history, and stats for memories |
-| `brain context <id>` | Show context for a note (relations + memories) |
-| `brain lineage <id>` | Show memory version lineage |
-| `brain profile` | Generate agent context profile |
-| `brain tidy` | LLM-powered note cleanup suggestions |
-| `brain doctor` | System health checks (`--fix` for auto-repair) |
-| `brain install-hooks` | Set up launchd/systemd scheduled processing |
-| `brain status` | Database stats |
-| `brain stale` | Notes needing review |
-| `brain graph <id>` | Show note relations |
-| `brain template <type>` | Output frontmatter template |
-| `brain archive` | Archive expired notes |
-| `brain config` | View/set configuration |
+| Command                 | Description                                                     |
+| ----------------------- | --------------------------------------------------------------- |
+| `brain init`            | Initialize workspace and database                               |
+| `brain index`           | Index all markdown notes                                        |
+| `brain search "query"`  | Hybrid BM25 + vector search                                     |
+| `brain add <file>`      | Add a note from file or stdin                                   |
+| `brain quick "text"`    | Zero-friction capture to inbox                                  |
+| `brain inbox`           | View/manage inbox items                                         |
+| `brain import <paths>`  | Smart import with three-tier extraction (`--dry-run`, `--tier`) |
+| `brain ingest`          | Bulk-import files to inbox                                      |
+| `brain feed`            | Manage RSS feed subscriptions                                   |
+| `brain extract`         | Extract memories from notes (Ollama)                            |
+| `brain memories`        | List, history, and stats for memories                           |
+| `brain context <id>`    | Show context for a note (relations + memories)                  |
+| `brain lineage <id>`    | Show memory version lineage                                     |
+| `brain profile`         | Generate agent context profile                                  |
+| `brain tidy`            | LLM-powered note cleanup suggestions                            |
+| `brain doctor`          | System health checks (`--fix` for auto-repair)                  |
+| `brain install-hooks`   | Set up launchd/systemd scheduled processing                     |
+| `brain status`          | Database stats                                                  |
+| `brain stale`           | Notes needing review                                            |
+| `brain graph <id>`      | Show note relations                                             |
+| `brain template <type>` | Output frontmatter template                                     |
+| `brain archive`         | Archive expired notes                                           |
+| `brain config`          | View/set configuration                                          |
 
 ### Project Management (`brain pm`)
 
-| Command | Description |
-|---------|-------------|
-| `brain pm init <name> --prefix <P>` | Initialize a new project |
-| `brain pm use <prefix>` | Set active project context |
-| `brain pm list` | List all projects |
-| `brain pm status [prefix]` | Show project status |
-| `brain pm workstream add <name>` | Add a workstream |
-| `brain pm task add <name>` | Create a task |
-| `brain pm task list` | List tasks (filterable by status, workstream) |
-| `brain pm task done <id>` | Mark task done |
-| `brain pm next` | Show eligible tasks (all deps satisfied) |
-| `brain pm waves` | Topological wave grouping of remaining tasks |
-| `brain pm dispatch <id>` | Assemble context bundle for a task |
-| `brain pm complete <id>` | Mark done, run impact analysis |
-| `brain pm briefing` | Session briefing with project state overview |
-| `brain pm audit summary` | Activity log, cost tracking |
-| `brain pm check [--deep]` | Consistency check (structural + semantic analysis) |
-| `brain pm setup` | Configure PM module (paths, hooks) |
-| `brain pm install-hooks` | Install PM hooks and skills (orchestrator + sanity-check) |
+| Command                             | Description                                               |
+| ----------------------------------- | --------------------------------------------------------- |
+| `brain pm init <name> --prefix <P>` | Initialize a new project                                  |
+| `brain pm use <prefix>`             | Set active project context                                |
+| `brain pm list`                     | List all projects                                         |
+| `brain pm status [prefix]`          | Show project status                                       |
+| `brain pm workstream add <name>`    | Add a workstream                                          |
+| `brain pm task add <name>`          | Create a task                                             |
+| `brain pm task list`                | List tasks (filterable by status, workstream)             |
+| `brain pm task done <id>`           | Mark task done                                            |
+| `brain pm next`                     | Show eligible tasks (all deps satisfied)                  |
+| `brain pm waves`                    | Topological wave grouping of remaining tasks              |
+| `brain pm dispatch <id>`            | Assemble context bundle for a task                        |
+| `brain pm complete <id>`            | Mark done, run impact analysis                            |
+| `brain pm briefing`                 | Session briefing with project state overview              |
+| `brain pm audit summary`            | Activity log, cost tracking                               |
+| `brain pm check [--deep]`           | Consistency check (structural + semantic analysis)        |
+| `brain pm setup`                    | Configure PM module (paths, hooks)                        |
+| `brain pm install-hooks`            | Install PM hooks and skills (orchestrator + sanity-check) |
 
 ## Architecture
 
@@ -147,6 +147,28 @@ Brain indexes markdown files with YAML frontmatter into a SQLite database. It co
 
 - `slow` — permanent knowledge (decisions, patterns, research) with review intervals
 - `fast` — ephemeral (meetings, session logs) with expiry dates
+
+### Knowledge Graph
+
+Link related notes and traverse connections:
+
+1. Add `related` field to YAML frontmatter:
+   ```yaml
+   related:
+     - database-migration-patterns
+     - service-architecture-overview
+   ```
+2. Re-index after adding relations: `brain index`
+3. Traverse the graph:
+   ```bash
+   brain graph <note-id>           # Show direct relations
+   brain graph <note-id> --depth 2 # Show 2-hop connections
+   brain graph <note-id> --json    # Machine-readable output
+   ```
+4. Use `--expand` in search to include graph-connected notes:
+   ```bash
+   brain search "query" --expand
+   ```
 
 ## Testing
 
