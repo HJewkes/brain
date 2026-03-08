@@ -37,7 +37,7 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
         const msg = e instanceof Error ? e.message : String(e);
         if (opts.json) {
           process.stderr.write(
-            JSON.stringify({ error: true, code: 'INVALID_CONTEXT', message: msg }) + '\n',
+            JSON.stringify({ error: true, code: 'INVALID_CONTEXT', message: msg }) + '\n'
           );
         } else {
           process.stderr.write(`Error [INVALID_CONTEXT]: ${msg}\n`);
@@ -48,7 +48,12 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
 
       await withBrain(async (svc) => {
         const result = await instantiateWorkflow(
-          svc.db, svc.config, svc.embedder, workflowId, opts.project, context,
+          svc.db,
+          svc.config,
+          svc.embedder,
+          workflowId,
+          opts.project,
+          context
         );
         if (!result.ok) {
           process.stderr.write(formatError(result.error, !!opts.json) + '\n');
@@ -82,7 +87,9 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
         if (opts.json) {
           process.stdout.write(JSON.stringify(data, null, 2) + '\n');
         } else {
-          process.stdout.write(`Expanded: ${data.tasksCreated} tasks created, ${data.edges} edges\n`);
+          process.stdout.write(
+            `Expanded: ${data.tasksCreated} tasks created, ${data.edges} edges\n`
+          );
         }
       });
     });

@@ -169,11 +169,10 @@ export function makeActivity(overrides: Partial<ActivityRecord> = {}): ActivityR
   };
 }
 
-
 export async function indexNoteFile(
   db: BrainDB,
   embedder: Embedder,
-  filePath: string,
+  filePath: string
 ): Promise<string> {
   const content = readFileSync(filePath, 'utf-8');
   const hash = createHash('sha256').update(content).digest('hex');

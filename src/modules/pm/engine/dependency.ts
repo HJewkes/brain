@@ -87,7 +87,10 @@ export function computeEligible(db: BrainDB, prefix: string): string[] {
     if (t.status !== 'pending') continue;
 
     const deps = graph.get(t.displayId) ?? [];
-    const allDepsDone = deps.every((dep) => { const s = statusByDisplay.get(dep); return s === 'done' || s === 'pruned'; });
+    const allDepsDone = deps.every((dep) => {
+      const s = statusByDisplay.get(dep);
+      return s === 'done' || s === 'pruned';
+    });
     if (allDepsDone) {
       eligible.push(t.displayId);
     }
@@ -190,7 +193,9 @@ export function computeWaves(db: BrainDB, prefix: string): WaveAssignment[] {
   const graph = buildDependencyGraph(db, prefix);
 
   // Exclude done and cancelled tasks
-  const activeTasks = tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled' && t.status !== 'pruned');
+  const activeTasks = tasks.filter(
+    (t) => t.status !== 'done' && t.status !== 'cancelled' && t.status !== 'pruned'
+  );
   const activeIds = new Set(activeTasks.map((t) => t.displayId));
   const statusByDisplay = new Map<string, TaskStatus>();
   for (const t of tasks) {

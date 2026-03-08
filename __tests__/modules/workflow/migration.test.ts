@@ -42,7 +42,10 @@ afterEach(() => {
 
 async function registerDefinition(def: WorkflowDefinition): Promise<string> {
   const noteFilePath = join(notesDir, `wf-${randomUUID().slice(0, 8)}.md`);
-  writeFileSync(noteFilePath, `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`);
+  writeFileSync(
+    noteFilePath,
+    `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`
+  );
   const noteId = await indexNoteFile(db, embedder, noteFilePath);
   const result = await registerWorkflow(db, config, embedder, noteId!);
   expect(result.ok).toBe(true);

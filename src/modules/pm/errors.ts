@@ -33,7 +33,7 @@ export function ok<T>(data: T): Result<T> {
 export function fail(
   code: PmErrorCode,
   message: string,
-  details?: Record<string, unknown>,
+  details?: Record<string, unknown>
 ): Result<never> {
   return genericFail(code, message, details);
 }
@@ -41,7 +41,7 @@ export function fail(
 export function pmError(
   code: PmErrorCode,
   message: string,
-  details?: Record<string, unknown>,
+  details?: Record<string, unknown>
 ): PmError {
   const err: PmError = { error: true, code, message };
   if (details !== undefined) {

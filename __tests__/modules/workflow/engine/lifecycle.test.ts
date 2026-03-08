@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, indexNoteFile, setTestTaskStatus } from '../../../helpers.js';
+import {
+  tmpDbPath,
+  createMockEmbedder,
+  indexNoteFile,
+  setTestTaskStatus,
+} from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
@@ -21,7 +26,6 @@ import type {
   WorkflowStep,
   WorkflowEdge,
 } from '../../../../src/modules/workflow/types.js';
-
 
 let db: BrainDB;
 let dbPath: string;
@@ -70,7 +74,10 @@ async function createAndRegisterWorkflow(
 
   const noteFileName = `workflow-${randomUUID().slice(0, 8)}.md`;
   const noteFilePath = join(notesDir, noteFileName);
-  writeFileSync(noteFilePath, `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`);
+  writeFileSync(
+    noteFilePath,
+    `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`
+  );
 
   const noteId = await indexNoteFile(db, embedder, noteFilePath);
   expect(noteId).toBeTruthy();
@@ -102,11 +109,9 @@ describe('instantiateWorkflow', () => {
   });
 
   test('AC-04: fails with MISSING_PARAMETER when required parameter is not provided', async () => {
-    const workflowId = await createAndRegisterWorkflow(
-      [step('research')],
-      [],
-      { parameters: [{ name: 'planId', description: 'Plan ID', required: true }] }
-    );
+    const workflowId = await createAndRegisterWorkflow([step('research')], [], {
+      parameters: [{ name: 'planId', description: 'Plan ID', required: true }],
+    });
 
     const result = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
 
@@ -131,7 +136,13 @@ describe('instantiateWorkflow', () => {
 describe('expandWorkflow', () => {
   test('AC-05: creates child tasks matching DAG steps with correct dependencies', async () => {
     const workflowId = await createAndRegisterWorkflow(
-      [step('a', 'Research'), step('b', 'Design'), step('c', 'Implement'), step('d', 'Review'), step('e', 'Deploy')],
+      [
+        step('a', 'Research'),
+        step('b', 'Design'),
+        step('c', 'Implement'),
+        step('d', 'Review'),
+        step('e', 'Deploy'),
+      ],
       [edge('a', 'b'), edge('b', 'c'), edge('c', 'd'), edge('d', 'e')]
     );
 
@@ -168,11 +179,9 @@ describe('expandWorkflow', () => {
   });
 
   test('AC-05: child task titles include step name and workflow context', async () => {
-    const workflowId = await createAndRegisterWorkflow(
-      [step('research', 'Research')],
-      [],
-      { name: 'planning' }
-    );
+    const workflowId = await createAndRegisterWorkflow([step('research', 'Research')], [], {
+      name: 'planning',
+    });
 
     const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
       planId: 'CO-04.08',
@@ -191,10 +200,7 @@ describe('expandWorkflow', () => {
   });
 
   test('AC-E1/AC-05: fails with ALREADY_EXPANDED when instance is already expanded', async () => {
-    const workflowId = await createAndRegisterWorkflow(
-      [step('a'), step('b')],
-      [edge('a', 'b')]
-    );
+    const workflowId = await createAndRegisterWorkflow([step('a'), step('b')], [edge('a', 'b')]);
 
     const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
     expect(instResult.ok).toBe(true);
@@ -335,10 +341,7 @@ describe('advanceWorkflow', () => {
 
 describe('collapseWorkflow', () => {
   test('AC-09: creates summary note and archives child tasks for completed workflow', async () => {
-    const workflowId = await createAndRegisterWorkflow(
-      [step('a'), step('b')],
-      [edge('a', 'b')]
-    );
+    const workflowId = await createAndRegisterWorkflow([step('a'), step('b')], [edge('a', 'b')]);
 
     const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
     expect(instResult.ok).toBe(true);

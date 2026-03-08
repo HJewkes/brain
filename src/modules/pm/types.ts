@@ -5,7 +5,14 @@ export type PmNoteType = 'project' | 'workstream' | 'task' | 'decision' | 'promp
 export type PmRelationType = 'depends_on' | 'blocks' | 'impacts' | 'supersedes';
 
 // Stored states (persisted in metadata)
-export type TaskStatus = 'pending' | 'claimed' | 'in-progress' | 'done' | 'blocked' | 'cancelled' | 'pruned';
+export type TaskStatus =
+  | 'pending'
+  | 'claimed'
+  | 'in-progress'
+  | 'done'
+  | 'blocked'
+  | 'cancelled'
+  | 'pruned';
 export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived';
 export type WorkstreamStatus = 'active' | 'paused' | 'completed';
 export type DecisionStatus = 'proposed' | 'accepted' | 'superseded' | 'rejected';

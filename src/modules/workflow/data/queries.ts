@@ -11,7 +11,7 @@ import type { TaskStatus } from '../../pm/types.js';
 
 export function getWorkflowDefinition(
   db: BrainDB,
-  workflowId: string,
+  workflowId: string
 ): Result<{ note: NoteRecord; definition: WorkflowDefinition; metadata: WorkflowNoteMetadata }> {
   const noteIds = db.getModuleNoteIds({ module: 'workflow', type: 'workflow' });
   if (noteIds.length === 0) {
@@ -48,7 +48,7 @@ export function getWorkflowDefinition(
 
 export function listWorkflows(
   db: BrainDB,
-  filters?: { project?: string; status?: string },
+  filters?: { project?: string; status?: string }
 ): Result<WorkflowNoteMetadata[]> {
   const noteIds = db.getModuleNoteIds({ module: 'workflow', type: 'workflow' });
   if (noteIds.length === 0) {
@@ -73,7 +73,7 @@ export function listWorkflows(
 
 export function getInstanceByDisplayId(
   db: BrainDB,
-  displayId: string,
+  displayId: string
 ): Result<{ note: NoteRecord; metadata: WorkflowInstanceMetadata }> {
   const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
   if (noteIds.length === 0) {
@@ -95,7 +95,8 @@ export function getInstanceByDisplayId(
       metadata: {
         workflow_id: meta.workflow_id as string,
         workflow_version: (meta.workflow_version as number) ?? 1,
-        instance_status: (meta.instance_status as WorkflowInstanceMetadata['instance_status']) ?? 'placeholder',
+        instance_status:
+          (meta.instance_status as WorkflowInstanceMetadata['instance_status']) ?? 'placeholder',
         context: (meta.context as Record<string, string>) ?? {},
       },
     });
@@ -106,7 +107,7 @@ export function getInstanceByDisplayId(
 
 export function getInstanceStepStates(
   db: BrainDB,
-  instanceDisplayId: string,
+  instanceDisplayId: string
 ): Result<{
   steps: Array<{ stepId: string; taskDisplayId: string; status: TaskStatus }>;
   progress: { total: number; done: number; pruned: number; active: number; pending: number };

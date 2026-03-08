@@ -48,7 +48,10 @@ async function registerTestWorkflow(): Promise<string> {
     edges: [],
   };
   const noteFilePath = join(notesDir, `wf-${randomUUID().slice(0, 8)}.md`);
-  writeFileSync(noteFilePath, `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`);
+  writeFileSync(
+    noteFilePath,
+    `---\ntype: workflow\nmodule: workflow\n---\n\n${JSON.stringify(def)}`
+  );
   const noteId = await indexNoteFile(db, embedder, noteFilePath);
   const result = await registerWorkflow(db, config, embedder, noteId!);
   expect(result.ok).toBe(true);
@@ -66,9 +69,17 @@ describe('workflow iteration', () => {
     if (!inst1.ok) return;
 
     // Create second instance as iteration of first
-    const inst2 = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {}, {
-      iterationOf: inst1.data.display_id,
-    });
+    const inst2 = await instantiateWorkflow(
+      db,
+      config,
+      embedder,
+      workflowId,
+      'TST',
+      {},
+      {
+        iterationOf: inst1.data.display_id,
+      }
+    );
     expect(inst2.ok).toBe(true);
     if (!inst2.ok) return;
 
@@ -82,15 +93,31 @@ describe('workflow iteration', () => {
     expect(inst1.ok).toBe(true);
     if (!inst1.ok) return;
 
-    const inst2 = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {}, {
-      iterationOf: inst1.data.display_id,
-    });
+    const inst2 = await instantiateWorkflow(
+      db,
+      config,
+      embedder,
+      workflowId,
+      'TST',
+      {},
+      {
+        iterationOf: inst1.data.display_id,
+      }
+    );
     expect(inst2.ok).toBe(true);
     if (!inst2.ok) return;
 
-    const inst3 = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {}, {
-      iterationOf: inst2.data.display_id,
-    });
+    const inst3 = await instantiateWorkflow(
+      db,
+      config,
+      embedder,
+      workflowId,
+      'TST',
+      {},
+      {
+        iterationOf: inst2.data.display_id,
+      }
+    );
     expect(inst3.ok).toBe(true);
     if (!inst3.ok) return;
 

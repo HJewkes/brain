@@ -140,15 +140,15 @@ export function createWorkflowCommand(): Command {
         const { steps, progress } = stepsResult.data;
 
         if (opts.json) {
-          process.stdout.write(
-            JSON.stringify({ metadata, steps, progress }, null, 2) + '\n',
-          );
+          process.stdout.write(JSON.stringify({ metadata, steps, progress }, null, 2) + '\n');
         } else {
           process.stdout.write(`Instance: ${instanceId}\n`);
-          process.stdout.write(`  Workflow: ${metadata.workflow_id} v${metadata.workflow_version}\n`);
+          process.stdout.write(
+            `  Workflow: ${metadata.workflow_id} v${metadata.workflow_version}\n`
+          );
           process.stdout.write(`  Status: ${metadata.instance_status}\n`);
           process.stdout.write(
-            `  Progress: ${progress.done}/${progress.total} done, ${progress.active} active, ${progress.pending} pending, ${progress.pruned} pruned\n`,
+            `  Progress: ${progress.done}/${progress.total} done, ${progress.active} active, ${progress.pending} pending, ${progress.pruned} pruned\n`
           );
 
           if (steps.length > 0) {

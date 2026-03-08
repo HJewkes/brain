@@ -19,7 +19,7 @@ export function ok<T>(data: T): Result<T, never> {
 export function fail<E extends string>(
   code: E,
   message: string,
-  details?: Record<string, unknown>,
+  details?: Record<string, unknown>
 ): Result<never, E> {
   const error: { error: true; code: E; message: string; details?: Record<string, unknown> } = {
     error: true,

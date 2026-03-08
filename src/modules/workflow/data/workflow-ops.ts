@@ -1,7 +1,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
-import type { WorkflowDefinition, WorkflowNoteMetadata, WorkflowInstanceMetadata } from '../types.js';
+import type {
+  WorkflowDefinition,
+  WorkflowNoteMetadata,
+  WorkflowInstanceMetadata,
+} from '../types.js';
 import type { TaskStatus } from '../../pm/types.js';
 import { validateDag, topologicalSort } from '../engine/dag.js';
 import { ok, fail, type Result } from '../../../errors.js';
@@ -33,7 +37,7 @@ export async function registerWorkflow(
   db: BrainDB,
   _config: BrainConfig,
   _embedder: Embedder,
-  noteId: string,
+  noteId: string
 ): Promise<Result<WorkflowNoteMetadata, RegisterErrorCode>> {
   const note = db.getNoteById(noteId);
   if (!note) {
@@ -41,7 +45,10 @@ export async function registerWorkflow(
   }
 
   if (note.type !== 'workflow') {
-    return fail('INVALID_NOTE_TYPE', `Note "${noteId}" is type "${note.type}", expected "workflow"`);
+    return fail(
+      'INVALID_NOTE_TYPE',
+      `Note "${noteId}" is type "${note.type}", expected "workflow"`
+    );
   }
 
   const body = extractNoteBody(note.filePath);
@@ -60,9 +67,7 @@ export async function registerWorkflow(
 
   const existingMeta = note.metadata ? (JSON.parse(note.metadata) as Record<string, unknown>) : {};
   const currentVersion =
-    existingMeta.registration_status === 'registered'
-      ? ((existingMeta.version as number) ?? 0)
-      : 0;
+    existingMeta.registration_status === 'registered' ? ((existingMeta.version as number) ?? 0) : 0;
   const newVersion = currentVersion + 1;
 
   const updatedMeta: Record<string, unknown> = {
@@ -107,7 +112,7 @@ export async function instantiateWorkflow(
   workflowId: string,
   project: string,
   context: Record<string, string>,
-  options?: { iterationOf?: string },
+  options?: { iterationOf?: string }
 ): Promise<Result<InstantiateResult, InstantiateErrorCode>> {
   const defResult = getWorkflowDefinition(db, workflowId);
   if (!defResult.ok) {
@@ -119,10 +124,7 @@ export async function instantiateWorkflow(
   if (definition.parameters) {
     for (const param of definition.parameters) {
       if (param.required && !(param.name in context)) {
-        return fail(
-          'MISSING_PARAMETER',
-          `Required parameter "${param.name}" not provided`,
-        );
+        return fail('MISSING_PARAMETER', `Required parameter "${param.name}" not provided`);
       }
     }
   }
@@ -165,9 +167,7 @@ export async function instantiateWorkflow(
   }
 
   if (taskNoteId) {
-    const relations = [
-      { sourceId: taskNoteId, targetId: defNote.id, type: 'instance-of' },
-    ];
+    const relations = [{ sourceId: taskNoteId, targetId: defNote.id, type: 'instance-of' }];
 
     if (options?.iterationOf) {
       const prevInstanceResult = getInstanceByDisplayId(db, options.iterationOf);
@@ -203,7 +203,7 @@ export async function expandWorkflow(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  instanceDisplayId: string,
+  instanceDisplayId: string
 ): Promise<Result<ExpandResult, ExpandErrorCode>> {
   const instanceResult = getInstanceByDisplayId(db, instanceDisplayId);
   if (!instanceResult.ok) {
@@ -212,10 +212,12 @@ export async function expandWorkflow(
 
   const { note: instanceNote, metadata: instanceMeta } = instanceResult.data;
 
-  if (instanceMeta.instance_status === 'expanded' ||
-      instanceMeta.instance_status === 'executing' ||
-      instanceMeta.instance_status === 'completed' ||
-      instanceMeta.instance_status === 'collapsed') {
+  if (
+    instanceMeta.instance_status === 'expanded' ||
+    instanceMeta.instance_status === 'executing' ||
+    instanceMeta.instance_status === 'completed' ||
+    instanceMeta.instance_status === 'collapsed'
+  ) {
     return fail('ALREADY_EXPANDED', `Instance "${instanceDisplayId}" is already expanded`);
   }
 
@@ -299,7 +301,10 @@ export async function expandWorkflow(
   db.upsertRelations(instanceNote.id, instanceRelations);
 
   // Build edge relations, grouping by source note to avoid overwriting
-  const edgesBySource = new Map<string, Array<{ sourceId: string; targetId: string; type: string }>>();
+  const edgesBySource = new Map<
+    string,
+    Array<{ sourceId: string; targetId: string; type: string }>
+  >();
   let edgeCount = 0;
   for (const edge of definition.edges) {
     const fromNoteId = stepToTaskNoteId.get(edge.from);
@@ -337,7 +342,7 @@ interface StatusResult {
 
 export function getWorkflowStatus(
   db: BrainDB,
-  instanceDisplayId: string,
+  instanceDisplayId: string
 ): Result<StatusResult, StatusErrorCode> {
   const instanceResult = getInstanceByDisplayId(db, instanceDisplayId);
   if (!instanceResult.ok) {
@@ -366,7 +371,7 @@ export async function collapseWorkflow(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  instanceDisplayId: string,
+  instanceDisplayId: string
 ): Promise<Result<CollapseResult, CollapseErrorCode>> {
   const instanceResult = getInstanceByDisplayId(db, instanceDisplayId);
   if (!instanceResult.ok) {
@@ -386,14 +391,12 @@ export async function collapseWorkflow(
 
   const { steps } = stepsResult.data;
   const incomplete = steps.filter(
-    (s) => s.status !== 'done' && s.status !== 'pruned' && s.status !== 'cancelled',
+    (s) => s.status !== 'done' && s.status !== 'pruned' && s.status !== 'cancelled'
   );
   if (incomplete.length > 0) {
-    return fail(
-      'INCOMPLETE_WORKFLOW',
-      `${incomplete.length} tasks are not done/pruned`,
-      { incomplete: incomplete.map((s) => s.taskDisplayId) },
-    );
+    return fail('INCOMPLETE_WORKFLOW', `${incomplete.length} tasks are not done/pruned`, {
+      incomplete: incomplete.map((s) => s.taskDisplayId),
+    });
   }
 
   let tasksArchived = 0;

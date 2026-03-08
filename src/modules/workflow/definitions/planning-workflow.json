@@ -22,7 +22,5 @@
     { "from": "decompose", "to": "implement" },
     { "from": "implement", "to": "review" }
   ],
-  "parameters": [
-    { "name": "planId", "description": "Plan identifier", "required": false }
-  ]
+  "parameters": [{ "name": "planId", "description": "Plan identifier", "required": false }]
 }

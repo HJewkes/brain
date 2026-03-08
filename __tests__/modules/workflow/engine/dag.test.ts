@@ -84,10 +84,7 @@ describe('validateDag', () => {
 
   describe('AC-03: cycle detection', () => {
     test('rejects a DAG with a direct cycle and returns CYCLE_DETECTED', () => {
-      const def = makeDefinition(
-        [step('a'), step('b')],
-        [edge('a', 'b'), edge('b', 'a')]
-      );
+      const def = makeDefinition([step('a'), step('b')], [edge('a', 'b'), edge('b', 'a')]);
       const result = validateDag(def);
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -125,10 +122,7 @@ describe('validateDag', () => {
 
   describe('AC-03: dangling edge references', () => {
     test('rejects an edge referencing a non-existent source step', () => {
-      const def = makeDefinition(
-        [step('a'), step('b')],
-        [edge('nonexistent', 'b')]
-      );
+      const def = makeDefinition([step('a'), step('b')], [edge('nonexistent', 'b')]);
       const result = validateDag(def);
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -138,10 +132,7 @@ describe('validateDag', () => {
     });
 
     test('rejects an edge referencing a non-existent target step', () => {
-      const def = makeDefinition(
-        [step('a'), step('b')],
-        [edge('a', 'nonexistent')]
-      );
+      const def = makeDefinition([step('a'), step('b')], [edge('a', 'nonexistent')]);
       const result = validateDag(def);
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -153,10 +144,7 @@ describe('validateDag', () => {
 
   describe('AC-03: terminal step requirement', () => {
     test('rejects a DAG with no terminal steps', () => {
-      const def = makeDefinition(
-        [step('a'), step('b')],
-        [edge('a', 'b'), edge('b', 'a')]
-      );
+      const def = makeDefinition([step('a'), step('b')], [edge('a', 'b'), edge('b', 'a')]);
       const result = validateDag(def);
       expect(result.ok).toBe(false);
     });

@@ -22,7 +22,12 @@ afterEach(() => {
 });
 
 function seedWorkflowNote(
-  overrides: { display_id?: string; name?: string; registration_status?: string; project?: string } = {},
+  overrides: {
+    display_id?: string;
+    name?: string;
+    registration_status?: string;
+    project?: string;
+  } = {}
 ): string {
   const id = `wf-${overrides.display_id ?? 'WF-01'}`;
   const meta = {
@@ -42,7 +47,7 @@ function seedWorkflowNote(
       type: 'workflow',
       title: meta.name,
       metadata: JSON.stringify(meta),
-    }),
+    })
   );
   return id;
 }
@@ -68,7 +73,11 @@ function validDefinition(): WorkflowDefinition {
   };
 }
 
-function seedInstanceNote(displayId: string, workflowId: string, instanceStatus = 'expanded'): string {
+function seedInstanceNote(
+  displayId: string,
+  workflowId: string,
+  instanceStatus = 'expanded'
+): string {
   const id = `task-${displayId}`;
   const meta = {
     display_id: displayId,
@@ -87,14 +96,14 @@ function seedInstanceNote(displayId: string, workflowId: string, instanceStatus 
       type: 'task',
       title: `Instance ${displayId}`,
       metadata: JSON.stringify(meta),
-    }),
+    })
   );
   return id;
 }
 
 function seedStepTasks(
   instanceNoteId: string,
-  steps: Array<{ stepId: string; displayId: string; status: string }>,
+  steps: Array<{ stepId: string; displayId: string; status: string }>
 ): void {
   const relations: Relation[] = [];
   for (const step of steps) {
@@ -113,7 +122,7 @@ function seedStepTasks(
         type: 'task',
         title: `Step ${step.stepId}`,
         metadata: JSON.stringify(meta),
-      }),
+      })
     );
 
     relations.push({ sourceId: instanceNoteId, targetId: id, type: 'expands-to' });
@@ -269,7 +278,7 @@ describe('getInstanceByDisplayId', () => {
         type: 'task',
         title: 'Plain task',
         metadata: JSON.stringify(meta),
-      }),
+      })
     );
 
     const result = getInstanceByDisplayId(db, 'TST-01.01');

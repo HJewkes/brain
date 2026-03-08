@@ -9,7 +9,7 @@ export async function createResource(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  resource: ResourceMetadata,
+  resource: ResourceMetadata
 ): Promise<Result<FastPathResource>> {
   return writeResource(db, config, embedder, resource);
 }
@@ -19,14 +19,14 @@ export async function updateResource(
   config: BrainConfig,
   embedder: Embedder,
   resourceId: string,
-  updates: Partial<ResourceMetadata>,
+  updates: Partial<ResourceMetadata>
 ): Promise<Result<FastPathResource>> {
   return updateResourceSidecar(db, config, embedder, resourceId, updates);
 }
 
 export function listResources(
   db: BrainDB,
-  filters?: { type?: string; project?: string; status?: string },
+  filters?: { type?: string; project?: string; status?: string }
 ): Result<FastPathResource[]> {
   const noteIds = db.getModuleNoteIds({ module: 'workflow', type: 'resource' });
   const notes = db.getNotesByIds(noteIds);
@@ -45,7 +45,10 @@ export function listResources(
       type: meta.resource_type as string,
       project: meta.project as string,
       status: meta.status as string,
-      data: (typeof meta.data === 'string' ? JSON.parse(meta.data) : meta.data ?? {}) as Record<string, unknown>,
+      data: (typeof meta.data === 'string' ? JSON.parse(meta.data) : (meta.data ?? {})) as Record<
+        string,
+        unknown
+      >,
       updatedAt: note.modifiedAt ?? note.createdAt ?? new Date().toISOString(),
     });
   }
@@ -53,10 +56,7 @@ export function listResources(
   return ok(resources);
 }
 
-export function getResource(
-  db: BrainDB,
-  resourceId: string,
-): Result<FastPathResource> {
+export function getResource(db: BrainDB, resourceId: string): Result<FastPathResource> {
   const noteIds = db.getModuleNoteIds({ module: 'workflow', type: 'resource' });
   const notes = db.getNotesByIds(noteIds);
 
@@ -70,7 +70,10 @@ export function getResource(
       type: meta.resource_type as string,
       project: meta.project as string,
       status: meta.status as string,
-      data: (typeof meta.data === 'string' ? JSON.parse(meta.data) : meta.data ?? {}) as Record<string, unknown>,
+      data: (typeof meta.data === 'string' ? JSON.parse(meta.data) : (meta.data ?? {})) as Record<
+        string,
+        unknown
+      >,
       updatedAt: note.modifiedAt ?? note.createdAt ?? new Date().toISOString(),
     });
   }
@@ -82,7 +85,7 @@ export async function releaseResource(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  resourceId: string,
+  resourceId: string
 ): Promise<Result<FastPathResource>> {
   return updateResourceSidecar(db, config, embedder, resourceId, { status: 'released' });
 }

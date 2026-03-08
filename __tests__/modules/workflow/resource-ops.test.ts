@@ -39,7 +39,11 @@ function makeResource(overrides: Partial<ResourceMetadata> = {}): ResourceMetada
     resource_type: overrides.resource_type ?? 'worktree',
     project: overrides.project ?? 'SDK',
     status: overrides.status ?? 'active',
-    data: overrides.data ?? { path: '/tmp/sdk-worktree', branch: 'feat/mock-infra', task: 'SDK-02.01' },
+    data: overrides.data ?? {
+      path: '/tmp/sdk-worktree',
+      branch: 'feat/mock-infra',
+      task: 'SDK-02.01',
+    },
   };
 }
 

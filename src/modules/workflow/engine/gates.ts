@@ -32,8 +32,11 @@ function evaluateCliPass(gate: Gate): boolean {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function evaluateGate(gate: Gate, db: BrainDB, _config: BrainConfig): Promise<boolean> {
+export async function evaluateGate(
+  gate: Gate,
+  db: BrainDB,
+  _config: BrainConfig
+): Promise<boolean> {
   switch (gate.type) {
     case 'task-complete':
       return evaluateTaskComplete(gate, db);
@@ -51,7 +54,7 @@ export async function evaluateGate(gate: Gate, db: BrainDB, _config: BrainConfig
 export async function evaluateGates(
   gates: Gate[],
   db: BrainDB,
-  config: BrainConfig,
+  config: BrainConfig
 ): Promise<{ allPassed: boolean; results: Array<{ gate: Gate; passed: boolean }> }> {
   if (gates.length === 0) {
     return { allPassed: true, results: [] };

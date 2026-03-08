@@ -136,7 +136,10 @@ export function findBlockedWithoutCause(db: BrainDB, prefix: string): BlockedTas
       continue;
     }
 
-    const allDone = deps.every((d) => { const s = statusMap.get(d); return s === 'done' || s === 'pruned'; });
+    const allDone = deps.every((d) => {
+      const s = statusMap.get(d);
+      return s === 'done' || s === 'pruned';
+    });
     if (allDone) {
       results.push({
         id: meta.display_id as string,

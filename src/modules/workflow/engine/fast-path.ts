@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
@@ -71,7 +79,7 @@ export async function writeResource(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,
-  resource: ResourceMetadata,
+  resource: ResourceMetadata
 ): Promise<Result<FastPathResource>> {
   const fastPathData = toFastPathResource(resource);
 
@@ -107,7 +115,7 @@ export async function updateResourceSidecar(
   config: BrainConfig,
   embedder: Embedder,
   resourceId: string,
-  updates: Partial<ResourceMetadata>,
+  updates: Partial<ResourceMetadata>
 ): Promise<Result<FastPathResource>> {
   const existing = readResourceFastPath(config.notesDir, resourceId);
   if (!existing) {
@@ -145,10 +153,7 @@ export function readResourceFastPath(notesDir: string, displayId: string): FastP
   }
 }
 
-export function listResourcesFastPath(
-  notesDir: string,
-  resourceType?: string,
-): FastPathResource[] {
+export function listResourcesFastPath(notesDir: string, resourceType?: string): FastPathResource[] {
   const dir = join(notesDir, 'modules', 'workflow', 'resources');
 
   let entries: string[];

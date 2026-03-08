@@ -122,9 +122,7 @@ describe('registerWorkflow', () => {
   });
 
   test('AC-E8: rejects workflow with empty steps array', async () => {
-    const noteId = await createWorkflowNote(
-      validDefinition({ steps: [], edges: [] })
-    );
+    const noteId = await createWorkflowNote(validDefinition({ steps: [], edges: [] }));
 
     const result = await registerWorkflow(db, config, embedder, noteId);
     expect(result.ok).toBe(false);
@@ -154,9 +152,8 @@ describe('workflow versioning', () => {
     const noteId = await createWorkflowNote(validDefinition());
     await registerWorkflow(db, config, embedder, noteId);
 
-    const { instantiateWorkflow, getWorkflowStatus } = await import(
-      '../../../src/modules/workflow/data/workflow-ops.js'
-    );
+    const { instantiateWorkflow, getWorkflowStatus } =
+      await import('../../../src/modules/workflow/data/workflow-ops.js');
     const { createProject } = await import('../../../src/modules/pm/data/project-ops.js');
     const { createWorkstream } = await import('../../../src/modules/pm/data/workstream-ops.js');
     await createProject(db, config, embedder, { name: 'Test', prefix: 'TST' });

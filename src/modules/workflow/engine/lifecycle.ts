@@ -17,7 +17,7 @@ interface AdvanceResult {
 export async function advanceWorkflow(
   db: BrainDB,
   config: BrainConfig,
-  instanceDisplayId: string,
+  instanceDisplayId: string
 ): Promise<Result<AdvanceResult>> {
   const instanceResult = getInstanceByDisplayId(db, instanceDisplayId);
   if (!instanceResult.ok) return instanceResult;
@@ -42,9 +42,22 @@ export async function advanceWorkflow(
   const allStepIds = steps.map((s) => s.stepId);
 
   const readySteps = buildReadySet(allStepIds, steps, definition);
-  const advanced = await findAdvancedSteps(allStepIds, statusMap, definition, readySteps, db, config);
+  const advanced = await findAdvancedSteps(
+    allStepIds,
+    statusMap,
+    definition,
+    readySteps,
+    db,
+    config
+  );
   const { pruned, warnings } = pruneUnreachableSteps(
-    db, allStepIds, statusMap, taskDisplayIdMap, definition, readySteps, advanced,
+    db,
+    allStepIds,
+    statusMap,
+    taskDisplayIdMap,
+    definition,
+    readySteps,
+    advanced
   );
 
   const prunedSet = new Set(pruned);
@@ -64,7 +77,7 @@ export async function advanceWorkflow(
 function buildReadySet(
   allStepIds: string[],
   steps: Array<{ stepId: string; status: string }>,
-  definition: WorkflowDefinition,
+  definition: WorkflowDefinition
 ): Set<string> {
   const ready = new Set<string>();
 
@@ -90,7 +103,7 @@ async function findAdvancedSteps(
   definition: WorkflowDefinition,
   readySteps: Set<string>,
   db: BrainDB,
-  config: BrainConfig,
+  config: BrainConfig
 ): Promise<string[]> {
   const advanced: string[] = [];
 
@@ -124,16 +137,14 @@ function pruneUnreachableSteps(
   taskDisplayIdMap: Map<string, string>,
   definition: WorkflowDefinition,
   readySteps: Set<string>,
-  advanced: string[],
+  advanced: string[]
 ): { pruned: string[]; warnings: string[] } {
   const pruned: string[] = [];
   const warnings: string[] = [];
 
   const unreachable = getUnreachableSteps([...readySteps], definition.edges, allStepIds);
 
-  const conditionalTargets = new Set(
-    definition.edges.filter((e) => e.condition).map((e) => e.to),
-  );
+  const conditionalTargets = new Set(definition.edges.filter((e) => e.condition).map((e) => e.to));
 
   for (const stepId of allStepIds) {
     if (unreachable.includes(stepId)) continue;
@@ -167,10 +178,7 @@ function pruneUnreachableSteps(
   return { pruned, warnings };
 }
 
-function resolveDefinition(
-  db: BrainDB,
-  instanceNote: { id: string },
-): WorkflowDefinition | null {
+function resolveDefinition(db: BrainDB, instanceNote: { id: string }): WorkflowDefinition | null {
   const relations = db.getRelationsFrom(instanceNote.id);
   const instanceOfRel = relations.find((r) => r.type === 'instance-of');
   if (!instanceOfRel) return null;

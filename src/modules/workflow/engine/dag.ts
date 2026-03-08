@@ -46,16 +46,10 @@ export function validateDag(definition: WorkflowDefinition): Result<void> {
 
   for (const edge of edges) {
     if (!stepIds.has(edge.from)) {
-      return fail(
-        'INVALID_DEFINITION',
-        `Edge references non-existent source step: ${edge.from}`
-      );
+      return fail('INVALID_DEFINITION', `Edge references non-existent source step: ${edge.from}`);
     }
     if (!stepIds.has(edge.to)) {
-      return fail(
-        'INVALID_DEFINITION',
-        `Edge references non-existent target step: ${edge.to}`
-      );
+      return fail('INVALID_DEFINITION', `Edge references non-existent target step: ${edge.to}`);
     }
   }
 
@@ -83,10 +77,7 @@ export function validateDag(definition: WorkflowDefinition): Result<void> {
   return ok(undefined);
 }
 
-function detectCycle(
-  steps: WorkflowStep[],
-  edges: WorkflowEdge[]
-): string[] | null {
+function detectCycle(steps: WorkflowStep[], edges: WorkflowEdge[]): string[] | null {
   const adj = new Map<string, string[]>();
   for (const s of steps) {
     adj.set(s.id, []);
@@ -137,10 +128,7 @@ function dfs(
   return null;
 }
 
-export function topologicalSort(
-  steps: WorkflowStep[],
-  edges: WorkflowEdge[]
-): Result<string[]> {
+export function topologicalSort(steps: WorkflowStep[], edges: WorkflowEdge[]): Result<string[]> {
   const inDegree = new Map<string, number>();
   const adj = new Map<string, string[]>();
 

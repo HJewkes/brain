@@ -6,7 +6,12 @@ import { randomUUID } from 'node:crypto';
 import { evaluateGate, evaluateGates } from '../../../../src/modules/workflow/engine/gates.js';
 import type { Gate } from '../../../../src/modules/workflow/types.js';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, createTestTask, setTestTaskStatus } from '../../../helpers.js';
+import {
+  tmpDbPath,
+  createMockEmbedder,
+  createTestTask,
+  setTestTaskStatus,
+} from '../../../helpers.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
 
