@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeQueueFile, type QueueContext } from '../../../src/services/extraction-tiers/agent-queue.js';
+import {
+  writeQueueFile,
+  type QueueContext,
+} from '../../../src/services/extraction-tiers/agent-queue.js';
 import type { ModuleRegistry } from '../../../src/modules/registry.js';
 
 vi.mock('node:fs', async () => {
@@ -13,7 +16,16 @@ vi.mock('node:fs', async () => {
   };
 });
 
-function makeRegistry(importable: Array<{ module: string; noteType: { name: string; description: string; schema?: { properties: Record<string, { type: string; description?: string }> } } }> = []): ModuleRegistry {
+function makeRegistry(
+  importable: Array<{
+    module: string;
+    noteType: {
+      name: string;
+      description: string;
+      schema?: { properties: Record<string, { type: string; description?: string }> };
+    };
+  }> = []
+): ModuleRegistry {
   return {
     getImportableNoteTypes: vi.fn().mockReturnValue(importable),
   } as unknown as ModuleRegistry;
@@ -136,7 +148,7 @@ describe('writeQueueFile', () => {
     const registry = makeRegistry();
     const ctx = makeContext({
       lowConfidenceRegions: [
-        { startLine: 5, endLine: 15, suggestedType: 'decision', confidence: 0.30 },
+        { startLine: 5, endLine: 15, suggestedType: 'decision', confidence: 0.3 },
       ],
     });
     writeQueueFile('/brain', ctx, registry);

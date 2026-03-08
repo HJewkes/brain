@@ -43,7 +43,13 @@ describe('runExtractionPipeline', () => {
     });
 
     const result = await runExtractionPipeline(
-      csv, 'tasks.csv', registry, makeEmbedder(), makeDb(), makeConfig(), 'src-1'
+      csv,
+      'tasks.csv',
+      registry,
+      makeEmbedder(),
+      makeDb(),
+      makeConfig(),
+      'src-1'
     );
 
     expect(result.extracted).toHaveLength(1);
@@ -56,7 +62,13 @@ describe('runExtractionPipeline', () => {
     const registry = makeRegistry();
 
     const result = await runExtractionPipeline(
-      content, 'notes.txt', registry, makeEmbedder(), makeDb(), makeConfig(), 'src-1'
+      content,
+      'notes.txt',
+      registry,
+      makeEmbedder(),
+      makeDb(),
+      makeConfig(),
+      'src-1'
     );
 
     expect(result.extracted).toHaveLength(1);
@@ -69,7 +81,13 @@ describe('runExtractionPipeline', () => {
     const registry = makeRegistry();
 
     const result = await runExtractionPipeline(
-      content, 'notes.txt', registry, makeEmbedder(), makeDb(), makeConfig(), 'src-1',
+      content,
+      'notes.txt',
+      registry,
+      makeEmbedder(),
+      makeDb(),
+      makeConfig(),
+      'src-1',
       { maxTier: 1 }
     );
 
@@ -97,7 +115,13 @@ describe('runExtractionPipeline', () => {
     });
 
     const result = await runExtractionPipeline(
-      `Name,Status\nBuild API,Open`, 'tasks.csv', registry, makeEmbedder(), makeDb(), makeConfig(), 'src-1'
+      `Name,Status\nBuild API,Open`,
+      'tasks.csv',
+      registry,
+      makeEmbedder(),
+      makeDb(),
+      makeConfig(),
+      'src-1'
     );
 
     expect(materializeFn).toHaveBeenCalledOnce();
@@ -116,7 +140,13 @@ describe('runExtractionPipeline', () => {
     });
 
     const result = await runExtractionPipeline(
-      csv, 'tasks.csv', registry, makeEmbedder(), makeDb(), makeConfig(), 'src-1'
+      csv,
+      'tasks.csv',
+      registry,
+      makeEmbedder(),
+      makeDb(),
+      makeConfig(),
+      'src-1'
     );
 
     expect(result.extracted).toHaveLength(1);
@@ -128,7 +158,13 @@ describe('runExtractionPipeline', () => {
     const registry = makeRegistry();
 
     const result = await runExtractionPipeline(
-      content, 'x.txt', registry, makeEmbedder(), makeDb(), makeConfig(), 'src-1'
+      content,
+      'x.txt',
+      registry,
+      makeEmbedder(),
+      makeDb(),
+      makeConfig(),
+      'src-1'
     );
 
     expect(result.extracted).toHaveLength(0);

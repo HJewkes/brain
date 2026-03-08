@@ -143,9 +143,9 @@ export class ModuleRegistry {
 
   /** Returns all note types that have importHints configured */
   getImportableNoteTypes(): Array<{ module: string; noteType: ImportableNoteType }> {
-    return (this.getAllNoteTypes() as Array<{ module: string; noteType: ImportableNoteType }>).filter(
-      ({ noteType }) => noteType.importHints
-    );
+    return (
+      this.getAllNoteTypes() as Array<{ module: string; noteType: ImportableNoteType }>
+    ).filter(({ noteType }) => noteType.importHints);
   }
 
   /** Match CSV/table column headers against registered tableColumnAliases.
@@ -184,7 +184,11 @@ export class ModuleRegistry {
     }
 
     return bestMatch
-      ? { module: bestMatch.module, noteType: bestMatch.noteType, columnMapping: bestMatch.columnMapping }
+      ? {
+          module: bestMatch.module,
+          noteType: bestMatch.noteType,
+          columnMapping: bestMatch.columnMapping,
+        }
       : null;
   }
 

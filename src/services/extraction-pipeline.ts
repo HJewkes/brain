@@ -51,7 +51,11 @@ export async function runExtractionPipeline(
       // No Ollama available — fallback to generic note
       result.extracted.push({
         noteType: 'note',
-        title: filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Imported',
+        title:
+          filePath
+            .split('/')
+            .pop()
+            ?.replace(/\.[^.]+$/, '') ?? 'Imported',
         content: tier1.remainder,
         fields: {},
       });
@@ -64,15 +68,19 @@ export async function runExtractionPipeline(
     const lineCount = content.split('\n').length;
     const ext = filePath.split('.').pop()?.toLowerCase() ?? 'txt';
     const format = detectFormat(ext);
-    const queueResult = writeQueueFile(config.notesDir, {
-      sourcePath: filePath,
-      format,
-      lineCount,
-      tier1Items: tier1.items,
-      tier2Items,
-      lowConfidenceRegions: [],
-      remainderContent: tier2Remainder,
-    }, registry);
+    const queueResult = writeQueueFile(
+      config.notesDir,
+      {
+        sourcePath: filePath,
+        format,
+        lineCount,
+        tier1Items: tier1.items,
+        tier2Items,
+        lowConfidenceRegions: [],
+        remainderContent: tier2Remainder,
+      },
+      registry
+    );
     result.queuedFiles.push({ path: queueResult.queuePath, reason: queueResult.reason });
   }
 
@@ -114,8 +122,13 @@ function findHandler(
 }
 
 const FORMAT_MAP: Record<string, string> = {
-  md: 'markdown', txt: 'text', csv: 'csv', tsv: 'tsv',
-  json: 'json', yaml: 'yaml', yml: 'yaml',
+  md: 'markdown',
+  txt: 'text',
+  csv: 'csv',
+  tsv: 'tsv',
+  json: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
 };
 
 function detectFormat(ext: string): string {

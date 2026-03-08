@@ -299,9 +299,7 @@ export function createOrchestrateCommands(): Command {
             process.stdout.write(
               `Tasks: ${done.length} done, ${inProgress.length} in-progress, ${pending.length} pending, ${blocked.length} blocked (${allTasks.length} total)\n`
             );
-            process.stdout.write(
-              `Worktrees: ${worktreeInfo.used}/${worktreeInfo.max} in use\n`
-            );
+            process.stdout.write(`Worktrees: ${worktreeInfo.used}/${worktreeInfo.max} in use\n`);
             if (worktreeInfo.allocations.length > 0) {
               for (const a of worktreeInfo.allocations) {
                 process.stdout.write(`  ${a.taskId}: ${a.path}\n`);

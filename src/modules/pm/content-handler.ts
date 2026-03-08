@@ -100,7 +100,6 @@ export class PmContentHandler implements ContentHandler {
     this.config = config;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   canHandle(noteType: string, _content: string): boolean {
     return noteType === 'task';
   }
@@ -116,11 +115,7 @@ export class PmContentHandler implements ContentHandler {
       throw new Error('PmContentHandler requires config — call setConfig() before materialize()');
     }
 
-    const { prefix, workstream } = await ensureProjectAndWorkstream(
-      db,
-      this.config,
-      embedder
-    );
+    const { prefix, workstream } = await ensureProjectAndWorkstream(db, this.config, embedder);
 
     const noteIds: string[] = [];
 
