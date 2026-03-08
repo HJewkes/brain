@@ -148,7 +148,9 @@ export function createSetupCommand(): Command {
         process.stdout.write(
           JSON.stringify(
             {
-              checks: [{ label: 'Database accessible', passed: dbCheck.passed, error: dbCheck.error }],
+              checks: [
+                { label: 'Database accessible', passed: dbCheck.passed, error: dbCheck.error },
+              ],
               demo: { success: demo.success, error: demo.error },
               success: !hasFailure,
             },

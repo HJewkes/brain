@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { copyFileSync } from 'node:fs';
+import { randomUUID, createHash } from 'node:crypto';
+import { copyFileSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { inject } from 'vitest';
@@ -14,6 +14,7 @@ import type {
   BrainConfig,
 } from '../src/types.js';
 import { BrainDB } from '../src/services/brain-db.js';
+import { indexSingleFile } from '../src/services/indexing.js';
 import { createTask } from '../src/modules/pm/data/task-ops.js';
 import type { CreateTaskInput } from '../src/modules/pm/data/task-ops.js';
 
@@ -166,4 +167,29 @@ export function makeActivity(overrides: Partial<ActivityRecord> = {}): ActivityR
     startedAt: overrides.startedAt ?? null,
     completedAt: overrides.completedAt ?? null,
   };
+}
+
+export async function indexNoteFile(
+  db: BrainDB,
+  embedder: Embedder,
+  filePath: string
+): Promise<string> {
+  const content = readFileSync(filePath, 'utf-8');
+  const hash = createHash('sha256').update(content).digest('hex');
+  const mtime = statSync(filePath).mtimeMs;
+  return indexSingleFile(db, embedder, filePath, content, hash, mtime);
+}
+
+export function setTestTaskStatus(db: BrainDB, displayId: string, status: string): void {
+  const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+  const notes = db.getNotesByIds(noteIds);
+  for (const [, note] of notes) {
+    if (!note.metadata) continue;
+    const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+    if (meta.display_id === displayId) {
+      const updated = { ...meta, status };
+      db.upsertNote({ ...note, metadata: JSON.stringify(updated) });
+      return;
+    }
+  }
 }

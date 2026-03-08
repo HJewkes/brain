@@ -218,7 +218,6 @@ describe('orchestrate route (validation)', () => {
 });
 
 describe('orchestrate session-start', () => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function mockStdin(_data: string) {
     const originalIsTTY = process.stdin.isTTY;
     Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });

@@ -1,21 +1,39 @@
 import { describe, it, expect, vi } from 'vitest';
-import { classifyWithLlm, prepareContent } from '../../../src/services/extraction-tiers/llm-classifier.js';
+import {
+  classifyWithLlm,
+  prepareContent,
+} from '../../../src/services/extraction-tiers/llm-classifier.js';
 import type { OllamaClient } from '../../../src/services/ollama.js';
 import type { ModuleRegistry } from '../../../src/modules/registry.js';
 
 function makeClient(response: string | Error): OllamaClient {
-  const generate = response instanceof Error
-    ? vi.fn().mockRejectedValue(response)
-    : vi.fn().mockResolvedValue(response);
+  const generate =
+    response instanceof Error
+      ? vi.fn().mockRejectedValue(response)
+      : vi.fn().mockResolvedValue(response);
   return { generate, model: 'qwen2.5:3b' };
 }
 
 function makeRegistry(
-  noteTypes: Array<{ module: string; noteType: { name: string; description: string; tier: 'slow' | 'fast'; schema?: { type: 'object'; properties: Record<string, { type: string; description?: string }> }; importHints?: unknown } }> = []
+  noteTypes: Array<{
+    module: string;
+    noteType: {
+      name: string;
+      description: string;
+      tier: 'slow' | 'fast';
+      schema?: {
+        type: 'object';
+        properties: Record<string, { type: string; description?: string }>;
+      };
+      importHints?: unknown;
+    };
+  }> = []
 ): ModuleRegistry {
   return {
     getAllNoteTypes: vi.fn().mockReturnValue(noteTypes),
-    getImportableNoteTypes: vi.fn().mockReturnValue(noteTypes.filter(t => t.noteType.importHints)),
+    getImportableNoteTypes: vi
+      .fn()
+      .mockReturnValue(noteTypes.filter((t) => t.noteType.importHints)),
     matchColumnHeaders: vi.fn().mockReturnValue(null),
     getArchetypeTexts: vi.fn().mockReturnValue(new Map()),
     getNoteType: vi.fn(),
@@ -52,11 +70,21 @@ describe('classifyWithLlm', () => {
   it('parses valid JSON response into ExtractedItems', async () => {
     const content = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5';
     const llmResponse = JSON.stringify([
-      { type: 'task', title: 'Fix bug', startLine: 1, endLine: 3, confidence: 0.9, fields: { status: 'open' } },
+      {
+        type: 'task',
+        title: 'Fix bug',
+        startLine: 1,
+        endLine: 3,
+        confidence: 0.9,
+        fields: { status: 'open' },
+      },
     ]);
 
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient(llmResponse)
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient(llmResponse)
     );
 
     expect(result.items).toHaveLength(1);
@@ -76,7 +104,10 @@ describe('classifyWithLlm', () => {
     ]);
 
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient(llmResponse)
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient(llmResponse)
     );
 
     expect(result.items).toHaveLength(1);
@@ -87,7 +118,10 @@ describe('classifyWithLlm', () => {
   it('returns empty items with full remainder on JSON parse failure', async () => {
     const content = 'Some content here';
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient('not valid json at all')
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient('not valid json at all')
     );
 
     expect(result.items).toHaveLength(0);
@@ -97,7 +131,10 @@ describe('classifyWithLlm', () => {
   it('returns empty items with full remainder when LLM throws', async () => {
     const content = 'Some content here';
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient(new Error('connection refused'))
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient(new Error('connection refused'))
     );
 
     expect(result.items).toHaveLength(0);
@@ -106,12 +143,18 @@ describe('classifyWithLlm', () => {
 
   it('handles LLM response with extra text around JSON', async () => {
     const content = 'Line 1\nLine 2';
-    const llmResponse = 'Here is the classification:\n' + JSON.stringify([
-      { type: 'note', title: 'A note', startLine: 1, endLine: 2, confidence: 0.7 },
-    ]) + '\nDone!';
+    const llmResponse =
+      'Here is the classification:\n' +
+      JSON.stringify([
+        { type: 'note', title: 'A note', startLine: 1, endLine: 2, confidence: 0.7 },
+      ]) +
+      '\nDone!';
 
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient(llmResponse)
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient(llmResponse)
     );
 
     expect(result.items).toHaveLength(1);
@@ -139,7 +182,10 @@ describe('classifyWithLlm', () => {
     ]);
 
     const result = await classifyWithLlm(
-      content, 'tasks.md', makeRegistry(defaultNoteTypes), makeClient(llmResponse)
+      content,
+      'tasks.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient(llmResponse)
     );
 
     expect(result.items).toHaveLength(3);
@@ -173,7 +219,10 @@ describe('classifyWithLlm', () => {
     ]);
 
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient(llmResponse)
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient(llmResponse)
     );
 
     expect(result.items).toHaveLength(1);
@@ -183,7 +232,10 @@ describe('classifyWithLlm', () => {
   it('handles empty LLM response array', async () => {
     const content = 'Some content';
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient('[]')
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient('[]')
     );
 
     expect(result.items).toHaveLength(0);
@@ -199,7 +251,10 @@ describe('classifyWithLlm', () => {
     ]);
 
     const result = await classifyWithLlm(
-      content, 'doc.md', makeRegistry(defaultNoteTypes), makeClient(llmResponse)
+      content,
+      'doc.md',
+      makeRegistry(defaultNoteTypes),
+      makeClient(llmResponse)
     );
 
     expect(result.items).toHaveLength(1);

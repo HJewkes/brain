@@ -1,9 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { extractDeterministic, cosineSimilarity } from '../../../src/services/extraction-tiers/deterministic.js';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  extractDeterministic,
+  cosineSimilarity,
+} from '../../../src/services/extraction-tiers/deterministic.js';
 import type { Embedder } from '../../../src/types.js';
 import type { ModuleRegistry } from '../../../src/modules/registry.js';
 
-function makeRegistry(overrides: Partial<Record<keyof ModuleRegistry, unknown>> = {}): ModuleRegistry {
+function makeRegistry(
+  overrides: Partial<Record<keyof ModuleRegistry, unknown>> = {}
+): ModuleRegistry {
   return {
     getNoteType: vi.fn().mockReturnValue(undefined),
     matchColumnHeaders: vi.fn().mockReturnValue(null),
@@ -167,11 +172,15 @@ describe('extractDeterministic', () => {
 
   describe('embedding similarity matching', () => {
     it('matches when similarity exceeds threshold', async () => {
-      const content = 'This is a detailed architecture description of the system components and data flow.';
+      const content =
+        'This is a detailed architecture description of the system components and data flow.';
       const registry = makeRegistry({
         getArchetypeTexts: vi.fn().mockReturnValue(
           new Map([
-            ['architecture', 'System architecture documentation describing components and data flow.'],
+            [
+              'architecture',
+              'System architecture documentation describing components and data flow.',
+            ],
             ['meeting', 'Meeting notes with attendees and action items.'],
           ])
         ),
@@ -194,18 +203,19 @@ describe('extractDeterministic', () => {
     });
 
     it('returns remainder when no archetype exceeds threshold', async () => {
-      const content = 'Some content that does not match anything particularly well at all for testing.';
+      const content =
+        'Some content that does not match anything particularly well at all for testing.';
       const registry = makeRegistry({
-        getArchetypeTexts: vi.fn().mockReturnValue(
-          new Map([['meeting', 'Meeting notes with attendees.']])
-        ),
+        getArchetypeTexts: vi
+          .fn()
+          .mockReturnValue(new Map([['meeting', 'Meeting notes with attendees.']])),
       });
 
       const embedder = makeEmbedder(async (texts: string[]) => {
         return texts.map(() => [0.5, 0.5, 0.5]);
       });
 
-      const result = await extractDeterministic(content, 'random.md', registry, embedder);
+      await extractDeterministic(content, 'random.md', registry, embedder);
 
       // All vectors identical => cosine = 1.0, but that's a degenerate case.
       // Use orthogonal vectors instead:
@@ -222,9 +232,7 @@ describe('extractDeterministic', () => {
     it('skips when content is too short', async () => {
       const content = 'Short.';
       const registry = makeRegistry({
-        getArchetypeTexts: vi.fn().mockReturnValue(
-          new Map([['note', 'A general note.']])
-        ),
+        getArchetypeTexts: vi.fn().mockReturnValue(new Map([['note', 'A general note.']])),
       });
 
       const result = await extractDeterministic(content, 'short.md', registry, makeEmbedder());

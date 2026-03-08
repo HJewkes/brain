@@ -212,7 +212,6 @@ describe('Wave 11: Consistency Checks', () => {
     });
   });
 
-
   describe('full report JSON shape', () => {
     it('produces valid JSON with all expected sections', async () => {
       // Create a scenario with multiple issue types

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "planning",
+  "description": "Planning workflow matching startup.md state machine",
+  "steps": [
+    { "id": "research", "name": "Research", "category": "research" },
+    { "id": "interview", "name": "Interview", "category": "research" },
+    { "id": "design", "name": "Design", "category": "design" },
+    { "id": "critic", "name": "Critic", "category": "review" },
+    { "id": "spec-tests", "name": "Spec Tests", "category": "testing" },
+    { "id": "decompose", "name": "Decompose", "category": "design" },
+    { "id": "implement", "name": "Implement", "category": "implementation" },
+    { "id": "review", "name": "Review", "category": "review" }
+  ],
+  "edges": [
+    { "from": "research", "to": "interview" },
+    { "from": "interview", "to": "design" },
+    { "from": "design", "to": "critic" },
+    { "from": "critic", "to": "spec-tests", "condition": "all_resolved" },
+    { "from": "critic", "to": "interview", "condition": "has_open_questions" },
+    { "from": "spec-tests", "to": "decompose" },
+    { "from": "decompose", "to": "implement" },
+    { "from": "implement", "to": "review" }
+  ],
+  "parameters": [{ "name": "planId", "description": "Plan identifier", "required": false }]
+}

@@ -99,7 +99,7 @@ export const pmModule: BrainModule = {
           number: { type: 'number', description: 'Task number within workstream' },
           status: {
             type: 'string',
-            enum: ['pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled'],
+            enum: ['pending', 'claimed', 'in-progress', 'done', 'blocked', 'cancelled', 'pruned'],
             description: 'Task status',
           },
           mode: {

@@ -18,7 +18,10 @@ function makeMockModule(name = 'test-module'): BrainModule {
   };
 }
 
-function makeMockNoteType(name = 'epic', overrides?: Partial<ImportableNoteType>): ImportableNoteType {
+function makeMockNoteType(
+  name = 'epic',
+  overrides?: Partial<ImportableNoteType>
+): ImportableNoteType {
   return {
     name,
     description: 'An epic note type',

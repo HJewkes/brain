@@ -103,9 +103,20 @@ export const importCommand = new Command('import')
       }
 
       const SKIP_DIRS = new Set([
-        'node_modules', '.git', '.hg', '.svn', 'dist', 'build',
-        '.next', '.nuxt', '.output', '__pycache__', '.tox',
-        'venv', '.venv', '.playwright-mcp',
+        'node_modules',
+        '.git',
+        '.hg',
+        '.svn',
+        'dist',
+        'build',
+        '.next',
+        '.nuxt',
+        '.output',
+        '__pycache__',
+        '.tox',
+        'venv',
+        '.venv',
+        '.playwright-mcp',
       ]);
 
       const filePaths: string[] = [];
@@ -203,9 +214,7 @@ export const importCommand = new Command('import')
 
         // Write unhandled items as plain notes
         const handledTypes = new Set(
-          modules
-            .getContentHandlers()
-            .flatMap(({ handler }) => handler.noteTypes)
+          modules.getContentHandlers().flatMap(({ handler }) => handler.noteTypes)
         );
         const unhandled = pipelineResult.extracted.filter(
           (item) => !handledTypes.has(item.noteType)
@@ -264,7 +273,12 @@ async function runDryExtraction(
   registry: Parameters<typeof runExtractionPipeline>[2],
   embedder: Parameters<typeof runExtractionPipeline>[3]
 ): Promise<{
-  extracted: Array<{ noteType: string; title: string; content: string; fields: Record<string, string> }>;
+  extracted: Array<{
+    noteType: string;
+    title: string;
+    content: string;
+    fields: Record<string, string>;
+  }>;
   materializedNoteIds: string[];
   queuedFiles: Array<{ path: string; reason: string }>;
 }> {
@@ -275,7 +289,11 @@ async function runDryExtraction(
   if (tier1.remainder && tier1.remainder.trim().length > 20) {
     extracted.push({
       noteType: 'note',
-      title: filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Imported',
+      title:
+        filePath
+          .split('/')
+          .pop()
+          ?.replace(/\.[^.]+$/, '') ?? 'Imported',
       content: tier1.remainder,
       fields: {},
     });
@@ -311,17 +329,13 @@ function printOutput(
 
   const total = [...stats.imported.values()].reduce((a, b) => a + b, 0);
   const prefix = dryRun ? '[dry-run] Would import' : 'Imported';
-  const formats = [...stats.imported.entries()]
-    .map(([fmt, count]) => `${count} ${fmt}`)
-    .join(', ');
+  const formats = [...stats.imported.entries()].map(([fmt, count]) => `${count} ${fmt}`).join(', ');
 
   process.stderr.write(`${prefix} ${total} file(s) (${formats})\n`);
 
   if (stats.extracted.size > 0) {
     const totalExtracted = [...stats.extracted.values()].reduce((a, b) => a + b, 0);
-    const types = [...stats.extracted.entries()]
-      .map(([t, count]) => `${count} ${t}`)
-      .join(', ');
+    const types = [...stats.extracted.entries()].map(([t, count]) => `${count} ${t}`).join(', ');
     process.stderr.write(`  Tier 1 (deterministic): ${totalExtracted} items (${types})\n`);
   }
 

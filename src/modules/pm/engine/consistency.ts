@@ -136,7 +136,10 @@ export function findBlockedWithoutCause(db: BrainDB, prefix: string): BlockedTas
       continue;
     }
 
-    const allDone = deps.every((d) => statusMap.get(d) === 'done');
+    const allDone = deps.every((d) => {
+      const s = statusMap.get(d);
+      return s === 'done' || s === 'pruned';
+    });
     if (allDone) {
       results.push({
         id: meta.display_id as string,
@@ -165,19 +168,20 @@ export function findCancelledDependencies(db: BrainDB, prefix: string): Cancelle
   for (const task of tasks) {
     const meta = JSON.parse(task.metadata!) as Record<string, unknown>;
     const status = meta.status as string;
-    if (status === 'done' || status === 'cancelled') continue;
+    if (status === 'done' || status === 'cancelled' || status === 'pruned') continue;
 
     const deps = getDependencyDisplayIds(db, task.id);
     if (deps.length === 0) continue;
 
     for (const dep of deps) {
-      if (statusMap.get(dep) === 'cancelled') {
+      const depStatus = statusMap.get(dep);
+      if (depStatus === 'cancelled' || depStatus === 'pruned') {
         results.push({
           task: meta.display_id as string,
           taskTitle: task.title ?? (meta.display_id as string),
           dependsOn: dep,
-          dependsOnStatus: 'cancelled',
-          reason: `Depends on cancelled task ${dep}`,
+          dependsOnStatus: depStatus,
+          reason: `Depends on ${depStatus} task ${dep}`,
         });
       }
     }

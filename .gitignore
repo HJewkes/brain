@@ -6,3 +6,7 @@ docs/
 .env
 coverage/
 .claude/plans/
+
+.brain/
+.worktrees/
+.claude/skills/

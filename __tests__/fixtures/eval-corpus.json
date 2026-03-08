@@ -7,11 +7,7 @@
         "title": "Velocity-Based Training Fundamentals",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "exercise-science",
-          "velocity"
-        ],
+        "tags": ["vbt", "exercise-science", "velocity"],
         "confidence": "high",
         "status": "current",
         "related": [
@@ -31,17 +27,10 @@
         "title": "RPE and Velocity Correlation in Resistance Training",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "rpe",
-          "autoregulation"
-        ],
+        "tags": ["vbt", "rpe", "autoregulation"],
         "confidence": "medium",
         "status": "current",
-        "related": [
-          "vbt-fundamentals",
-          "velocity-thresholds-v3"
-        ],
+        "related": ["vbt-fundamentals", "velocity-thresholds-v3"],
         "created": "2025-09-01"
       },
       "body": "# RPE and Velocity Correlation in Resistance Training\n\n## Background\n\nRating of Perceived Exertion (RPE) is a subjective autoregulation tool where athletes rate set difficulty on a 1–10 scale. The modified RPE scale (Zourdos et al., 2016) maps RPE values to repetitions in reserve (RIR): RPE 10 = 0 RIR (failure), RPE 9 = 1 RIR, RPE 8 = 2 RIR, and so on.\n\n## Velocity as Objective RPE\n\nA key insight is that mean concentric velocity at a given RPE is relatively stable within an individual for a given exercise. If an athlete's RPE 8 squat consistently occurs at 0.40 m/s, then velocity can serve as an objective cross-reference for their subjective rating.\n\n### Practical Mapping\n\nFor the back squat in trained males, approximate relationships observed in research:\n\n- RPE 6 (~4 RIR): 0.55–0.65 m/s\n- RPE 7 (~3 RIR): 0.45–0.55 m/s\n- RPE 8 (~2 RIR): 0.35–0.45 m/s\n- RPE 9 (~1 RIR): 0.25–0.35 m/s\n- RPE 10 (0 RIR): 0.15–0.25 m/s\n\nThese ranges vary by exercise and individual. The Voltra system can learn an athlete's personal velocity-RPE profile over time, improving autoregulation accuracy.\n\n## Implementation Considerations\n\nThe workout-analytics package computes RPE estimates from velocity data using a configurable lookup table. The default table uses population-level data, but the app can override it with individualized profiles stored locally. The key metric is last-rep velocity relative to the athlete's known minimum velocity threshold (MVT).\n\n## Limitations\n\n- Subjective RPE can be influenced by sleep, caffeine, mood, and training history\n- Velocity-RPE mapping drifts across a training block as fatigue accumulates\n- Exercise technique changes (e.g., wider squat stance) invalidate existing profiles"
@@ -53,17 +42,10 @@
         "title": "BLE Protocol Design for Fitness Devices",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "ble",
-          "protocol",
-          "embedded"
-        ],
+        "tags": ["ble", "protocol", "embedded"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "ble-command-pattern",
-          "ble-setup-guide"
-        ],
+        "related": ["ble-command-pattern", "ble-setup-guide"],
         "created": "2025-07-20"
       },
       "body": "# BLE Protocol Design for Fitness Devices\n\n## Overview\n\nThe Voltra device communicates with the mobile app over Bluetooth Low Energy (BLE) using a custom GATT profile. The protocol is designed for low-latency telemetry streaming with reliable command delivery.\n\n## GATT Service Structure\n\nThe device exposes a primary service with three characteristics:\n\n1. **Telemetry Characteristic** (Notify): Streams position and IMU data at ~100 Hz raw, decimated to ~11 Hz for BLE transmission. Each notification payload is 20 bytes containing timestamp (4B), position (4B float), velocity (4B float), acceleration (4B float), and flags (4B).\n\n2. **Command Characteristic** (Write with Response): Accepts commands from the app. Commands use a TLV (Type-Length-Value) encoding with a CRC-16/CCITT checksum for integrity. The CRC polynomial is 0x1021 with an initial value of 0xFFFF.\n\n3. **Status Characteristic** (Read/Notify): Reports device state (idle, recording, calibrating, error) and battery level.\n\n## Packet Format\n\n```\n| Byte 0    | Byte 1    | Bytes 2..N-2 | Bytes N-2..N-1 |\n| CMD Type  | Length    | Payload       | CRC-16         |\n```\n\nCommand types include: START_RECORDING (0x01), STOP_RECORDING (0x02), CALIBRATE (0x03), SET_CONFIG (0x04), GET_STATUS (0x05), and FIRMWARE_VERSION (0x06).\n\n## Reliability Considerations\n\nBLE notifications are unreliable by design — they do not require acknowledgment. For telemetry this is acceptable since missing a single sample at 11 Hz causes minimal data loss. However, commands use Write with Response to guarantee delivery. The SDK implements a command queue with retry logic (3 attempts, 500ms timeout per attempt).\n\n## MTU Negotiation\n\nModern iOS and Android devices support MTU sizes of 185+ bytes, but the protocol conservatively uses 20-byte payloads to ensure compatibility with older peripherals and avoid fragmentation. Future protocol versions may negotiate larger MTUs for bulk data transfer (e.g., downloading stored workout data)."
@@ -75,16 +57,10 @@
         "title": "Real-Time Telemetry Processing Pipeline",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "telemetry",
-          "signal-processing",
-          "real-time"
-        ],
+        "tags": ["telemetry", "signal-processing", "real-time"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "vbt-fundamentals"
-        ],
+        "related": ["vbt-fundamentals"],
         "created": "2025-08-01"
       },
       "body": "# Real-Time Telemetry Processing Pipeline\n\n## Signal Flow\n\nRaw position data from the Voltra linear position transducer arrives at approximately 11 Hz over BLE. The processing pipeline transforms this into usable velocity and acceleration metrics with minimal latency.\n\n### Stage 1: Denoising\n\nThe raw position signal contains noise from BLE transmission jitter, sensor quantization, and mechanical vibration. A second-order Butterworth low-pass filter with a cutoff frequency of 4 Hz is applied. This preserves the movement dynamics of typical resistance training (rep durations of 0.5–3.0 seconds) while attenuating high-frequency noise.\n\n### Stage 2: Differentiation\n\nVelocity is computed as the first derivative of filtered position using a central difference method. At the edges of the signal window, forward and backward differences are used respectively. Acceleration is the second derivative, computed similarly.\n\n### Stage 3: Rep Detection\n\nRep boundaries are identified using a state machine that tracks velocity sign changes. A rep begins when velocity crosses a positive threshold (0.02 m/s) and ends when position returns to within 5% of the starting position. Minimum rep duration (0.3s) and minimum displacement (0.05m) thresholds reject false triggers from noise.\n\n### Stage 4: Metric Computation\n\nFor each detected rep, the following metrics are computed:\n- Mean velocity (MV): average velocity over the concentric phase\n- Mean propulsive velocity (MPV): average velocity during the acceleration phase only\n- Peak velocity (PV): maximum instantaneous velocity\n- Time to peak velocity (tPV): duration from rep start to PV\n- Range of motion (ROM): total displacement\n- Rep duration: time from start to end of concentric phase\n\n## Latency Budget\n\nThe total pipeline latency from sensor to display must remain under 100ms for acceptable real-time feedback. Current measurements show ~45ms BLE transmission + ~10ms processing + ~16ms render frame = ~71ms typical."
@@ -96,11 +72,7 @@
         "title": "Exercise Science Foundations for VBT Applications",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "exercise-science",
-          "biomechanics",
-          "strength-training"
-        ],
+        "tags": ["exercise-science", "biomechanics", "strength-training"],
         "confidence": "high",
         "status": "current",
         "created": "2025-06-10"
@@ -114,16 +86,10 @@
         "title": "CRC Checksum Implementation for BLE Commands",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "crc",
-          "protocol",
-          "integrity"
-        ],
+        "tags": ["crc", "protocol", "integrity"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "ble-protocol-research"
-        ],
+        "related": ["ble-protocol-research"],
         "created": "2025-07-25"
       },
       "body": "# CRC Checksum Implementation for BLE Commands\n\n## Algorithm Selection\n\nThe Voltra BLE protocol uses CRC-16/CCITT (also known as CRC-16/XMODEM) for command integrity verification. This was chosen over simpler checksums (XOR, Fletcher) because:\n\n1. Superior burst error detection — detects all single, double, and odd-number bit errors\n2. Well-supported across embedded platforms (many MCUs have hardware CRC-16 peripherals)\n3. 16-bit width provides sufficient protection for our small packet sizes (max 20 bytes)\n\n## Parameters\n\n- Polynomial: 0x1021 (x^16 + x^12 + x^5 + 1)\n- Initial value: 0xFFFF\n- Input reflection: false\n- Output reflection: false\n- Final XOR: 0x0000\n\n## Implementation\n\nThe SDK implements CRC computation in TypeScript for command construction:\n\n```typescript\nfunction crc16ccitt(data: Uint8Array): number {\n  let crc = 0xFFFF;\n  for (let i = 0; i < data.length; i++) {\n    crc ^= data[i] << 8;\n    for (let j = 0; j < 8; j++) {\n      if (crc & 0x8000) {\n        crc = (crc << 1) ^ 0x1021;\n      } else {\n        crc = crc << 1;\n      }\n      crc &= 0xFFFF;\n    }\n  }\n  return crc;\n}\n```\n\n## Verification\n\nThe device firmware computes the same CRC over the received payload and compares it with the transmitted CRC. Mismatches result in a NAK response, triggering the SDK's retry logic. In testing, CRC mismatches occur in approximately 0.1% of commands, primarily during high-interference RF environments."
@@ -135,11 +101,7 @@
         "title": "Velocity Threshold Configuration v1",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "thresholds",
-          "configuration"
-        ],
+        "tags": ["vbt", "thresholds", "configuration"],
         "confidence": "low",
         "status": "deprecated",
         "created": "2025-05-01"
@@ -153,11 +115,7 @@
         "title": "Velocity Threshold Configuration v2",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "thresholds",
-          "configuration"
-        ],
+        "tags": ["vbt", "thresholds", "configuration"],
         "confidence": "medium",
         "status": "outdated",
         "supersedes": "velocity-thresholds-v1",
@@ -172,19 +130,11 @@
         "title": "Velocity Threshold Configuration v3 — Adaptive",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "thresholds",
-          "adaptive",
-          "configuration"
-        ],
+        "tags": ["vbt", "thresholds", "adaptive", "configuration"],
         "confidence": "high",
         "status": "current",
         "supersedes": "velocity-thresholds-v2",
-        "related": [
-          "vbt-fundamentals",
-          "rpe-velocity-relationship"
-        ],
+        "related": ["vbt-fundamentals", "rpe-velocity-relationship"],
         "created": "2025-10-01"
       },
       "body": "# Velocity Threshold Configuration v3 — Adaptive\n\n## Design Philosophy\n\nVersion 3 eliminates fixed thresholds in favor of an adaptive system that learns from the user's movement patterns. The first 3 reps of each set establish baseline parameters, and subsequent reps use adaptive thresholds derived from the baseline.\n\n## Algorithm\n\n1. **Warm-up Detection**: First set of a session uses conservative defaults (v2 values). Data from this set calibrates thresholds for the session.\n2. **Baseline Window**: Reps 1–3 of each working set define the baseline velocity and ROM. Mean velocity and displacement are computed.\n3. **Adaptive Thresholds**: Minimum velocity = 20% of baseline MV. Minimum displacement = 50% of baseline ROM. These adapt per-set.\n4. **Velocity Zones**: Zone boundaries are computed relative to the athlete's first-rep velocity rather than absolute values.\n\n## Results\n\nRep detection accuracy improved to 99.2% across the expanded test dataset (n=4,200 reps across 12 athletes and 6 exercises). False positive rate decreased from 2.1% (v2) to 0.3%.\n\n## Configuration\n\n```typescript\ninterface AdaptiveThresholdConfig {\n  baselineReps: number           // default: 3\n  velocityFraction: number       // default: 0.20\n  displacementFraction: number   // default: 0.50\n  minRepDuration: number         // default: 0.3 (seconds)\n  fallbackMinVelocity: number   // default: 0.02 (m/s)\n  fallbackMinDisplacement: number // default: 0.05 (m)\n}\n```\n\n## Migration\n\nThe workout-analytics package exposes both v2 (fixed) and v3 (adaptive) threshold strategies via a strategy pattern. The mobile app defaults to v3 but can fall back to v2 via a settings toggle."
@@ -196,17 +146,10 @@
         "title": "Movement Phase Detection in Resistance Exercises",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "biomechanics",
-          "signal-processing",
-          "vbt"
-        ],
+        "tags": ["biomechanics", "signal-processing", "vbt"],
         "confidence": "medium",
         "status": "current",
-        "related": [
-          "vbt-fundamentals",
-          "telemetry-processing"
-        ],
+        "related": ["vbt-fundamentals", "telemetry-processing"],
         "created": "2025-08-20"
       },
       "body": "# Movement Phase Detection in Resistance Exercises\n\n## Phases of a Repetition\n\nEach repetition in resistance training consists of distinct phases that carry different training significance:\n\n1. **Eccentric phase**: The lowering/lengthening portion. Velocity is negative (downward movement). Duration typically 1–4 seconds depending on tempo prescription.\n2. **Amortization phase**: The transition between eccentric and concentric. Also called the \"turnaround\" or \"stretch-shortening cycle\" transition. Duration is typically 0.1–0.5 seconds.\n3. **Concentric phase**: The lifting/shortening portion. This is the primary phase of interest for VBT metrics. Velocity is positive.\n4. **Lockout/rest phase**: The brief pause at the top of the rep before the next eccentric.\n\n## Detection Algorithm\n\nPhase transitions are detected by analyzing velocity zero-crossings and acceleration sign changes:\n\n- Eccentric start: velocity crosses below -0.02 m/s threshold\n- Amortization: velocity magnitude < 0.02 m/s with position at or near minimum\n- Concentric start: velocity crosses above +0.02 m/s from amortization\n- Lockout: velocity returns to near-zero with position at or near maximum\n\n## Eccentric Velocity Tracking\n\nWhile VBT traditionally focuses on concentric velocity, eccentric velocity monitoring provides additional training insights. Controlled eccentrics (slow eccentric velocity) indicate intentional tempo training. Fast eccentric velocities may indicate loss of control or intentional stretch-shortening cycle training.\n\n## Implementation Notes\n\nThe movement phase detector in workout-analytics runs as a state machine that processes each velocity sample. It outputs phase labels with timestamps, allowing the mobile app to display phase-specific metrics (concentric MV, eccentric duration, amortization time)."
@@ -218,17 +161,10 @@
         "title": "Minimum Velocity Threshold (MVT) Research",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "mvt",
-          "1rm-estimation"
-        ],
+        "tags": ["vbt", "mvt", "1rm-estimation"],
         "confidence": "medium",
         "status": "current",
-        "related": [
-          "vbt-fundamentals",
-          "rpe-velocity-relationship"
-        ],
+        "related": ["vbt-fundamentals", "rpe-velocity-relationship"],
         "created": "2025-09-15"
       },
       "body": "# Minimum Velocity Threshold (MVT) Research\n\n## Definition\n\nThe Minimum Velocity Threshold (MVT) is the lowest mean concentric velocity an athlete can achieve against a maximal load (1RM) for a given exercise. It represents the velocity at which no further load can be lifted — the rightmost point on the load-velocity curve.\n\n## Exercise-Specific MVT Values\n\nResearch has established typical MVT ranges for common exercises:\n\n| Exercise | MVT Range (m/s) | Mean MVT (m/s) |\n|----------|-----------------|-----------------|\n| Back Squat | 0.25–0.36 | 0.30 |\n| Bench Press | 0.10–0.20 | 0.15 |\n| Deadlift | 0.12–0.20 | 0.16 |\n| Overhead Press | 0.18–0.28 | 0.22 |\n| Bent-over Row | 0.20–0.30 | 0.25 |\n\n## Application in 1RM Estimation\n\nKnowing an athlete's MVT enables daily 1RM estimation from submaximal sets. By fitting a linear regression to the load-velocity data from warm-up sets, the predicted load at MVT gives an estimated 1RM. This avoids the fatigue and injury risk of true maximal testing.\n\n## Individualization\n\nMVT varies between athletes by up to 0.15 m/s for the same exercise. Factors include:\n- Training experience (more experienced lifters tend to have lower MVTs)\n- Limb proportions\n- Muscle fiber type composition\n- Technique proficiency\n\nThe Voltra system builds individual MVT profiles over time by tracking velocity at near-maximal loads (RPE 9.5–10 sets)."
@@ -240,17 +176,10 @@
         "title": "SDK Architecture: Manager Pattern with Adapter Layer",
         "type": "decision",
         "tier": "slow",
-        "tags": [
-          "architecture",
-          "sdk",
-          "ble"
-        ],
+        "tags": ["architecture", "sdk", "ble"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "mobile-architecture",
-          "ble-command-pattern"
-        ],
+        "related": ["mobile-architecture", "ble-command-pattern"],
         "created": "2025-06-01"
       },
       "body": "# SDK Architecture: Manager Pattern with Adapter Layer\n\n## Context\n\nThe voltra-node-sdk needs to support multiple BLE backends (React Native BLE PLX for production, MockBLEAdapter for testing and web preview) while providing a consistent API to consumers.\n\n## Decision\n\nAdopt a Manager pattern with a pluggable adapter layer:\n\n- `VoltraManager` is the main entry point. It owns connection lifecycle, command queuing, and telemetry event emission.\n- `BLEAdapter` is an interface that abstracts platform-specific BLE operations (scan, connect, read, write, subscribe).\n- Concrete adapters implement BLEAdapter: `RNBLEAdapter` (React Native), `MockBLEAdapter` (synthetic data), and potentially `WebBLEAdapter` (Web Bluetooth API).\n\n## Rationale\n\n- Adapter pattern enables testing without hardware\n- Manager centralizes state machine logic (disconnected → scanning → connecting → connected → streaming)\n- Event-based telemetry (EventEmitter) decouples data production from consumption\n- React hook layer (`@voltras/node-sdk/react`) wraps Manager in useSyncExternalStore for reactive UI updates\n\n## Consequences\n\n- Adding a new platform requires only a new adapter implementation\n- Manager tests can use MockBLEAdapter for deterministic behavior\n- Dual CJS/ESM build ensures compatibility with both Node.js tooling and React Native bundlers"
@@ -262,19 +191,10 @@
         "title": "Mobile App State Management Architecture",
         "type": "decision",
         "tier": "slow",
-        "tags": [
-          "architecture",
-          "mobile",
-          "zustand",
-          "state-management"
-        ],
+        "tags": ["architecture", "mobile", "zustand", "state-management"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "sdk-architecture",
-          "titan-design-system",
-          "zustand-store-patterns"
-        ],
+        "related": ["sdk-architecture", "titan-design-system", "zustand-store-patterns"],
         "created": "2025-06-15"
       },
       "body": "# Mobile App State Management Architecture\n\n## Context\n\nThe Voltras mobile app (React Native/Expo) needs to manage several state domains: BLE connection, real-time workout data, user preferences, and exercise library. Redux was considered but deemed overly verbose for our team size and state complexity.\n\n## Decision\n\nUse Zustand for all application state, with domain-specific store slices:\n\n1. **connection-store**: BLE connection state, device info, signal strength. Driven by SDK events.\n2. **workout-store**: Active workout state, rep history, current set metrics. Updated from telemetry stream.\n3. **settings-store**: User preferences (units, velocity zones, threshold config). Persisted with AsyncStorage.\n4. **exercise-store**: Exercise library with custom exercises. Persisted with AsyncStorage.\n\n## Rationale\n\n- Zustand has minimal boilerplate compared to Redux (no action types, reducers, or middleware setup)\n- Built-in support for subscriptions and selectors, works naturally with React rendering\n- Small bundle size (~1KB) matters for mobile\n- Middleware for persistence (zustand/middleware) handles AsyncStorage integration cleanly\n\n## Store Composition\n\nStores are independent singletons. Cross-store coordination happens in React components or custom hooks, not in the stores themselves. For example, the `useWorkoutSession` hook subscribes to both connection-store and workout-store to orchestrate recording start/stop.\n\n## Consequences\n\n- No centralized action log (unlike Redux DevTools) — debugging relies on Zustand's built-in devtools middleware\n- Store independence means no guaranteed ordering of cross-store updates\n- Selectors must be carefully memoized to avoid unnecessary re-renders in the hot telemetry path"
@@ -286,17 +206,10 @@
         "title": "Titan Design System Adoption Decision",
         "type": "decision",
         "tier": "slow",
-        "tags": [
-          "design-system",
-          "ui",
-          "titan"
-        ],
+        "tags": ["design-system", "ui", "titan"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "mobile-architecture",
-          "sdk-architecture"
-        ],
+        "related": ["mobile-architecture", "sdk-architecture"],
         "created": "2025-11-01"
       },
       "body": "# Titan Design System Adoption Decision\n\n## Context\n\nThe mobile app had accumulated ad-hoc UI components with inconsistent styling. A custom theme system in `@/theme` defined colors and spacing, but lacked component-level standardization. We needed a design system that works across React Native and web (for Storybook).\n\n## Decision\n\nBuild and adopt `@titan-design/react-ui` as the shared design system:\n\n- Cross-platform components using NativeWind v4 for styling\n- Semantic color tokens (not raw hex values) for theme consistency\n- Component library: Button, Card, Input, Badge, Toggle, Text, Heading\n- Dark/light mode support via CSS custom properties on web and NativeWind dark: variants on native\n\n## Migration Strategy\n\nPhased migration over two sprints:\n1. Phase 1: Replace all custom components with Titan equivalents. Delete old `src/components/ui/` files.\n2. Phase 2: Replace `@/theme` color tokens with Titan semantic tokens. Delete `@/theme`.\n3. Phase 3: Remaining custom components (WeightPicker, LinkCard) either migrated or kept as app-specific.\n\n## Consequences\n\n- Consistent visual language across the app\n- Storybook 10 integration for component documentation\n- NativeWind v4 dependency adds build complexity (PostCSS, Tailwind config)\n- Design system is a separate repo with its own release cycle, adding coordination overhead"
@@ -308,11 +221,7 @@
         "title": "Testing Strategy for the Voltras Ecosystem",
         "type": "decision",
         "tier": "slow",
-        "tags": [
-          "testing",
-          "vitest",
-          "strategy"
-        ],
+        "tags": ["testing", "vitest", "strategy"],
         "confidence": "high",
         "status": "current",
         "created": "2025-06-20"
@@ -326,12 +235,7 @@
         "title": "NPM Publishing via OIDC Trusted Publishing",
         "type": "decision",
         "tier": "slow",
-        "tags": [
-          "publishing",
-          "npm",
-          "ci-cd",
-          "oidc"
-        ],
+        "tags": ["publishing", "npm", "ci-cd", "oidc"],
         "confidence": "high",
         "status": "current",
         "created": "2025-10-15"
@@ -345,11 +249,7 @@
         "title": "SQLite with better-sqlite3 for Local Brain Storage",
         "type": "decision",
         "tier": "slow",
-        "tags": [
-          "database",
-          "sqlite",
-          "architecture"
-        ],
+        "tags": ["database", "sqlite", "architecture"],
         "confidence": "high",
         "status": "current",
         "created": "2025-11-10"
@@ -363,17 +263,10 @@
         "title": "Zustand Store Patterns for React Native",
         "type": "pattern",
         "tier": "slow",
-        "tags": [
-          "zustand",
-          "state-management",
-          "react-native",
-          "patterns"
-        ],
+        "tags": ["zustand", "state-management", "react-native", "patterns"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "mobile-architecture"
-        ],
+        "related": ["mobile-architecture"],
         "created": "2025-07-01"
       },
       "body": "# Zustand Store Patterns for React Native\n\n## Slice Pattern\n\nEach domain gets its own store created with `create()`. Avoid combining all state into a single monolithic store — this causes unnecessary re-renders when unrelated state changes.\n\n```typescript\n// Good: separate stores\nconst useConnectionStore = create<ConnectionState>((set) => ({\n  status: 'disconnected',\n  device: null,\n  connect: async (deviceId) => { /* ... */ },\n}));\n\nconst useWorkoutStore = create<WorkoutState>((set) => ({\n  reps: [],\n  isRecording: false,\n  addRep: (rep) => set((s) => ({ reps: [...s.reps, rep] })),\n}));\n```\n\n## Selector Pattern\n\nAlways use selectors to subscribe to specific state slices. Selecting the entire store object causes re-renders on every state change.\n\n```typescript\n// Good: narrow selector\nconst status = useConnectionStore((s) => s.status);\n\n// Bad: selects entire store\nconst store = useConnectionStore();\n```\n\n## Persistence Pattern\n\nUse Zustand's persist middleware with AsyncStorage for state that should survive app restarts:\n\n```typescript\nconst useSettingsStore = create(\n  persist<SettingsState>(\n    (set) => ({\n      units: 'metric',\n      velocityZones: defaultZones,\n    }),\n    { name: 'settings-storage', storage: createJSONStorage(() => AsyncStorage) }\n  )\n);\n```\n\n## Derived State\n\nCompute derived values in selectors rather than storing them. This avoids stale derived state:\n\n```typescript\nconst averageVelocity = useWorkoutStore(\n  (s) => s.reps.length > 0\n    ? s.reps.reduce((sum, r) => sum + r.velocity, 0) / s.reps.length\n    : 0\n);\n```"
@@ -385,18 +278,10 @@
         "title": "BLE Command Queue Pattern",
         "type": "pattern",
         "tier": "slow",
-        "tags": [
-          "ble",
-          "patterns",
-          "queue",
-          "sdk"
-        ],
+        "tags": ["ble", "patterns", "queue", "sdk"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "sdk-architecture",
-          "ble-protocol-research"
-        ],
+        "related": ["sdk-architecture", "ble-protocol-research"],
         "created": "2025-07-10"
       },
       "body": "# BLE Command Queue Pattern\n\n## Problem\n\nBLE Write with Response operations must be serialized — sending a second write before the first response arrives causes undefined behavior on most platforms. Concurrent command requests from different parts of the app need to be queued and executed sequentially.\n\n## Pattern\n\nThe SDK implements a command queue using an async mutex:\n\n```typescript\nclass CommandQueue {\n  private queue: Array<() => Promise<void>> = [];\n  private processing = false;\n\n  async enqueue<T>(command: () => Promise<T>): Promise<T> {\n    return new Promise((resolve, reject) => {\n      this.queue.push(async () => {\n        try {\n          resolve(await command());\n        } catch (e) {\n          reject(e);\n        }\n      });\n      this.processNext();\n    });\n  }\n\n  private async processNext(): Promise<void> {\n    if (this.processing || this.queue.length === 0) return;\n    this.processing = true;\n    const next = this.queue.shift()!;\n    try {\n      await next();\n    } finally {\n      this.processing = false;\n      this.processNext();\n    }\n  }\n}\n```\n\n## Retry Logic\n\nEach command attempt has a 500ms timeout. On timeout or NAK response, the command is retried up to 3 times. After 3 failures, the promise rejects with a `CommandTimeoutError`.\n\n## Usage in VoltraManager\n\n```typescript\nclass VoltraManager {\n  private commandQueue = new CommandQueue();\n\n  async startRecording(): Promise<void> {\n    await this.commandQueue.enqueue(() =>\n      this.adapter.write(COMMAND_CHAR, encodeCommand(Commands.START_RECORDING))\n    );\n  }\n}\n```"
@@ -408,11 +293,7 @@
         "title": "Component Composition Patterns for React Native",
         "type": "pattern",
         "tier": "slow",
-        "tags": [
-          "react-native",
-          "patterns",
-          "components"
-        ],
+        "tags": ["react-native", "patterns", "components"],
         "confidence": "high",
         "status": "current",
         "created": "2025-08-05"
@@ -426,11 +307,7 @@
         "title": "Error Boundary Strategy for React Native",
         "type": "pattern",
         "tier": "slow",
-        "tags": [
-          "error-handling",
-          "react-native",
-          "patterns"
-        ],
+        "tags": ["error-handling", "react-native", "patterns"],
         "confidence": "high",
         "status": "current",
         "created": "2025-08-10"
@@ -444,12 +321,7 @@
         "title": "Custom Hook Patterns for Voltra Integration",
         "type": "pattern",
         "tier": "slow",
-        "tags": [
-          "hooks",
-          "react",
-          "patterns",
-          "sdk"
-        ],
+        "tags": ["hooks", "react", "patterns", "sdk"],
         "confidence": "high",
         "status": "current",
         "created": "2025-08-15"
@@ -463,12 +335,7 @@
         "title": "TypeScript Generics Patterns in the SDK",
         "type": "pattern",
         "tier": "slow",
-        "tags": [
-          "typescript",
-          "generics",
-          "patterns",
-          "sdk"
-        ],
+        "tags": ["typescript", "generics", "patterns", "sdk"],
         "confidence": "high",
         "status": "current",
         "created": "2025-09-01"
@@ -482,11 +349,7 @@
         "title": "Observations on Consumer Fitness Device Market",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "fitness",
-          "market",
-          "devices"
-        ],
+        "tags": ["fitness", "market", "devices"],
         "confidence": "medium",
         "status": "current",
         "created": "2025-07-05"
@@ -500,11 +363,7 @@
         "title": "SDK Versioning and Breaking Change Policy",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "sdk",
-          "versioning",
-          "semver"
-        ],
+        "tags": ["sdk", "versioning", "semver"],
         "confidence": "medium",
         "status": "current",
         "created": "2025-08-25"
@@ -518,11 +377,7 @@
         "title": "Mobile App Performance Observations",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "performance",
-          "mobile",
-          "react-native"
-        ],
+        "tags": ["performance", "mobile", "react-native"],
         "confidence": "medium",
         "status": "current",
         "created": "2025-09-10"
@@ -536,11 +391,7 @@
         "title": "Expo SDK Update Experiences",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "expo",
-          "updates",
-          "mobile"
-        ],
+        "tags": ["expo", "updates", "mobile"],
         "confidence": "medium",
         "status": "current",
         "created": "2025-10-05"
@@ -554,12 +405,7 @@
         "title": "NativeWind v4 Quirks and Workarounds",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "nativewind",
-          "styling",
-          "react-native",
-          "tailwind"
-        ],
+        "tags": ["nativewind", "styling", "react-native", "tailwind"],
         "confidence": "medium",
         "status": "current",
         "created": "2025-10-20"
@@ -573,17 +419,10 @@
         "title": "BLE Development Setup Guide",
         "type": "guide",
         "tier": "slow",
-        "tags": [
-          "ble",
-          "setup",
-          "development"
-        ],
+        "tags": ["ble", "setup", "development"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "ble-protocol-research",
-          "ble-command-pattern"
-        ],
+        "related": ["ble-protocol-research", "ble-command-pattern"],
         "created": "2025-07-15"
       },
       "body": "# BLE Development Setup Guide\n\n## Prerequisites\n\n- macOS or Linux (BLE development on Windows requires additional drivers)\n- Node.js 20+ for SDK development\n- Xcode 15+ for iOS BLE testing\n- Android Studio with SDK 34+ for Android BLE testing\n- A physical Voltra device or the MockBLEAdapter for software-only development\n\n## Mock Development (No Hardware Required)\n\nThe SDK's MockBLEAdapter simulates a Voltra device entirely in software:\n\n```typescript\nimport { VoltraManager, MockBLEAdapter } from '@voltras/node-sdk';\n\nconst adapter = new MockBLEAdapter({ telemetryHz: 11 });\nconst manager = new VoltraManager({ adapter });\n\nawait manager.scan();     // Returns a mock device\nawait manager.connect();  // Instant connection\nawait manager.startRecording(); // Begins synthetic telemetry\n```\n\nThe mock generates realistic velocity profiles based on configurable parameters (exercise type, rep count, velocity range).\n\n## Physical Device Testing\n\n### iOS\n\n1. Enable Bluetooth in Settings\n2. Add `NSBluetoothAlwaysUsageDescription` to Info.plist\n3. Build and run on physical device (BLE does not work in Simulator)\n4. Pair device via the app's scan screen\n\n### Android\n\n1. Enable Bluetooth and Location Services (required for BLE scanning on Android)\n2. Add permissions to AndroidManifest.xml: BLUETOOTH_SCAN, BLUETOOTH_CONNECT, ACCESS_FINE_LOCATION\n3. Build and run on physical device (BLE partially works in emulator with host forwarding)\n\n## Debugging BLE\n\n- Use nRF Connect app (Nordic Semiconductor) to inspect GATT services directly\n- Enable SDK debug logging: `manager.setLogLevel('debug')`\n- On iOS, use PacketLogger for low-level BLE packet inspection\n- On Android, enable Bluetooth HCI snoop log in Developer Options"
@@ -595,18 +434,10 @@
         "title": "SDK Integration Guide for React Native Apps",
         "type": "guide",
         "tier": "slow",
-        "tags": [
-          "sdk",
-          "integration",
-          "react-native",
-          "guide"
-        ],
+        "tags": ["sdk", "integration", "react-native", "guide"],
         "confidence": "high",
         "status": "current",
-        "related": [
-          "sdk-architecture",
-          "hook-patterns"
-        ],
+        "related": ["sdk-architecture", "hook-patterns"],
         "created": "2025-08-01"
       },
       "body": "# SDK Integration Guide for React Native Apps\n\n## Installation\n\n```bash\nnpm install @voltras/node-sdk\n```\n\n## Basic Setup\n\n```typescript\nimport { VoltraManager, RNBLEAdapter } from '@voltras/node-sdk';\n\n// Create manager with React Native BLE adapter\nconst manager = new VoltraManager({\n  adapter: new RNBLEAdapter(),\n});\n\n// Scan for devices\nconst devices = [];\nfor await (const device of manager.scan({ timeout: 10000 })) {\n  devices.push(device);\n}\n\n// Connect to first found device\nawait manager.connect(devices[0]);\n```\n\n## React Integration\n\nThe SDK provides React hooks via the `@voltras/node-sdk/react` subpath:\n\n```typescript\nimport { VoltraProvider, useVoltra, useTelemetry } from '@voltras/node-sdk/react';\n\nfunction App() {\n  return (\n    <VoltraProvider manager={manager}>\n      <WorkoutScreen />\n    </VoltraProvider>\n  );\n}\n\nfunction WorkoutScreen() {\n  const { status, connect, disconnect } = useVoltra();\n  const telemetry = useTelemetry();\n\n  return (\n    <View>\n      <Text>Status: {status}</Text>\n      <Text>Velocity: {telemetry?.velocity.toFixed(2)} m/s</Text>\n    </View>\n  );\n}\n```\n\n## Error Handling\n\nThe SDK emits errors through the event system and throws on async operations:\n\n```typescript\nmanager.on('error', (error) => {\n  if (error.code === 'CONNECTION_LOST') {\n    // Handle reconnection\n  }\n});\n\ntry {\n  await manager.connect(device);\n} catch (e) {\n  if (e instanceof VoltraConnectionError) {\n    // Handle connection failure\n  }\n}\n```\n\n## Cleanup\n\nAlways dispose of the manager when the app unmounts or the user navigates away:\n\n```typescript\nuseEffect(() => {\n  return () => {\n    manager.disconnect();\n    manager.dispose();\n  };\n}, []);\n```"
@@ -618,11 +449,7 @@
         "title": "Storybook 10 Setup for Cross-Platform Components",
         "type": "guide",
         "tier": "slow",
-        "tags": [
-          "storybook",
-          "design-system",
-          "setup"
-        ],
+        "tags": ["storybook", "design-system", "setup"],
         "confidence": "high",
         "status": "current",
         "created": "2025-11-15"
@@ -636,10 +463,7 @@
         "title": "Sprint Planning — Week 42, 2025",
         "type": "meeting",
         "tier": "fast",
-        "tags": [
-          "sprint",
-          "planning"
-        ],
+        "tags": ["sprint", "planning"],
         "status": "current",
         "review-interval": "2w",
         "created": "2025-10-13",
@@ -654,11 +478,7 @@
         "title": "Design Review — Workout Recording Screen",
         "type": "meeting",
         "tier": "fast",
-        "tags": [
-          "design",
-          "review",
-          "workout-screen"
-        ],
+        "tags": ["design", "review", "workout-screen"],
         "status": "current",
         "review-interval": "4w",
         "created": "2025-09-29",
@@ -673,11 +493,7 @@
         "title": "API Discussion — Workout Data Export Format",
         "type": "meeting",
         "tier": "fast",
-        "tags": [
-          "api",
-          "data-export",
-          "workout"
-        ],
+        "tags": ["api", "data-export", "workout"],
         "status": "current",
         "review-interval": "4w",
         "created": "2025-09-15",
@@ -692,11 +508,7 @@
         "title": "Debug Session: Intermittent BLE Disconnects on Android",
         "type": "session-log",
         "tier": "fast",
-        "tags": [
-          "debugging",
-          "ble",
-          "android"
-        ],
+        "tags": ["debugging", "ble", "android"],
         "status": "current",
         "review-interval": "2w",
         "created": "2025-09-20",
@@ -711,11 +523,7 @@
         "title": "Refactoring Session: Store Consolidation",
         "type": "session-log",
         "tier": "fast",
-        "tags": [
-          "refactoring",
-          "zustand",
-          "stores"
-        ],
+        "tags": ["refactoring", "zustand", "stores"],
         "status": "current",
         "review-interval": "2w",
         "created": "2025-10-01",
@@ -730,10 +538,7 @@
         "title": "Quick Note on BLE MTU",
         "type": "note",
         "tier": "fast",
-        "tags": [
-          "ble",
-          "mtu"
-        ],
+        "tags": ["ble", "mtu"],
         "created": "2025-10-25"
       },
       "body": "BLE MTU defaults to 23 bytes but can be negotiated up to 517 bytes on modern devices."
@@ -745,11 +550,7 @@
         "title": "Comprehensive VBT Implementation Guide",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "comprehensive",
-          "guide"
-        ],
+        "tags": ["vbt", "comprehensive", "guide"],
         "confidence": "high",
         "status": "current",
         "created": "2025-11-20"
@@ -763,12 +564,7 @@
         "title": "BLE Protocol Encoding Implementation",
         "type": "pattern",
         "tier": "slow",
-        "tags": [
-          "ble",
-          "protocol",
-          "typescript",
-          "code"
-        ],
+        "tags": ["ble", "protocol", "typescript", "code"],
         "confidence": "high",
         "status": "current",
         "created": "2025-08-30"
@@ -782,11 +578,7 @@
         "title": "Exercise Velocity Reference Tables",
         "type": "research",
         "tier": "slow",
-        "tags": [
-          "vbt",
-          "reference",
-          "tables"
-        ],
+        "tags": ["vbt", "reference", "tables"],
         "confidence": "medium",
         "status": "current",
         "created": "2025-09-05"
@@ -800,11 +592,7 @@
         "title": "Thoughts on Wearable Sensor Placement",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "sensors",
-          "wearables",
-          "ergonomics"
-        ],
+        "tags": ["sensors", "wearables", "ergonomics"],
         "confidence": "low",
         "status": "current",
         "created": "2025-10-30"
@@ -818,11 +606,7 @@
         "title": "Notas sobre la Localización de la App — Übersetzung & 翻訳",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "i18n",
-          "localization",
-          "unicode"
-        ],
+        "tags": ["i18n", "localization", "unicode"],
         "confidence": "low",
         "status": "draft",
         "created": "2025-11-01"
@@ -836,10 +620,7 @@
         "title": "Placeholder Architecture Notes",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "architecture",
-          "placeholder"
-        ],
+        "tags": ["architecture", "placeholder"],
         "confidence": "speculative",
         "status": "draft",
         "created": "2025-11-05"
@@ -853,11 +634,7 @@
         "title": "Deeply Nested Document Structure Test",
         "type": "note",
         "tier": "slow",
-        "tags": [
-          "structure",
-          "nesting",
-          "edge-case"
-        ],
+        "tags": ["structure", "nesting", "edge-case"],
         "confidence": "medium",
         "status": "current",
         "created": "2025-11-10"
@@ -870,154 +647,109 @@
       "id": "q01",
       "text": "What is the load-velocity relationship in resistance training?",
       "type": "factual",
-      "relevantNoteIds": [
-        "vbt-fundamentals"
-      ]
+      "relevantNoteIds": ["vbt-fundamentals"]
     },
     {
       "id": "q02",
       "text": "What are the different velocity training zones and their ranges?",
       "type": "factual",
-      "relevantNoteIds": [
-        "vbt-fundamentals",
-        "exercise-science-overview"
-      ]
+      "relevantNoteIds": ["vbt-fundamentals", "exercise-science-overview"]
     },
     {
       "id": "q03",
       "text": "How can you estimate exercise difficulty from barbell speed?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "rpe-velocity-relationship",
-        "vbt-fundamentals"
-      ]
+      "relevantNoteIds": ["rpe-velocity-relationship", "vbt-fundamentals"]
     },
     {
       "id": "q04",
       "text": "What is the relationship between RPE and mean concentric velocity?",
       "type": "factual",
-      "relevantNoteIds": [
-        "rpe-velocity-relationship"
-      ]
+      "relevantNoteIds": ["rpe-velocity-relationship"]
     },
     {
       "id": "q05",
       "text": "What CRC polynomial does the Voltra BLE protocol use?",
       "type": "factual",
-      "relevantNoteIds": [
-        "crc-checksum-research",
-        "ble-protocol-research"
-      ]
+      "relevantNoteIds": ["crc-checksum-research", "ble-protocol-research"]
     },
     {
       "id": "q06",
       "text": "How does the BLE GATT service structure work for the Voltra device?",
       "type": "factual",
-      "relevantNoteIds": [
-        "ble-protocol-research"
-      ]
+      "relevantNoteIds": ["ble-protocol-research"]
     },
     {
       "id": "q07",
       "text": "How is noise removed from the raw position sensor data?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "telemetry-processing"
-      ]
+      "relevantNoteIds": ["telemetry-processing"]
     },
     {
       "id": "q08",
       "text": "What is the latency budget for real-time telemetry display?",
       "type": "factual",
-      "relevantNoteIds": [
-        "telemetry-processing"
-      ]
+      "relevantNoteIds": ["telemetry-processing"]
     },
     {
       "id": "q09",
       "text": "How does the force-velocity curve apply to strength training?",
       "type": "factual",
-      "relevantNoteIds": [
-        "exercise-science-overview",
-        "vbt-fundamentals"
-      ]
+      "relevantNoteIds": ["exercise-science-overview", "vbt-fundamentals"]
     },
     {
       "id": "q10",
       "text": "What does undulating periodization look like with velocity targets?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "exercise-science-overview"
-      ]
+      "relevantNoteIds": ["exercise-science-overview"]
     },
     {
       "id": "q11",
       "text": "How is the CRC-16/CCITT checksum computed for BLE commands?",
       "type": "factual",
-      "relevantNoteIds": [
-        "crc-checksum-research"
-      ]
+      "relevantNoteIds": ["crc-checksum-research"]
     },
     {
       "id": "q12",
       "text": "What happens when a CRC mismatch is detected in a command response?",
       "type": "factual",
-      "relevantNoteIds": [
-        "crc-checksum-research",
-        "ble-command-pattern"
-      ]
+      "relevantNoteIds": ["crc-checksum-research", "ble-command-pattern"]
     },
     {
       "id": "q13",
       "text": "Why were the original velocity thresholds replaced?",
       "type": "factual",
-      "relevantNoteIds": [
-        "velocity-thresholds-v1",
-        "velocity-thresholds-v2"
-      ]
+      "relevantNoteIds": ["velocity-thresholds-v1", "velocity-thresholds-v2"]
     },
     {
       "id": "q14",
       "text": "How does the adaptive threshold system learn from user movement patterns?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "velocity-thresholds-v3"
-      ]
+      "relevantNoteIds": ["velocity-thresholds-v3"]
     },
     {
       "id": "q15",
       "text": "What are the four phases of a resistance training repetition?",
       "type": "factual",
-      "relevantNoteIds": [
-        "movement-phases"
-      ]
+      "relevantNoteIds": ["movement-phases"]
     },
     {
       "id": "q16",
       "text": "How does the state machine detect transitions between movement phases?",
       "type": "factual",
-      "relevantNoteIds": [
-        "movement-phases",
-        "telemetry-processing"
-      ]
+      "relevantNoteIds": ["movement-phases", "telemetry-processing"]
     },
     {
       "id": "q17",
       "text": "What is the minimum velocity threshold and why does it matter?",
       "type": "factual",
-      "relevantNoteIds": [
-        "mvt-research",
-        "vbt-fundamentals"
-      ]
+      "relevantNoteIds": ["mvt-research", "vbt-fundamentals"]
     },
     {
       "id": "q18",
       "text": "How can submaximal sets be used to estimate daily one-rep max?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "mvt-research",
-        "vbt-fundamentals"
-      ]
+      "relevantNoteIds": ["mvt-research", "vbt-fundamentals"]
     },
     {
       "id": "q19",
@@ -1033,498 +765,361 @@
       "id": "q20",
       "text": "What exercises have the lowest minimum velocity thresholds?",
       "type": "factual",
-      "relevantNoteIds": [
-        "mvt-research"
-      ]
+      "relevantNoteIds": ["mvt-research"]
     },
     {
       "id": "q21",
       "text": "Why was the Manager-Adapter pattern chosen for the SDK?",
       "type": "factual",
-      "relevantNoteIds": [
-        "sdk-architecture"
-      ]
+      "relevantNoteIds": ["sdk-architecture"]
     },
     {
       "id": "q22",
       "text": "How does the SDK support multiple BLE backends?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "sdk-architecture",
-        "ble-command-pattern"
-      ]
+      "relevantNoteIds": ["sdk-architecture", "ble-command-pattern"]
     },
     {
       "id": "q23",
       "text": "Why was Zustand chosen over Redux for the mobile app?",
       "type": "factual",
-      "relevantNoteIds": [
-        "mobile-architecture"
-      ]
+      "relevantNoteIds": ["mobile-architecture"]
     },
     {
       "id": "q24",
       "text": "How is cross-store coordination handled in the mobile app?",
       "type": "factual",
-      "relevantNoteIds": [
-        "mobile-architecture",
-        "zustand-store-patterns"
-      ]
+      "relevantNoteIds": ["mobile-architecture", "zustand-store-patterns"]
     },
     {
       "id": "q25",
       "text": "What problems did the custom theme system have before Titan?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "titan-design-system"
-      ]
+      "relevantNoteIds": ["titan-design-system"]
     },
     {
       "id": "q26",
       "text": "How was the Titan design system migration phased?",
       "type": "factual",
-      "relevantNoteIds": [
-        "titan-design-system"
-      ]
+      "relevantNoteIds": ["titan-design-system"]
     },
     {
       "id": "q27",
       "text": "What testing framework do all Voltras repos use?",
       "type": "factual",
-      "relevantNoteIds": [
-        "testing-strategy"
-      ]
+      "relevantNoteIds": ["testing-strategy"]
     },
     {
       "id": "q28",
       "text": "How does the mobile app test configuration differ from other repos?",
       "type": "factual",
-      "relevantNoteIds": [
-        "testing-strategy"
-      ]
+      "relevantNoteIds": ["testing-strategy"]
     },
     {
       "id": "q29",
       "text": "How does OIDC trusted publishing work for npm packages?",
       "type": "factual",
-      "relevantNoteIds": [
-        "publishing-decision"
-      ]
+      "relevantNoteIds": ["publishing-decision"]
     },
     {
       "id": "q30",
       "text": "Why doesn't the Voltras project need an NPM_TOKEN secret?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "publishing-decision"
-      ]
+      "relevantNoteIds": ["publishing-decision"]
     },
     {
       "id": "q31",
       "text": "Why was SQLite chosen over PostgreSQL for the brain project?",
       "type": "factual",
-      "relevantNoteIds": [
-        "database-choice"
-      ]
+      "relevantNoteIds": ["database-choice"]
     },
     {
       "id": "q32",
       "text": "How are embedding vectors stored and queried in the brain database?",
       "type": "factual",
-      "relevantNoteIds": [
-        "database-choice"
-      ]
+      "relevantNoteIds": ["database-choice"]
     },
     {
       "id": "q33",
       "text": "What is the Zustand selector pattern and why does it matter?",
       "type": "factual",
-      "relevantNoteIds": [
-        "zustand-store-patterns"
-      ]
+      "relevantNoteIds": ["zustand-store-patterns"]
     },
     {
       "id": "q34",
       "text": "How do you persist Zustand state with AsyncStorage?",
       "type": "factual",
-      "relevantNoteIds": [
-        "zustand-store-patterns"
-      ]
+      "relevantNoteIds": ["zustand-store-patterns"]
     },
     {
       "id": "q35",
       "text": "Why must BLE write operations be serialized?",
       "type": "factual",
-      "relevantNoteIds": [
-        "ble-command-pattern"
-      ]
+      "relevantNoteIds": ["ble-command-pattern"]
     },
     {
       "id": "q36",
       "text": "How does the SDK command queue handle concurrent requests?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "ble-command-pattern",
-        "sdk-architecture"
-      ]
+      "relevantNoteIds": ["ble-command-pattern", "sdk-architecture"]
     },
     {
       "id": "q37",
       "text": "What is the compound component pattern in React Native?",
       "type": "factual",
-      "relevantNoteIds": [
-        "component-composition-pattern"
-      ]
+      "relevantNoteIds": ["component-composition-pattern"]
     },
     {
       "id": "q38",
       "text": "How does the Titan design system handle component customization?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "component-composition-pattern",
-        "titan-design-system"
-      ]
+      "relevantNoteIds": ["component-composition-pattern", "titan-design-system"]
     },
     {
       "id": "q39",
       "text": "What are the three levels of error boundaries in the mobile app?",
       "type": "factual",
-      "relevantNoteIds": [
-        "error-boundary-pattern"
-      ]
+      "relevantNoteIds": ["error-boundary-pattern"]
     },
     {
       "id": "q40",
       "text": "How does the app handle BLE connection loss automatically?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "error-boundary-pattern",
-        "debug-session-ble-disconnect"
-      ]
+      "relevantNoteIds": ["error-boundary-pattern", "debug-session-ble-disconnect"]
     },
     {
       "id": "q41",
       "text": "How does the useTelemetry hook subscribe to SDK events?",
       "type": "factual",
-      "relevantNoteIds": [
-        "hook-patterns"
-      ]
+      "relevantNoteIds": ["hook-patterns"]
     },
     {
       "id": "q42",
       "text": "What React patterns are used for integrating with the Voltra SDK?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "hook-patterns",
-        "sdk-integration-guide"
-      ]
+      "relevantNoteIds": ["hook-patterns", "sdk-integration-guide"]
     },
     {
       "id": "q43",
       "text": "How does the SDK enforce type safety for command payloads?",
       "type": "factual",
-      "relevantNoteIds": [
-        "typescript-generics-pattern"
-      ]
+      "relevantNoteIds": ["typescript-generics-pattern"]
     },
     {
       "id": "q44",
       "text": "What generic patterns does the SDK use for its event system?",
       "type": "factual",
-      "relevantNoteIds": [
-        "typescript-generics-pattern"
-      ]
+      "relevantNoteIds": ["typescript-generics-pattern"]
     },
     {
       "id": "q45",
       "text": "How does the Voltra device compare to competitor VBT products?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "fitness-device-observations"
-      ]
+      "relevantNoteIds": ["fitness-device-observations"]
     },
     {
       "id": "q46",
       "text": "What is the target price point for the Voltra consumer device?",
       "type": "factual",
-      "relevantNoteIds": [
-        "fitness-device-observations"
-      ]
+      "relevantNoteIds": ["fitness-device-observations"]
     },
     {
       "id": "q47",
       "text": "What is the SDK's breaking change policy before version 1.0?",
       "type": "factual",
-      "relevantNoteIds": [
-        "sdk-versioning-notes"
-      ]
+      "relevantNoteIds": ["sdk-versioning-notes"]
     },
     {
       "id": "q48",
       "text": "What needs to happen before the SDK can reach 1.0?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "sdk-versioning-notes"
-      ]
+      "relevantNoteIds": ["sdk-versioning-notes"]
     },
     {
       "id": "q49",
       "text": "What caused frame drops in the workout recording screen?",
       "type": "factual",
-      "relevantNoteIds": [
-        "mobile-performance-notes"
-      ]
+      "relevantNoteIds": ["mobile-performance-notes"]
     },
     {
       "id": "q50",
       "text": "How was the telemetry rendering optimized for older devices?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "mobile-performance-notes",
-        "telemetry-processing"
-      ]
+      "relevantNoteIds": ["mobile-performance-notes", "telemetry-processing"]
     },
     {
       "id": "q51",
       "text": "What issues were encountered updating from Expo 53 to 54?",
       "type": "factual",
-      "relevantNoteIds": [
-        "expo-update-notes"
-      ]
+      "relevantNoteIds": ["expo-update-notes"]
     },
     {
       "id": "q52",
       "text": "What NativeWind workarounds were needed for the Expo update?",
       "type": "multi-hop",
-      "relevantNoteIds": [
-        "expo-update-notes",
-        "nativewind-quirks"
-      ]
+      "relevantNoteIds": ["expo-update-notes", "nativewind-quirks"]
     },
     {
       "id": "q53",
       "text": "Why don't Tailwind animation classes work in NativeWind v4?",
       "type": "factual",
-      "relevantNoteIds": [
-        "nativewind-quirks"
-      ]
+      "relevantNoteIds": ["nativewind-quirks"]
     },
     {
       "id": "q54",
       "text": "How does dark mode behave differently on web versus native with NativeWind?",
       "type": "factual",
-      "relevantNoteIds": [
-        "nativewind-quirks"
-      ]
+      "relevantNoteIds": ["nativewind-quirks"]
     },
     {
       "id": "q55",
       "text": "How do you set up BLE development without a physical device?",
       "type": "factual",
-      "relevantNoteIds": [
-        "ble-setup-guide"
-      ]
+      "relevantNoteIds": ["ble-setup-guide"]
     },
     {
       "id": "q56",
       "text": "What Android permissions are required for BLE scanning?",
       "type": "factual",
-      "relevantNoteIds": [
-        "ble-setup-guide"
-      ]
+      "relevantNoteIds": ["ble-setup-guide"]
     },
     {
       "id": "q57",
       "text": "How do you integrate the Voltra SDK into a React Native app?",
       "type": "factual",
-      "relevantNoteIds": [
-        "sdk-integration-guide"
-      ]
+      "relevantNoteIds": ["sdk-integration-guide"]
     },
     {
       "id": "q58",
       "text": "How do you properly clean up SDK resources when a component unmounts?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "sdk-integration-guide",
-        "hook-patterns"
-      ]
+      "relevantNoteIds": ["sdk-integration-guide", "hook-patterns"]
     },
     {
       "id": "q59",
       "text": "How do you configure Storybook to work with NativeWind styles?",
       "type": "factual",
-      "relevantNoteIds": [
-        "storybook-setup-guide"
-      ]
+      "relevantNoteIds": ["storybook-setup-guide"]
     },
     {
       "id": "q60",
       "text": "What are the known Storybook limitations with React Native components?",
       "type": "factual",
-      "relevantNoteIds": [
-        "storybook-setup-guide",
-        "nativewind-quirks"
-      ]
+      "relevantNoteIds": ["storybook-setup-guide", "nativewind-quirks"]
     },
     {
       "id": "q61",
       "text": "What were the sprint goals for Week 42?",
       "type": "factual",
-      "relevantNoteIds": [
-        "sprint-planning-2025w42"
-      ]
+      "relevantNoteIds": ["sprint-planning-2025w42"]
     },
     {
       "id": "q62",
       "text": "What was decided about Playwright E2E testing?",
       "type": "factual",
-      "relevantNoteIds": [
-        "sprint-planning-2025w42",
-        "testing-strategy"
-      ]
+      "relevantNoteIds": ["sprint-planning-2025w42", "testing-strategy"]
     },
     {
       "id": "q63",
       "text": "What design feedback was given for the workout recording screen?",
       "type": "factual",
-      "relevantNoteIds": [
-        "design-review-2025w40"
-      ]
+      "relevantNoteIds": ["design-review-2025w40"]
     },
     {
       "id": "q64",
       "text": "Why can't the velocity chart use gradient fills on Android?",
       "type": "factual",
-      "relevantNoteIds": [
-        "design-review-2025w40"
-      ]
+      "relevantNoteIds": ["design-review-2025w40"]
     },
     {
       "id": "q65",
       "text": "What workout data export format was chosen and why?",
       "type": "factual",
-      "relevantNoteIds": [
-        "api-discussion-2025w38"
-      ]
+      "relevantNoteIds": ["api-discussion-2025w38"]
     },
     {
       "id": "q66",
       "text": "Why wasn't FIT file format adopted for the first version of data export?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "api-discussion-2025w38"
-      ]
+      "relevantNoteIds": ["api-discussion-2025w38"]
     },
     {
       "id": "q67",
       "text": "What caused intermittent BLE disconnections on Android?",
       "type": "factual",
-      "relevantNoteIds": [
-        "debug-session-ble-disconnect"
-      ]
+      "relevantNoteIds": ["debug-session-ble-disconnect"]
     },
     {
       "id": "q68",
       "text": "How was the Android BLE disconnect issue fixed?",
       "type": "factual",
-      "relevantNoteIds": [
-        "debug-session-ble-disconnect"
-      ]
+      "relevantNoteIds": ["debug-session-ble-disconnect"]
     },
     {
       "id": "q69",
       "text": "What stores were consolidated during the refactoring session?",
       "type": "factual",
-      "relevantNoteIds": [
-        "refactoring-session-stores"
-      ]
+      "relevantNoteIds": ["refactoring-session-stores"]
     },
     {
       "id": "q70",
       "text": "Why was the calibration store replaced with local component state?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "refactoring-session-stores",
-        "zustand-store-patterns"
-      ]
+      "relevantNoteIds": ["refactoring-session-stores", "zustand-store-patterns"]
     },
     {
       "id": "q71",
       "text": "What is the default BLE MTU size?",
       "type": "factual",
-      "relevantNoteIds": [
-        "edge-tiny",
-        "ble-protocol-research"
-      ]
+      "relevantNoteIds": ["edge-tiny", "ble-protocol-research"]
     },
     {
       "id": "q72",
       "text": "How does velocity loss within a set relate to training adaptations?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "edge-huge",
-        "vbt-fundamentals"
-      ]
+      "relevantNoteIds": ["edge-huge", "vbt-fundamentals"]
     },
     {
       "id": "q73",
       "text": "How is the BLE command packet encoded in TypeScript?",
       "type": "factual",
-      "relevantNoteIds": [
-        "edge-code",
-        "ble-protocol-research"
-      ]
+      "relevantNoteIds": ["edge-code", "ble-protocol-research"]
     },
     {
       "id": "q74",
       "text": "What is the mean velocity for a back squat at 80% of 1RM?",
       "type": "factual",
-      "relevantNoteIds": [
-        "edge-tables"
-      ]
+      "relevantNoteIds": ["edge-tables"]
     },
     {
       "id": "q75",
       "text": "How does sensor placement affect velocity measurement accuracy?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "edge-no-headings"
-      ]
+      "relevantNoteIds": ["edge-no-headings"]
     },
     {
       "id": "q76",
       "text": "What localization considerations does the app need to handle?",
       "type": "semantic",
-      "relevantNoteIds": [
-        "edge-unicode"
-      ]
+      "relevantNoteIds": ["edge-unicode"]
     },
     {
       "id": "q77",
       "text": "What placeholder architecture areas still need to be defined?",
       "type": "factual",
-      "relevantNoteIds": [
-        "edge-empty-sections"
-      ]
+      "relevantNoteIds": ["edge-empty-sections"]
     },
     {
       "id": "q78",
       "text": "How deep is the navigation nesting in the connection store implementation?",
       "type": "factual",
-      "relevantNoteIds": [
-        "edge-deep-nesting"
-      ]
+      "relevantNoteIds": ["edge-deep-nesting"]
     },
     {
       "id": "q79",
       "text": "How does the SDK architecture influence the mobile app's state management?",
       "type": "multi-hop",
-      "relevantNoteIds": [
-        "sdk-architecture",
-        "mobile-architecture",
-        "zustand-store-patterns"
-      ]
+      "relevantNoteIds": ["sdk-architecture", "mobile-architecture", "zustand-store-patterns"]
     },
     {
       "id": "q80",
@@ -1551,11 +1146,7 @@
       "id": "q82",
       "text": "How does the Titan design system decision connect to the NativeWind quirks found in practice?",
       "type": "multi-hop",
-      "relevantNoteIds": [
-        "titan-design-system",
-        "nativewind-quirks",
-        "storybook-setup-guide"
-      ]
+      "relevantNoteIds": ["titan-design-system", "nativewind-quirks", "storybook-setup-guide"]
     }
   ],
   "offTopicQueries": [

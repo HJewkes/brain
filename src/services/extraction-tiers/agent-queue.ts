@@ -29,12 +29,16 @@ export interface QueueResult {
 export function writeQueueFile(
   brainDir: string,
   context: QueueContext,
-  registry: ModuleRegistry,
+  registry: ModuleRegistry
 ): QueueResult {
   const queueDir = join(brainDir, 'import-queue');
   mkdirSync(queueDir, { recursive: true });
 
-  const basename = context.sourcePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'unknown';
+  const basename =
+    context.sourcePath
+      .split('/')
+      .pop()
+      ?.replace(/\.[^.]+$/, '') ?? 'unknown';
   const slug = slugify(basename);
   const queuePath = join(queueDir, `${slug}.md`);
   const now = new Date().toISOString().slice(0, 10);
@@ -69,7 +73,7 @@ export function writeQueueFile(
 
   for (const region of context.lowConfidenceRegions) {
     lines.push(
-      `- Low confidence: lines ${region.startLine}-${region.endLine} (${region.suggestedType}, confidence: ${region.confidence.toFixed(2)})`,
+      `- Low confidence: lines ${region.startLine}-${region.endLine} (${region.suggestedType}, confidence: ${region.confidence.toFixed(2)})`
     );
   }
 
@@ -91,7 +95,7 @@ export function writeQueueFile(
   lines.push('## Questions');
   for (const region of context.lowConfidenceRegions) {
     lines.push(
-      `- Lines ${region.startLine}-${region.endLine}: suggested "${region.suggestedType}" but confidence is ${region.confidence.toFixed(2)}. Is this correct?`,
+      `- Lines ${region.startLine}-${region.endLine}: suggested "${region.suggestedType}" but confidence is ${region.confidence.toFixed(2)}. Is this correct?`
     );
   }
   if (context.remainderContent.trim()) {
@@ -103,7 +107,7 @@ export function writeQueueFile(
   lines.push('## Instructions');
   lines.push('Review the source file and create the appropriate notes using the brain CLI.');
   lines.push(
-    'For tasks, use: `brain pm task add --project <PREFIX> --workstream <N> --name "..." --description "..."`',
+    'For tasks, use: `brain pm task add --project <PREFIX> --workstream <N> --name "..." --description "..."`'
   );
   lines.push('For notes, use: `brain add --type <type> --title "..." <file>`');
   lines.push('');

@@ -463,7 +463,7 @@ export function listTasks(
   }
 
   // Strip internal _body field before returning
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   const cleaned = tasks.map(({ _body, ...rest }) => rest);
   return ok(cleaned);
 }

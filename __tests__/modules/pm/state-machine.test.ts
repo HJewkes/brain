@@ -278,7 +278,7 @@ describe('canClaim', () => {
 
 describe('allowedTransitions', () => {
   test('pending returns [claimed, blocked, cancelled]', () => {
-    expect(allowedTransitions('pending')).toEqual(['claimed', 'blocked', 'cancelled']);
+    expect(allowedTransitions('pending')).toEqual(['claimed', 'blocked', 'cancelled', 'pruned']);
   });
 
   test('claimed returns [in-progress, pending, cancelled]', () => {
@@ -294,7 +294,7 @@ describe('allowedTransitions', () => {
   });
 
   test('blocked returns [pending, cancelled]', () => {
-    expect(allowedTransitions('blocked')).toEqual(['pending', 'cancelled']);
+    expect(allowedTransitions('blocked')).toEqual(['pending', 'cancelled', 'pruned']);
   });
 
   test('cancelled returns []', () => {
