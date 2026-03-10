@@ -64,6 +64,9 @@ jobs:
 
   test-integration:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1/2, 2/2]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -71,8 +74,15 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - name: Run integration tests
-        run: npx vitest run --project integration
+      - name: Run integration tests (shard ${{ matrix.shard }})
+        run: npx vitest run --project integration --shard ${{ matrix.shard }} --reporter=blob
+      - name: Upload blob report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-integration-${{ strategy.job-index }}
+          path: .vitest-reports
+          retention-days: 1
 
   test-report:
     if: always()

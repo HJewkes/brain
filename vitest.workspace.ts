@@ -28,7 +28,7 @@ export default defineWorkspace([
       pool: 'forks',
       poolOptions: {
         forks: {
-          maxForks: 2,
+          singleFork: true,
         },
       },
       testTimeout: 60_000,
