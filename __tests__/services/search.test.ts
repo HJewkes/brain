@@ -8,7 +8,13 @@ import {
 } from '../../src/services/search.js';
 import { unlinkSync } from 'node:fs';
 import type { Chunk, NoteRecord, SearchResult } from '../../src/types.js';
-import { tmpDbPath, makeNote, makeMemoryEntry, createMockEmbedder } from '../helpers.js';
+import {
+  tmpDbPath,
+  makeNote,
+  makeMemoryEntry,
+  createMockEmbedder,
+  createTestDb,
+} from '../helpers.js';
 import { ModuleRegistry } from '../../src/modules/registry.js';
 
 vi.mock('../../src/services/reranker.js', () => ({
@@ -730,8 +736,7 @@ describe('search with PM note inclusion', () => {
   }
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     embedder = createMockEmbedder();
     registry = createRegistryWithPmPrivate();
 
@@ -881,8 +886,7 @@ describe('searchMemories', () => {
   let embedder: Embedder;
 
   beforeEach(async () => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     embedder = createMockEmbedder();
 
     db.upsertNote(makeNote({ id: 'note-1', filePath: '/notes/note-1.md' }));
@@ -1015,8 +1019,7 @@ describe('metadata filtering', () => {
   }
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     embedder = createMockEmbedder();
   });
 
@@ -1061,8 +1064,7 @@ describe('facet computation', () => {
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {

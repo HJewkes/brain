@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { runOnboard } from '../../../src/modules/pm/commands/onboard.js';
 
@@ -16,8 +16,7 @@ let config: BrainConfig;
 const embedder = createMockEmbedder();
 
 beforeEach(() => {
-  dbPath = tmpDbPath('v11-init-onboard');
-  db = new BrainDB(dbPath);
+  ({ dbPath, db } = createTestDb());
   notesDir = join(tmpdir(), `v11-init-onboard-${randomUUID()}`);
   projectDir = join(tmpdir(), `v11-project-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { tmpDbPath, makeNote, makeInboxItem } from '../helpers.js';
+import { makeNote, makeInboxItem, createTestDb } from '../helpers.js';
 import { BrainDB } from '../../src/services/brain-db.js';
 import {
   checkDatabase,
@@ -15,7 +15,7 @@ describe('health checks', () => {
   let db: BrainDB;
 
   beforeEach(() => {
-    db = new BrainDB(tmpDbPath());
+    ({ db } = createTestDb());
   });
 
   afterEach(() => {

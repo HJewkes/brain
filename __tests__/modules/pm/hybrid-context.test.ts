@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote, createMockEmbedder } from '../../helpers.js';
+import { makeNote, createMockEmbedder, createTestDb } from '../../helpers.js';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,7 +10,6 @@ import { computeGraphScores } from '../../../src/services/graph.js';
 import type { BrainConfig } from '../../../src/types.js';
 
 let db: BrainDB;
-let dbPath: string;
 let tempDir: string;
 const embedder = createMockEmbedder();
 
@@ -39,8 +38,7 @@ function makeTaskFile(dir: string, displayId: string, title: string): string {
 }
 
 beforeEach(() => {
-  dbPath = tmpDbPath('hybrid-ctx');
-  db = new BrainDB(dbPath);
+  ({ db } = createTestDb());
   tempDir = join(tmpdir(), `brain-hybrid-${randomUUID()}`);
   mkdirSync(tempDir, { recursive: true });
 });

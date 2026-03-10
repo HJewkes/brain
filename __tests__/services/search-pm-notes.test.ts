@@ -3,7 +3,7 @@ import { unlinkSync } from 'node:fs';
 import { BrainDB } from '../../src/services/brain-db.js';
 import { search } from '../../src/services/search.js';
 import { ModuleRegistry } from '../../src/modules/registry.js';
-import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
+import { createMockEmbedder, makeNote, createTestDb } from '../helpers.js';
 import type { Chunk, Embedder } from '../../src/types.js';
 
 describe('PM notes in search', () => {
@@ -13,8 +13,7 @@ describe('PM notes in search', () => {
   let registry: ModuleRegistry;
 
   beforeEach(() => {
-    dbPath = tmpDbPath('search-pm');
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     embedder = createMockEmbedder();
     registry = new ModuleRegistry();
     registry.registerFilter('pm', { visibility: 'private' });

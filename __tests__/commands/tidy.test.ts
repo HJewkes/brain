@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
+import { createMockEmbedder, makeNote, createTestDb } from '../helpers.js';
 import type { BrainConfig } from '../../src/types.js';
 import { tidyCommand } from '../../src/commands/tidy.js';
 
@@ -44,7 +44,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(() => {
-  db = new BrainDB(tmpDbPath('tidy-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-tidy-cmd',
     dbPath: ':memory:',

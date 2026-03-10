@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote } from '../../helpers.js';
+import { makeNote, createTestDb } from '../../helpers.js';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,7 +8,6 @@ import { randomUUID } from 'node:crypto';
 import { assembleContext, isContextStale } from '../../../src/modules/pm/engine/dispatch.js';
 
 let db: BrainDB;
-let dbPath: string;
 let tempDir: string;
 
 function taskMeta(displayId: string, project: string, overrides: Record<string, unknown> = {}) {
@@ -51,8 +50,7 @@ function promptMeta(
 }
 
 beforeEach(() => {
-  dbPath = tmpDbPath('pm-dispatch');
-  db = new BrainDB(dbPath);
+  ({ db } = createTestDb());
   tempDir = join(tmpdir(), `brain-dispatch-${randomUUID()}`);
   mkdirSync(tempDir, { recursive: true });
 });

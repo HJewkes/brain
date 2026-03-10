@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createDecisionCommands } from '../../../../src/modules/pm/commands/decision.js';
@@ -30,7 +30,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('decision-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-decision-cmd',
     dbPath: ':memory:',
@@ -61,7 +61,7 @@ afterEach(() => {
 describe('decision add (error paths)', () => {
   it('error when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('decision-add-noproj'));
+    ({ db } = createTestDb());
 
     await run('add', 'Test', '--source-task', 'TEST-01.01');
 
@@ -72,7 +72,7 @@ describe('decision add (error paths)', () => {
 describe('decision list (error paths)', () => {
   it('error when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('decision-list-noproj'));
+    ({ db } = createTestDb());
 
     await run('list');
 

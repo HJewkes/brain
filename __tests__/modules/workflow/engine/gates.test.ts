@@ -7,10 +7,10 @@ import { evaluateGate, evaluateGates } from '../../../../src/modules/workflow/en
 import type { Gate } from '../../../../src/modules/workflow/types.js';
 import { BrainDB } from '../../../../src/services/brain-db.js';
 import {
-  tmpDbPath,
   createMockEmbedder,
   createTestTask,
   setTestTaskStatus,
+  createTestDb,
 } from '../../../helpers.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
@@ -24,8 +24,7 @@ let config: BrainConfig;
 const embedder = createMockEmbedder();
 
 beforeEach(async () => {
-  dbPath = tmpDbPath('wf-gates');
-  db = new BrainDB(dbPath);
+  ({ dbPath, db } = createTestDb());
   notesDir = join(tmpdir(), `wf-gates-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });
   config = { notesDir, dbPath, embedder: 'local', fusionWeights: { bm25: 0.3, vector: 0.7 } };

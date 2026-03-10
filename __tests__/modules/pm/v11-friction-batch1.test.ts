@@ -1,14 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote } from '../../helpers.js';
+import { makeNote, createTestDb } from '../../helpers.js';
 import type { SearchResult } from '../../../src/types.js';
 
 let db: BrainDB;
-let dbPath: string;
 
 beforeEach(() => {
-  dbPath = tmpDbPath('friction-batch1');
-  db = new BrainDB(dbPath);
+  ({ db } = createTestDb());
 });
 
 afterEach(() => {

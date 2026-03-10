@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import { indexSingleFile } from '../../../src/services/indexing.js';
 import { computeAutoLinks } from '../../../src/services/graph.js';
 
@@ -13,7 +13,7 @@ let notesDir: string;
 const embedder = createMockEmbedder();
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('auto-link-dedup'));
+  ({ db } = createTestDb());
   db.setEmbeddingModel(embedder.model, embedder.dimensions);
   notesDir = join(tmpdir(), `ald-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });

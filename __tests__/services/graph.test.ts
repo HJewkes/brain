@@ -2,15 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
 import { unlinkSync } from 'node:fs';
 import { getDirectRelations, traverseGraph, expandResults } from '../../src/services/graph.js';
-import { tmpDbPath, makeNote } from '../helpers.js';
+import { makeNote, createTestDb } from '../helpers.js';
 
 describe('graph service', () => {
   let db: BrainDB;
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {

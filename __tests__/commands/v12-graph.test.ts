@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
+import { createMockEmbedder, makeNote, createTestDb } from '../helpers.js';
 import type { BrainConfig } from '../../src/types.js';
 import { graphCommand } from '../../src/commands/graph.js';
 
@@ -30,7 +30,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(() => {
-  db = new BrainDB(tmpDbPath('v12-graph'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-v12-graph',
     dbPath: ':memory:',

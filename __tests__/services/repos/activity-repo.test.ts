@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { unlinkSync } from 'node:fs';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeActivity } from '../../helpers.js';
+import { makeActivity, createTestDb } from '../../helpers.js';
 
 describe('ActivityRepo', () => {
   let db: BrainDB;
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {

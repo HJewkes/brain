@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, makeActivity } from '../../../helpers.js';
+import { createMockEmbedder, makeActivity, createTestDb } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createAuditCommands } from '../../../../src/modules/pm/commands/audit.js';
 
@@ -67,7 +67,7 @@ function seedActivities(): void {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('audit-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-audit-cmd',
     dbPath: ':memory:',

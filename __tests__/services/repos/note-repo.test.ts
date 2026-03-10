@@ -4,7 +4,7 @@ import { BrainDB } from '../../../src/services/brain-db.js';
 import { NoteRepo } from '../../../src/services/repos/note-repo.js';
 import { unlinkSync } from 'node:fs';
 import type { FileRecord, Chunk } from '../../../src/types.js';
-import { tmpDbPath, makeNote, makeChunk } from '../../helpers.js';
+import { makeNote, makeChunk, createTestDb } from '../../helpers.js';
 
 function makeFileRecord(overrides: Partial<FileRecord> = {}): FileRecord {
   return {
@@ -20,8 +20,7 @@ describe('NoteRepo', () => {
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {

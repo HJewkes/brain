@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { unlinkSync } from 'node:fs';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote } from '../../helpers.js';
+import { makeNote, createTestDb } from '../../helpers.js';
 import {
   parseDisplayId,
   formatDisplayId,
@@ -154,8 +154,7 @@ describe('nextWorkstreamNumber', () => {
   let db: BrainDB;
 
   beforeEach(() => {
-    dbPath = tmpDbPath('pm-ids');
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {
@@ -245,8 +244,7 @@ describe('nextTaskNumber', () => {
   let db: BrainDB;
 
   beforeEach(() => {
-    dbPath = tmpDbPath('pm-ids');
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {

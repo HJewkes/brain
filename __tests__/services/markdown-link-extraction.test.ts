@@ -3,7 +3,7 @@ import { unlinkSync } from 'node:fs';
 import { extractNoteLinks } from '../../src/services/markdown-parser.js';
 import { indexSingleFile } from '../../src/services/indexing.js';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../helpers.js';
+import { createMockEmbedder, createTestDb } from '../helpers.js';
 
 describe('extractNoteLinks', () => {
   it('extracts internal markdown links', () => {
@@ -53,8 +53,7 @@ describe('indexSingleFile creates related-to relations for links', () => {
   const embedder = createMockEmbedder();
 
   beforeEach(() => {
-    dbPath = tmpDbPath('link-extract');
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../helpers.js';
+import { createMockEmbedder, createTestDb } from '../helpers.js';
 import { ingestBrainReferenceDocs } from '../../src/commands/init.js';
 import type { BrainConfig } from '../../src/types.js';
 
@@ -24,8 +24,7 @@ function makeConfig(overrides: Partial<BrainConfig> = {}): BrainConfig {
 }
 
 beforeEach(() => {
-  dbPath = tmpDbPath('init-ref-docs');
-  db = new BrainDB(dbPath);
+  ({ dbPath, db } = createTestDb());
   db.setEmbeddingModel('mock-embedder', 384);
   notesDir = join(tmpdir(), `init-ref-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });

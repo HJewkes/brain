@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote } from '../../helpers.js';
+import { makeNote, createTestDb } from '../../helpers.js';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -12,7 +12,6 @@ import {
 } from '../../../src/modules/pm/engine/dispatch.js';
 
 let db: BrainDB;
-let dbPath: string;
 let tempDir: string;
 
 function taskMeta(displayId: string, project: string, overrides: Record<string, unknown> = {}) {
@@ -31,8 +30,7 @@ function taskMeta(displayId: string, project: string, overrides: Record<string, 
 }
 
 beforeEach(() => {
-  dbPath = tmpDbPath('pm-context-semantic');
-  db = new BrainDB(dbPath);
+  ({ db } = createTestDb());
   tempDir = join(tmpdir(), `brain-context-${randomUUID()}`);
   mkdirSync(tempDir, { recursive: true });
 });

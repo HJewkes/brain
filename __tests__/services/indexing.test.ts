@@ -10,7 +10,7 @@ import {
   indexSingleFile,
 } from '../../src/services/indexing.js';
 import { parseMarkdown } from '../../src/services/markdown-parser.js';
-import { tmpDbPath, createMockEmbedder, makeInboxItem } from '../helpers.js';
+import { createMockEmbedder, makeInboxItem, createTestDb } from '../helpers.js';
 import type { RawChunk } from '../../src/types.js';
 
 describe('slugify', () => {
@@ -239,8 +239,7 @@ describe('indexSingleFile', () => {
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     db.ensureVectorTable(384);
     db.setEmbeddingModel('mock-embedder', 384);
   });

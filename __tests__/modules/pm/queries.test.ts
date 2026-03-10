@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote } from '../../helpers.js';
+import { makeNote, createTestDb } from '../../helpers.js';
 import {
   resolveDisplayId,
   getProjectNotes,
@@ -13,11 +13,9 @@ import {
 } from '../../../src/modules/pm/data/queries.js';
 
 let db: BrainDB;
-let dbPath: string;
 
 beforeEach(() => {
-  dbPath = tmpDbPath('pm-queries');
-  db = new BrainDB(dbPath);
+  ({ db } = createTestDb());
 });
 
 afterEach(() => {

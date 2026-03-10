@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
 import { search } from '../../src/services/search.js';
-import { tmpDbPath, createMockEmbedder } from '../helpers.js';
+import { createMockEmbedder, createTestDb } from '../helpers.js';
 import { indexSingleFile } from '../../src/services/indexing.js';
 import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ const embedder = createMockEmbedder();
 const weights = { bm25: 0.3, vector: 0.7 };
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('search-guardrails'));
+  ({ db } = createTestDb());
   db.setEmbeddingModel(embedder.model, embedder.dimensions);
   notesDir = join(tmpdir(), `sg-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });

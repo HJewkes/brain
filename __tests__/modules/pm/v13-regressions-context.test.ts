@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
@@ -18,7 +18,7 @@ let config: BrainConfig;
 const embedder = createMockEmbedder();
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('reg-ctx'));
+  ({ db } = createTestDb());
   notesDir = join(tmpdir(), `reg-ctx-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });
   config = { notesDir, dbPath: '', embedder: 'local', fusionWeights: { bm25: 0.3, vector: 0.7 } };

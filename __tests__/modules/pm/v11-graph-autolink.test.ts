@@ -1,14 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote, makeChunk } from '../../helpers.js';
+import { makeNote, makeChunk, createTestDb } from '../../helpers.js';
 import { computeAutoLinks } from '../../../src/services/graph.js';
 
 let db: BrainDB;
-let dbPath: string;
 
 beforeEach(() => {
-  dbPath = tmpDbPath('graph-autolink');
-  db = new BrainDB(dbPath);
+  ({ db } = createTestDb());
 });
 
 afterEach(() => {

@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, makeNote, makeChunk } from '../helpers.js';
+import { createMockEmbedder, makeNote, makeChunk, createTestDb } from '../helpers.js';
 import type { BrainConfig } from '../../src/types.js';
 import { searchCommand } from '../../src/commands/search.js';
 
@@ -38,7 +38,7 @@ async function indexNote(
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('v11-search-scoping'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-v11-scoping',
     dbPath: ':memory:',

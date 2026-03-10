@@ -2,7 +2,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createTaskCommands } from '../../../../src/modules/pm/commands/task.js';
@@ -32,7 +32,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('task-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-task-cmd',
     dbPath: ':memory:',
@@ -193,7 +193,7 @@ describe('task list', () => {
   it('error when no project: exitCode=1, stderr has error', async () => {
     // Use a fresh DB with no project
     db.close();
-    db = new BrainDB(tmpDbPath('task-cmd-empty'));
+    ({ db } = createTestDb());
 
     await run('list');
 
@@ -481,7 +481,7 @@ describe('task start', () => {
 describe('task add (error paths)', () => {
   it('error when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('task-add-noproj'));
+    ({ db } = createTestDb());
 
     await run('add', 'New task', '--workstream', '1', '--description', 'Test task.');
 
@@ -492,7 +492,7 @@ describe('task add (error paths)', () => {
 describe('task list (error paths)', () => {
   it('error when resolveProject fails', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('task-list-noproj'));
+    ({ db } = createTestDb());
 
     await run('list');
 
@@ -689,7 +689,7 @@ describe('task list (output formatting)', () => {
 
   it('text output shows "No tasks found" with no filters on empty project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('task-cmd-empty'));
+    ({ db } = createTestDb());
 
     await run('list');
 

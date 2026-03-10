@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
@@ -13,7 +13,7 @@ const embedder = createMockEmbedder();
 let config: BrainConfig;
 
 beforeEach(() => {
-  db = new BrainDB(tmpDbPath('v12-ws-context'));
+  ({ db } = createTestDb());
   config = {
     notesDir: `/tmp/v12-ws-context-${Date.now()}`,
     dbPath: ':memory:',

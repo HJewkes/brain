@@ -1,13 +1,13 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath } from '../../helpers.js';
+import { createTestDb } from '../../helpers.js';
 import { getActiveProject, setActiveProject } from '../../../src/modules/pm/data/queries.js';
 
 describe('session-start: active project detection', () => {
   let db: BrainDB;
 
   beforeEach(() => {
-    db = new BrainDB(tmpDbPath());
+    ({ db } = createTestDb());
     db.setEmbeddingModel('mock', 384);
   });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type Database from 'better-sqlite3';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath } from '../../helpers.js';
+import { createTestDb } from '../../helpers.js';
 
 let db: BrainDB;
 
@@ -10,7 +10,7 @@ function rawDb(): Database.Database {
 }
 
 beforeEach(() => {
-  db = new BrainDB(tmpDbPath('embed-lifecycle'));
+  ({ db } = createTestDb());
 });
 
 afterEach(() => {

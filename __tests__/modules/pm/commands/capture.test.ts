@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createCaptureCommands } from '../../../../src/modules/pm/commands/capture.js';
@@ -39,7 +39,7 @@ async function runInbox(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('capture-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-capture-cmd',
     dbPath: ':memory:',
@@ -79,7 +79,7 @@ describe('capture process (error paths)', () => {
 
   it('error when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('capture-proc-noproj'));
+    ({ db } = createTestDb());
 
     await runProcess2(
       'some-id',
