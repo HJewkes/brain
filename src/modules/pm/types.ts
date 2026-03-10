@@ -55,6 +55,20 @@ export type ActivityType =
   | 'unblock'
   | 'cancel';
 
+export interface ProjectCommands {
+  build?: string | null;
+  test?: string | null;
+  typecheck?: string | null;
+  lint?: string | null;
+}
+
+export interface ProjectBranchPrefix {
+  feature?: string;
+  bug?: string;
+  refactor?: string;
+  infrastructure?: string;
+}
+
 // PM metadata interfaces (stored in notes.metadata JSON)
 export interface ProjectMetadata {
   title?: string;
@@ -63,6 +77,15 @@ export interface ProjectMetadata {
   status: ProjectStatus;
   phase?: string;
   wip_limit?: number;
+  path?: string;
+  remote?: string;
+  default_branch?: string;
+  review_threshold?: number;
+  package_name?: string;
+  package_manager?: string;
+  commands?: ProjectCommands;
+  branch_prefix?: ProjectBranchPrefix;
+  notes?: Record<string, string>;
 }
 
 export interface WorkstreamMetadata {

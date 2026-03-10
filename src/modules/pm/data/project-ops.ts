@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { Result } from '../errors.js';
-import type { ProjectMetadata } from '../types.js';
+import type { ProjectMetadata, ProjectCommands, ProjectBranchPrefix } from '../types.js';
 import { ok, fail } from '../errors.js';
 import { validatePrefix } from '../ids.js';
 import { indexSingleFile } from '../../../services/indexing.js';
@@ -15,6 +15,15 @@ export interface CreateProjectInput {
   prefix: string;
   phase?: string;
   wipLimit?: number;
+  path?: string;
+  remote?: string;
+  defaultBranch?: string;
+  reviewThreshold?: number;
+  packageName?: string;
+  packageManager?: string;
+  commands?: ProjectCommands;
+  branchPrefix?: ProjectBranchPrefix;
+  notes?: Record<string, string>;
 }
 
 function projectFilePath(config: BrainConfig, prefix: string): string {
@@ -41,6 +50,16 @@ function buildProjectMarkdown(input: CreateProjectInput): string {
   if (input.wipLimit !== undefined) {
     lines.push(`wip_limit: ${input.wipLimit}`);
   }
+
+  if (input.path) lines.push(`path: "${input.path}"`);
+  if (input.remote) lines.push(`remote: "${input.remote}"`);
+  if (input.defaultBranch) lines.push(`default_branch: "${input.defaultBranch}"`);
+  if (input.reviewThreshold !== undefined) lines.push(`review_threshold: ${input.reviewThreshold}`);
+  if (input.packageName) lines.push(`package_name: "${input.packageName}"`);
+  if (input.packageManager) lines.push(`package_manager: "${input.packageManager}"`);
+  if (input.commands) lines.push(`commands: '${JSON.stringify(input.commands)}'`);
+  if (input.branchPrefix) lines.push(`branch_prefix: '${JSON.stringify(input.branchPrefix)}'`);
+  if (input.notes) lines.push(`notes: '${JSON.stringify(input.notes)}'`);
 
   lines.push(`created: ${now}`, `modified: ${now}`, '---', '', `# ${input.name}`, '');
   return lines.join('\n');
@@ -82,12 +101,34 @@ export async function createProject(
     status: 'active',
     phase: input.phase,
     wip_limit: input.wipLimit,
+    path: input.path,
+    remote: input.remote,
+    default_branch: input.defaultBranch,
+    review_threshold: input.reviewThreshold,
+    package_name: input.packageName,
+    package_manager: input.packageManager,
+    commands: input.commands,
+    branch_prefix: input.branchPrefix,
+    notes: input.notes,
   };
 
   return ok(metadata);
 }
 
 function projectMetaFromRecord(meta: Record<string, unknown>): ProjectMetadata {
+  const parseJsonField = <T>(val: unknown): T | undefined => {
+    if (!val) return undefined;
+    if (typeof val === 'object') return val as T;
+    if (typeof val === 'string') {
+      try {
+        return JSON.parse(val) as T;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+
   return {
     title: (meta.title as string) ?? undefined,
     display_id: meta.display_id as string,
@@ -95,6 +136,15 @@ function projectMetaFromRecord(meta: Record<string, unknown>): ProjectMetadata {
     status: meta.status as ProjectMetadata['status'],
     phase: meta.phase as string | undefined,
     wip_limit: meta.wip_limit as number | undefined,
+    path: meta.path as string | undefined,
+    remote: meta.remote as string | undefined,
+    default_branch: meta.default_branch as string | undefined,
+    review_threshold: meta.review_threshold as number | undefined,
+    package_name: meta.package_name as string | undefined,
+    package_manager: meta.package_manager as string | undefined,
+    commands: parseJsonField<ProjectCommands>(meta.commands),
+    branch_prefix: parseJsonField<ProjectBranchPrefix>(meta.branch_prefix),
+    notes: parseJsonField<Record<string, string>>(meta.notes),
   };
 }
 
@@ -135,7 +185,23 @@ export async function updateProject(
   config: BrainConfig,
   embedder: Embedder,
   prefix: string,
-  updates: Partial<Pick<ProjectMetadata, 'status' | 'phase' | 'wip_limit'>>
+  updates: Partial<
+    Pick<
+      ProjectMetadata,
+      | 'status'
+      | 'phase'
+      | 'wip_limit'
+      | 'path'
+      | 'remote'
+      | 'default_branch'
+      | 'review_threshold'
+      | 'package_name'
+      | 'package_manager'
+      | 'commands'
+      | 'branch_prefix'
+      | 'notes'
+    >
+  >
 ): Promise<Result<ProjectMetadata>> {
   const notes = getPmNotes(db, 'project', { prefix });
   if (notes.length === 0) {
@@ -160,6 +226,41 @@ export async function updateProject(
   }
   if (updates.wip_limit !== undefined) {
     updated = replaceFrontmatterField(updated, 'wip_limit', String(updates.wip_limit));
+  }
+  if (updates.path !== undefined) {
+    updated = replaceFrontmatterField(updated, 'path', `"${updates.path}"`);
+  }
+  if (updates.remote !== undefined) {
+    updated = replaceFrontmatterField(updated, 'remote', `"${updates.remote}"`);
+  }
+  if (updates.default_branch !== undefined) {
+    updated = replaceFrontmatterField(updated, 'default_branch', `"${updates.default_branch}"`);
+  }
+  if (updates.review_threshold !== undefined) {
+    updated = replaceFrontmatterField(
+      updated,
+      'review_threshold',
+      String(updates.review_threshold)
+    );
+  }
+  if (updates.package_name !== undefined) {
+    updated = replaceFrontmatterField(updated, 'package_name', `"${updates.package_name}"`);
+  }
+  if (updates.package_manager !== undefined) {
+    updated = replaceFrontmatterField(updated, 'package_manager', `"${updates.package_manager}"`);
+  }
+  if (updates.commands !== undefined) {
+    updated = replaceFrontmatterField(updated, 'commands', `'${JSON.stringify(updates.commands)}'`);
+  }
+  if (updates.branch_prefix !== undefined) {
+    updated = replaceFrontmatterField(
+      updated,
+      'branch_prefix',
+      `'${JSON.stringify(updates.branch_prefix)}'`
+    );
+  }
+  if (updates.notes !== undefined) {
+    updated = replaceFrontmatterField(updated, 'notes', `'${JSON.stringify(updates.notes)}'`);
   }
 
   const now = new Date().toISOString().slice(0, 10);
@@ -228,7 +329,10 @@ function replaceFrontmatterField(content: string, field: string, value: string):
   const frontmatter = content.slice(0, endOfFrontmatter);
   const rest = content.slice(endOfFrontmatter);
   const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = value.includes(' ') ? `"${value}"` : value;
+  const isAlreadyQuoted =
+    (value.startsWith("'") && value.endsWith("'")) ||
+    (value.startsWith('"') && value.endsWith('"'));
+  const quoted = isAlreadyQuoted ? value : value.includes(' ') ? `"${value}"` : value;
 
   if (fieldRegex.test(frontmatter)) {
     return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;

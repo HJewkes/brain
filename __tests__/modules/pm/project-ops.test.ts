@@ -282,3 +282,186 @@ describe('deleteProject', () => {
     }
   });
 });
+
+describe('project metadata enrichment', () => {
+  it('createProject with all new fields round-trips through getProject', async () => {
+    const commands = {
+      build: 'npm run build',
+      test: 'npm test',
+      typecheck: 'npm run typecheck',
+      lint: 'npm run lint',
+    };
+    const branchPrefix = {
+      feature: 'feat/',
+      bug: 'fix/',
+      refactor: 'refactor/',
+      infrastructure: 'infra/',
+    };
+    const notes = { ci: 'Uses GitHub Actions', deploy: 'Auto-deploy on merge' };
+
+    const result = await createProject(db, config, embedder, {
+      name: 'SDK',
+      prefix: 'SDK',
+      path: '/projects/sdk',
+      remote: 'git@github.com:org/sdk.git',
+      defaultBranch: 'main',
+      reviewThreshold: 4,
+      packageName: '@voltras/node-sdk',
+      packageManager: 'npm',
+      commands,
+      branchPrefix,
+      notes,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.path).toBe('/projects/sdk');
+    expect(result.data.remote).toBe('git@github.com:org/sdk.git');
+    expect(result.data.default_branch).toBe('main');
+    expect(result.data.review_threshold).toBe(4);
+    expect(result.data.package_name).toBe('@voltras/node-sdk');
+    expect(result.data.package_manager).toBe('npm');
+    expect(result.data.commands).toEqual(commands);
+    expect(result.data.branch_prefix).toEqual(branchPrefix);
+    expect(result.data.notes).toEqual(notes);
+
+    const fetched = getProject(db, 'SDK');
+    expect(fetched.ok).toBe(true);
+    if (!fetched.ok) return;
+    expect(fetched.data.path).toBe('/projects/sdk');
+    expect(fetched.data.remote).toBe('git@github.com:org/sdk.git');
+    expect(fetched.data.default_branch).toBe('main');
+    expect(fetched.data.review_threshold).toBe(4);
+    expect(fetched.data.package_name).toBe('@voltras/node-sdk');
+    expect(fetched.data.package_manager).toBe('npm');
+    expect(fetched.data.commands).toEqual(commands);
+    expect(fetched.data.branch_prefix).toEqual(branchPrefix);
+    expect(fetched.data.notes).toEqual(notes);
+  });
+
+  it('createProject with only some new fields (path + commands)', async () => {
+    const commands = { build: 'npm run build', test: 'npm test' };
+
+    const result = await createProject(db, config, embedder, {
+      name: 'Partial',
+      prefix: 'PART',
+      path: '/projects/partial',
+      commands,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.path).toBe('/projects/partial');
+    expect(result.data.commands).toEqual(commands);
+    expect(result.data.remote).toBeUndefined();
+    expect(result.data.review_threshold).toBeUndefined();
+    expect(result.data.branch_prefix).toBeUndefined();
+    expect(result.data.notes).toBeUndefined();
+
+    const fetched = getProject(db, 'PART');
+    expect(fetched.ok).toBe(true);
+    if (!fetched.ok) return;
+    expect(fetched.data.path).toBe('/projects/partial');
+    expect(fetched.data.commands).toEqual(commands);
+    expect(fetched.data.remote).toBeUndefined();
+  });
+
+  it('updateProject can update review_threshold', async () => {
+    await createProject(db, config, embedder, {
+      name: 'Threshold',
+      prefix: 'THR',
+      reviewThreshold: 3,
+    });
+
+    const result = await updateProject(db, config, embedder, 'THR', { review_threshold: 5 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.review_threshold).toBe(5);
+
+    const fetched = getProject(db, 'THR');
+    expect(fetched.ok).toBe(true);
+    if (!fetched.ok) return;
+    expect(fetched.data.review_threshold).toBe(5);
+  });
+
+  it('updateProject can update commands (object field)', async () => {
+    await createProject(db, config, embedder, {
+      name: 'CmdUpdate',
+      prefix: 'CMD',
+      commands: { build: 'npm run build' },
+    });
+
+    const newCommands = { build: 'pnpm build', test: 'pnpm test', lint: 'pnpm lint' };
+    const result = await updateProject(db, config, embedder, 'CMD', { commands: newCommands });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.commands).toEqual(newCommands);
+
+    const fetched = getProject(db, 'CMD');
+    expect(fetched.ok).toBe(true);
+    if (!fetched.ok) return;
+    expect(fetched.data.commands).toEqual(newCommands);
+  });
+
+  it('updateProject can update path and remote', async () => {
+    await createProject(db, config, embedder, {
+      name: 'Paths',
+      prefix: 'PTH',
+    });
+
+    const result = await updateProject(db, config, embedder, 'PTH', {
+      path: '/new/path',
+      remote: 'git@github.com:org/new.git',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.path).toBe('/new/path');
+    expect(result.data.remote).toBe('git@github.com:org/new.git');
+
+    const fetched = getProject(db, 'PTH');
+    expect(fetched.ok).toBe(true);
+    if (!fetched.ok) return;
+    expect(fetched.data.path).toBe('/new/path');
+    expect(fetched.data.remote).toBe('git@github.com:org/new.git');
+  });
+
+  it('listProjects includes new metadata fields', async () => {
+    await createProject(db, config, embedder, {
+      name: 'Listed',
+      prefix: 'LST',
+      path: '/projects/listed',
+      reviewThreshold: 3,
+      packageManager: 'pnpm',
+    });
+
+    const result = listProjects(db);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].path).toBe('/projects/listed');
+    expect(result.data[0].review_threshold).toBe(3);
+    expect(result.data[0].package_manager).toBe('pnpm');
+  });
+
+  it('backward compat: projects without new fields return undefined', async () => {
+    await createProject(db, config, embedder, {
+      name: 'Legacy',
+      prefix: 'LEG',
+    });
+
+    const result = getProject(db, 'LEG');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.prefix).toBe('LEG');
+    expect(result.data.status).toBe('active');
+    expect(result.data.path).toBeUndefined();
+    expect(result.data.remote).toBeUndefined();
+    expect(result.data.default_branch).toBeUndefined();
+    expect(result.data.review_threshold).toBeUndefined();
+    expect(result.data.package_name).toBeUndefined();
+    expect(result.data.package_manager).toBeUndefined();
+    expect(result.data.commands).toBeUndefined();
+    expect(result.data.branch_prefix).toBeUndefined();
+    expect(result.data.notes).toBeUndefined();
+  });
+});
