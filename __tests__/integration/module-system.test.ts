@@ -16,7 +16,7 @@ import {
   archiveContentDir,
   deleteContentDir,
 } from '../../src/services/content-dir.js';
-import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
+import { tmpDbPath, createMockEmbedder, makeNote, createTestDb } from '../helpers.js';
 import { widgetModule } from '../fixtures/widget-module.js';
 import type { ModuleRegistry } from '../../src/modules/registry.js';
 
@@ -56,7 +56,7 @@ describe('V1: Module Registration and Indexing', () => {
   const embedder = createMockEmbedder();
 
   beforeEach(async () => {
-    db = new BrainDB(tmpDbPath());
+    ({ db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
     notesDir = tmpDir();
     const result = await loadModules({ modules: [widgetModule] });
@@ -446,7 +446,7 @@ describe('V3: Content Directory + FTS Integration', () => {
   const embedder = createMockEmbedder();
 
   beforeEach(() => {
-    db = new BrainDB(tmpDbPath());
+    ({ db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
     notesDir = tmpDir();
   });

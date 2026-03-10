@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, makeFeedRecord } from '../helpers.js';
+import { createMockEmbedder, makeFeedRecord, createTestDb } from '../helpers.js';
 import type { BrainConfig } from '../../src/types.js';
 import { feedCommand } from '../../src/commands/feed.js';
 
@@ -30,7 +30,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(() => {
-  db = new BrainDB(tmpDbPath('feed-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-feed-cmd',
     dbPath: ':memory:',

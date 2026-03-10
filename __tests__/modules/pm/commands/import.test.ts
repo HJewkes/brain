@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createImportCommand, executeImport } from '../../../../src/modules/pm/commands/import.js';
 import type { ImportProjectDef } from '../../../../src/modules/pm/commands/import.js';
@@ -37,7 +37,7 @@ beforeEach(async () => {
   tempDir = join(tmpdir(), `import-test-${randomUUID().slice(0, 8)}`);
   mkdirSync(tempDir, { recursive: true });
 
-  db = new BrainDB(tmpDbPath('import-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: join(tempDir, 'notes'),
     dbPath: ':memory:',

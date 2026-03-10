@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
 import {
-  tmpDbPath,
   createMockEmbedder,
   indexNoteFile,
   setTestTaskStatus,
+  createTestDb,
 } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
@@ -42,8 +42,7 @@ function edge(from: string, to: string, condition?: string): WorkflowEdge {
 }
 
 beforeEach(async () => {
-  dbPath = tmpDbPath('wf-lifecycle');
-  db = new BrainDB(dbPath);
+  ({ dbPath, db } = createTestDb());
   notesDir = join(tmpdir(), `wf-lifecycle-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });
   config = { notesDir, dbPath, embedder: 'local', fusionWeights: { bm25: 0.3, vector: 0.7 } };

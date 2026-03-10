@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { createProject } from '../../../src/modules/pm/data/project-ops.js';
 import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js';
@@ -37,7 +37,7 @@ async function seedProject(): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('pm-consistency'));
+  ({ db } = createTestDb());
   db.setEmbeddingModel(embedder.model, embedder.dimensions);
   notesDir = join(tmpdir(), `pm-consistency-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });

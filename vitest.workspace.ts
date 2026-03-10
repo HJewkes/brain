@@ -15,7 +15,7 @@ export default defineWorkspace([
       pool: 'forks',
       poolOptions: {
         forks: {
-          singleFork: true,
+          maxForks: 2,
         },
       },
     },
@@ -25,10 +25,10 @@ export default defineWorkspace([
       name: 'integration',
       globalSetup: ['__tests__/setup/global-setup.ts'],
       include: ['__tests__/integration/**/*.test.ts'],
-      pool: 'forks',
+      pool: 'threads',
       poolOptions: {
-        forks: {
-          singleFork: true,
+        threads: {
+          singleThread: true,
         },
       },
       testTimeout: 60_000,
@@ -42,7 +42,7 @@ export default defineWorkspace([
       pool: 'forks',
       poolOptions: {
         forks: {
-          singleFork: true,
+          maxForks: 2,
         },
       },
       testTimeout: 60_000,

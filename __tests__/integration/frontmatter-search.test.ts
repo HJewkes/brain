@@ -6,7 +6,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { BrainDB } from '../../src/services/brain-db.js';
 import { indexSingleFile } from '../../src/services/indexing.js';
 import { search, computeFacets } from '../../src/services/search.js';
-import { tmpDbPath, createMockEmbedder } from '../helpers.js';
+import { createMockEmbedder, createTestDb } from '../helpers.js';
 
 let db: BrainDB;
 let notesDir: string;
@@ -33,7 +33,7 @@ async function indexNote(filePath: string): Promise<void> {
 }
 
 beforeEach(() => {
-  db = new BrainDB(tmpDbPath('fm-search'));
+  ({ db } = createTestDb());
   db.setEmbeddingModel(embedder.model, embedder.dimensions);
   notesDir = join(tmpdir(), `fm-search-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });

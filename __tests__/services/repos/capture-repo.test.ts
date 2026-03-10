@@ -2,15 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { unlinkSync } from 'node:fs';
 import type { InboxItem, FeedRecord } from '../../../src/types.js';
-import { tmpDbPath } from '../../helpers.js';
+import { createTestDb } from '../../helpers.js';
 
 describe('CaptureRepo', () => {
   let db: BrainDB;
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
   });
 
   afterEach(() => {

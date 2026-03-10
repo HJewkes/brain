@@ -29,6 +29,14 @@ export function cloneTemplateDb(): { dbPath: string; db: BrainDB } {
   return { dbPath, db: new BrainDB(dbPath) };
 }
 
+/**
+ * Create a test DB by cloning the pre-migrated template.
+ * Much faster than running full schema migration per test.
+ */
+export function createTestDb(): { dbPath: string; db: BrainDB } {
+  return cloneTemplateDb();
+}
+
 export function makeChunk(overrides: Partial<Chunk> = {}): Chunk {
   return {
     id: overrides.id ?? `chunk-${randomUUID().slice(0, 8)}`,

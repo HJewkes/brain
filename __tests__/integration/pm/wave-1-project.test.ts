@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { loadModules } from '../../../src/modules/loader.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import { pmModule } from '../../../src/modules/pm/index.js';
 import {
@@ -23,7 +23,7 @@ let config: BrainConfig;
 const embedder = createMockEmbedder();
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('pm-wave1'));
+  ({ db } = createTestDb());
   db.setEmbeddingModel(embedder.model, embedder.dimensions);
   notesDir = join(tmpdir(), `pm-wave1-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });

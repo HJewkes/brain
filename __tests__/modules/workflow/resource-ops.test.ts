@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import type { BrainConfig } from '../../../src/types.js';
 import {
   writeResource,
@@ -19,8 +19,7 @@ let config: BrainConfig;
 const embedder = createMockEmbedder();
 
 beforeEach(() => {
-  dbPath = tmpDbPath('wf-resource');
-  db = new BrainDB(dbPath);
+  ({ dbPath, db } = createTestDb());
   notesDir = join(tmpdir(), `wf-resource-${randomUUID()}`);
   mkdirSync(join(notesDir, 'modules', 'workflow', 'resources'), { recursive: true });
   config = { notesDir, dbPath, embedder: 'local', fusionWeights: { bm25: 0.3, vector: 0.7 } };

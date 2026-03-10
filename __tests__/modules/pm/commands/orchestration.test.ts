@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Command } from '@commander-js/extra-typings';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createOrchestrationCommands } from '../../../../src/modules/pm/commands/orchestration.js';
@@ -41,7 +41,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('orchestration-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-orchestration-cmd',
     dbPath: ':memory:',
@@ -72,7 +72,7 @@ afterEach(() => {
 describe('next (error paths)', () => {
   it('shows no projects message when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('orch-next-empty'));
+    ({ db } = createTestDb());
 
     await run('next');
 
@@ -106,7 +106,7 @@ describe('next (error paths)', () => {
 describe('waves (error paths)', () => {
   it('error when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('orch-waves-empty'));
+    ({ db } = createTestDb());
 
     await run('waves');
 
@@ -117,7 +117,7 @@ describe('waves (error paths)', () => {
 describe('dispatch (error paths)', () => {
   it('error when no project resolves', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('orch-dispatch-empty'));
+    ({ db } = createTestDb());
 
     await run('dispatch', 'NONE-01.01');
 

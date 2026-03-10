@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createVerifyCommand } from '../../../../src/modules/pm/commands/verify.js';
@@ -31,7 +31,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('verify-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-verify-cmd',
     dbPath: ':memory:',

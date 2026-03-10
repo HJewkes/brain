@@ -40,7 +40,7 @@ import {
   isClaimActive,
 } from '../../src/modules/pm/engine/claims.js';
 import { createStandardProject } from '../fixtures/pm-project.js';
-import { tmpDbPath, createMockEmbedder, makeNote } from '../helpers.js';
+import { createMockEmbedder, makeNote, createTestDb } from '../helpers.js';
 import type { ModuleRegistry } from '../../src/modules/registry.js';
 import type { BrainConfig } from '../../src/types.js';
 import { createTestTask } from '../helpers.js';
@@ -63,14 +63,14 @@ function makeConfig(notesDir: string, dbPath: string): BrainConfig {
 
 describe('V4: PM Module Smoke Test', () => {
   let db: BrainDB;
+  let dbPath: string;
   let registry: ModuleRegistry;
   let notesDir: string;
   let config: BrainConfig;
   const embedder = createMockEmbedder();
 
   beforeEach(async () => {
-    const dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
     notesDir = tmpDir();
     config = makeConfig(notesDir, dbPath);
@@ -230,13 +230,13 @@ describe('V4: PM Module Smoke Test', () => {
 
 describe('V5: State Machine + Dependency Engine', () => {
   let db: BrainDB;
+  let dbPath: string;
   let notesDir: string;
   let config: BrainConfig;
   const embedder = createMockEmbedder();
 
   beforeEach(async () => {
-    const dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
     notesDir = tmpDir();
     config = makeConfig(notesDir, dbPath);
@@ -439,13 +439,13 @@ describe('V5: State Machine + Dependency Engine', () => {
 
 describe('V6: CLI Commands (data layer)', () => {
   let db: BrainDB;
+  let dbPath: string;
   let notesDir: string;
   let config: BrainConfig;
   const embedder = createMockEmbedder();
 
   beforeEach(() => {
-    const dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
     notesDir = tmpDir();
     config = makeConfig(notesDir, dbPath);
@@ -631,13 +631,13 @@ describe('V6: CLI Commands (data layer)', () => {
 
 describe('V7: Directory-Backed Tasks', () => {
   let db: BrainDB;
+  let dbPath: string;
   let notesDir: string;
   let config: BrainConfig;
   const embedder = createMockEmbedder();
 
   beforeEach(() => {
-    const dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
     notesDir = tmpDir();
     config = makeConfig(notesDir, dbPath);

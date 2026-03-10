@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../helpers.js';
 import { indexSingleFile } from '../../../src/services/indexing.js';
 import { createHash } from 'node:crypto';
 import type { BrainConfig } from '../../../src/types.js';
@@ -27,8 +27,7 @@ let config: BrainConfig;
 const embedder = createMockEmbedder();
 
 beforeEach(async () => {
-  dbPath = tmpDbPath('pm-task-ops');
-  db = new BrainDB(dbPath);
+  ({ dbPath, db } = createTestDb());
   notesDir = join(tmpdir(), `pm-task-notes-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });
   config = {

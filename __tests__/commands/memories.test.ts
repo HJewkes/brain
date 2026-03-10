@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, makeNote, makeMemoryEntry } from '../helpers.js';
+import { createMockEmbedder, makeNote, makeMemoryEntry, createTestDb } from '../helpers.js';
 import type { BrainConfig } from '../../src/types.js';
 import { memoriesCommand } from '../../src/commands/memories.js';
 
@@ -30,7 +30,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('memories-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-memories-cmd',
     dbPath: ':memory:',
@@ -100,7 +100,7 @@ describe('memories list', () => {
 
   it('shows "No memories found" when empty', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('memories-cmd-empty'));
+    ({ db } = createTestDb());
     const embedder = createMockEmbedder();
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
 

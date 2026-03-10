@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createOrchestrateCommands } from '../../../../src/modules/pm/commands/orchestrate.js';
@@ -30,7 +30,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('orchestrate-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-orchestrate-cmd',
     dbPath: ':memory:',
@@ -163,7 +163,7 @@ describe('orchestrate session-end', () => {
 
   it('handles no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('orchestrate-cmd-empty'));
+    ({ db } = createTestDb());
 
     await run('session-end', '--json');
 
@@ -247,7 +247,7 @@ describe('orchestrate session-start', () => {
 
   it('errors when no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('orchestrate-no-project'));
+    ({ db } = createTestDb());
     const restore = mockStdin('');
 
     await run('session-start');

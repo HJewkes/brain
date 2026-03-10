@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, makeNote, makeChunk } from '../../../helpers.js';
+import { makeNote, makeChunk, tmpDbPath } from '../../../helpers.js';
 import {
   getWorkflowDefinition,
   listWorkflows,
@@ -13,7 +13,7 @@ import type { Relation } from '../../../../src/types.js';
 let db: BrainDB;
 
 beforeEach(() => {
-  db = new BrainDB(tmpDbPath('wf-queries'));
+  db = new BrainDB(tmpDbPath());
   db.setEmbeddingModel('test', 3);
 });
 

@@ -293,7 +293,7 @@ export function detectStalePrompts(db: BrainDB, prefix: string): Result<PromptMe
       if (!impacts || !impacts.includes(taskDisplayId)) continue;
 
       const decIndexedAt = getIndexedAt(db, decNote.filePath);
-      if (decIndexedAt > promptIndexedAt) {
+      if (decIndexedAt >= promptIndexedAt) {
         stale.push(promptMetaFromRecord(promptMeta));
         break;
       }

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { unlinkSync } from 'node:fs';
 import type { MemoryEntry } from '../../../src/types.js';
-import { tmpDbPath } from '../../helpers.js';
+import { createTestDb } from '../../helpers.js';
 
 describe('MemoryRepo', () => {
   let db: BrainDB;
@@ -28,8 +28,7 @@ describe('MemoryRepo', () => {
   });
 
   beforeEach(() => {
-    dbPath = tmpDbPath();
-    db = new BrainDB(dbPath);
+    ({ dbPath, db } = createTestDb());
 
     db.upsertNote({
       id: 'test-note',

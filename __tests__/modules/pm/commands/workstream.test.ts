@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { BrainDB } from '../../../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder } from '../../../helpers.js';
+import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
 import { setActiveProject } from '../../../../src/modules/pm/data/queries.js';
@@ -27,8 +27,7 @@ let stdoutSpy: ReturnType<typeof vi.spyOn>;
 let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
-  dbPath = tmpDbPath('pm-workstream');
-  db = new BrainDB(dbPath);
+  ({ dbPath, db } = createTestDb());
   notesDir = join(tmpdir(), `pm-workstream-notes-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });
   config = {
@@ -79,7 +78,7 @@ async function run(args: string[]): Promise<void> {
 describe('workstream add (error paths)', () => {
   it('error when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('ws-add-noproj'));
+    ({ db } = createTestDb());
 
     const { withBrain } = await import('../../../../src/services/brain-service.js');
     vi.mocked(withBrain).mockImplementation(async (fn) => {
@@ -95,7 +94,7 @@ describe('workstream add (error paths)', () => {
 describe('workstream list (error paths)', () => {
   it('error when no project and no active project', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('ws-list-noproj'));
+    ({ db } = createTestDb());
 
     const { withBrain } = await import('../../../../src/services/brain-service.js');
     vi.mocked(withBrain).mockImplementation(async (fn) => {

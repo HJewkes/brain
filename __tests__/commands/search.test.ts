@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../src/services/brain-db.js';
-import { tmpDbPath, createMockEmbedder, makeNote, makeChunk } from '../helpers.js';
+import { createMockEmbedder, makeNote, makeChunk, createTestDb } from '../helpers.js';
 import type { BrainConfig } from '../../src/types.js';
 import { searchCommand } from '../../src/commands/search.js';
 
@@ -31,7 +31,7 @@ async function run(...args: string[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = new BrainDB(tmpDbPath('search-cmd'));
+  ({ db } = createTestDb());
   config = {
     notesDir: '/tmp/test-search-cmd',
     dbPath: ':memory:',
@@ -90,7 +90,7 @@ describe('search command', () => {
 
   it('shows "No results found" when database is empty', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('search-cmd-empty'));
+    ({ db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
 
     await run('anything');
@@ -117,7 +117,7 @@ describe('search command', () => {
 
   it('no results in text mode writes to stderr only', async () => {
     db.close();
-    db = new BrainDB(tmpDbPath('search-cmd-empty2'));
+    ({ db } = createTestDb());
     db.setEmbeddingModel(embedder.model, embedder.dimensions);
 
     await run('anything');
