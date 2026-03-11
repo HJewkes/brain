@@ -119,6 +119,78 @@ describe('workflow definitions', () => {
       expect(required?.map((p) => p.name)).toContain('branch');
     });
   });
-});
 
-// Appended by hand — remove the duplicate closing brace above first
+  describe('brainstorming workflow', () => {
+    const def = loadDefinition('brainstorming-workflow');
+
+    it('has version 1', () => {
+      expect(def.version).toBe(1);
+    });
+
+    it('has 6 steps in explore→interview→propose→design→write-doc→write-plan order', () => {
+      expect(def.steps.map((s) => s.id)).toEqual([
+        'explore',
+        'interview',
+        'propose',
+        'design',
+        'write-doc',
+        'write-plan',
+      ]);
+    });
+
+    it('every step has a template', () => {
+      for (const step of def.steps) {
+        expect(step.template, `step ${step.id} missing template`).toBeTruthy();
+      }
+    });
+
+    it('every step has a mode', () => {
+      for (const step of def.steps) {
+        expect(step.mode, `step ${step.id} missing mode`).toBeTruthy();
+      }
+    });
+
+    it('interview, propose, and design are assisted mode', () => {
+      for (const id of ['interview', 'propose', 'design']) {
+        const step = def.steps.find((s) => s.id === id);
+        expect(step?.mode, `step ${id}`).toBe('assisted');
+      }
+    });
+
+    it('explore, write-doc, and write-plan are agent mode', () => {
+      for (const id of ['explore', 'write-doc', 'write-plan']) {
+        const step = def.steps.find((s) => s.id === id);
+        expect(step?.mode, `step ${id}`).toBe('agent');
+      }
+    });
+
+    it('design has approval and iteration gates', () => {
+      const design = def.steps.find((s) => s.id === 'design');
+      expect(design?.gates).toHaveLength(2);
+      expect(design?.gates?.[0]?.type).toBe('approval');
+      expect(design?.gates?.[1]?.type).toBe('iteration');
+      expect(design?.gates?.[1]?.maxIterations).toBe(3);
+    });
+
+    it('design→interview is a conditional feedback edge', () => {
+      const feedbackEdge = def.edges.find((e) => e.from === 'design' && e.to === 'interview');
+      expect(feedbackEdge?.condition).toBe('needs_clarification');
+    });
+
+    it('has 6 edges total (5 unconditional + 1 conditional)', () => {
+      expect(def.edges).toHaveLength(6);
+      const conditional = def.edges.filter((e) => e.condition);
+      expect(conditional).toHaveLength(1);
+    });
+
+    it('requires topic parameter', () => {
+      const topic = def.parameters?.find((p) => p.name === 'topic');
+      expect(topic?.required).toBe(true);
+    });
+
+    it('repo parameter is optional', () => {
+      const repo = def.parameters?.find((p) => p.name === 'repo');
+      expect(repo?.required).toBe(false);
+    });
+  });
+});
