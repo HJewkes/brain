@@ -1,12 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
-import { registerWorkflow } from '../data/workflow-ops.js';
-import {
-  getWorkflowDefinition,
-  listWorkflows,
-  getInstanceByDisplayId,
-  getInstanceStepStates,
-} from '../data/queries.js';
+import { registerWorkflow, getWorkflowStatus } from '../data/workflow-ops.js';
+import { getWorkflowDefinition, listWorkflows, getInstanceStepStates } from '../data/queries.js';
 import type { WorkflowNoteMetadata } from '../types.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
 
@@ -122,23 +117,14 @@ export function createWorkflowCommand(): Command {
     .option('--json', 'Output JSON')
     .action(async (instanceId, opts) => {
       await withBrain(async (svc) => {
-        const instanceResult = getInstanceByDisplayId(svc.db, instanceId);
-        if (!instanceResult.ok) {
-          process.stderr.write(formatError(instanceResult.error, !!opts.json) + '\n');
+        const result = getWorkflowStatus(svc.db, instanceId);
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
           process.exitCode = 1;
           return;
         }
 
-        const { metadata } = instanceResult.data;
-
-        const stepsResult = getInstanceStepStates(svc.db, instanceId);
-        if (!stepsResult.ok) {
-          process.stderr.write(formatError(stepsResult.error, !!opts.json) + '\n');
-          process.exitCode = 1;
-          return;
-        }
-
-        const { steps, progress } = stepsResult.data;
+        const { instance: metadata, steps, progress } = result.data;
 
         if (opts.json) {
           process.stdout.write(JSON.stringify({ metadata, steps, progress }, null, 2) + '\n');

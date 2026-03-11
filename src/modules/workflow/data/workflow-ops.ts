@@ -342,6 +342,7 @@ type StatusErrorCode = 'NOT_FOUND';
 interface StatusResult {
   instance: WorkflowInstanceMetadata;
   steps: Array<{ stepId: string; taskDisplayId: string; status: TaskStatus }>;
+  progress: { total: number; done: number; pruned: number; active: number; pending: number };
 }
 
 export function getWorkflowStatus(
@@ -358,9 +359,26 @@ export function getWorkflowStatus(
     return fail('NOT_FOUND', stepsResult.error.message);
   }
 
+  const { steps } = stepsResult.data;
+
+  const defResult = getWorkflowDefinition(db, instanceResult.data.metadata.workflow_id);
+  if (defResult.ok) {
+    const { definition } = defResult.data;
+    const sortResult = topologicalSort(definition.steps, definition.edges);
+    if (sortResult.ok) {
+      const orderIndex = new Map(sortResult.data.map((id, i) => [id, i]));
+      steps.sort((a, b) => {
+        const ai = orderIndex.get(a.stepId) ?? Infinity;
+        const bi = orderIndex.get(b.stepId) ?? Infinity;
+        return ai - bi;
+      });
+    }
+  }
+
   return ok({
     instance: instanceResult.data.metadata,
-    steps: stepsResult.data.steps,
+    steps,
+    progress: stepsResult.data.progress,
   });
 }
 
