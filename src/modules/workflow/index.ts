@@ -5,6 +5,14 @@ import { createResourceCommand } from './commands/resource.js';
 import { createLifecycleCommands } from './commands/lifecycle.js';
 import { createCollapseCommand } from './commands/collapse.js';
 
+export {
+  resolveTemplate,
+  listTemplateNames,
+  listTemplates,
+  renderTemplate,
+  extractVariables,
+} from './engine/templates.js';
+
 export const workflowModule: BrainModule = {
   name: 'workflow',
   version: '1.0.0',
