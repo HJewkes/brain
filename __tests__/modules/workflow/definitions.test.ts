@@ -82,4 +82,43 @@ describe('workflow definitions', () => {
       expect(interview?.mode).toBe('assisted');
     });
   });
+
+  describe('review workflow', () => {
+    const def = loadDefinition('review-workflow');
+
+    it('has version 1', () => {
+      expect(def.version).toBe(1);
+    });
+
+    it('every agent step has a template', () => {
+      for (const step of def.steps) {
+        if (step.mode === 'human' || step.id === 'route') continue;
+        expect(step.template, `step ${step.id} missing template`).toBeTruthy();
+      }
+    });
+
+    it('fixup loops back to review', () => {
+      const fixupEdge = def.edges.find((e) => e.from === 'fixup');
+      expect(fixupEdge?.to).toBe('review');
+    });
+
+    it('route has three outgoing edges', () => {
+      const routeEdges = def.edges.filter((e) => e.from === 'route');
+      expect(routeEdges).toHaveLength(3);
+    });
+
+    it('human-review step has human-approval gate', () => {
+      const hr = def.steps.find((s) => s.id === 'human-review');
+      expect(hr?.gates?.[0]?.type).toBe('human-approval');
+    });
+
+    it('requires prUrl and branch parameters', () => {
+      const required = def.parameters?.filter((p) => p.required);
+      expect(required).toHaveLength(2);
+      expect(required?.map((p) => p.name)).toContain('prUrl');
+      expect(required?.map((p) => p.name)).toContain('branch');
+    });
+  });
 });
+
+// Appended by hand — remove the duplicate closing brace above first
