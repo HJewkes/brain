@@ -19,10 +19,18 @@ export interface WorkflowEdge {
 }
 
 export interface Gate {
-  type: 'task-complete' | 'file-exists' | 'cli-pass' | 'human-approval' | 'custom';
-  target: string;
+  type:
+    | 'task-complete'
+    | 'file-exists'
+    | 'cli-pass'
+    | 'human-approval'
+    | 'approval'
+    | 'iteration'
+    | 'custom';
+  target?: string;
   command?: string;
   timeout?: number;
+  maxIterations?: number;
   description?: string;
 }
 
@@ -39,6 +47,7 @@ export interface WorkflowParameter {
   name: string;
   description: string;
   required: boolean;
+  values?: string[];
   default?: string;
 }
 

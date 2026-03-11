@@ -22,7 +22,7 @@ async function evaluateTaskComplete(gate: Gate, db: BrainDB): Promise<boolean> {
 }
 
 function evaluateCliPass(gate: Gate): boolean {
-  const command = gate.command ?? gate.target;
+  const command = gate.command ?? gate.target ?? 'true';
   const timeout = gate.timeout ?? DEFAULT_TIMEOUT_MS;
   try {
     execSync(command, { timeout, stdio: 'ignore' });
@@ -41,11 +41,15 @@ export async function evaluateGate(
     case 'task-complete':
       return evaluateTaskComplete(gate, db);
     case 'file-exists':
-      return existsSync(gate.target);
+      return gate.target ? existsSync(gate.target) : false;
     case 'cli-pass':
       return evaluateCliPass(gate);
     case 'human-approval':
       return false;
+    case 'approval':
+      return false;
+    case 'iteration':
+      return true;
     case 'custom':
       return evaluateCliPass(gate);
   }

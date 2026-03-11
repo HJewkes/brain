@@ -1,26 +1,57 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "planning",
-  "description": "Planning workflow matching startup.md state machine",
+  "description": "Planning workflow with templates, gates, and complexity routing",
   "steps": [
-    { "id": "research", "name": "Research", "category": "research" },
-    { "id": "interview", "name": "Interview", "category": "research" },
-    { "id": "design", "name": "Design", "category": "design" },
-    { "id": "critic", "name": "Critic", "category": "review" },
-    { "id": "spec-tests", "name": "Spec Tests", "category": "testing" },
-    { "id": "decompose", "name": "Decompose", "category": "design" },
-    { "id": "implement", "name": "Implement", "category": "implementation" },
-    { "id": "review", "name": "Review", "category": "review" }
+    {
+      "id": "research",
+      "name": "Research",
+      "category": "research",
+      "template": "planning-research",
+      "mode": "agent",
+      "gates": [{ "type": "iteration", "maxIterations": 2, "description": "Max 2 re-research rounds" }]
+    },
+    { "id": "interview", "name": "Interview", "category": "research", "template": "planning-interview", "mode": "assisted" },
+    {
+      "id": "design",
+      "name": "Design",
+      "category": "design",
+      "template": "planning-design",
+      "mode": "agent",
+      "gates": [{ "type": "iteration", "maxIterations": 3, "description": "Max 3 design revisions" }]
+    },
+    {
+      "id": "critic",
+      "name": "Critic",
+      "category": "review",
+      "template": "planning-critic",
+      "mode": "agent",
+      "gates": [{ "type": "iteration", "maxIterations": 3, "description": "Max 3 critic rounds" }]
+    },
+    { "id": "spec-tests", "name": "Spec Tests", "category": "testing", "template": "planning-spectests", "mode": "agent" },
+    { "id": "decompose", "name": "Decompose", "category": "design", "template": "planning-decompose", "mode": "agent" },
+    { "id": "implement", "name": "Implement", "category": "implementation", "template": "implementation-compact", "mode": "agent" },
+    { "id": "review", "name": "Review", "category": "review", "template": "review-agent", "mode": "agent" }
   ],
   "edges": [
     { "from": "research", "to": "interview" },
     { "from": "interview", "to": "design" },
     { "from": "design", "to": "critic" },
+    { "from": "critic", "to": "design", "condition": "needs_revision" },
     { "from": "critic", "to": "spec-tests", "condition": "all_resolved" },
-    { "from": "critic", "to": "interview", "condition": "has_open_questions" },
+    { "from": "critic", "to": "research", "condition": "has_open_questions" },
     { "from": "spec-tests", "to": "decompose" },
     { "from": "decompose", "to": "implement" },
     { "from": "implement", "to": "review" }
   ],
-  "parameters": [{ "name": "planId", "description": "Plan identifier", "required": false }]
+  "parameters": [
+    { "name": "planId", "description": "Plan identifier", "required": false },
+    {
+      "name": "complexity",
+      "description": "Complexity level: low (skip to implement), medium (skip interview), high (full pipeline)",
+      "required": false,
+      "values": ["low", "medium", "high"],
+      "default": "high"
+    }
+  ]
 }
