@@ -17,7 +17,8 @@ export type CoreNoteType =
   | 'research'
   | 'meeting'
   | 'session-log'
-  | 'guide';
+  | 'guide'
+  | 'workflow';
 
 export type NoteType = CoreNoteType | (string & {});
 
@@ -33,6 +34,7 @@ export const VALID_CORE_NOTE_TYPES: CoreNoteType[] = [
   'meeting',
   'session-log',
   'guide',
+  'workflow',
 ];
 
 export function isValidCoreNoteType(value: string): value is CoreNoteType {

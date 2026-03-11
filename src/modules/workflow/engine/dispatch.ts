@@ -9,6 +9,8 @@ import { getTask, updateTaskStatus } from '../../pm/data/task-ops.js';
 import { readTaskBody } from '../../pm/engine/dispatch.js';
 import { getPmNotes } from '../../pm/data/queries.js';
 import { generateClaim } from '../../pm/engine/claims.js';
+import type { TaskMode } from '../../pm/types.js';
+import { getWorkflowDefinition } from '../data/queries.js';
 
 export interface DispatchOptions {
   branch?: string;
@@ -23,6 +25,7 @@ export interface DispatchResult {
   taskId: string;
   variables: Record<string, string>;
   unfilled: string[];
+  mode?: 'agent' | 'assisted' | 'human' | 'review' | 'auto' | 'interactive';
 }
 
 const CATEGORY_TO_PREFIX: Record<string, keyof ProjectBranchPrefix> = {
@@ -68,6 +71,88 @@ function defaultBranchPrefix(key: keyof ProjectBranchPrefix): string {
     infrastructure: 'infra',
   };
   return defaults[key];
+}
+
+function resolveStepMode(db: BrainDB, taskId: string): TaskMode | undefined {
+  const taskNotes = getPmNotes(db, 'task', { display_id: taskId });
+  if (taskNotes.length === 0) return undefined;
+
+  const taskNote = taskNotes[0];
+  if (!taskNote.metadata) return undefined;
+
+  const taskMeta = JSON.parse(taskNote.metadata) as Record<string, unknown>;
+  const stepId = taskMeta.step_id as string | undefined;
+  if (!stepId) return undefined;
+
+  const incomingRelations = db.getRelationsTo(taskNote.id);
+  const expandsToRel = incomingRelations.find((r) => r.type === 'expands-to');
+  if (!expandsToRel) return undefined;
+
+  const instanceNote = db.getNoteById(expandsToRel.sourceId);
+  if (!instanceNote?.metadata) return undefined;
+
+  const instanceMeta = JSON.parse(instanceNote.metadata) as Record<string, unknown>;
+  const workflowId = instanceMeta.workflow_id as string | undefined;
+  if (!workflowId) return undefined;
+
+  const defResult = getWorkflowDefinition(db, workflowId);
+  if (!defResult.ok) return undefined;
+
+  const step = defResult.data.definition.steps.find((s) => s.id === stepId);
+  return step?.mode;
+}
+
+function injectWorkflowContext(db: BrainDB, taskId: string, vars: Record<string, string>): void {
+  const taskNotes = getPmNotes(db, 'task', { display_id: taskId });
+  if (taskNotes.length === 0) return;
+
+  const taskNote = taskNotes[0];
+  if (!taskNote.metadata) return;
+
+  const taskMeta = JSON.parse(taskNote.metadata) as Record<string, unknown>;
+  const stepId = taskMeta.step_id as string | undefined;
+
+  if (stepId) {
+    vars.STEP_ID = stepId;
+  }
+
+  // Find the parent instance via incoming expands-to relation
+  const incomingRelations = db.getRelationsTo(taskNote.id);
+  const expandsToRel = incomingRelations.find((r) => r.type === 'expands-to');
+  if (!expandsToRel) return;
+
+  const instanceNote = db.getNoteById(expandsToRel.sourceId);
+  if (!instanceNote?.metadata) return;
+
+  const instanceMeta = JSON.parse(instanceNote.metadata) as Record<string, unknown>;
+  const instanceDisplayId = instanceMeta.display_id as string | undefined;
+  const workflowId = instanceMeta.workflow_id as string | undefined;
+  const context = instanceMeta.context as Record<string, string> | undefined;
+
+  if (instanceDisplayId) {
+    vars.INSTANCE_ID = instanceDisplayId;
+  }
+
+  if (workflowId) {
+    vars.WORKFLOW_ID = workflowId;
+
+    const defResult = getWorkflowDefinition(db, workflowId);
+    if (defResult.ok) {
+      vars.WORKFLOW_NAME = defResult.data.definition.name;
+    }
+  }
+
+  // Inject instance context params (e.g. topic, repo) into template variables.
+  // Provide both original case and UPPER_CASE for template flexibility.
+  if (context) {
+    for (const [key, value] of Object.entries(context)) {
+      vars[key] = value;
+      const upperKey = key.toUpperCase();
+      if (!(upperKey in vars)) {
+        vars[upperKey] = value;
+      }
+    }
+  }
 }
 
 export async function dispatchTemplate(
@@ -138,6 +223,10 @@ export async function dispatchTemplate(
     vars.CLAIM_TOKEN = claim.token;
   }
 
+  injectWorkflowContext(db, taskId, vars);
+
+  const stepMode = resolveStepMode(db, taskId);
+
   const rendered = renderTemplate(templateName, vars);
   if (!rendered.ok) return rendered;
 
@@ -150,5 +239,6 @@ export async function dispatchTemplate(
     taskId,
     variables: vars,
     unfilled,
+    mode: stepMode,
   });
 }
