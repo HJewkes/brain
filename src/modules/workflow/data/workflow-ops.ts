@@ -239,7 +239,8 @@ export async function expandWorkflow(
 
   let definition: WorkflowDefinition;
   try {
-    definition = JSON.parse(chunk.content) as WorkflowDefinition;
+    const jsonMatch2 = chunk.content.match(/({[\s\S]*})/);
+    definition = JSON.parse(jsonMatch2 ? jsonMatch2[1] : chunk.content) as WorkflowDefinition;
   } catch {
     return fail('DEFINITION_NOT_FOUND', `Failed to parse workflow definition`);
   }
