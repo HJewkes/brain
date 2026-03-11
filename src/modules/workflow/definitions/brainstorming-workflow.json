@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "name": "brainstorming",
+  "description": "Interactive design workflow: explore context, interview user, propose approaches, validate design sections, write plan",
+  "steps": [
+    {
+      "id": "explore",
+      "name": "Explore Context",
+      "category": "research",
+      "template": "brainstorm-explore",
+      "mode": "agent"
+    },
+    {
+      "id": "interview",
+      "name": "Interview",
+      "category": "research",
+      "template": "brainstorm-interview",
+      "mode": "assisted",
+      "gates": [{ "type": "approval", "description": "User answers all clarifying questions" }]
+    },
+    {
+      "id": "propose",
+      "name": "Propose Approaches",
+      "category": "design",
+      "template": "brainstorm-propose",
+      "mode": "assisted",
+      "gates": [{ "type": "approval", "description": "User selects an approach" }]
+    },
+    {
+      "id": "design",
+      "name": "Present Design",
+      "category": "design",
+      "template": "brainstorm-design",
+      "mode": "assisted",
+      "gates": [
+        { "type": "approval", "description": "User approves all design sections" },
+        { "type": "iteration", "maxIterations": 3, "description": "Max 3 revision rounds" }
+      ]
+    },
+    {
+      "id": "write-doc",
+      "name": "Write Design Doc",
+      "category": "documentation",
+      "template": "brainstorm-write-doc",
+      "mode": "agent"
+    },
+    {
+      "id": "write-plan",
+      "name": "Write Implementation Plan",
+      "category": "design",
+      "template": "writing-plans",
+      "mode": "agent"
+    }
+  ],
+  "edges": [
+    { "from": "explore", "to": "interview" },
+    { "from": "interview", "to": "propose" },
+    { "from": "propose", "to": "design" },
+    { "from": "design", "to": "interview", "condition": "needs_clarification" },
+    { "from": "design", "to": "write-doc" },
+    { "from": "write-doc", "to": "write-plan" }
+  ],
+  "parameters": [
+    { "name": "topic", "description": "Feature or idea being designed", "required": true },
+    { "name": "repo", "description": "Target repository path", "required": false }
+  ]
+}

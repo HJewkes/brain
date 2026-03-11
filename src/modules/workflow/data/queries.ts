@@ -31,7 +31,10 @@ export function getWorkflowDefinition(
 
     let definition: WorkflowDefinition;
     try {
-      definition = JSON.parse(chunk.content) as WorkflowDefinition;
+      // Chunk may include markdown heading before JSON; extract the JSON object
+      const jsonMatch = chunk.content.match(/({[\s\S]*})/);
+      const jsonStr = jsonMatch ? jsonMatch[1] : chunk.content;
+      definition = JSON.parse(jsonStr) as WorkflowDefinition;
     } catch {
       return fail('INVALID_INPUT', `Workflow "${workflowId}" body is not valid JSON.`);
     }

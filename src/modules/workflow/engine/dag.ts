@@ -62,13 +62,16 @@ export function validateDag(definition: WorkflowDefinition): Result<void> {
     });
   }
 
-  const hasIncoming = new Set(edges.map((e) => e.to));
+  // Only unconditional edges define structure; conditional edges are optional
+  // feedback loops and should not affect entry/terminal node detection
+  const unconditionalEdges = edges.filter((e) => !e.condition);
+  const hasIncoming = new Set(unconditionalEdges.map((e) => e.to));
   const entryNodes = steps.filter((s) => !hasIncoming.has(s.id));
   if (entryNodes.length === 0) {
     return fail('INVALID_DEFINITION', 'DAG must have at least one entry node');
   }
 
-  const hasOutgoing = new Set(edges.map((e) => e.from));
+  const hasOutgoing = new Set(unconditionalEdges.map((e) => e.from));
   const terminalNodes = steps.filter((s) => !hasOutgoing.has(s.id));
   if (terminalNodes.length === 0) {
     return fail('INVALID_DEFINITION', 'DAG must have at least one terminal node');

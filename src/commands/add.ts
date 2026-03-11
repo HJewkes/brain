@@ -74,6 +74,7 @@ const TYPE_DIRS: Record<CoreNoteType, string> = {
   meeting: 'logs',
   'session-log': 'logs',
   guide: 'guides',
+  workflow: 'workflows',
 };
 
 function resolveOutputPath(notesDir: string, tier: NoteTier, type: string, id: string): string {
@@ -187,7 +188,7 @@ export const addCommand = new Command('add')
   .option('--title <title>', 'Note title')
   .option(
     '--type <type>',
-    'Note type (note, decision, pattern, research, meeting, session-log, guide)'
+    'Note type (note, decision, pattern, research, meeting, session-log, guide, workflow)'
   )
   .option('--tier <tier>', 'Note tier (slow, fast)')
   .option('--tags <tags>', 'Comma-separated tags')

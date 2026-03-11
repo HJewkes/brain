@@ -11,6 +11,7 @@ import { validateDag, topologicalSort } from '../engine/dag.js';
 import { ok, fail, type Result } from '../../../errors.js';
 import { getWorkflowDefinition, getInstanceByDisplayId, getInstanceStepStates } from './queries.js';
 import { createTask } from '../../pm/data/task-ops.js';
+import { getPmNotes } from '../../pm/data/queries.js';
 
 type RegisterErrorCode =
   | 'NOT_FOUND'
@@ -239,7 +240,8 @@ export async function expandWorkflow(
 
   let definition: WorkflowDefinition;
   try {
-    definition = JSON.parse(chunk.content) as WorkflowDefinition;
+    const jsonMatch2 = chunk.content.match(/({[\s\S]*})/);
+    definition = JSON.parse(jsonMatch2 ? jsonMatch2[1] : chunk.content) as WorkflowDefinition;
   } catch {
     return fail('DEFINITION_NOT_FOUND', `Failed to parse workflow definition`);
   }
@@ -274,17 +276,15 @@ export async function expandWorkflow(
     const childDisplayId = taskResult.data.display_id;
     stepToDisplayId.set(stepId, childDisplayId);
 
-    const childNoteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
-    const childNotes = db.getNotesByIds(childNoteIds);
-    for (const [, childNote] of childNotes) {
-      if (!childNote.metadata) continue;
-      const meta = JSON.parse(childNote.metadata) as Record<string, unknown>;
-      if (meta.display_id === childDisplayId) {
-        const updatedChildMeta = { ...meta, step_id: stepId };
-        db.upsertNote({ ...childNote, metadata: JSON.stringify(updatedChildMeta) });
-        stepToTaskNoteId.set(stepId, childNote.id);
-        break;
-      }
+    const matchingNotes = getPmNotes(db, 'task', { display_id: childDisplayId });
+    if (matchingNotes.length > 0) {
+      const childNote = matchingNotes[0];
+      const meta = childNote.metadata
+        ? (JSON.parse(childNote.metadata) as Record<string, unknown>)
+        : {};
+      const updatedChildMeta = { ...meta, step_id: stepId };
+      db.upsertNote({ ...childNote, metadata: JSON.stringify(updatedChildMeta) });
+      stepToTaskNoteId.set(stepId, childNote.id);
     }
   }
 
@@ -300,13 +300,17 @@ export async function expandWorkflow(
   }
   db.upsertRelations(instanceNote.id, instanceRelations);
 
+  // Only unconditional edges create structural dependencies;
+  // conditional edges are optional paths that don't block execution
+  const unconditionalEdges = definition.edges.filter((e) => !e.condition);
+
   // Build edge relations, grouping by source note to avoid overwriting
   const edgesBySource = new Map<
     string,
     Array<{ sourceId: string; targetId: string; type: string }>
   >();
   let edgeCount = 0;
-  for (const edge of definition.edges) {
+  for (const edge of unconditionalEdges) {
     const fromNoteId = stepToTaskNoteId.get(edge.from);
     const toNoteId = stepToTaskNoteId.get(edge.to);
     if (fromNoteId && toNoteId) {

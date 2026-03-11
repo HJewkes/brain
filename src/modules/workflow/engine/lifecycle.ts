@@ -87,8 +87,11 @@ function buildReadySet(
     }
   }
 
+  // Entry nodes have no unconditional predecessors. Conditional edges represent
+  // optional feedback loops and don't count as structural dependencies.
+  const unconditionalEdges = definition.edges.filter((e) => !e.condition);
   for (const stepId of allStepIds) {
-    const preds = getPredecessors(stepId, definition.edges);
+    const preds = getPredecessors(stepId, unconditionalEdges);
     if (preds.length === 0) {
       ready.add(stepId);
     }
@@ -107,11 +110,14 @@ async function findAdvancedSteps(
 ): Promise<string[]> {
   const advanced: string[] = [];
 
+  // Only unconditional edges define advancement prerequisites
+  const unconditional = definition.edges.filter((e) => !e.condition);
+
   for (const stepId of allStepIds) {
     const status = statusMap.get(stepId);
     if (status === 'done' || status === 'pruned' || status === 'cancelled') continue;
 
-    const preds = getPredecessors(stepId, definition.edges);
+    const preds = getPredecessors(stepId, unconditional);
     if (preds.length === 0) continue;
 
     const allPredsReady = preds.every((p) => readySteps.has(p));
@@ -190,7 +196,8 @@ function resolveDefinition(db: BrainDB, instanceNote: { id: string }): WorkflowD
   if (!chunk) return null;
 
   try {
-    return JSON.parse(chunk.content) as WorkflowDefinition;
+    const jsonMatch = chunk.content.match(/({[\s\S]*})/);
+    return JSON.parse(jsonMatch ? jsonMatch[1] : chunk.content) as WorkflowDefinition;
   } catch {
     return null;
   }

@@ -199,7 +199,88 @@ export function createWorkflowCommand(): Command {
         if (opts.json) {
           process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
         } else {
+          if (result.data.mode === 'assisted') {
+            process.stdout.write('## Assisted Step — Coordinator Instructions\n\n');
+            process.stdout.write(
+              'This step requires interactive coordination. Use this prompt in your current session.\n'
+            );
+            process.stdout.write('Do NOT dispatch this to an autonomous agent.\n\n');
+            process.stdout.write('---\n\n');
+          }
           process.stdout.write(result.data.rendered + '\n');
+        }
+      });
+    });
+
+  cmd
+    .command('gate')
+    .description('Set gate status for a workflow step')
+    .argument('<instance-id>', 'Instance display ID')
+    .argument('<step-id>', 'Step ID within the workflow')
+    .argument('<action>', 'Gate action: pass')
+    .option('--json', 'Output JSON')
+    .action(async (instanceId, stepId, action, opts) => {
+      if (action !== 'pass') {
+        const msg = `Unknown gate action "${action}". Supported: pass`;
+        process.stderr.write(
+          formatError({ code: 'INVALID_ACTION', message: msg }, !!opts.json) + '\n'
+        );
+        process.exitCode = 1;
+        return;
+      }
+
+      await withBrain(async (svc) => {
+        const stepsResult = getInstanceStepStates(svc.db, instanceId);
+        if (!stepsResult.ok) {
+          process.stderr.write(formatError(stepsResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const step = stepsResult.data.steps.find((s) => s.stepId === stepId);
+        if (!step) {
+          const msg = `Step "${stepId}" not found in instance "${instanceId}"`;
+          process.stderr.write(
+            formatError({ code: 'NOT_FOUND', message: msg }, !!opts.json) + '\n'
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const taskNotes = svc.db.getModuleNoteIds({ module: 'pm', type: 'task' });
+        const notes = svc.db.getNotesByIds(taskNotes);
+        let updated = false;
+
+        for (const [, note] of notes) {
+          if (!note.metadata) continue;
+          const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+          if (meta.display_id !== step.taskDisplayId) continue;
+
+          const newMeta = { ...meta, gate_status: 'passed' };
+          svc.db.upsertNote({ ...note, metadata: JSON.stringify(newMeta) });
+          updated = true;
+          break;
+        }
+
+        if (!updated) {
+          const msg = `Could not update gate for task "${step.taskDisplayId}"`;
+          process.stderr.write(
+            formatError({ code: 'UPDATE_FAILED', message: msg }, !!opts.json) + '\n'
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        if (opts.json) {
+          process.stdout.write(
+            JSON.stringify(
+              { instance_id: instanceId, step_id: stepId, gate_status: 'passed' },
+              null,
+              2
+            ) + '\n'
+          );
+        } else {
+          process.stdout.write(`Gate passed for step "${stepId}" (${step.taskDisplayId})\n`);
         }
       });
     });

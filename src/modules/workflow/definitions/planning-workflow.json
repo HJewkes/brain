@@ -38,7 +38,7 @@
     { "from": "interview", "to": "design" },
     { "from": "design", "to": "critic" },
     { "from": "critic", "to": "design", "condition": "needs_revision" },
-    { "from": "critic", "to": "spec-tests", "condition": "all_resolved" },
+    { "from": "critic", "to": "spec-tests" },
     { "from": "critic", "to": "research", "condition": "has_open_questions" },
     { "from": "spec-tests", "to": "decompose" },
     { "from": "decompose", "to": "implement" },

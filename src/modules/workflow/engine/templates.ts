@@ -6,11 +6,15 @@ import { ok, fail } from '../../../errors.js';
 function findTemplatesDir(): string {
   // Source layout: engine/templates.ts -> ../templates/
   const sourceDir = join(import.meta.dirname, '..', 'templates');
-  if (existsSync(sourceDir)) return sourceDir;
+  if (existsSync(sourceDir) && existsSync(join(sourceDir, 'implementation-compact.md'))) {
+    return sourceDir;
+  }
 
   // Bundled layout: dist/*.js -> templates/
   const bundledDir = join(import.meta.dirname, 'templates');
-  if (existsSync(bundledDir)) return bundledDir;
+  if (existsSync(bundledDir) && existsSync(join(bundledDir, 'implementation-compact.md'))) {
+    return bundledDir;
+  }
 
   return sourceDir;
 }
