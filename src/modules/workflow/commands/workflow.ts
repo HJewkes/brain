@@ -8,6 +8,7 @@ import {
   getInstanceStepStates,
 } from '../data/queries.js';
 import type { WorkflowNoteMetadata } from '../types.js';
+import { dispatchTemplate } from '../engine/dispatch.js';
 
 function formatWorkflowLine(wf: WorkflowNoteMetadata): string {
   return `${wf.display_id} - ${wf.name} v${wf.version} [${wf.registration_status}]`;
@@ -161,6 +162,44 @@ export function createWorkflowCommand(): Command {
           if (opts.history) {
             process.stdout.write('\nHistory not yet available.\n');
           }
+        }
+      });
+    });
+
+  cmd
+    .command('dispatch')
+    .description('Fill a dispatch template with task and project metadata')
+    .argument('<task-id>', 'Brain PM task display ID (e.g., SDK-02.03)')
+    .argument('<template>', 'Template name (e.g., implementation-compact)')
+    .option('--branch <name>', 'Override auto-generated branch name')
+    .option('--worktree <path>', 'Set worktree path')
+    .option('--dry-run', 'Show filled template without claiming the task')
+    .option('--claim', 'Auto-claim the task before dispatch')
+    .option('--json', 'Output JSON with template and metadata')
+    .action(async (taskId, templateName, opts) => {
+      await withBrain(async (svc) => {
+        const result = await dispatchTemplate(
+          svc.db,
+          svc.config,
+          svc.embedder,
+          taskId.toUpperCase(),
+          templateName,
+          {
+            branch: opts.branch,
+            worktree: opts.worktree,
+            dryRun: opts.dryRun,
+            claim: opts.claim,
+          }
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
+        } else {
+          process.stdout.write(result.data.rendered + '\n');
         }
       });
     });
