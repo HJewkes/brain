@@ -2,7 +2,11 @@ import { Command, type CommandUnknownOpts } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { instantiateWorkflow, expandWorkflow } from '../data/workflow-ops.js';
 import { advanceWorkflow } from '../engine/lifecycle.js';
-import { getWorkflowDefinition, getInstanceStepStates } from '../data/queries.js';
+import {
+  getWorkflowDefinition,
+  getInstanceByDisplayId,
+  getInstanceStepStates,
+} from '../data/queries.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
 
 function formatError(error: { code: string; message: string }, json: boolean): string {
@@ -124,6 +128,148 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
       });
     });
 
+  const next = new Command('next')
+    .description('Advance a workflow and dispatch the next step(s)')
+    .argument('<instance-id>', 'Instance display ID to advance')
+    .option('--json', 'Output JSON')
+    .action(async (instanceId, opts) => {
+      await withBrain(async (svc) => {
+        // 1. Advance the workflow
+        const advResult = await advanceWorkflow(svc.db, svc.config, instanceId);
+        if (!advResult.ok) {
+          process.stderr.write(formatError(advResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        const { advanced, pruned, warnings, completed } = advResult.data;
+
+        // 2. Map step IDs to task display IDs
+        const stepsResult = getInstanceStepStates(svc.db, instanceId);
+        const stepToTask = new Map<string, string>();
+        if (stepsResult.ok) {
+          for (const step of stepsResult.data.steps) {
+            stepToTask.set(step.stepId, step.taskDisplayId);
+          }
+        }
+
+        // 3. Get the workflow definition to look up step templates
+        const instanceResult = getInstanceByDisplayId(svc.db, instanceId);
+        const stepDefs = new Map<string, { template?: string; mode?: string }>();
+        if (instanceResult.ok) {
+          const workflowId = instanceResult.data.metadata.workflow_id;
+          const defResult = getWorkflowDefinition(svc.db, workflowId);
+          if (defResult.ok) {
+            for (const step of defResult.data.definition.steps) {
+              stepDefs.set(step.id, { template: step.template, mode: step.mode });
+            }
+          }
+        }
+
+        // 4. Dispatch templates for advanced steps
+        const dispatched: Array<{ stepId: string; taskId: string; template: string }> = [];
+        const dispatchErrors: Array<{ stepId: string; error: string }> = [];
+
+        for (const stepId of advanced) {
+          const taskId = stepToTask.get(stepId);
+          if (!taskId) continue;
+
+          const stepDef = stepDefs.get(stepId);
+          const templateName = stepDef?.template;
+          if (!templateName) continue;
+
+          const isAssisted = stepDef?.mode === 'assisted';
+          const dispatchResult = await dispatchTemplate(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            taskId,
+            templateName,
+            { claim: !isAssisted }
+          );
+
+          if (!dispatchResult.ok) {
+            dispatchErrors.push({
+              stepId,
+              error: dispatchResult.error.message,
+            });
+            continue;
+          }
+
+          dispatched.push({ stepId, taskId, template: templateName });
+        }
+
+        // 5. Output
+        if (opts.json) {
+          process.stdout.write(
+            JSON.stringify(
+              {
+                advanced,
+                pruned,
+                warnings,
+                completed,
+                dispatched,
+                errors: dispatchErrors,
+              },
+              null,
+              2
+            ) + '\n'
+          );
+        } else {
+          const advancedStr = advanced.length > 0 ? advanced.join(', ') : '(none)';
+          const prunedStr = pruned.length > 0 ? pruned.join(', ') : '(none)';
+          process.stdout.write(`Advanced: ${advancedStr}\n`);
+          process.stdout.write(`Pruned: ${prunedStr}\n`);
+          if (warnings.length > 0) {
+            process.stdout.write(`Warnings: ${warnings.join('; ')}\n`);
+          }
+
+          if (completed) {
+            process.stdout.write(`Workflow completed.\n`);
+          }
+
+          if (dispatched.length > 0) {
+            process.stdout.write(`\nDispatched steps:\n`);
+            for (const d of dispatched) {
+              process.stdout.write(`  ${d.stepId} \u2192 ${d.taskId} (${d.template})\n`);
+            }
+          }
+
+          if (dispatchErrors.length > 0) {
+            process.stdout.write(`\nDispatch errors:\n`);
+            for (const e of dispatchErrors) {
+              process.stdout.write(`  ${e.stepId}: ${e.error}\n`);
+            }
+          }
+
+          // Print the rendered template for the first dispatched step
+          if (dispatched.length > 0) {
+            const firstTask = dispatched[0];
+            const rendered = await dispatchTemplate(
+              svc.db,
+              svc.config,
+              svc.embedder,
+              firstTask.taskId,
+              firstTask.template,
+              { dryRun: true }
+            );
+            if (rendered.ok) {
+              if (rendered.data.mode === 'assisted') {
+                process.stdout.write(`\n## Assisted Step — Coordinator Instructions\n\n`);
+                process.stdout.write(
+                  'This step requires interactive coordination. Use this prompt in your current session.\n'
+                );
+                process.stdout.write('Do NOT dispatch this to an autonomous agent.\n\n');
+                process.stdout.write('---\n\n');
+              } else {
+                process.stdout.write(`\n--- Dispatch prompt (${firstTask.stepId}) ---\n`);
+              }
+              process.stdout.write(rendered.data.rendered + '\n');
+            }
+          }
+        }
+      });
+    });
+
   const run = new Command('run')
     .description('Instantiate, expand, and dispatch the first step(s) of a workflow')
     .argument('<definition-id>', 'Workflow definition ID to run')
@@ -207,13 +353,14 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
             continue;
           }
 
+          const isAssisted = step.mode === 'assisted';
           const dispatchResult = await dispatchTemplate(
             svc.db,
             svc.config,
             svc.embedder,
             taskId,
             templateName,
-            { claim: true }
+            { claim: !isAssisted }
           );
 
           if (!dispatchResult.ok) {
@@ -256,7 +403,7 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
           if (dispatched.length > 0) {
             process.stdout.write(`\nDispatched steps:\n`);
             for (const d of dispatched) {
-              process.stdout.write(`  ${d.stepId} → ${d.taskId} (${d.template})\n`);
+              process.stdout.write(`  ${d.stepId} \u2192 ${d.taskId} (${d.template})\n`);
             }
           }
 
@@ -279,7 +426,16 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
               { dryRun: true }
             );
             if (rendered.ok) {
-              process.stdout.write(`\n--- Dispatch prompt (${firstTask.stepId}) ---\n`);
+              if (rendered.data.mode === 'assisted') {
+                process.stdout.write(`\n## Assisted Step — Coordinator Instructions\n\n`);
+                process.stdout.write(
+                  'This step requires interactive coordination. Use this prompt in your current session.\n'
+                );
+                process.stdout.write('Do NOT dispatch this to an autonomous agent.\n\n');
+                process.stdout.write('---\n\n');
+              } else {
+                process.stdout.write(`\n--- Dispatch prompt (${firstTask.stepId}) ---\n`);
+              }
               process.stdout.write(rendered.data.rendered + '\n');
             }
           }
@@ -287,5 +443,5 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
       });
     });
 
-  return [add, expand, advance, run] as CommandUnknownOpts[];
+  return [add, expand, advance, next, run] as CommandUnknownOpts[];
 }

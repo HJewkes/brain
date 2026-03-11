@@ -110,12 +110,13 @@ async function findAdvancedSteps(
 ): Promise<string[]> {
   const advanced: string[] = [];
 
+  // Only unconditional edges define advancement prerequisites
+  const unconditional = definition.edges.filter((e) => !e.condition);
+
   for (const stepId of allStepIds) {
     const status = statusMap.get(stepId);
     if (status === 'done' || status === 'pruned' || status === 'cancelled') continue;
 
-    // Only unconditional edges define advancement prerequisites
-    const unconditional = definition.edges.filter((e) => !e.condition);
     const preds = getPredecessors(stepId, unconditional);
     if (preds.length === 0) continue;
 
