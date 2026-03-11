@@ -58,7 +58,7 @@ describe('evaluateGate', () => {
 
       const gate: Gate = { type: 'task-complete', target: displayId };
       const result = await evaluateGate(gate, db, config);
-      expect(result).toBe(true);
+      expect(result.passed).toBe(true);
     });
 
     test('AC-06: returns false when referenced task is in-progress', async () => {
@@ -76,7 +76,7 @@ describe('evaluateGate', () => {
 
       const gate: Gate = { type: 'task-complete', target: displayId };
       const result = await evaluateGate(gate, db, config);
-      expect(result).toBe(false);
+      expect(result.passed).toBe(false);
     });
   });
 
@@ -87,13 +87,13 @@ describe('evaluateGate', () => {
 
       const gate: Gate = { type: 'file-exists', target: filePath };
       const result = await evaluateGate(gate, db, config);
-      expect(result).toBe(true);
+      expect(result.passed).toBe(true);
     });
 
     test('AC-06: returns false when file does not exist', async () => {
       const gate: Gate = { type: 'file-exists', target: join(notesDir, 'nonexistent.md') };
       const result = await evaluateGate(gate, db, config);
-      expect(result).toBe(false);
+      expect(result.passed).toBe(false);
     });
   });
 
@@ -101,13 +101,77 @@ describe('evaluateGate', () => {
     test('AC-06: returns true when command exits with code 0', async () => {
       const gate: Gate = { type: 'cli-pass', target: 'true' };
       const result = await evaluateGate(gate, db, config);
-      expect(result).toBe(true);
+      expect(result.passed).toBe(true);
     });
 
     test('AC-06: returns false when command exits with non-zero code', async () => {
       const gate: Gate = { type: 'cli-pass', target: 'false' };
       const result = await evaluateGate(gate, db, config);
-      expect(result).toBe(false);
+      expect(result.passed).toBe(false);
+    });
+  });
+
+  describe('approval gate', () => {
+    test('passes when gate_status is passed in task metadata', async () => {
+      const gate: Gate = { type: 'approval' };
+      const result = await evaluateGate(gate, db, config, { gate_status: 'passed' });
+      expect(result.passed).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    test('fails when gate_status is not set in task metadata', async () => {
+      const gate: Gate = { type: 'approval' };
+      const result = await evaluateGate(gate, db, config, {});
+      expect(result.passed).toBe(false);
+      expect(result.reason).toBe('Approval gate not yet passed');
+    });
+
+    test('fails when no task metadata is provided', async () => {
+      const gate: Gate = { type: 'approval' };
+      const result = await evaluateGate(gate, db, config);
+      expect(result.passed).toBe(false);
+      expect(result.reason).toBe('Approval gate not yet passed');
+    });
+
+    test('fails when gate_status is not "passed"', async () => {
+      const gate: Gate = { type: 'approval' };
+      const result = await evaluateGate(gate, db, config, { gate_status: 'pending' });
+      expect(result.passed).toBe(false);
+    });
+  });
+
+  describe('iteration gate', () => {
+    test('passes when iteration_count is below maxIterations', async () => {
+      const gate: Gate = { type: 'iteration', maxIterations: 3 };
+      const result = await evaluateGate(gate, db, config, { iteration_count: 1 });
+      expect(result.passed).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    test('fails when iteration_count equals maxIterations', async () => {
+      const gate: Gate = { type: 'iteration', maxIterations: 3 };
+      const result = await evaluateGate(gate, db, config, { iteration_count: 3 });
+      expect(result.passed).toBe(false);
+      expect(result.reason).toBe('Iteration limit reached (3/3)');
+    });
+
+    test('fails when iteration_count exceeds maxIterations', async () => {
+      const gate: Gate = { type: 'iteration', maxIterations: 2 };
+      const result = await evaluateGate(gate, db, config, { iteration_count: 5 });
+      expect(result.passed).toBe(false);
+      expect(result.reason).toBe('Iteration limit reached (5/2)');
+    });
+
+    test('passes when iteration_count is not set (defaults to 0)', async () => {
+      const gate: Gate = { type: 'iteration', maxIterations: 3 };
+      const result = await evaluateGate(gate, db, config, {});
+      expect(result.passed).toBe(true);
+    });
+
+    test('passes when maxIterations is not set (defaults to Infinity)', async () => {
+      const gate: Gate = { type: 'iteration' };
+      const result = await evaluateGate(gate, db, config, { iteration_count: 100 });
+      expect(result.passed).toBe(true);
     });
   });
 });
@@ -141,5 +205,33 @@ describe('evaluateGates', () => {
     const result = await evaluateGates([], db, config);
     expect(result.allPassed).toBe(true);
     expect(result.results).toHaveLength(0);
+  });
+
+  test('passes task metadata through to gate evaluation', async () => {
+    const gates: Gate[] = [{ type: 'approval' }, { type: 'iteration', maxIterations: 5 }];
+    const result = await evaluateGates(gates, db, config, {
+      gate_status: 'passed',
+      iteration_count: 2,
+    });
+    expect(result.allPassed).toBe(true);
+    expect(result.results).toHaveLength(2);
+    expect(result.results[0].passed).toBe(true);
+    expect(result.results[1].passed).toBe(true);
+  });
+
+  test('fails when approval gate not passed in metadata', async () => {
+    const gates: Gate[] = [{ type: 'approval' }, { type: 'cli-pass', target: 'true' }];
+    const result = await evaluateGates(gates, db, config, {});
+    expect(result.allPassed).toBe(false);
+    expect(result.results[0].passed).toBe(false);
+    expect(result.results[0].reason).toBe('Approval gate not yet passed');
+    expect(result.results[1].passed).toBe(true);
+  });
+
+  test('includes reason in results for failed gates', async () => {
+    const gates: Gate[] = [{ type: 'iteration', maxIterations: 2 }];
+    const result = await evaluateGates(gates, db, config, { iteration_count: 3 });
+    expect(result.allPassed).toBe(false);
+    expect(result.results[0].reason).toBe('Iteration limit reached (3/2)');
   });
 });
