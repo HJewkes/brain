@@ -45,6 +45,7 @@ export async function advanceWorkflow(
   const advanced = await findAdvancedSteps(
     allStepIds,
     statusMap,
+    taskDisplayIdMap,
     definition,
     readySteps,
     db,
@@ -103,6 +104,7 @@ function buildReadySet(
 async function findAdvancedSteps(
   allStepIds: string[],
   statusMap: Map<string, string>,
+  taskDisplayIdMap: Map<string, string>,
   definition: WorkflowDefinition,
   readySteps: Set<string>,
   db: BrainDB,
@@ -126,7 +128,8 @@ async function findAdvancedSteps(
     const stepDef = definition.steps.find((s) => s.id === stepId);
     const gates = stepDef?.gates ?? [];
     if (gates.length > 0) {
-      const gateResult = await evaluateGates(gates, db, config);
+      const taskMeta = lookupTaskMetadata(db, taskDisplayIdMap.get(stepId));
+      const gateResult = await evaluateGates(gates, db, config, taskMeta);
       if (!gateResult.allPassed) continue;
     }
 
@@ -182,6 +185,21 @@ function pruneUnreachableSteps(
   }
 
   return { pruned, warnings };
+}
+
+function lookupTaskMetadata(
+  db: BrainDB,
+  taskDisplayId: string | undefined
+): Record<string, unknown> | undefined {
+  if (!taskDisplayId) return undefined;
+  const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+  const notes = db.getNotesByIds(noteIds);
+  for (const [, note] of notes) {
+    if (!note.metadata) continue;
+    const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+    if (meta.display_id === taskDisplayId) return meta;
+  }
+  return undefined;
 }
 
 function resolveDefinition(db: BrainDB, instanceNote: { id: string }): WorkflowDefinition | null {
