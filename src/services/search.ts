@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { BrainDB } from './brain-db.js';
+import { computeHotnessScore, ageDays } from './hotness.js';
 import { addFrontmatterField } from './indexing.js';
 import { rerank } from './reranker.js';
 import type {
@@ -265,6 +266,15 @@ export async function search(
     ? ftsResults.filter((r) => allowedNoteIds.has(r.noteId))
     : ftsResults;
 
+  // Step 1b: Trigram fallback when BM25 returns no results
+  let effectiveFts = filteredFts;
+  if (effectiveFts.length === 0) {
+    const trigramResults = db.searchFTSTrigram(query, overfetchLimit);
+    effectiveFts = allowedNoteIds
+      ? trigramResults.filter((r) => allowedNoteIds.has(r.noteId))
+      : trigramResults;
+  }
+
   // Step 2: Vector search
   const queryVec = await embedQuery(embedder, query);
   const vectorResults = db.searchVector(queryVec, overfetchLimit);
@@ -285,8 +295,25 @@ export async function search(
   const strategy: FusionStrategy = options.fusionStrategy ?? 'score';
   const scored =
     strategy === 'score'
-      ? fuseByScore(filteredFts, bestVectorByNote, fusionWeights)
-      : fuseByRRF(filteredFts, bestVectorByNote, fusionWeights);
+      ? fuseByScore(effectiveFts, bestVectorByNote, fusionWeights)
+      : fuseByRRF(effectiveFts, bestVectorByNote, fusionWeights);
+
+  // Step 3b: Blend hotness scores (20% weight)
+  const hotnessWeight = 0.2;
+  if (scored.length > 0) {
+    const noteIdsForHotness = scored.map((s) => s.noteId);
+    const accessCounts = db.getAccessCounts(noteIdsForHotness);
+    const notesForHotness = db.getNotesByIds(noteIdsForHotness);
+
+    const now = new Date();
+    for (const item of scored) {
+      const count = accessCounts.get(item.noteId) ?? 0;
+      const note = notesForHotness.get(item.noteId);
+      const age = ageDays(note?.modifiedAt ?? null, now);
+      const hotness = computeHotnessScore(count, age);
+      item.score = (1 - hotnessWeight) * item.score + hotnessWeight * hotness;
+    }
+  }
 
   scored.sort((a, b) => b.score - a.score);
   const DEFAULT_MIN_SCORE = 0.25;

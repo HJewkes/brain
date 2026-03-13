@@ -25,6 +25,7 @@ describe('PM notes in search', () => {
         title: 'Authentication patterns in Node.js',
         tier: 'slow',
         summary: 'JWT tokens, OAuth2, session-based auth',
+        modifiedAt: new Date().toISOString(),
       })
     );
     db.upsertNoteFTS(
@@ -42,6 +43,7 @@ describe('PM notes in search', () => {
         tier: 'slow',
         summary: 'Implement JWT-based authentication',
         module: 'pm',
+        modifiedAt: new Date().toISOString(),
       })
     );
     db.upsertNoteFTS(
