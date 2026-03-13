@@ -8,6 +8,8 @@ import { createSessionResumeCommand } from './commands/resume.js';
 import { createSessionAnalyticsCommand } from './commands/analytics.js';
 import { createSessionSnapshotCommand } from './commands/snapshot.js';
 import { createSessionCommitCommand } from './commands/session-commit.js';
+import { createSessionRestoreCommand } from './commands/restore.js';
+import { createSessionStatsCommand } from './commands/stats.js';
 
 const SESSION_NOTE_TYPE: ModuleNoteType = {
   name: 'session',
@@ -232,6 +234,8 @@ export const sessionsModule: BrainModule = {
     sessionCmd.addCommand(createSessionAnalyticsCommand());
     sessionCmd.addCommand(createSessionSnapshotCommand());
     sessionCmd.addCommand(createSessionCommitCommand());
+    sessionCmd.addCommand(createSessionRestoreCommand());
+    sessionCmd.addCommand(createSessionStatsCommand());
 
     ctx.registerCommand(sessionCmd);
   },
