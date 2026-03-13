@@ -1,6 +1,7 @@
 import type { Command } from '@commander-js/extra-typings';
 import type { NoteRecord, Embedder, ExtractedItem } from '../types.js';
 import type { BrainDB } from '../services/brain-db.js';
+import type { HookHandler } from '../hooks/types.js';
 
 /** Schema for validating module note frontmatter (JSON Schema subset) */
 export interface ModuleConfigSchema {
@@ -85,6 +86,7 @@ export interface ModuleContext {
   registerFilter(filter: FilterProvider): void;
   registerMigration(migration: ModuleMigration): void;
   registerContentHandler(handler: ContentHandler): void;
+  registerHookHandler(handler: HookHandler): void;
 }
 
 /** The interface every brain module must implement */

@@ -9,6 +9,7 @@ import type {
   ContentHandler,
 } from './types.js';
 import type { ModuleRegistry } from './registry.js';
+import type { HookHandler } from '../hooks/types.js';
 
 export function createModuleContext(registry: ModuleRegistry, moduleName: string): ModuleContext {
   return {
@@ -32,6 +33,9 @@ export function createModuleContext(registry: ModuleRegistry, moduleName: string
     },
     registerContentHandler(handler: ContentHandler): void {
       registry.registerContentHandler(moduleName, handler);
+    },
+    registerHookHandler(handler: HookHandler): void {
+      registry.registerHookHandler(moduleName, handler);
     },
   };
 }
