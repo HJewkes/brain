@@ -35,9 +35,9 @@ describe('BrainDB', () => {
       expect(tables).toContain('db_meta');
     });
 
-    it('sets schema_version to 9 in db_meta', () => {
+    it('sets schema_version to 10 in db_meta', () => {
       const version = db.getMetaValue('schema_version');
-      expect(version).toBe('9');
+      expect(version).toBe('10');
     });
 
     it('sets and gets embedding model metadata', () => {
@@ -67,7 +67,7 @@ describe('BrainDB', () => {
 
   describe('schema v5 migration', () => {
     it('new databases get latest schema version', () => {
-      expect(db.getMetaValue('schema_version')).toBe('9');
+      expect(db.getMetaValue('schema_version')).toBe('10');
     });
 
     it('creates inbox table', () => {
@@ -149,6 +149,7 @@ describe('BrainDB', () => {
         sourceNoteId: 'test-note',
         sourceChunkId: null,
         containerTag: 'default',
+        category: null,
         isLatest: true,
         parentMemoryId: null,
         rootMemoryId: null,
@@ -185,8 +186,8 @@ describe('BrainDB', () => {
       expect(tables).toContain('note_access');
     });
 
-    it('sets schema_version to 9', () => {
-      expect(db.getMetaValue('schema_version')).toBe('9');
+    it('sets schema_version to 10', () => {
+      expect(db.getMetaValue('schema_version')).toBe('10');
     });
 
     it('stores derived-from relation type', () => {

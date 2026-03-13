@@ -186,6 +186,7 @@ export interface SearchOptions {
   dropoff?: number;
   includePm?: boolean;
   excludePm?: boolean;
+  intent?: string;
   filters?: Array<{ field: string; value: string }>;
   facets?: string[];
 }
@@ -271,6 +272,27 @@ export interface FeedRecord {
 
 // === Memory Types ===
 
+export type MemoryCategory =
+  | 'profile'
+  | 'preferences'
+  | 'entities'
+  | 'events' // user-space
+  | 'cases'
+  | 'patterns'
+  | 'tools'
+  | 'skills'; // agent-space
+
+export const VALID_MEMORY_CATEGORIES: MemoryCategory[] = [
+  'profile',
+  'preferences',
+  'entities',
+  'events',
+  'cases',
+  'patterns',
+  'tools',
+  'skills',
+];
+
 export type MemoryRelationType = 'updates' | 'extends' | 'derives';
 
 export type MemoryEvent = 'add' | 'update' | 'delete' | 'forget';
@@ -281,6 +303,7 @@ export interface MemoryEntry {
   sourceNoteId: string;
   sourceChunkId: string | null;
   containerTag: string;
+  category: MemoryCategory | null;
   isLatest: boolean;
   parentMemoryId: string | null;
   rootMemoryId: string | null;
@@ -315,6 +338,7 @@ export interface MemorySearchResult {
 export interface ExtractedFact {
   fact: string;
   sourceChunkId: string | null;
+  category: MemoryCategory | null;
 }
 
 // === Config Types ===

@@ -35,7 +35,7 @@ export interface ArchiveResult {
   orphanedChildren: string[];
 }
 
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 export class BrainDB {
   private db: Database.Database;
@@ -89,6 +89,7 @@ export class BrainDB {
     this.applyMigration(currentVersion, 7, () => this.migrateToV7());
     this.applyMigration(currentVersion, 8, () => this.migrateToV8());
     this.applyMigration(currentVersion, 9, () => this.migrateToV9());
+    this.applyMigration(currentVersion, 10, () => this.migrateToV10());
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -154,6 +155,7 @@ export class BrainDB {
         source_note_id    TEXT NOT NULL,
         source_chunk_id   TEXT,
         container_tag     TEXT NOT NULL DEFAULT 'default',
+        category          TEXT DEFAULT NULL,
         is_latest         INTEGER NOT NULL DEFAULT 1,
         parent_memory_id  TEXT,
         root_memory_id    TEXT,
@@ -170,6 +172,7 @@ export class BrainDB {
       CREATE INDEX IF NOT EXISTS idx_memory_source ON memory_entries(source_note_id);
       CREATE INDEX IF NOT EXISTS idx_memory_latest ON memory_entries(is_latest) WHERE is_latest = 1;
       CREATE INDEX IF NOT EXISTS idx_memory_container ON memory_entries(container_tag);
+      CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category);
 
       CREATE TABLE IF NOT EXISTS memory_history (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -337,6 +340,14 @@ export class BrainDB {
         tokenize='trigram'
       );
     `);
+  }
+
+  private migrateToV10(): void {
+    const columns = this.db.pragma('table_info(memory_entries)') as { name: string }[];
+    const columnNames = new Set(columns.map((c) => c.name));
+    if (!columnNames.has('category')) {
+      this.db.exec('ALTER TABLE memory_entries ADD COLUMN category TEXT DEFAULT NULL');
+    }
   }
 
   private migrateToV8(): void {
@@ -713,6 +724,12 @@ export class BrainDB {
     limit: number
   ): Array<{ memoryId: string; distance: number }> {
     return this.memoryRepo.searchMemoryVectors(embedding, limit);
+  }
+  getMemoriesByCategory(category: string): MemoryEntry[] {
+    return this.memoryRepo.getMemoriesByCategory(category);
+  }
+  updateMemoryCategory(memoryId: string, category: string): void {
+    this.memoryRepo.updateMemoryCategory(memoryId, category);
   }
 
   // --- Capture Delegates ---

@@ -16,6 +16,7 @@ import type {
 import type { ModuleRegistry } from '../modules/registry.js';
 
 const RRF_K = 60;
+const INTENT_SIMILARITY_THRESHOLD = 0.3;
 // Cross-encoder reranker (ms-marco-MiniLM-L-6-v2) has a 512-token window.
 // 500 chars balances rerank quality with response payload size.
 const EXCERPT_MAX_LENGTH = 500;
@@ -33,6 +34,42 @@ interface ScoreEntry {
   bm25Score: number | null;
   vectorDistance: number | null;
   chunkId: string | null;
+}
+
+function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
+}
+
+async function applyIntentFilter(
+  embedder: Embedder,
+  results: SearchResult[],
+  intent: string
+): Promise<SearchResult[]> {
+  if (results.length <= 1) return results;
+
+  const intentVec = await embedQuery(embedder, intent);
+  const excerptTexts = results.map((r) => r.excerpt);
+  const excerptVecs = await embedder.embed(excerptTexts);
+
+  const scored = results.map((r, i) => ({
+    result: r,
+    intentScore: cosineSimilarity(intentVec, new Float32Array(excerptVecs[i])),
+  }));
+
+  const intentFiltered = scored
+    .filter((s) => s.intentScore >= INTENT_SIMILARITY_THRESHOLD)
+    .sort((a, b) => b.intentScore - a.intentScore)
+    .map((s) => s.result);
+
+  return intentFiltered.length > 0 ? intentFiltered : results;
 }
 
 function distanceToCosineSim(distance: number): number {
@@ -334,11 +371,17 @@ export async function search(
   }
 
   // Step 6: Optional cross-encoder reranking
+  let finalResults = results;
   if (options.rerank && results.length > 1) {
-    return rerank(query, results, limit);
+    finalResults = await rerank(query, results, limit);
   }
 
-  return results;
+  // Step 7: Optional intent-based filtering
+  if (options.intent && finalResults.length > 1) {
+    finalResults = await applyIntentFilter(embedder, finalResults, options.intent);
+  }
+
+  return finalResults;
 }
 
 export function computeFacets(

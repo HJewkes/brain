@@ -18,6 +18,7 @@ export const searchCommand = new Command('search')
   .option('--min-score <score>', 'minimum relevance score (0-1)')
   .option('--dropoff <pct>', 'cut results when score drops by this percentage (e.g. 30)')
   .option('--rerank', 'apply cross-encoder reranking for better relevance')
+  .option('--intent <text>', 'filter results by stated intent/goal')
   .option('--include-tasks', 'include PM task notes in search results')
   .option('--exclude-pm', 'exclude project management notes from results')
   .option('--expand', 'include graph-connected notes')
@@ -44,6 +45,7 @@ export const searchCommand = new Command('search')
         rerank: opts.rerank,
         includePm: opts.includeTasks,
         excludePm: opts.excludePm,
+        intent: opts.intent,
       };
 
       if (opts.filter) {

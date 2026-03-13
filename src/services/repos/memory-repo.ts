@@ -4,6 +4,7 @@ import type {
   MemoryHistoryEntry,
   MemoryEvent,
   MemoryRelationType,
+  MemoryCategory,
 } from '../../types.js';
 
 interface MemoryRow {
@@ -12,6 +13,7 @@ interface MemoryRow {
   source_note_id: string;
   source_chunk_id: string | null;
   container_tag: string;
+  category: string | null;
   is_latest: number;
   parent_memory_id: string | null;
   root_memory_id: string | null;
@@ -41,6 +43,7 @@ function rowToMemoryEntry(row: MemoryRow): MemoryEntry {
     sourceNoteId: row.source_note_id,
     sourceChunkId: row.source_chunk_id,
     containerTag: row.container_tag,
+    category: row.category as MemoryCategory | null,
     isLatest: row.is_latest === 1,
     parentMemoryId: row.parent_memory_id,
     rootMemoryId: row.root_memory_id,
@@ -86,10 +89,10 @@ export class MemoryRepo {
     this.db
       .prepare(
         `INSERT INTO memory_entries
-          (id, memory, source_note_id, source_chunk_id, container_tag,
+          (id, memory, source_note_id, source_chunk_id, container_tag, category,
            is_latest, parent_memory_id, root_memory_id, relation_type,
            valid_at, invalid_at, forget_after, is_forgotten, is_inference, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         entry.id,
@@ -97,6 +100,7 @@ export class MemoryRepo {
         entry.sourceNoteId,
         entry.sourceChunkId,
         entry.containerTag,
+        entry.category,
         entry.isLatest ? 1 : 0,
         entry.parentMemoryId,
         entry.rootMemoryId,
@@ -269,5 +273,18 @@ export class MemoryRepo {
     } catch {
       return [];
     }
+  }
+
+  getMemoriesByCategory(category: string): MemoryEntry[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM memory_entries WHERE category = ? AND is_latest = 1 AND is_forgotten = 0 ORDER BY created_at DESC'
+      )
+      .all(category) as MemoryRow[];
+    return rows.map(rowToMemoryEntry);
+  }
+
+  updateMemoryCategory(memoryId: string, category: string): void {
+    this.db.prepare('UPDATE memory_entries SET category = ? WHERE id = ?').run(category, memoryId);
   }
 }
