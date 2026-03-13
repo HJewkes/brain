@@ -1,6 +1,6 @@
 import type { BrainModule } from '../types.js';
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../../hooks/types.js';
-import { hookAllow, hookBlock } from '../../hooks/types.js';
+import { hookAllow, hookBlock, hookAllowJson } from '../../hooks/types.js';
 import { agentsMigration } from './schema.js';
 import { createAgentCommands } from './commands.js';
 
@@ -45,9 +45,21 @@ const agentDoneHandler: HookHandler = {
     return true;
   },
 
-  run(_input: HookInput, _config: HookConfig): HookResult {
-    // Placeholder: commands added in VNM-09.08 will update agent status on completion
-    return hookAllow();
+  run(input: HookInput, _config: HookConfig): HookResult {
+    const agentId = process.env.BRAIN_AGENT_ID;
+    if (!agentId) return hookAllow();
+
+    // Provide context about agent completion for the orchestrator.
+    // Actual DB update is done via `brain agent complete <id>` by the caller.
+    const parsed = input.parsed as { exit_code?: number; summary?: string };
+    const exitCode = parsed.exit_code ?? 0;
+    const status = exitCode === 0 ? 'completed' : 'failed';
+
+    return hookAllowJson(
+      `<agent-done agent_id="${agentId}" status="${status}">\n` +
+        `Run "brain agent ${status === 'completed' ? 'complete' : 'abandon'} ${agentId}" to update status.\n` +
+        `</agent-done>`
+    );
   },
 };
 

@@ -10,6 +10,9 @@ import { createSessionSnapshotCommand } from './commands/snapshot.js';
 import { createSessionCommitCommand } from './commands/session-commit.js';
 import { createSessionRestoreCommand } from './commands/restore.js';
 import { createSessionStatsCommand } from './commands/stats.js';
+import { createSessionBriefingCommand } from './commands/briefing.js';
+import { sessionRestoreHandler } from './hooks/session-restore-handler.js';
+import { sessionBriefingHandler } from './hooks/session-briefing-handler.js';
 
 const SESSION_NOTE_TYPE: ModuleNoteType = {
   name: 'session',
@@ -140,6 +143,9 @@ export const sessionsModule: BrainModule = {
 
     ctx.registerContentHandler(new SessionContentHandler());
 
+    ctx.registerHookHandler(sessionRestoreHandler);
+    ctx.registerHookHandler(sessionBriefingHandler);
+
     // Migration v1: json_extract indexes for session frontmatter queries
     ctx.registerMigration({
       version: 1,
@@ -236,6 +242,7 @@ export const sessionsModule: BrainModule = {
     sessionCmd.addCommand(createSessionCommitCommand());
     sessionCmd.addCommand(createSessionRestoreCommand());
     sessionCmd.addCommand(createSessionStatsCommand());
+    sessionCmd.addCommand(createSessionBriefingCommand());
 
     ctx.registerCommand(sessionCmd);
   },

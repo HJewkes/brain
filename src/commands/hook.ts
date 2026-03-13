@@ -9,6 +9,7 @@ import { loadModules } from '../modules/loader.js';
 import { pmModule } from '../modules/pm/index.js';
 import { workflowModule } from '../modules/workflow/index.js';
 import { sessionsModule } from '../modules/sessions/index.js';
+import { agentsModule } from '../modules/agents/index.js';
 import type { HookEvent, HookInput, HookResult } from '../hooks/types.js';
 
 const VALID_EVENTS = new Set<HookEvent>([
@@ -49,7 +50,7 @@ function createRegistry(): HookRegistry {
 
 async function registerModuleHandlers(registry: HookRegistry): Promise<void> {
   const { registry: moduleRegistry } = await loadModules({
-    modules: [pmModule, workflowModule, sessionsModule],
+    modules: [pmModule, workflowModule, sessionsModule, agentsModule],
   });
   for (const { handler } of moduleRegistry.getHookHandlers()) {
     registry.register(handler);
