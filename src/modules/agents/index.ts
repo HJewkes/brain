@@ -2,6 +2,7 @@ import type { BrainModule } from '../types.js';
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../../hooks/types.js';
 import { hookAllow, hookBlock } from '../../hooks/types.js';
 import { agentsMigration } from './schema.js';
+import { createAgentCommands } from './commands.js';
 
 const worktreeBoundaryCheck: HookHandler = {
   name: 'agents:worktree-boundary',
@@ -103,5 +104,7 @@ export const agentsModule: BrainModule = {
 
     ctx.registerHookHandler(worktreeBoundaryCheck);
     ctx.registerHookHandler(agentDoneHandler);
+
+    ctx.registerCommand(createAgentCommands());
   },
 };

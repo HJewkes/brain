@@ -345,6 +345,19 @@ export interface ExtractedFact {
 
 export type EmbedderBackend = 'local' | 'ollama' | 'remote';
 
+export interface HookEnforcementConfig {
+  ownership?: boolean;
+  dod?: boolean;
+  dodCriteria?: Array<{ name: string; check: string; required: boolean }>;
+  wipLimit?: number;
+  workspaceClean?: boolean;
+  gitSafety?: boolean;
+  gitSafetyBlockOnce?: boolean;
+  brainResources?: boolean;
+  worktreeBudget?: number;
+  worktreeBasePath?: string;
+}
+
 export interface BrainConfig {
   notesDir: string;
   dbPath: string;
@@ -358,6 +371,10 @@ export interface BrainConfig {
   modules?: {
     enabled?: string[];
     disabled?: string[];
+  };
+  hooks?: {
+    enforcement?: HookEnforcementConfig;
+    ownershipManifest?: string;
   };
 }
 

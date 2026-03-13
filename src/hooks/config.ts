@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { HookConfig } from './types.js';
+import type { BrainConfig } from '../types.js';
 
 export const DEFAULT_HOOK_CONFIG: HookConfig = {
   enforcement: {
@@ -19,22 +20,46 @@ export const DEFAULT_HOOK_CONFIG: HookConfig = {
   ownershipManifest: '.claude/ownership.json',
 };
 
+function brainConfigToHookConfig(brain: BrainConfig): Partial<HookConfig> | null {
+  if (!brain.hooks) return null;
+  const result: Partial<HookConfig> = {};
+  if (brain.hooks.enforcement) {
+    result.enforcement = brain.hooks.enforcement as HookConfig['enforcement'];
+  }
+  if (brain.hooks.ownershipManifest) {
+    result.ownershipManifest = brain.hooks.ownershipManifest;
+  }
+  return result;
+}
+
+function tryLoadJson(path: string): Partial<HookConfig> | null {
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, 'utf-8')) as Partial<HookConfig>;
+}
+
 export function resolveHookConfig(
   projectDir: string,
-  overrides?: Partial<HookConfig>
+  overrides?: Partial<HookConfig>,
+  brainConfig?: BrainConfig
 ): HookConfig {
   const sources: Partial<HookConfig>[] = [];
 
-  const globalPath = join(homedir(), '.claude', 'ao.config.json');
-  if (existsSync(globalPath)) {
-    sources.push(JSON.parse(readFileSync(globalPath, 'utf-8')) as Partial<HookConfig>);
+  // Priority 1: ao.config.json (legacy, lowest priority)
+  const globalAoPath = join(homedir(), '.claude', 'ao.config.json');
+  const globalAo = tryLoadJson(globalAoPath);
+  if (globalAo) sources.push(globalAo);
+
+  const projectAoPath = join(projectDir, 'ao.config.json');
+  const projectAo = tryLoadJson(projectAoPath);
+  if (projectAo) sources.push(projectAo);
+
+  // Priority 2: brain config hooks section (higher priority than ao.config.json)
+  if (brainConfig) {
+    const hookConfig = brainConfigToHookConfig(brainConfig);
+    if (hookConfig) sources.push(hookConfig);
   }
 
-  const projectPath = join(projectDir, 'ao.config.json');
-  if (existsSync(projectPath)) {
-    sources.push(JSON.parse(readFileSync(projectPath, 'utf-8')) as Partial<HookConfig>);
-  }
-
+  // Priority 3: explicit overrides (highest priority)
   if (overrides) {
     sources.push(overrides);
   }

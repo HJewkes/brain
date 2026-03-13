@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { resolveHookConfig, DEFAULT_HOOK_CONFIG } from '../../src/hooks/config.js';
+import type { BrainConfig } from '../../src/types.js';
 
 // deepMerge is not exported, but we test its behaviour via resolveHookConfig
 
@@ -132,6 +133,78 @@ describe('resolveHookConfig', () => {
       });
       // wipLimit should stay at 0 (default) since the override is undefined
       expect(config.enforcement.wipLimit).toBe(0);
+    });
+  });
+
+  describe('brainConfig parameter', () => {
+    it('applies hook settings from BrainConfig', () => {
+      const brainConfig: BrainConfig = {
+        notesDir: '/tmp',
+        dbPath: '/tmp/brain.db',
+        embedder: 'local',
+        fusionWeights: { bm25: 0.3, vector: 0.7 },
+        hooks: {
+          enforcement: { ownership: true, wipLimit: 6 },
+          ownershipManifest: '.brain/ownership.json',
+        },
+      };
+
+      const config = resolveHookConfig('/nonexistent', undefined, brainConfig);
+      expect(config.enforcement.ownership).toBe(true);
+      expect(config.enforcement.wipLimit).toBe(6);
+      expect(config.ownershipManifest).toBe('.brain/ownership.json');
+    });
+
+    it('brainConfig takes precedence over ao.config.json', () => {
+      const tmpDir = makeTmpDir();
+      try {
+        writeFileSync(
+          join(tmpDir, 'ao.config.json'),
+          JSON.stringify({ enforcement: { wipLimit: 3 } })
+        );
+
+        const brainConfig: BrainConfig = {
+          notesDir: '/tmp',
+          dbPath: '/tmp/brain.db',
+          embedder: 'local',
+          fusionWeights: { bm25: 0.3, vector: 0.7 },
+          hooks: { enforcement: { wipLimit: 8 } },
+        };
+
+        const config = resolveHookConfig(tmpDir, undefined, brainConfig);
+        expect(config.enforcement.wipLimit).toBe(8);
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('explicit overrides take precedence over brainConfig', () => {
+      const brainConfig: BrainConfig = {
+        notesDir: '/tmp',
+        dbPath: '/tmp/brain.db',
+        embedder: 'local',
+        fusionWeights: { bm25: 0.3, vector: 0.7 },
+        hooks: { enforcement: { wipLimit: 8 } },
+      };
+
+      const config = resolveHookConfig(
+        '/nonexistent',
+        { enforcement: { wipLimit: 99 } },
+        brainConfig
+      );
+      expect(config.enforcement.wipLimit).toBe(99);
+    });
+
+    it('ignores brainConfig with no hooks field', () => {
+      const brainConfig: BrainConfig = {
+        notesDir: '/tmp',
+        dbPath: '/tmp/brain.db',
+        embedder: 'local',
+        fusionWeights: { bm25: 0.3, vector: 0.7 },
+      };
+
+      const config = resolveHookConfig('/nonexistent', undefined, brainConfig);
+      expect(config.enforcement.wipLimit).toBe(0); // default
     });
   });
 
