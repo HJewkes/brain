@@ -28,6 +28,7 @@ import { notesCommand } from './commands/notes.js';
 import { loadModules } from './modules/loader.js';
 import { pmModule } from './modules/pm/index.js';
 import { workflowModule } from './modules/workflow/index.js';
+import { sessionsModule } from './modules/sessions/index.js';
 import { instancesCommand } from './commands/instances.js';
 
 const program = new Command()
@@ -64,7 +65,7 @@ program.addCommand(notesCommand);
 program.addCommand(instancesCommand);
 
 async function main(): Promise<void> {
-  const { registry } = await loadModules({ modules: [pmModule, workflowModule] });
+  const { registry } = await loadModules({ modules: [pmModule, workflowModule, sessionsModule] });
   for (const { command } of registry.getCommands()) {
     program.addCommand(command);
   }

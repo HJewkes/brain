@@ -12,6 +12,7 @@ import { listTasks } from '../data/task-ops.js';
 import { computeEligible } from './dependency.js';
 import { computeGraphScores } from '../../../services/graph.js';
 import type { GraphScore } from '../../../services/graph.js';
+import { getSessionsForTask } from '../../sessions/data/session-ops.js';
 
 export interface DependencySummary {
   displayId: string;
@@ -31,10 +32,18 @@ export interface DecisionSummary {
   content: string;
 }
 
+export interface SessionSummaryItem {
+  displayId: string;
+  startedAt: string;
+  durationMinutes: number | null;
+  summary: string | null;
+}
+
 export interface DispatchBundle extends ContextBundle {
   peerTasks: Array<{ displayId: string; title: string; status: string }>;
   workstreamDescription: string;
   downstreamDependents: Array<{ displayId: string; title: string }>;
+  recentSessions: SessionSummaryItem[];
 }
 
 export interface ContextBundle {
@@ -356,11 +365,21 @@ export async function assembleDispatch(
         .map((t) => ({ displayId: t.display_id, title: t.title ?? t.display_id }))
     : [];
 
+  // Recent sessions that worked on this task (last 3)
+  const sessionHistory = getSessionsForTask(db, taskDisplayId);
+  const recentSessions: DispatchBundle['recentSessions'] = sessionHistory.slice(-3).map((s) => ({
+    displayId: s.display_id,
+    startedAt: s.started_at,
+    durationMinutes: s.duration_minutes ?? null,
+    summary: s.summary ?? null,
+  }));
+
   return ok({
     ...ctx,
     peerTasks,
     workstreamDescription: wsDescription,
     downstreamDependents,
+    recentSessions,
   });
 }
 
