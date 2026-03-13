@@ -96,10 +96,34 @@ describe('HookRegistry', () => {
       })
     );
 
-    const result = registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), DEFAULT_HOOK_CONFIG);
+    const result = registry.dispatch(
+      'pre-tool-use',
+      makeInput('pre-tool-use'),
+      DEFAULT_HOOK_CONFIG
+    );
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain('blocked by first');
     expect(calls).toEqual(['first']);
+  });
+
+  it('does not run subsequent handlers after a block', () => {
+    const registry = new HookRegistry();
+    let secondRan = false;
+
+    registry.register(makeHandler({ name: 'a', priority: 10, run: () => hookBlock('blocked') }));
+    registry.register(
+      makeHandler({
+        name: 'b',
+        priority: 20,
+        run: () => {
+          secondRan = true;
+          return hookAllow();
+        },
+      })
+    );
+
+    registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), DEFAULT_HOOK_CONFIG);
+    expect(secondRan).toBe(false);
   });
 
   it('aggregates context from multiple allow results', () => {
@@ -120,20 +144,63 @@ describe('HookRegistry', () => {
       })
     );
 
-    const result = registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), DEFAULT_HOOK_CONFIG);
+    const result = registry.dispatch(
+      'pre-tool-use',
+      makeInput('pre-tool-use'),
+      DEFAULT_HOOK_CONFIG
+    );
     expect(result.exitCode).toBe(0);
     const parsed = JSON.parse(result.stdout) as { additionalContext: string };
     expect(parsed.additionalContext).toContain('context A');
     expect(parsed.additionalContext).toContain('context B');
   });
 
-  it('runs handlers in priority order', () => {
+  it('returns plain allow with empty stdout when all handlers allow with no context', () => {
+    const registry = new HookRegistry();
+
+    registry.register(makeHandler({ name: 'a', run: () => hookAllow() }));
+    registry.register(makeHandler({ name: 'b', run: () => hookAllow() }));
+
+    const result = registry.dispatch(
+      'pre-tool-use',
+      makeInput('pre-tool-use'),
+      DEFAULT_HOOK_CONFIG
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('runs handlers in priority order (ascending)', () => {
     const registry = new HookRegistry();
     const order: number[] = [];
 
-    registry.register(makeHandler({ priority: 30, run: () => { order.push(30); return hookAllow(); } }));
-    registry.register(makeHandler({ priority: 10, run: () => { order.push(10); return hookAllow(); } }));
-    registry.register(makeHandler({ priority: 20, run: () => { order.push(20); return hookAllow(); } }));
+    registry.register(
+      makeHandler({
+        priority: 30,
+        run: () => {
+          order.push(30);
+          return hookAllow();
+        },
+      })
+    );
+    registry.register(
+      makeHandler({
+        priority: 10,
+        run: () => {
+          order.push(10);
+          return hookAllow();
+        },
+      })
+    );
+    registry.register(
+      makeHandler({
+        priority: 20,
+        run: () => {
+          order.push(20);
+          return hookAllow();
+        },
+      })
+    );
 
     registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), DEFAULT_HOOK_CONFIG);
     expect(order).toEqual([10, 20, 30]);
@@ -141,12 +208,16 @@ describe('HookRegistry', () => {
 
   it('returns allow with empty stdout when no handlers match', () => {
     const registry = new HookRegistry();
-    const result = registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), DEFAULT_HOOK_CONFIG);
+    const result = registry.dispatch(
+      'pre-tool-use',
+      makeInput('pre-tool-use'),
+      DEFAULT_HOOK_CONFIG
+    );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
   });
 
-  it('getHandlers returns all handlers for an event', () => {
+  it('getHandlers returns all handlers for a specific event', () => {
     const registry = new HookRegistry();
     registry.register(makeHandler({ name: 'a', event: 'pre-tool-use' }));
     registry.register(makeHandler({ name: 'b', event: 'task-completed' }));
@@ -155,5 +226,94 @@ describe('HookRegistry', () => {
     expect(registry.getHandlers('pre-tool-use')).toHaveLength(2);
     expect(registry.getHandlers('task-completed')).toHaveLength(1);
     expect(registry.getHandlers()).toHaveLength(3);
+  });
+
+  it('getHandlers returns all handlers when called without event', () => {
+    const registry = new HookRegistry();
+    registry.register(makeHandler({ name: 'a', event: 'pre-tool-use' }));
+    registry.register(makeHandler({ name: 'b', event: 'prompt-submit' }));
+
+    expect(registry.getHandlers()).toHaveLength(2);
+  });
+
+  it('passes config to the enabled predicate', () => {
+    const registry = new HookRegistry();
+    const seenConfigs: HookConfig[] = [];
+
+    registry.register(
+      makeHandler({
+        enabled: (cfg) => {
+          seenConfigs.push(cfg);
+          return true;
+        },
+      })
+    );
+
+    const customConfig: HookConfig = {
+      ...DEFAULT_HOOK_CONFIG,
+      enforcement: { ...DEFAULT_HOOK_CONFIG.enforcement, wipLimit: 7 },
+    };
+    registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), customConfig);
+    expect(seenConfigs[0].enforcement.wipLimit).toBe(7);
+  });
+
+  it('passes config to the run function', () => {
+    const registry = new HookRegistry();
+    const seenConfigs: HookConfig[] = [];
+
+    registry.register(
+      makeHandler({
+        run: (_, cfg) => {
+          seenConfigs.push(cfg);
+          return hookAllow();
+        },
+      })
+    );
+
+    const customConfig: HookConfig = {
+      ...DEFAULT_HOOK_CONFIG,
+      enforcement: { ...DEFAULT_HOOK_CONFIG.enforcement, wipLimit: 3 },
+    };
+    registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), customConfig);
+    expect(seenConfigs[0].enforcement.wipLimit).toBe(3);
+  });
+
+  it('preserves insertion order for equal-priority handlers', () => {
+    const registry = new HookRegistry();
+    const order: string[] = [];
+
+    registry.register(
+      makeHandler({
+        name: 'x',
+        priority: 50,
+        run: () => {
+          order.push('x');
+          return hookAllow();
+        },
+      })
+    );
+    registry.register(
+      makeHandler({
+        name: 'y',
+        priority: 50,
+        run: () => {
+          order.push('y');
+          return hookAllow();
+        },
+      })
+    );
+    registry.register(
+      makeHandler({
+        name: 'z',
+        priority: 50,
+        run: () => {
+          order.push('z');
+          return hookAllow();
+        },
+      })
+    );
+
+    registry.dispatch('pre-tool-use', makeInput('pre-tool-use'), DEFAULT_HOOK_CONFIG);
+    expect(order).toEqual(['x', 'y', 'z']);
   });
 });
