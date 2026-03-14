@@ -81,6 +81,7 @@ export const searchCommand = new Command('search')
             tier: note.tier,
             tags: note.tags ? note.tags.split(',') : [],
             confidence: note.confidence,
+            matchSource: 'graph',
           });
         }
       }
@@ -171,7 +172,7 @@ export const searchCommand = new Command('search')
         }
         for (const r of allResults) {
           const score = r.score.toFixed(3);
-          process.stdout.write(`[${score}] ${r.filePath}\n`);
+          process.stdout.write(`[${score}] (${r.matchSource}) ${r.filePath}\n`);
           if (r.heading) {
             process.stdout.write(`  \u00A7 ${r.heading}\n`);
           }
