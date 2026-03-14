@@ -154,4 +154,24 @@ export function cleanupStaleAllocations(db: unknown, projectRoot: string): strin
   return removed;
 }
 
+/**
+ * Verify worktree isolation before dispatching an agent.
+ * Returns the allocated worktree path if one exists, or null if this is the only agent.
+ * Throws if other agents are active and the current task lacks a worktree.
+ */
+export function requireWorktreeIsolation(db: unknown, taskId: string): string | null {
+  const allocations = getWorktreeAllocations(db);
+
+  const ownAllocation = allocations.find((a) => a.task_id === taskId);
+  if (ownAllocation) return ownAllocation.worktree_path;
+
+  const otherAllocations = allocations.filter((a) => a.task_id !== taskId);
+  if (otherAllocations.length === 0) return null;
+
+  throw new Error(
+    `Worktree isolation required: ${otherAllocations.length} other allocation(s) active. ` +
+      `Task "${taskId}" must allocate a worktree before dispatch.`
+  );
+}
+
 export type { WorktreeAllocation };

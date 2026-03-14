@@ -6,6 +6,7 @@ import { gitSafetyCheck } from '../hooks/checks/git-safety.js';
 import { workspaceCheck } from '../hooks/checks/workspace.js';
 import { dodCheck } from '../hooks/checks/dod.js';
 import { wipCheck } from '../hooks/checks/wip.js';
+import { worktreeIsolationCheck } from '../hooks/checks/worktree-isolation.js';
 import { loadModules } from '../modules/loader.js';
 import { pmModule } from '../modules/pm/index.js';
 import { workflowModule } from '../modules/workflow/index.js';
@@ -46,6 +47,7 @@ function createRegistry(): HookRegistry {
   registry.register(workspaceCheck);
   registry.register(dodCheck);
   registry.register(wipCheck);
+  registry.register(worktreeIsolationCheck);
   return registry;
 }
 
