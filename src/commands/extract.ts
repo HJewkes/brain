@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
 import { requireOllama } from '../services/ollama.js';
-import { extractMemoriesFromNote } from '../services/memory-extractor.js';
+import { DedupWindow, extractMemoriesFromNote } from '../services/memory-extractor.js';
 
 export const extractCommand = new Command('extract')
   .description('Extract memories from indexed notes')
@@ -45,13 +45,18 @@ export const extractCommand = new Command('extract')
       let totalUpdated = 0;
       let totalDeleted = 0;
       let processed = 0;
+      const dedupWindow = new DedupWindow();
 
       for (const noteId of noteIds) {
         if (!opts.quiet && !opts.json) {
           process.stderr.write(`Extracting from ${noteId}...\n`);
         }
 
-        const result = await extractMemoriesFromNote(db, llm, noteId, opts.tag, embedder);
+        const result = await extractMemoriesFromNote(db, llm, noteId, {
+          containerTag: opts.tag,
+          embedder,
+          dedupWindow,
+        });
 
         totalFacts += result.facts.length;
         totalCreated += result.memoriesCreated;

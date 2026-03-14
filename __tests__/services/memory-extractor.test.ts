@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { BrainDB } from '../../src/services/brain-db.js';
 import {
+  DedupWindow,
   extractMemoriesFromNote,
   parseReconciliationResponse,
 } from '../../src/services/memory-extractor.js';
@@ -316,5 +317,101 @@ describe('parseReconciliationResponse', () => {
     expect(actions).toHaveLength(2);
     expect(actions[0]).toEqual({ type: 'ADD', fact: 'Valid' });
     expect(actions[1]).toEqual({ type: 'DELETE', id: 'x' });
+  });
+});
+
+describe('DedupWindow', () => {
+  it('returns false for first occurrence and true for duplicate', () => {
+    const window = new DedupWindow();
+    expect(window.isDuplicate('hello world')).toBe(false);
+    expect(window.isDuplicate('hello world')).toBe(true);
+  });
+
+  it('tracks different content independently', () => {
+    const window = new DedupWindow();
+    expect(window.isDuplicate('content A')).toBe(false);
+    expect(window.isDuplicate('content B')).toBe(false);
+    expect(window.isDuplicate('content A')).toBe(true);
+  });
+
+  it('evicts oldest entries when window is full', () => {
+    const window = new DedupWindow(2);
+    expect(window.isDuplicate('first')).toBe(false);
+    expect(window.isDuplicate('second')).toBe(false);
+    expect(window.isDuplicate('third')).toBe(false);
+    // 'first' should be evicted, so no longer a duplicate
+    expect(window.isDuplicate('first')).toBe(false);
+    // 'second' should also be evicted now
+    expect(window.isDuplicate('second')).toBe(false);
+  });
+
+  it('tracks size correctly', () => {
+    const window = new DedupWindow(3);
+    window.isDuplicate('a');
+    window.isDuplicate('b');
+    expect(window.size).toBe(2);
+    window.isDuplicate('a'); // duplicate, no new entry
+    expect(window.size).toBe(2);
+    window.isDuplicate('c');
+    expect(window.size).toBe(3);
+    window.isDuplicate('d'); // evicts 'a'
+    expect(window.size).toBe(3);
+  });
+
+  it('skips duplicate chunks during extraction', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'brain-dedup-test-'));
+    const db = new BrainDB(join(tmpDir, 'test.db'));
+    db.setEmbeddingModel('test-model', 3);
+
+    db.upsertNote({
+      id: 'note-1',
+      filePath: '/tmp/note-1.md',
+      title: 'Test Note',
+      type: 'note',
+      tier: 'slow',
+      category: null,
+      tags: null,
+      summary: null,
+      confidence: null,
+      status: 'current',
+      sources: null,
+      createdAt: null,
+      modifiedAt: null,
+      lastReviewed: null,
+      reviewInterval: null,
+      expires: null,
+      metadata: null,
+    });
+
+    const duplicateContent = 'This is duplicate content that appears in multiple chunks.';
+    const chunk1 = makeChunk({ id: 'c1', noteId: 'note-1', content: duplicateContent });
+    const chunk2 = makeChunk({ id: 'c2', noteId: 'note-1', content: duplicateContent });
+    const chunk3 = makeChunk({
+      id: 'c3',
+      noteId: 'note-1',
+      content: 'Unique content for extraction testing purposes.',
+    });
+    db.upsertChunks(
+      'note-1',
+      [chunk1, chunk2, chunk3],
+      [new Float32Array([1, 2, 3]), new Float32Array([4, 5, 6]), new Float32Array([7, 8, 9])]
+    );
+
+    const llm: OllamaClient = {
+      model: 'test-model',
+      generate: vi.fn(async () => 'Extracted fact from content'),
+    };
+
+    const dedupWindow = new DedupWindow();
+    const result = await extractMemoriesFromNote(db, llm, 'note-1', {
+      dedupWindow,
+    });
+
+    // LLM should only be called twice (duplicate chunk skipped)
+    expect(llm.generate).toHaveBeenCalledTimes(2);
+    expect(result.memoriesCreated).toBe(2);
+
+    db.close();
+    rmSync(tmpDir, { recursive: true, force: true });
   });
 });

@@ -5,7 +5,7 @@ import { loadConfig, resolveInstance, parentResolveOpts } from '../services/conf
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel, createOllamaClient } from '../services/ollama.js';
-import { extractMemoriesFromNote } from '../services/memory-extractor.js';
+import { DedupWindow, extractMemoriesFromNote } from '../services/memory-extractor.js';
 import { scanForChanges, INDEXABLE_EXTENSIONS } from '../services/file-scanner.js';
 import {
   indexSingleFile,
@@ -156,11 +156,16 @@ async function extractFromNotes(
   quiet?: boolean
 ): Promise<number> {
   const llm = createOllamaClient(ollamaUrl, model);
+  const dedupWindow = new DedupWindow();
   let total = 0;
 
   for (const noteId of noteIds) {
     try {
-      const result = await extractMemoriesFromNote(db, llm, noteId, containerTag, embedder);
+      const result = await extractMemoriesFromNote(db, llm, noteId, {
+        containerTag,
+        embedder,
+        dedupWindow,
+      });
       total += result.memoriesCreated + result.memoriesUpdated;
     } catch (err) {
       if (!quiet) {

@@ -1,8 +1,42 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { OllamaClient } from './ollama.js';
 import type { BrainDB } from './brain-db.js';
 import type { Chunk, Embedder, ExtractedFact, MemoryCategory, MemoryEntry } from '../types.js';
 import { VALID_MEMORY_CATEGORIES } from '../types.js';
+
+const DEFAULT_DEDUP_WINDOW_SIZE = 128;
+
+export class DedupWindow {
+  private hashes: Set<string>;
+  private order: string[];
+  private maxSize: number;
+
+  constructor(maxSize: number = DEFAULT_DEDUP_WINDOW_SIZE) {
+    this.hashes = new Set();
+    this.order = [];
+    this.maxSize = maxSize;
+  }
+
+  isDuplicate(content: string): boolean {
+    const hash = createHash('sha256').update(content).digest('hex');
+    if (this.hashes.has(hash)) return true;
+    this.add(hash);
+    return false;
+  }
+
+  get size(): number {
+    return this.hashes.size;
+  }
+
+  private add(hash: string): void {
+    if (this.order.length >= this.maxSize) {
+      const evicted = this.order.shift()!;
+      this.hashes.delete(evicted);
+    }
+    this.hashes.add(hash);
+    this.order.push(hash);
+  }
+}
 import type { ModuleRegistry } from '../modules/registry.js';
 
 const EXTRACTION_SYSTEM = `You are a fact extraction engine. Given a text, extract discrete, self-contained facts.
@@ -58,24 +92,37 @@ export interface ExtractionResult {
   memoriesDeleted: number;
 }
 
+export interface ExtractionOptions {
+  containerTag?: string;
+  embedder?: Embedder;
+  moduleRegistry?: ModuleRegistry;
+  dedupWindow?: DedupWindow;
+}
+
 export async function extractMemoriesFromNote(
   db: BrainDB,
   llm: OllamaClient,
   noteId: string,
-  containerTag: string = 'default',
+  containerTagOrOpts?: string | ExtractionOptions,
   embedder?: Embedder,
   moduleRegistry?: ModuleRegistry
 ): Promise<ExtractionResult> {
+  const opts = typeof containerTagOrOpts === 'object' ? containerTagOrOpts : undefined;
+  const containerTag =
+    opts?.containerTag ?? (typeof containerTagOrOpts === 'string' ? containerTagOrOpts : 'default');
+  const effectiveEmbedder = opts?.embedder ?? embedder;
+  const effectiveRegistry = opts?.moduleRegistry ?? moduleRegistry;
+  const dedupWindow = opts?.dedupWindow;
   const chunks = db.getChunksForNote(noteId);
   if (chunks.length === 0) {
     return { noteId, facts: [], memoriesCreated: 0, memoriesUpdated: 0, memoriesDeleted: 0 };
   }
 
   // Check if module has custom extraction strategy
-  if (moduleRegistry) {
+  if (effectiveRegistry) {
     const note = db.getNoteById(noteId);
     if (note?.module) {
-      const strategy = moduleRegistry.getExtractionStrategy(note.module);
+      const strategy = effectiveRegistry.getExtractionStrategy(note.module);
       if (strategy && !strategy.shouldExtract(note)) {
         return { noteId, facts: [], memoriesCreated: 0, memoriesUpdated: 0, memoriesDeleted: 0 };
       }
@@ -84,6 +131,7 @@ export async function extractMemoriesFromNote(
 
   const allFacts: ExtractedFact[] = [];
   for (const chunk of chunks) {
+    if (dedupWindow?.isDuplicate(chunk.content)) continue;
     const facts = await extractFactsFromChunk(llm, chunk);
     allFacts.push(...facts);
   }
@@ -95,7 +143,7 @@ export async function extractMemoriesFromNote(
   const existingMemories = db.getMemoriesForNote(noteId);
 
   if (existingMemories.length === 0) {
-    const created = await applyAdditions(db, allFacts, noteId, containerTag, embedder);
+    const created = await applyAdditions(db, allFacts, noteId, containerTag, effectiveEmbedder);
     return {
       noteId,
       facts: allFacts,
@@ -106,7 +154,14 @@ export async function extractMemoriesFromNote(
   }
 
   const actions = await reconcile(llm, allFacts, existingMemories);
-  const result = await applyActions(db, actions, existingMemories, noteId, containerTag, embedder);
+  const result = await applyActions(
+    db,
+    actions,
+    existingMemories,
+    noteId,
+    containerTag,
+    effectiveEmbedder
+  );
 
   return {
     noteId,
