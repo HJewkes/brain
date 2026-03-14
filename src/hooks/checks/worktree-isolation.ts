@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../types.js';
 import { hookAllow, hookBlock } from '../types.js';
+import { countActiveAgentsFromDb } from './agent-count.js';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit', 'Bash']);
 
@@ -23,7 +24,7 @@ export const worktreeIsolationCheck: HookHandler = {
     const worktreePath = process.env.AGENT_WORKTREE_PATH;
     if (worktreePath) return hookAllow();
 
-    const otherAgentCount = countOtherAgents();
+    const otherAgentCount = countOtherAgents(input.cwd);
     if (otherAgentCount === 0) return hookAllow();
 
     return hookBlock(
@@ -34,14 +35,21 @@ export const worktreeIsolationCheck: HookHandler = {
   },
 };
 
-function countOtherAgents(): number {
+function countOtherAgents(cwd: string): number {
+  const dbCount = countActiveAgentsFromDb(cwd);
+  if (dbCount !== null) {
+    return Math.max(0, dbCount - 1);
+  }
+  return countOtherAgentsByProcess();
+}
+
+function countOtherAgentsByProcess(): number {
   try {
     const output = execSync('ps aux | grep -c "[c]laude.*agent"', {
       encoding: 'utf-8',
       timeout: 2000,
     }).trim();
     const total = parseInt(output, 10) || 0;
-    // Subtract 1 for the current agent process
     return Math.max(0, total - 1);
   } catch {
     return 0;
