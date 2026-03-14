@@ -58,13 +58,9 @@ describe('state machine regressions', () => {
     expect(taskResult.data.status).toBe('claimed');
   });
 
-  it('O-58: done to pending transition is invalid', () => {
+  it('O-58: done to pending transition is valid (reset)', () => {
     const result = validateTransition('done', 'pending');
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toContain('Cannot transition');
-    expect(result.error.message).toContain('done');
-    expect(result.error.message).toContain('pending');
+    expect(result.ok).toBe(true);
   });
 
   it('O-59: pending to blocked is a valid transition', () => {

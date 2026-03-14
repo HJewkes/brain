@@ -614,6 +614,74 @@ export function createTaskCommands(): Command {
     });
 
   cmd
+    .command('reset')
+    .description('Reset a completed task to pending')
+    .argument('<id>', 'Task display ID')
+    .option('--force', 'Skip confirmation (required)')
+    .option('--json', 'Output JSON')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const displayId = id.toUpperCase();
+        const redirectMsg = checkNamespaceMismatch(displayId, 'task');
+        if (redirectMsg) {
+          process.stderr.write(`Error: ${redirectMsg}\n`);
+          process.exitCode = 1;
+          return;
+        }
+
+        if (!opts.force) {
+          process.stderr.write(
+            `Error: --force is required to reset a completed task. ` +
+              `This clears claim token and all progress metadata.\n`
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const taskResult = getTask(svc.db, displayId);
+        if (!taskResult.ok) {
+          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        if (taskResult.data.status !== 'done') {
+          const err = pmError(
+            'INVALID_TRANSITION',
+            `Task "${displayId}" is ${taskResult.data.status}, not done. ` +
+              `Use 'brain pm task release' for claimed tasks or 'brain pm task unblock' for blocked tasks.`
+          );
+          process.stderr.write(formatError(err, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        // Transition to pending (records 'reset' activity)
+        const statusResult = await updateTaskStatus(
+          svc.db,
+          svc.config,
+          svc.embedder,
+          displayId,
+          'pending' as TaskStatus
+        );
+        if (!statusResult.ok) {
+          process.stderr.write(formatError(statusResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        // Clear claim metadata
+        await updateTaskMetadataFields(svc.db, svc.config, svc.embedder, displayId, {
+          claim_token: '',
+          claimed_at: '',
+          spawn_timestamp: '',
+        });
+
+        outputResult(statusResult.data, !!opts.json);
+      });
+    });
+
+  cmd
     .command('delete')
     .description('Delete a task')
     .argument('<id>', 'Task display ID')

@@ -21,6 +21,7 @@ describe('validateTransition', () => {
     ['in-progress', 'pending'],
     ['blocked', 'pending'],
     ['blocked', 'cancelled'],
+    ['done', 'pending'],
   ];
 
   test.each(validTransitions)('%s -> %s is valid', (from, to) => {
@@ -29,7 +30,6 @@ describe('validateTransition', () => {
   });
 
   const invalidTransitions: [TaskStatus, TaskStatus][] = [
-    ['done', 'pending'],
     ['done', 'claimed'],
     ['done', 'in-progress'],
     ['done', 'blocked'],
@@ -84,11 +84,16 @@ describe('validateTransition', () => {
     }
   });
 
-  test('error says terminal state for done', () => {
+  test('done -> pending is valid (reset)', () => {
     const result = validateTransition('done', 'pending');
+    expect(result.ok).toBe(true);
+  });
+
+  test('done -> claimed includes reset hint', () => {
+    const result = validateTransition('done', 'claimed');
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.message).toContain('none (terminal state)');
+      expect(result.error.message).toContain('reset');
     }
   });
 
@@ -289,8 +294,8 @@ describe('allowedTransitions', () => {
     expect(allowedTransitions('in-progress')).toEqual(['done', 'blocked', 'cancelled', 'pending']);
   });
 
-  test('done returns []', () => {
-    expect(allowedTransitions('done')).toEqual([]);
+  test('done returns [pending]', () => {
+    expect(allowedTransitions('done')).toEqual(['pending']);
   });
 
   test('blocked returns [pending, cancelled]', () => {
