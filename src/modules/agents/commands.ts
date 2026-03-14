@@ -1,6 +1,13 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../services/brain-service.js';
-import { createAgent, getAgent, listAgents, updateAgentStatus } from './data.js';
+import {
+  createAgent,
+  getAgent,
+  listAgents,
+  updateAgentStatus,
+  getAgentContext,
+  setAgentContext,
+} from './data.js';
 import type { AgentRecord } from './types.js';
 import { createWorktreeCommand } from './worktree-commands.js';
 import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
@@ -275,6 +282,53 @@ export function createAgentCommands(): Command {
           process.stdout.write(JSON.stringify(ctx, null, 2) + '\n');
         } else {
           process.stdout.write(formatDispatchBrief(ctx) + '\n');
+        }
+      });
+    });
+
+  // brain agent context <id>
+  cmd
+    .command('context')
+    .description('Get or set agent context key/value pairs')
+    .argument('<id>', 'Agent ID')
+    .option('--get [key]', 'Get full context or a specific key')
+    .option('--set <pair>', 'Set a key=value pair (value parsed as JSON, fallback to string)')
+    .action(async (id, opts) => {
+      await withDb((svc) => {
+        const agent = getAgent(svc.db, id);
+        if (!agent) {
+          process.stderr.write(`Error: Agent not found: ${id}\n`);
+          process.exitCode = 1;
+          return;
+        }
+
+        if (opts.set) {
+          const eqIdx = (opts.set as string).indexOf('=');
+          if (eqIdx < 1) {
+            process.stderr.write('Error: --set requires key=value format\n');
+            process.exitCode = 1;
+            return;
+          }
+          const key = (opts.set as string).slice(0, eqIdx);
+          const rawValue = (opts.set as string).slice(eqIdx + 1);
+          let value: unknown;
+          try {
+            value = JSON.parse(rawValue);
+          } catch {
+            value = rawValue;
+          }
+          setAgentContext(svc.db, id, key, value);
+          process.stdout.write(`Set context.${key}\n`);
+          return;
+        }
+
+        // Default to --get behavior
+        const key = typeof opts.get === 'string' ? opts.get : undefined;
+        const result = getAgentContext(svc.db, id, key);
+        if (result === undefined) {
+          process.stdout.write('undefined\n');
+        } else {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
         }
       });
     });
