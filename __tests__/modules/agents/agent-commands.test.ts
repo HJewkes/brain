@@ -6,15 +6,24 @@ import { agentsMigration } from '../../../src/modules/agents/schema.js';
 // The data.ts toRaw() helper handles both BrainDB and raw Database instances.
 let db: ReturnType<typeof Database>;
 
+const mockUpdateTaskStatus = vi.fn().mockResolvedValue({ ok: true, value: {} });
+
+vi.mock('../../../src/modules/pm/data/task-ops.js', () => ({
+  updateTaskStatus: (...args: unknown[]) => mockUpdateTaskStatus(...args),
+}));
+
+const mockSvc = () => ({
+  db,
+  config: { notesDir: '/tmp/test-agents', dbPath: ':memory:' },
+  embedder: { embed: vi.fn() },
+  instance: { root: '/tmp/test-agents', isLocal: false, source: 'test' },
+  modules: {},
+  close: () => {},
+});
+
 vi.mock('../../../src/services/brain-service.js', () => ({
-  withDb: vi.fn(async (fn: (svc: unknown) => unknown) =>
-    fn({
-      db,
-      config: { notesDir: '/tmp/test-agents', dbPath: ':memory:' },
-      instance: { root: '/tmp/test-agents', isLocal: false, source: 'test' },
-      close: () => {},
-    })
-  ),
+  withDb: vi.fn(async (fn: (svc: unknown) => unknown) => fn(mockSvc())),
+  withBrain: vi.fn(async (fn: (svc: unknown) => unknown) => fn(mockSvc())),
 }));
 
 import { createAgentCommands } from '../../../src/modules/agents/commands.js';
@@ -33,6 +42,8 @@ beforeEach(() => {
 
   stdoutData = '';
   stderrData = '';
+  mockUpdateTaskStatus.mockClear();
+  mockUpdateTaskStatus.mockResolvedValue({ ok: true, value: {} });
   vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
     stdoutData += String(chunk);
     return true;
@@ -229,6 +240,60 @@ describe('agent complete', () => {
     expect(stderrData).toContain('not active');
     expect(process.exitCode).toBe(1);
   });
+
+  it('propagates completion to linked PM task', async () => {
+    await run('register', '--name', 'pm-agent', '--brain-task', 'VNM-10.02');
+    const id = stdoutData.trim();
+    stdoutData = '';
+    await run('start', id);
+    stdoutData = '';
+    stderrData = '';
+
+    await run('complete', id, '--summary', 'All done');
+    expect(mockUpdateTaskStatus).toHaveBeenCalledOnce();
+    expect(mockUpdateTaskStatus).toHaveBeenCalledWith(
+      db,
+      expect.anything(),
+      expect.anything(),
+      'VNM-10.02',
+      'done'
+    );
+    expect(stdoutData).toContain('VNM-10.02');
+    expect(stdoutData).toContain('done');
+  });
+
+  it('does not call updateTaskStatus when no brain_task', async () => {
+    await run('register', '--name', 'no-task-agent');
+    const id = stdoutData.trim();
+    stdoutData = '';
+    await run('start', id);
+    stdoutData = '';
+
+    await run('complete', id, '--summary', 'Done');
+    expect(mockUpdateTaskStatus).not.toHaveBeenCalled();
+  });
+
+  it('warns but does not fail when task update fails', async () => {
+    mockUpdateTaskStatus.mockResolvedValue({
+      ok: false,
+      error: { message: 'Task not found', code: 'NOT_FOUND' },
+    });
+
+    await run('register', '--name', 'fail-task-agent', '--brain-task', 'VNM-99.99');
+    const id = stdoutData.trim();
+    stdoutData = '';
+    await run('start', id);
+    stdoutData = '';
+    stderrData = '';
+
+    await run('complete', id, '--summary', 'Done');
+    expect(process.exitCode).toBeUndefined();
+    expect(stderrData).toContain('Warning');
+    expect(stderrData).toContain('VNM-99.99');
+
+    const row = db.prepare('SELECT status FROM agents WHERE id = ?').get(id) as { status: string };
+    expect(row.status).toBe('completed');
+  });
 });
 
 // ── abandon ───────────────────────────────────────────────────────────────────
@@ -269,6 +334,38 @@ describe('agent abandon', () => {
     await run('abandon', id, '--reason', 'bail');
     expect(stderrData).toContain('not active');
     expect(process.exitCode).toBe(1);
+  });
+
+  it('reverts linked PM task to pending on abandon', async () => {
+    await run('register', '--name', 'abandon-pm', '--brain-task', 'VNM-10.05');
+    const id = stdoutData.trim();
+    stdoutData = '';
+    await run('start', id);
+    stdoutData = '';
+    stderrData = '';
+
+    await run('abandon', id, '--reason', 'timeout');
+    expect(mockUpdateTaskStatus).toHaveBeenCalledOnce();
+    expect(mockUpdateTaskStatus).toHaveBeenCalledWith(
+      db,
+      expect.anything(),
+      expect.anything(),
+      'VNM-10.05',
+      'pending'
+    );
+    expect(stdoutData).toContain('VNM-10.05');
+    expect(stdoutData).toContain('pending');
+  });
+
+  it('does not call updateTaskStatus when no brain_task on abandon', async () => {
+    await run('register', '--name', 'abandon-no-task');
+    const id = stdoutData.trim();
+    stdoutData = '';
+    await run('start', id);
+    stdoutData = '';
+
+    await run('abandon', id, '--reason', 'done');
+    expect(mockUpdateTaskStatus).not.toHaveBeenCalled();
   });
 });
 
