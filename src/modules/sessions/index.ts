@@ -13,6 +13,7 @@ import { createSessionStatsCommand } from './commands/stats.js';
 import { createSessionBriefingCommand } from './commands/briefing.js';
 import { sessionRestoreHandler } from './hooks/session-restore-handler.js';
 import { sessionBriefingHandler } from './hooks/session-briefing-handler.js';
+import { sessionCaptureHandler } from './hooks/session-capture-handler.js';
 
 const SESSION_NOTE_TYPE: ModuleNoteType = {
   name: 'session',
@@ -145,6 +146,7 @@ export const sessionsModule: BrainModule = {
 
     ctx.registerHookHandler(sessionRestoreHandler);
     ctx.registerHookHandler(sessionBriefingHandler);
+    ctx.registerHookHandler(sessionCaptureHandler);
 
     // Migration v1: json_extract indexes for session frontmatter queries
     ctx.registerMigration({
