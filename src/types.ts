@@ -444,4 +444,6 @@ export interface NoteRecord {
   module: string | null;
   moduleInstance: string | null;
   contentDir: string | null;
+  l0Abstract: string | null;
+  l1Overview: string | null;
 }

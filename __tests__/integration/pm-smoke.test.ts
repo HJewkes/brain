@@ -197,6 +197,8 @@ describe('V4: PM Module Smoke Test', () => {
       module: null,
       moduleInstance: null,
       contentDir: null,
+      l0Abstract: null,
+      l1Overview: null,
     });
 
     const pmNotes = getPmNotes(db, 'project');

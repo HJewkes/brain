@@ -27,9 +27,9 @@ export class NoteRepo {
     this.db
       .prepare(
         `INSERT OR REPLACE INTO notes
-          (id, file_path, title, type, tier, category, tags, summary, confidence, status, sources, created_at, modified_at, last_reviewed, review_interval, expires, metadata, module, module_instance, content_dir)
+          (id, file_path, title, type, tier, category, tags, summary, confidence, status, sources, created_at, modified_at, last_reviewed, review_interval, expires, metadata, module, module_instance, content_dir, l0_abstract, l1_overview)
         VALUES
-          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         record.id,
@@ -51,9 +51,17 @@ export class NoteRepo {
         record.metadata,
         record.module,
         record.moduleInstance,
-        record.contentDir
+        record.contentDir,
+        record.l0Abstract,
+        record.l1Overview
       );
     return record;
+  }
+
+  updateAbstracts(noteId: string, l0: string, l1: string): void {
+    this.db
+      .prepare('UPDATE notes SET l0_abstract = ?, l1_overview = ? WHERE id = ?')
+      .run(l0, l1, noteId);
   }
 
   getNoteById(id: string): NoteRecord | null {
@@ -634,6 +642,8 @@ interface NoteRow {
   module: string | null;
   module_instance: string | null;
   content_dir: string | null;
+  l0_abstract: string | null;
+  l1_overview: string | null;
 }
 
 interface FileRow {
@@ -686,6 +696,8 @@ function rowToNoteRecord(row: NoteRow): NoteRecord {
     module: row.module ?? null,
     moduleInstance: row.module_instance ?? null,
     contentDir: row.content_dir ?? null,
+    l0Abstract: row.l0_abstract ?? null,
+    l1Overview: row.l1_overview ?? null,
   };
 }
 
