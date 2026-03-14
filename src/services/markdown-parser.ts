@@ -7,6 +7,7 @@ import type {
   RelationType,
   NoteSource,
   CutType,
+  ContentType,
 } from '../types.js';
 import {
   VALID_CORE_NOTE_TYPES,
@@ -232,6 +233,48 @@ function prependAncestry(ancestry: string | null, text: string): string {
   return `${ancestry}\n\n${text}`;
 }
 
+export function classifyContentType(text: string): ContentType {
+  const lines = text.split('\n');
+  let codeLines = 0;
+  let tableLines = 0;
+  let totalLines = 0;
+  let inFence = false;
+
+  for (const line of lines) {
+    if (!inFence && FENCE_OPEN.test(line)) {
+      inFence = true;
+      codeLines++;
+      totalLines++;
+      continue;
+    }
+    if (inFence) {
+      codeLines++;
+      totalLines++;
+      if (FENCE_CLOSE.test(line) && codeLines > 1) {
+        inFence = false;
+      }
+      continue;
+    }
+    if (TABLE_LINE.test(line)) {
+      tableLines++;
+      totalLines++;
+      continue;
+    }
+    if (line.trim().length > 0) {
+      totalLines++;
+    }
+  }
+
+  if (totalLines === 0) return 'prose';
+  const codeRatio = codeLines / totalLines;
+  const tableRatio = tableLines / totalLines;
+
+  if (tableRatio > 0.5) return 'table';
+  if (codeRatio > 0.8) return 'code';
+  if (codeRatio > 0.2) return 'mixed';
+  return 'prose';
+}
+
 function chunkBody(body: string): RawChunk[] {
   const sections = splitIntoSections(body);
   const chunks: RawChunk[] = [];
@@ -252,6 +295,7 @@ function chunkBody(body: string): RawChunk[] {
         tokenCount: tokens,
         chunkType: 'section',
         cutType: 'heading_boundary',
+        contentType: classifyContentType(text),
         position: position++,
       });
     } else {
@@ -314,6 +358,7 @@ function splitOversizedSection(
         tokenCount,
         chunkType: 'paragraph',
         cutType,
+        contentType: classifyContentType(buffer),
         position: pos++,
       });
       overlapPrefix = bufferIsTable ? '' : extractOverlap(buffer);
@@ -334,6 +379,7 @@ function splitOversizedSection(
       tokenCount,
       chunkType: 'paragraph',
       cutType: 'paragraph_end',
+      contentType: classifyContentType(buffer),
       position: pos++,
     });
   }
