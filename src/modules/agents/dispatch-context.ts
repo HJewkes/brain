@@ -10,6 +10,8 @@ import type { FileOwnershipManifest } from './file-ownership.js';
 import { formatOwnershipBrief } from './file-ownership.js';
 import type { SessionBriefing } from '../sessions/engine/session-briefing.js';
 import { generateSessionBriefing } from '../sessions/engine/session-briefing.js';
+import type { BreakingChange } from './breaking-changes.js';
+import { detectBreakingChanges, formatBreakingChangesBrief } from './breaking-changes.js';
 
 export interface AgentDispatchContext {
   taskId: string;
@@ -28,6 +30,7 @@ export interface AgentDispatchContext {
   contextHash: string;
   fileOwnership?: FileOwnershipManifest;
   sessionBriefing?: SessionBriefing;
+  breakingChanges?: BreakingChange[];
 }
 
 export interface DispatchContextOptions {
@@ -60,6 +63,18 @@ export function buildAgentDispatchContext(
     }
   }
 
+  let breakingChanges: BreakingChange[] | undefined;
+  if (options?.projectDir) {
+    try {
+      const detected = detectBreakingChanges(options.projectDir);
+      if (detected.length > 0) {
+        breakingChanges = detected;
+      }
+    } catch {
+      // Breaking change detection is best-effort
+    }
+  }
+
   const waveInfo = resolveWaveInfo(db, ctx.task.project, taskDisplayId);
 
   return {
@@ -82,6 +97,7 @@ export function buildAgentDispatchContext(
     waveInfo,
     contextHash: ctx.contextHash,
     sessionBriefing,
+    breakingChanges,
   };
 }
 
@@ -170,6 +186,11 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
 
   if (ctx.fileOwnership) {
     lines.push(formatOwnershipBrief(ctx.fileOwnership, ctx.taskId));
+    lines.push('');
+  }
+
+  if (ctx.breakingChanges && ctx.breakingChanges.length > 0) {
+    lines.push(formatBreakingChangesBrief(ctx.breakingChanges));
     lines.push('');
   }
 
