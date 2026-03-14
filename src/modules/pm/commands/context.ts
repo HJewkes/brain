@@ -279,7 +279,7 @@ export function createContextCommand(): Command {
 
             if (query) {
               try {
-                const semanticResults = await search(
+                const { results: semanticResults } = await search(
                   svc.db,
                   svc.embedder,
                   query,

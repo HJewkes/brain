@@ -272,7 +272,7 @@ export async function assembleDispatch(
   const searchQuery = [ctx.task.title, ctx.body].filter(Boolean).join(' ').trim();
   if (searchQuery) {
     try {
-      const results = await search(
+      const { results } = await search(
         db,
         embedder,
         searchQuery,
@@ -519,7 +519,7 @@ export async function assembleWorkstreamContext(
 
     if (searchQuery) {
       try {
-        const results = await search(
+        const { results } = await search(
           db,
           embedder,
           searchQuery,

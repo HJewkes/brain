@@ -214,7 +214,7 @@ describe('search service', () => {
 
   describe('BM25-only search', () => {
     it('returns results ranked by BM25 relevance', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 3,
       });
 
@@ -223,7 +223,7 @@ describe('search service', () => {
     });
 
     it('result objects contain required fields', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 3,
       });
 
@@ -241,7 +241,7 @@ describe('search service', () => {
     });
 
     it('excerpt is a truncated snippet of matching content', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 3,
       });
 
@@ -254,7 +254,7 @@ describe('search service', () => {
   describe('vector-only search', () => {
     it('returns results ranked by vector similarity', async () => {
       // Use a query that shares text with BLE content to get deterministic hash similarity
-      const results = await search(
+      const { results } = await search(
         ctx.db,
         ctx.embedder,
         'Bluetooth Low Energy uses GATT profiles for communication',
@@ -285,7 +285,7 @@ describe('search service', () => {
 
   describe('RRF fusion', () => {
     it('merges BM25 and vector results using reciprocal rank fusion', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
         limit: 5,
       });
 
@@ -298,7 +298,7 @@ describe('search service', () => {
 
     it('document ranked high in both gets highest fused score', async () => {
       // TypeScript patterns should rank high in both BM25 (exact match) and vector
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
         limit: 5,
       });
 
@@ -307,7 +307,7 @@ describe('search service', () => {
     });
 
     it('document appearing in only one result set still appears', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'CSS grid layout', {
+      const { results } = await search(ctx.db, ctx.embedder, 'CSS grid layout', {
         limit: 5,
       });
 
@@ -316,14 +316,24 @@ describe('search service', () => {
     });
 
     it('fusionStrategy rrf uses reciprocal rank fusion', async () => {
-      const rrfResults = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
-        limit: 5,
-        fusionStrategy: 'rrf',
-      });
-      const scoreResults = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
-        limit: 5,
-        fusionStrategy: 'score',
-      });
+      const { results: rrfResults } = await search(
+        ctx.db,
+        ctx.embedder,
+        'TypeScript design patterns',
+        {
+          limit: 5,
+          fusionStrategy: 'rrf',
+        }
+      );
+      const { results: scoreResults } = await search(
+        ctx.db,
+        ctx.embedder,
+        'TypeScript design patterns',
+        {
+          limit: 5,
+          fusionStrategy: 'score',
+        }
+      );
 
       expect(rrfResults.length).toBeGreaterThan(0);
       expect(rrfResults[0].noteId).toBe('ts-patterns');
@@ -334,7 +344,7 @@ describe('search service', () => {
 
   describe('metadata filtering', () => {
     it('filters by tier', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript', {
         limit: 10,
         tier: 'slow',
       });
@@ -345,7 +355,7 @@ describe('search service', () => {
     });
 
     it('filters by tags', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'design', {
+      const { results } = await search(ctx.db, ctx.embedder, 'design', {
         limit: 10,
         tags: ['typescript'],
       });
@@ -356,7 +366,7 @@ describe('search service', () => {
     });
 
     it('filters by category', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'patterns design', {
+      const { results } = await search(ctx.db, ctx.embedder, 'patterns design', {
         limit: 10,
         category: 'frontend',
       });
@@ -370,7 +380,7 @@ describe('search service', () => {
     });
 
     it('filters by since date', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'patterns algorithms', {
+      const { results } = await search(ctx.db, ctx.embedder, 'patterns algorithms', {
         limit: 10,
         since: '2024-06-01',
       });
@@ -383,7 +393,7 @@ describe('search service', () => {
     });
 
     it('filters by confidence', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'patterns design layout', {
+      const { results } = await search(ctx.db, ctx.embedder, 'patterns design layout', {
         limit: 10,
         confidence: 'high',
       });
@@ -394,7 +404,7 @@ describe('search service', () => {
     });
 
     it('combines multiple filters with AND logic', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript', {
         limit: 10,
         tier: 'slow',
         category: 'frontend',
@@ -413,19 +423,24 @@ describe('search service', () => {
 
   describe('empty and edge cases', () => {
     it('returns empty array for empty query', async () => {
-      const results = await search(ctx.db, ctx.embedder, '', { limit: 10 });
+      const { results } = await search(ctx.db, ctx.embedder, '', { limit: 10 });
       expect(results).toEqual([]);
     });
 
     it('returns empty array for whitespace-only query', async () => {
-      const results = await search(ctx.db, ctx.embedder, '   ', { limit: 10 });
+      const { results } = await search(ctx.db, ctx.embedder, '   ', { limit: 10 });
       expect(results).toEqual([]);
     });
 
     it('returns empty array when no results match', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'xyznonexistentquerythatmatchesnothing', {
-        limit: 10,
-      });
+      const { results } = await search(
+        ctx.db,
+        ctx.embedder,
+        'xyznonexistentquerythatmatchesnothing',
+        {
+          limit: 10,
+        }
+      );
       // May return vector results since vector search is semantic, but BM25 should return nothing
       // The combined results might be empty or have very low scores
       // This is acceptable behavior
@@ -453,7 +468,7 @@ describe('search service', () => {
         'This note about TypeScript has only FTS content and no vectors'
       );
 
-      const results = await search(freshDb, ctx.embedder, 'TypeScript', { limit: 5 });
+      const { results } = await search(freshDb, ctx.embedder, 'TypeScript', { limit: 5 });
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results[0].noteId).toBe('fts-only');
 
@@ -466,7 +481,7 @@ describe('search service', () => {
     });
 
     it('respects the limit parameter', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns design', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns design', {
         limit: 2,
       });
       expect(results.length).toBeLessThanOrEqual(2);
@@ -475,13 +490,13 @@ describe('search service', () => {
 
   describe('minScore threshold', () => {
     it('filters out results below the threshold', async () => {
-      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: allResults } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
       });
       expect(allResults.length).toBeGreaterThan(1);
 
       const highThreshold = allResults[0].score - 0.01;
-      const filtered = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: filtered } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
         minScore: highThreshold,
       });
@@ -494,10 +509,15 @@ describe('search service', () => {
     });
 
     it('returns all results when minScore is undefined', async () => {
-      const withoutMinScore = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
-        limit: 10,
-      });
-      const withUndefined = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: withoutMinScore } = await search(
+        ctx.db,
+        ctx.embedder,
+        'TypeScript patterns',
+        {
+          limit: 10,
+        }
+      );
+      const { results: withUndefined } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
         minScore: undefined,
       });
@@ -506,7 +526,7 @@ describe('search service', () => {
     });
 
     it('returns empty results when minScore is 1.0', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
         minScore: 1.0,
       });
@@ -515,10 +535,10 @@ describe('search service', () => {
     });
 
     it('returns all results when minScore is 0', async () => {
-      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: allResults } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
       });
-      const withZero = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: withZero } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
         minScore: 0,
       });
@@ -529,14 +549,14 @@ describe('search service', () => {
 
   describe('custom fusion weights', () => {
     it('respects custom fusion weights', async () => {
-      const bm25Heavy = await search(
+      const { results: bm25Heavy } = await search(
         ctx.db,
         ctx.embedder,
         'TypeScript patterns',
         { limit: 5 },
         { bm25: 0.9, vector: 0.1 }
       );
-      const vectorHeavy = await search(
+      const { results: vectorHeavy } = await search(
         ctx.db,
         ctx.embedder,
         'TypeScript patterns',
@@ -553,12 +573,12 @@ describe('search service', () => {
 
   describe('dropoff filter', () => {
     it('cuts results at the largest relative score gap', async () => {
-      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: allResults } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
       });
       expect(allResults.length).toBeGreaterThan(1);
 
-      const withDropoff = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: withDropoff } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
         dropoff: 0.01,
       });
@@ -568,23 +588,33 @@ describe('search service', () => {
     });
 
     it('returns all results when no gap exceeds threshold', async () => {
-      const allResults = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: allResults } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
       });
 
-      const withHighThreshold = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
-        limit: 10,
-        dropoff: 0.99,
-      });
+      const { results: withHighThreshold } = await search(
+        ctx.db,
+        ctx.embedder,
+        'TypeScript patterns',
+        {
+          limit: 10,
+          dropoff: 0.99,
+        }
+      );
 
       expect(withHighThreshold.length).toBe(allResults.length);
     });
 
     it('returns all results when dropoff is undefined', async () => {
-      const withoutDropoff = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
-        limit: 10,
-      });
-      const withUndefined = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results: withoutDropoff } = await search(
+        ctx.db,
+        ctx.embedder,
+        'TypeScript patterns',
+        {
+          limit: 10,
+        }
+      );
+      const { results: withUndefined } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
         dropoff: undefined,
       });
@@ -593,7 +623,7 @@ describe('search service', () => {
     });
 
     it('keeps at least one result even with aggressive threshold', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 10,
         dropoff: 0.001,
       });
@@ -636,7 +666,7 @@ describe('search service', () => {
 
   describe('access tracking', () => {
     it('records search_hit events for returned results', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 5,
       });
 
@@ -646,7 +676,7 @@ describe('search service', () => {
     });
 
     it('records one event per result', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 5,
       });
 
@@ -669,7 +699,7 @@ describe('search service', () => {
     it('calls cross-encoder reranking when rerank is true', async () => {
       const { rerank } = await import('../../src/services/reranker.js');
 
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 5,
         rerank: true,
       });
@@ -693,7 +723,7 @@ describe('search service', () => {
 
   describe('matchSource field', () => {
     it('includes matchSource on all search results', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 5,
       });
 
@@ -705,7 +735,7 @@ describe('search service', () => {
     });
 
     it('marks results found in both BM25 and vector as both', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
         limit: 5,
       });
 
@@ -716,7 +746,7 @@ describe('search service', () => {
     });
 
     it('sets matchSource to rerank after cross-encoder reranking', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 5,
         rerank: true,
       });
@@ -728,7 +758,7 @@ describe('search service', () => {
     });
 
     it('matchSource appears in JSON output', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
         limit: 3,
       });
 
@@ -866,7 +896,7 @@ describe('search with PM note inclusion', () => {
   });
 
   it('includes PM notes by default when moduleRegistry is provided', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'TypeScript',
@@ -881,7 +911,7 @@ describe('search with PM note inclusion', () => {
   });
 
   it('excludes PM notes when excludePm option is true', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'TypeScript',
@@ -896,7 +926,7 @@ describe('search with PM note inclusion', () => {
   });
 
   it('excludes PM notes when includePm is explicitly false (backward compat)', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'TypeScript',
@@ -911,7 +941,7 @@ describe('search with PM note inclusion', () => {
   });
 
   it('includes PM notes when includePm option is true', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'TypeScript',
@@ -926,7 +956,7 @@ describe('search with PM note inclusion', () => {
   });
 
   it('includes PM notes when no moduleRegistry is provided', async () => {
-    const results = await search(db, embedder, 'TypeScript', { limit: 10 });
+    const { results } = await search(db, embedder, 'TypeScript', { limit: 10 });
 
     const noteIds = results.map((r) => r.noteId);
     expect(noteIds).toContain('pm-task-note');
@@ -1104,7 +1134,7 @@ describe('metadata filtering', () => {
     addFtsAndChunks(db, 'insight-1', 'WIP limits enforcement');
     addFtsAndChunks(db, 'insight-2', 'WIP limits discussion');
 
-    const results = await search(db, embedder, 'WIP limits', {
+    const { results } = await search(db, embedder, 'WIP limits', {
       limit: 10,
       filters: [{ field: 'enforcement-strength', value: 'deterministic' }],
     });

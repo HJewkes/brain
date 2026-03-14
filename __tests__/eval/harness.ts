@@ -226,7 +226,7 @@ export async function runEvalSuite(
   const results: EvalResult[] = [];
 
   for (const query of corpus.queries) {
-    const searchResults = await search(
+    const { results: searchResults } = await search(
       env.db,
       env.embedder,
       query.text,

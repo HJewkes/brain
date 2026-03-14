@@ -112,7 +112,7 @@ export async function resolveUnknownCommand(
   if (db && embedder) {
     try {
       const { search } = await import('../../../services/search.js');
-      const results = await search(
+      const { results } = await search(
         db,
         embedder,
         input,
