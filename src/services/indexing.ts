@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { parseMarkdown, extractNoteLinks } from './markdown-parser.js';
+import { chunkJson } from './json-chunker.js';
 import type { BrainDB } from './brain-db.js';
 import type { Chunk, Embedder, InboxItem, NoteRecord, RawChunk, Relation } from '../types.js';
 import { scanForChanges } from './file-scanner.js';
@@ -9,6 +10,12 @@ import { readIndexableContent } from './content-dir.js';
 import { computeAutoLinks } from './graph.js';
 import { slugify } from '../utils.js';
 export { slugify };
+
+export function isJsonContent(filePath: string, content: string): boolean {
+  if (filePath.endsWith('.json')) return true;
+  const trimmed = content.trimStart();
+  return trimmed.startsWith('{') || trimmed.startsWith('[');
+}
 
 export function isSkippedFile(filePath: string): boolean {
   return filePath.includes('/_templates/') || basename(filePath) === '_index.md';
@@ -124,6 +131,13 @@ export async function indexSingleFile(
   mtime: number
 ): Promise<string> {
   const parsed = parseMarkdown(filePath, content);
+
+  if (isJsonContent(filePath, content)) {
+    const jsonChunks = chunkJson(content, filePath);
+    if (jsonChunks.length > 0) {
+      parsed.chunks = jsonChunks;
+    }
+  }
 
   const noteRecord = frontmatterToRecord(parsed);
   db.upsertNote(noteRecord);
