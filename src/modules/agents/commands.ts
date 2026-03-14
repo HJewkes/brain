@@ -1,9 +1,10 @@
 import { Command } from '@commander-js/extra-typings';
-import { withDb } from '../../services/brain-service.js';
+import { withBrain, withDb } from '../../services/brain-service.js';
 import { createAgent, getAgent, listAgents, updateAgentStatus } from './data.js';
 import type { AgentRecord } from './types.js';
 import { createWorktreeCommand } from './worktree-commands.js';
 import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
+import { updateTaskStatus } from '../pm/data/task-ops.js';
 
 function padRight(s: string, len: number): string {
   return s.length >= len ? s.substring(0, len) : s + ' '.repeat(len - s.length);
@@ -128,7 +129,7 @@ export function createAgentCommands(): Command {
     .argument('<id>', 'Agent ID')
     .requiredOption('--summary <text>', 'Completion summary')
     .action(async (id, opts) => {
-      await withDb((svc) => {
+      await withBrain(async (svc) => {
         const agent = getAgent(svc.db, id);
         if (!agent) {
           process.stderr.write(`Error: Agent not found: ${id}\n`);
@@ -144,6 +145,23 @@ export function createAgentCommands(): Command {
 
         updateAgentStatus(svc.db, id, 'completed', { summary: opts.summary });
         process.stdout.write(`Agent ${id} completed.\n`);
+
+        if (agent.brain_task) {
+          const result = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            agent.brain_task,
+            'done'
+          );
+          if (result.ok) {
+            process.stdout.write(`Task ${agent.brain_task} → done\n`);
+          } else {
+            process.stderr.write(
+              `Warning: Failed to update task ${agent.brain_task}: ${result.error.message}\n`
+            );
+          }
+        }
       });
     });
 
@@ -154,7 +172,7 @@ export function createAgentCommands(): Command {
     .argument('<id>', 'Agent ID')
     .requiredOption('--reason <text>', 'Reason for abandoning')
     .action(async (id, opts) => {
-      await withDb((svc) => {
+      await withBrain(async (svc) => {
         const agent = getAgent(svc.db, id);
         if (!agent) {
           process.stderr.write(`Error: Agent not found: ${id}\n`);
@@ -170,6 +188,23 @@ export function createAgentCommands(): Command {
 
         updateAgentStatus(svc.db, id, 'abandoned', { exit_reason: opts.reason });
         process.stdout.write(`Agent ${id} abandoned.\n`);
+
+        if (agent.brain_task) {
+          const result = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            agent.brain_task,
+            'pending'
+          );
+          if (result.ok) {
+            process.stdout.write(`Task ${agent.brain_task} → pending\n`);
+          } else {
+            process.stderr.write(
+              `Warning: Failed to update task ${agent.brain_task}: ${result.error.message}\n`
+            );
+          }
+        }
       });
     });
 
