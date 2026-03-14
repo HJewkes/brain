@@ -61,6 +61,38 @@ export const workflowModule: BrainModule = {
       },
     });
 
+    ctx.registerNoteType({
+      name: 'observation',
+      description: 'Workflow observation recording friction, patterns, or improvements',
+      tier: 'fast',
+      schema: {
+        type: 'object',
+        properties: {
+          observation_type: {
+            type: 'string',
+            enum: ['friction', 'pattern', 'improvement', 'anomaly'],
+            description: 'Type of observation',
+          },
+          impact: {
+            type: 'string',
+            enum: ['low', 'medium', 'high', 'critical'],
+            description: 'Impact severity',
+          },
+          category: {
+            type: 'string',
+            description: 'Observation category (e.g., tool-failure, permission, retry)',
+          },
+          session_id: { type: 'string', description: 'Source session ID' },
+          status: {
+            type: 'string',
+            enum: ['new', 'acknowledged', 'resolved', 'dismissed'],
+            description: 'Observation status',
+          },
+        },
+        required: ['observation_type', 'impact', 'status'],
+      },
+    });
+
     ctx.registerRelationType({
       name: 'instance-of',
       description: 'Workflow instance is an instance of a workflow definition',
@@ -74,6 +106,11 @@ export const workflowModule: BrainModule = {
     ctx.registerRelationType({
       name: 'iteration-of',
       description: 'Workflow instance is an iteration of a previous instance',
+    });
+
+    ctx.registerRelationType({
+      name: 'observed-in',
+      description: 'Observation was detected in a session',
     });
 
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
