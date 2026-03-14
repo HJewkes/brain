@@ -3,6 +3,7 @@ import type { BrainConfig } from '../../types.js';
 import type { RoutingResult } from '../pm/engine/routing.js';
 import { computeRouting, isAgentDispatchable } from '../pm/engine/routing.js';
 import { assembleContext } from '../pm/engine/dispatch.js';
+import { computeWaves } from '../pm/engine/dependency.js';
 import { getPmNotes } from '../pm/data/queries.js';
 import type { TaskMetadata } from '../pm/types.js';
 import type { FileOwnershipManifest } from './file-ownership.js';
@@ -23,6 +24,7 @@ export interface AgentDispatchContext {
     decisions: Array<{ displayId: string; status: string; content: string }>;
     constraints: string[];
   };
+  waveInfo?: { waveNumber: number; totalWaves: number; waveTasks: string[] };
   contextHash: string;
   fileOwnership?: FileOwnershipManifest;
   sessionBriefing?: SessionBriefing;
@@ -58,6 +60,8 @@ export function buildAgentDispatchContext(
     }
   }
 
+  const waveInfo = resolveWaveInfo(db, ctx.task.project, taskDisplayId);
+
   return {
     taskId: taskDisplayId,
     routing,
@@ -75,6 +79,7 @@ export function buildAgentDispatchContext(
       decisions: ctx.decisions,
       constraints: ctx.constraints,
     },
+    waveInfo,
     contextHash: ctx.contextHash,
     sessionBriefing,
   };
@@ -84,6 +89,30 @@ function resolveTaskMetadata(db: BrainDB, taskDisplayId: string): TaskMetadata |
   const taskNotes = getPmNotes(db, 'task', { display_id: taskDisplayId });
   if (taskNotes.length === 0) return null;
   return JSON.parse(taskNotes[0].metadata!) as TaskMetadata;
+}
+
+function resolveWaveInfo(
+  db: BrainDB,
+  project: string,
+  taskDisplayId: string
+): AgentDispatchContext['waveInfo'] {
+  try {
+    const waves = computeWaves(db, project);
+    if (waves.length === 0) return undefined;
+
+    for (const wave of waves) {
+      if (wave.taskIds.includes(taskDisplayId)) {
+        return {
+          waveNumber: wave.wave + 1,
+          totalWaves: waves.length,
+          waveTasks: wave.taskIds.filter((id) => id !== taskDisplayId),
+        };
+      }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function formatDispatchBrief(ctx: AgentDispatchContext): string {
@@ -116,6 +145,17 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
     lines.push('--- Dependencies ---');
     for (const dep of ctx.context.dependencies) {
       lines.push(`  ${dep.displayId} [${dep.status}] ${dep.name}`);
+    }
+    lines.push('');
+  }
+
+  if (ctx.waveInfo) {
+    lines.push('--- Wave Info ---');
+    lines.push(
+      `This task is in wave ${ctx.waveInfo.waveNumber} of ${ctx.waveInfo.totalWaves}. All prior wave tasks are complete.`
+    );
+    if (ctx.waveInfo.waveTasks.length > 0) {
+      lines.push(`Parallel tasks in this wave: ${ctx.waveInfo.waveTasks.join(', ')}`);
     }
     lines.push('');
   }
