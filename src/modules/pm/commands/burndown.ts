@@ -165,6 +165,84 @@ export function createBurndownCommand(): Command {
       });
     });
 
+  cmd
+    .command('launch')
+    .description('Render coordinator prompt for Team/Agent pattern (replaces subprocess spawner)')
+    .option('--project <prefix>', 'Project prefix (defaults to active project)')
+    .option('--wip-limit <n>', 'Max concurrent agents', '4')
+    .option('--team-name <name>', 'Team name for agent coordination', 'burndown')
+    .option('--template <name>', 'Coordinator template name', 'coordinator')
+    .option('--dry-run', 'Output coordinator prompt without launching')
+    .option('--json', 'Output JSON')
+    .action(async (opts) => {
+      await withDb(async (svc) => {
+        const project = opts.project ?? getActiveProject(svc.db);
+        if (!project) {
+          process.stderr.write(
+            'Error: No active project. Use --project or "brain pm use <prefix>"\n'
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const { renderCoordinatorPrompt } = await import('../../agents/coordinator.js');
+
+        const teamName = `${opts.teamName}-${project.toLowerCase()}`;
+        const result = renderCoordinatorPrompt({
+          projectDir: process.cwd(),
+          teamName,
+          wipLimit: parseInt(opts.wipLimit, 10),
+          templateName: opts.template,
+        });
+
+        if (!result) {
+          process.stderr.write(
+            `Error: Template "${opts.template}" not found in templates/agents/\n`
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const tasksResult = listTasks(svc.db, project);
+        const allTasks = tasksResult.ok ? tasksResult.data : [];
+        const totalTasks = allTasks.length;
+        const doneTasks = allTasks.filter((t) => t.status === 'done').length;
+
+        if (opts.json) {
+          process.stdout.write(
+            JSON.stringify(
+              {
+                project,
+                teamName,
+                wipLimit: parseInt(opts.wipLimit, 10),
+                totalTasks,
+                doneTasks,
+                dryRun: !!opts.dryRun,
+                prompt: result.prompt,
+              },
+              null,
+              2
+            ) + '\n'
+          );
+          return;
+        }
+
+        if (opts.dryRun) {
+          process.stdout.write(`Dry run — ${project}\n`);
+          process.stdout.write(`Team: ${teamName}\n`);
+          process.stdout.write(`WIP limit: ${opts.wipLimit}\n`);
+          process.stdout.write(
+            `Tasks: ${doneTasks}/${totalTasks} done\n\n`
+          );
+          process.stdout.write('--- Coordinator Prompt ---\n');
+          process.stdout.write(result.prompt + '\n');
+          return;
+        }
+
+        process.stdout.write(result.prompt);
+      });
+    });
+
   return cmd as unknown as Command;
 }
 
