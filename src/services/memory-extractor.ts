@@ -38,6 +38,7 @@ export class DedupWindow {
   }
 }
 import type { ModuleRegistry } from '../modules/registry.js';
+import { splitMemoryFacets } from './facet-splitter.js';
 
 const EXTRACTION_SYSTEM = `You are a fact extraction engine. Given a text, extract discrete, self-contained facts.
 Each fact should be a single sentence that stands alone without context.
@@ -140,20 +141,22 @@ export async function extractMemoriesFromNote(
     return { noteId, facts: [], memoriesCreated: 0, memoriesUpdated: 0, memoriesDeleted: 0 };
   }
 
+  const splitFacts = splitMemoryFacets(allFacts);
+
   const existingMemories = db.getMemoriesForNote(noteId);
 
   if (existingMemories.length === 0) {
-    const created = await applyAdditions(db, allFacts, noteId, containerTag, effectiveEmbedder);
+    const created = await applyAdditions(db, splitFacts, noteId, containerTag, effectiveEmbedder);
     return {
       noteId,
-      facts: allFacts,
+      facts: splitFacts,
       memoriesCreated: created,
       memoriesUpdated: 0,
       memoriesDeleted: 0,
     };
   }
 
-  const actions = await reconcile(llm, allFacts, existingMemories);
+  const actions = await reconcile(llm, splitFacts, existingMemories);
   const result = await applyActions(
     db,
     actions,
@@ -165,7 +168,7 @@ export async function extractMemoriesFromNote(
 
   return {
     noteId,
-    facts: allFacts,
+    facts: splitFacts,
     memoriesCreated: result.created,
     memoriesUpdated: result.updated,
     memoriesDeleted: result.deleted,
