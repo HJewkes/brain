@@ -12,9 +12,11 @@ import { generateSummaries, generateL2Timeline } from '../ingestion/summarizer.j
 import { computeSessionAnalyticsExt } from '../analytics/metrics.js';
 import { detectLinks } from '../ingestion/linker.js';
 import { discoverSessions } from '../ingestion/discovery.js';
+import { extractSessionMemories, updateSessionMemoryCount } from './extract-memories.js';
 
 export interface CommitOptions {
   skipSummaries?: boolean;
+  skipExtraction?: boolean;
   jsonlPath?: string;
 }
 
@@ -106,6 +108,21 @@ async function commitFromAnalytics(
 
   for (const taskId of links.tasksWorked) {
     linkSessionToTask(db, result.data.display_id, taskId);
+  }
+
+  // Extract memories from session chunks if LLM available
+  if (ollama && !opts?.skipExtraction) {
+    const extraction = await extractSessionMemories(
+      db,
+      ollama,
+      embedder,
+      analytics.sessionId,
+      result.data.note_id
+    );
+    const total = extraction.memoriesCreated + extraction.memoriesUpdated;
+    if (total > 0) {
+      updateSessionMemoryCount(db, analytics.sessionId, total);
+    }
   }
 
   // Return the created session metadata
