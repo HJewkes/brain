@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../types.js';
 import { hookAllow, hookAllowJson } from '../types.js';
+import { countActiveAgentsFromDb } from './agent-count.js';
 
 export const wipCheck: HookHandler = {
   name: 'wip',
@@ -13,7 +14,7 @@ export const wipCheck: HookHandler = {
 
   run(input: HookInput, config: HookConfig): HookResult {
     const limit = config.enforcement.wipLimit;
-    const current = countActiveAgents();
+    const current = countActiveAgentsFromDb(input.cwd) ?? countActiveAgentsByProcess();
     if (current < limit) return hookAllow();
 
     return hookAllowJson(
@@ -23,7 +24,7 @@ export const wipCheck: HookHandler = {
   },
 };
 
-function countActiveAgents(): number {
+function countActiveAgentsByProcess(): number {
   try {
     const output = execSync('ps aux | grep -c "[c]laude.*agent"', {
       encoding: 'utf-8',
