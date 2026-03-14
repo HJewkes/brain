@@ -775,6 +775,8 @@ export function createOrchestrationCommands(): Command[] {
     .argument('<id>', 'Task display ID')
     .requiredOption('--template <name>', 'Template name (file in templates/agents/<name>.md)')
     .option('--project-dir <dir>', 'Project directory (defaults to cwd)')
+    .option('--team-name <name>', 'Team name for coordinator/worker communication')
+    .option('--claim-token <token>', 'Claim token for the task')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
@@ -789,7 +791,10 @@ export function createOrchestrationCommands(): Command[] {
         }
 
         const { renderTemplateFile } = await import('../../agents/template-renderer.js');
-        const variables = buildTemplateVariables(dispatch, opts.projectDir ?? process.cwd());
+        const variables = buildTemplateVariables(dispatch, opts.projectDir ?? process.cwd(), {
+          teamName: opts.teamName,
+          claimToken: opts.claimToken,
+        });
 
         try {
           const rendered = renderTemplateFile(
@@ -808,9 +813,15 @@ export function createOrchestrationCommands(): Command[] {
   return [nextCmd, wavesCmd, dispatchCmd, renderPromptCmd, completeCmd, briefingCmd] as Command[];
 }
 
+export interface TemplateVariableOptions {
+  teamName?: string;
+  claimToken?: string;
+}
+
 export function buildTemplateVariables(
   dispatch: AgentDispatchContext,
-  projectDir: string
+  projectDir: string,
+  options?: TemplateVariableOptions
 ): TemplateVariables {
   const deps = dispatch.context.dependencies
     .map((d) => `${d.displayId} [${d.status}] ${d.name}`)
@@ -830,20 +841,38 @@ export function buildTemplateVariables(
         .join(', ')
     : 'No file ownership assigned';
 
+  const readOnlyPatterns = dispatch.fileOwnership
+    ? dispatch.fileOwnership.rules
+        .filter((r) => r.agentId !== dispatch.taskId)
+        .flatMap((r) => r.patterns)
+        .join(', ')
+    : '';
+
+  const verifyCommands = ['npx tsc --noEmit', 'npm test', 'npx eslint'].join('\n');
+
+  const decisions = dispatch.context.decisions
+    .map((d) => `${d.displayId} [${d.status}] ${d.content}`)
+    .join('\n');
+
   return {
     TASK_ID: dispatch.taskId,
     TITLE: dispatch.context.title,
     DESCRIPTION: dispatch.context.body || '(no description)',
     DEPENDENCIES: deps || 'None',
     FILE_OWNERSHIP: fileOwnership,
+    READ_ONLY_FILES: readOnlyPatterns || 'None',
     WAVE_INFO: waveInfo,
     CWD: projectDir,
     PROJECT_DIR: projectDir,
-    CLAIM_TOKEN: '',
+    CLAIM_TOKEN: options?.claimToken ?? '',
+    TEAM_NAME: options?.teamName ?? '',
     MODEL: dispatch.routing.model,
     AGENT_TYPE: dispatch.routing.agentType,
     ISOLATION: dispatch.routing.isolation,
     VERIFY: String(dispatch.routing.verify),
+    VERIFY_COMMANDS: verifyCommands,
+    DECISIONS: decisions || 'None',
+    BRAIN_CLI: `npx tsx src/cli.ts`,
   };
 }
 

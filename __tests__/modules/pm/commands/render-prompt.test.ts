@@ -153,6 +153,8 @@ describe('buildTemplateVariables', () => {
     expect(vars.DEPENDENCIES).toContain('TEST-00.01');
     expect(vars.WAVE_INFO).toContain('Wave 1 of 3');
     expect(vars.WAVE_INFO).toContain('TEST-01.02');
+    expect(vars.VERIFY_COMMANDS).toContain('npx tsc --noEmit');
+    expect(vars.BRAIN_CLI).toBe('npx tsx src/cli.ts');
   });
 
   it('handles empty dependencies and no wave info', () => {
@@ -178,5 +180,34 @@ describe('buildTemplateVariables', () => {
     expect(vars.DEPENDENCIES).toBe('None');
     expect(vars.WAVE_INFO).toBe('No wave context');
     expect(vars.DESCRIPTION).toBe('(no description)');
+    expect(vars.DECISIONS).toBe('None');
+    expect(vars.READ_ONLY_FILES).toBe('None');
+  });
+
+  it('passes team name and claim token from options', () => {
+    const dispatch: AgentDispatchContext = {
+      taskId: 'X-01.01',
+      routing: { model: 'opus', agentType: 'worker', isolation: 'worktree', verify: true },
+      agentDispatchable: true,
+      context: {
+        title: 'Task',
+        body: '',
+        workstream: undefined,
+        prompt: undefined,
+        dependencies: [],
+        decisions: [],
+        constraints: [],
+      },
+      contextHash: 'hash',
+      extensions: {},
+    };
+
+    const vars = buildTemplateVariables(dispatch, '/dir', {
+      teamName: 'burndown-vnm',
+      claimToken: 'tok-abc-123',
+    });
+
+    expect(vars.TEAM_NAME).toBe('burndown-vnm');
+    expect(vars.CLAIM_TOKEN).toBe('tok-abc-123');
   });
 });
