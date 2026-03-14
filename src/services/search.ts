@@ -20,6 +20,7 @@ import { createEmptyTokenUsage, estimateTokens } from '../types.js';
 import type { ModuleRegistry } from '../modules/registry.js';
 import { correctQuery } from './vocabulary.js';
 import { intentSearch } from './search-intent.js';
+import { enrichSearchResults } from './relational-enrichment.js';
 
 const RRF_K = 60;
 const INTENT_SIMILARITY_THRESHOLD = 0.3;
@@ -463,6 +464,12 @@ export async function search(
   // Step 7: Optional intent-based filtering
   if (options.intent && finalResults.length > 1) {
     finalResults = await applyIntentFilter(embedder, finalResults, options.intent, usage);
+  }
+
+  // Step 8: Optional relational enrichment
+  if (options.enrich) {
+    const enriched = enrichSearchResults(db, finalResults);
+    return { results: enriched, tokenUsage: usage };
   }
 
   return { results: finalResults, tokenUsage: usage };
