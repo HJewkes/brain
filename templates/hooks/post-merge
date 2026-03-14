@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Auto-reindex architecture notes after merge
+# Installed by: brain codebase install-hook
+
+# Get changed source files
+CHANGED=$(git diff --name-only HEAD@{1} HEAD -- 'src/**/*.ts')
+if [ -z "$CHANGED" ]; then
+  exit 0
+fi
+
+# Run incremental reindex
+npx tsx src/cli.ts codebase index . --project "$(basename "$(pwd)")" 2>/dev/null
