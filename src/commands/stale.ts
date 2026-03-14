@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { parseIntervalDays } from '../utils.js';
 import type { NoteRecord, NoteTier } from '../types.js';
 
@@ -56,7 +57,7 @@ export const staleCommand = new Command('stale')
 
       staleNotes.sort((a, b) => b.daysOverdue - a.daysOverdue);
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(staleNotes, null, 2) + '\n');
       } else if (staleNotes.length === 0) {
         process.stdout.write('No stale notes found.\n');

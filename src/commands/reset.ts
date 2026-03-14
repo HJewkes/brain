@@ -7,6 +7,7 @@ import {
   getConfigDir,
   getDataDir,
 } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 
 export const resetCommand = new Command('reset')
   .description('Remove all brain data and start fresh')
@@ -59,7 +60,7 @@ export const resetCommand = new Command('reset')
       }
     }
 
-    if (opts.json) {
+    if (isJsonFormat(opts, cmd)) {
       process.stdout.write(JSON.stringify({ removed }) + '\n');
     } else {
       if (removed.length === 0) {

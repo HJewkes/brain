@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { readFileSync } from 'node:fs';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { requireOllama } from '../services/ollama.js';
 
 /** Max characters of note content sent to the tidy LLM call */
@@ -77,7 +78,7 @@ export const tidyCommand = new Command('tidy')
         results.push({ noteId: note.id, title: note.title, suggestions });
       }
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(results) + '\n');
         return;
       }

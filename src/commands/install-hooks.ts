@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { execSync } from 'node:child_process';
 import { loadConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 
 const PLIST_LABEL = 'com.brain.index';
 const PLIST_PATH = join(homedir(), 'Library', 'LaunchAgents', `${PLIST_LABEL}.plist`);
@@ -202,9 +203,9 @@ export const installHooksCommand = new Command('install-hooks')
     const config = loadConfig(instance);
     const os = platform();
 
-    if (opts.status || opts.json) {
+    if (opts.status || isJsonFormat(opts, cmd)) {
       const status = getStatus(config.notesDir);
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(status) + '\n');
       } else {
         process.stderr.write(

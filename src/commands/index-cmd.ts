@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { readFileSync, watch } from 'node:fs';
 import { extname } from 'node:path';
 import { loadConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { checkOllamaHealth, hasModel, createOllamaClient } from '../services/ollama.js';
@@ -84,7 +85,7 @@ export const indexCommand = new Command('index')
         total: db.getAllNotes().length,
       };
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(summary) + '\n');
       } else if (!opts.quiet) {
         process.stderr.write(

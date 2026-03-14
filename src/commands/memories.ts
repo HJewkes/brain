@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 
 const listCommand = new Command('list')
   .description('List active memories')
@@ -30,7 +31,7 @@ const listCommand = new Command('list')
       }
       const limited = memories.slice(0, limit);
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(limited) + '\n');
         return;
       }
@@ -68,7 +69,7 @@ export const memoriesCommand = new Command('memories')
           const chain = db.getMemoryVersionChain(id);
           const history = db.getMemoryHistory(id);
 
-          if (opts.json) {
+          if (isJsonFormat(opts, cmd)) {
             process.stdout.write(JSON.stringify({ chain, history }) + '\n');
             return;
           }
@@ -115,7 +116,7 @@ export const memoriesCommand = new Command('memories')
 
           const stats = { activeMemories: count, expiredThisRun: forgotten };
 
-          if (opts.json) {
+          if (isJsonFormat(opts, cmd)) {
             process.stdout.write(JSON.stringify(stats) + '\n');
             return;
           }

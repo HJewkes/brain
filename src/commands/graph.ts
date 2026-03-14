@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { traverseGraph } from '../services/graph.js';
 import type { GraphResult, Relation } from '../types.js';
 
@@ -84,7 +85,7 @@ export const graphCommand = new Command('graph')
 
       const result = traverseGraph(db, resolvedId, opts.depth);
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
         const tree = buildTree(result);

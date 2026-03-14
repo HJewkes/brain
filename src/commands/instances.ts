@@ -1,12 +1,13 @@
 import { Command } from '@commander-js/extra-typings';
 import { listInstances, pruneStaleInstances } from '../services/instance-registry.js';
 import { GLOBAL_BRAIN_DIR } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 
 const listSubcommand = new Command('list')
   .description('List all known brain instances')
   .option('--json', 'output as JSON')
   .option('--prune', 'remove stale entries (paths that no longer exist)')
-  .action((opts) => {
+  .action((opts, cmd) => {
     const globalDir = GLOBAL_BRAIN_DIR;
 
     if (opts.prune) {
@@ -18,7 +19,7 @@ const listSubcommand = new Command('list')
 
     const instances = listInstances(globalDir);
 
-    if (opts.json) {
+    if (isJsonFormat(opts, cmd)) {
       process.stdout.write(
         JSON.stringify({
           global: { path: globalDir, name: 'global' },

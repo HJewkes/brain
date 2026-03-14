@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { requireOllama } from '../services/ollama.js';
 import { DedupWindow, extractMemoriesFromNote } from '../services/memory-extractor.js';
 
@@ -48,7 +49,7 @@ export const extractCommand = new Command('extract')
       const dedupWindow = new DedupWindow();
 
       for (const noteId of noteIds) {
-        if (!opts.quiet && !opts.json) {
+        if (!opts.quiet && !isJsonFormat(opts, cmd)) {
           process.stderr.write(`Extracting from ${noteId}...\n`);
         }
 
@@ -74,7 +75,7 @@ export const extractCommand = new Command('extract')
         totalMemories: db.getMemoryCount(),
       };
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(summary) + '\n');
       } else if (!opts.quiet) {
         process.stderr.write(
