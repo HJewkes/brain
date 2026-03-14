@@ -18,7 +18,9 @@ import {
 import { ModuleRegistry } from '../../src/modules/registry.js';
 
 vi.mock('../../src/services/reranker.js', () => ({
-  rerank: vi.fn(async (_query: string, results: SearchResult[]) => results.reverse()),
+  rerank: vi.fn(async (_query: string, results: SearchResult[]) =>
+    results.reverse().map((r) => ({ ...r, matchSource: 'rerank' as const }))
+  ),
 }));
 
 interface TestContext {
@@ -685,6 +687,54 @@ describe('search service', () => {
       });
 
       expect(rerank).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('matchSource field', () => {
+    it('includes matchSource on all search results', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 5,
+      });
+
+      expect(results.length).toBeGreaterThan(0);
+      for (const r of results) {
+        expect(r.matchSource).toBeDefined();
+        expect(['bm25', 'vector', 'both', 'rerank', 'graph']).toContain(r.matchSource);
+      }
+    });
+
+    it('marks results found in both BM25 and vector as both', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript design patterns', {
+        limit: 5,
+      });
+
+      expect(results.length).toBeGreaterThan(0);
+      const topResult = results[0];
+      expect(topResult.noteId).toBe('ts-patterns');
+      expect(topResult.matchSource).toBe('both');
+    });
+
+    it('sets matchSource to rerank after cross-encoder reranking', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 5,
+        rerank: true,
+      });
+
+      expect(results.length).toBeGreaterThan(0);
+      for (const r of results) {
+        expect(r.matchSource).toBe('rerank');
+      }
+    });
+
+    it('matchSource appears in JSON output', async () => {
+      const results = await search(ctx.db, ctx.embedder, 'TypeScript patterns', {
+        limit: 3,
+      });
+
+      const json = JSON.parse(JSON.stringify(results));
+      for (const r of json) {
+        expect(r).toHaveProperty('matchSource');
+      }
     });
   });
 
