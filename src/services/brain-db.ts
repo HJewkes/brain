@@ -19,6 +19,8 @@ import { NoteRepo } from './repos/note-repo.js';
 import { MemoryRepo } from './repos/memory-repo.js';
 import { CaptureRepo } from './repos/capture-repo.js';
 import { ActivityRepo } from './repos/activity-repo.js';
+import { VocabularyRepo } from './repos/vocabulary-repo.js';
+import type { VocabEntry } from './vocabulary.js';
 import { addFrontmatterField } from './indexing.js';
 
 export { sanitizeFtsQuery } from './repos/note-repo.js';
@@ -44,6 +46,7 @@ export class BrainDB {
   private memoryRepo: MemoryRepo;
   private captureRepo: CaptureRepo;
   private activityRepo: ActivityRepo;
+  private vocabularyRepo: VocabularyRepo;
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
@@ -55,6 +58,7 @@ export class BrainDB {
     this.memoryRepo = new MemoryRepo(this.db);
     this.captureRepo = new CaptureRepo(this.db);
     this.activityRepo = new ActivityRepo(this.db);
+    this.vocabularyRepo = new VocabularyRepo(this.db);
   }
 
   close(): void {
@@ -809,5 +813,23 @@ export class BrainDB {
   }
   getActivitiesBySession(sessionId: string): ActivityRecord[] {
     return this.activityRepo.getActivitiesBySession(sessionId);
+  }
+
+  // --- Vocabulary Delegates ---
+
+  getVocabulary(): VocabEntry[] {
+    return this.vocabularyRepo.getVocabulary();
+  }
+  updateVocabularyForNote(title: string, content: string, totalDocs: number): void {
+    this.vocabularyRepo.updateForNote(title, content, totalDocs);
+  }
+  rebuildVocabularyScores(totalDocs: number): void {
+    this.vocabularyRepo.rebuildScores(totalDocs);
+  }
+  clearVocabulary(): void {
+    this.vocabularyRepo.clear();
+  }
+  getVocabularyCount(): number {
+    return this.vocabularyRepo.count();
   }
 }
