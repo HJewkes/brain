@@ -58,6 +58,7 @@ export function makeMemoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEnt
     sourceNoteId: overrides.sourceNoteId ?? 'test-note',
     sourceChunkId: overrides.sourceChunkId ?? null,
     containerTag: overrides.containerTag ?? 'default',
+    category: overrides.category ?? null,
     isLatest: overrides.isLatest ?? true,
     parentMemoryId: overrides.parentMemoryId ?? null,
     rootMemoryId: overrides.rootMemoryId ?? null,

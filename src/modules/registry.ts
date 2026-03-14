@@ -9,6 +9,7 @@ import type {
   DirectorySchema,
   ContentHandler,
 } from './types.js';
+import type { HookHandler } from '../hooks/types.js';
 
 /** @deprecated Use ModuleNoteType.importHints directly — ImportHints is now in types.ts */
 export type ImportableNoteType = ModuleNoteType;
@@ -22,6 +23,7 @@ export class ModuleRegistry {
   private filters: Array<{ module: string; filter: FilterProvider }> = [];
   private migrations: Array<{ module: string; migration: ModuleMigration }> = [];
   private contentHandlers: Array<{ module: string; handler: ContentHandler }> = [];
+  private hookHandlers: Array<{ module: string; handler: HookHandler }> = [];
 
   registerModule(mod: BrainModule): void {
     if (this.modules.has(mod.name)) {
@@ -137,6 +139,16 @@ export class ModuleRegistry {
 
   getContentHandlers(): Array<{ module: string; handler: ContentHandler }> {
     return [...this.contentHandlers];
+  }
+
+  // --- Hook Handlers ---
+
+  registerHookHandler(moduleName: string, handler: HookHandler): void {
+    this.hookHandlers.push({ module: moduleName, handler });
+  }
+
+  getHookHandlers(): Array<{ module: string; handler: HookHandler }> {
+    return [...this.hookHandlers];
   }
 
   // --- Import Hints ---

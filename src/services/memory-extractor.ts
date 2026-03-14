@@ -1,13 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import type { OllamaClient } from './ollama.js';
 import type { BrainDB } from './brain-db.js';
-import type { Chunk, Embedder, ExtractedFact, MemoryEntry } from '../types.js';
+import type { Chunk, Embedder, ExtractedFact, MemoryCategory, MemoryEntry } from '../types.js';
+import { VALID_MEMORY_CATEGORIES } from '../types.js';
 import type { ModuleRegistry } from '../modules/registry.js';
 
 const EXTRACTION_SYSTEM = `You are a fact extraction engine. Given a text, extract discrete, self-contained facts.
 Each fact should be a single sentence that stands alone without context.
-Output one fact per line. Do not number them. Do not add commentary.
-If the text contains no extractable facts, output nothing.
+
+Output valid JSON: an array of objects with "fact" and "category" fields.
+Categories: profile, preferences, entities, events, cases, patterns, tools, skills.
+- profile: personal identity, background, roles
+- preferences: likes, dislikes, chosen approaches
+- entities: people, projects, organizations, products
+- events: meetings, decisions, milestones, dates
+- cases: problem/solution pairs, debugging stories
+- patterns: recurring approaches, architectural conventions
+- tools: technologies, libraries, commands
+- skills: capabilities, expertise areas
+
+Example output:
+[{"fact":"The team uses PostgreSQL for all production databases","category":"tools"},{"fact":"Sprint reviews happen every other Friday","category":"events"}]
+
+If the text contains no extractable facts, output an empty array: []
 Focus on: decisions, preferences, patterns, technical facts, relationships, and conclusions.
 Skip: filler text, questions, TODOs, and speculative statements.`;
 
@@ -126,6 +141,7 @@ async function applyAdditions(
       sourceChunkId: fact.sourceChunkId,
       actor: 'extractor',
       embedder,
+      category: fact.category,
     });
   }
   return facts.length;
@@ -208,7 +224,12 @@ async function createMemory(
   noteId: string,
   containerTag: string,
   now: string,
-  opts: { sourceChunkId?: string | null; actor: string; embedder?: Embedder }
+  opts: {
+    sourceChunkId?: string | null;
+    actor: string;
+    embedder?: Embedder;
+    category?: MemoryCategory | null;
+  }
 ): Promise<void> {
   const id = randomUUID();
   db.addMemory({
@@ -217,6 +238,7 @@ async function createMemory(
     sourceNoteId: noteId,
     sourceChunkId: opts.sourceChunkId ?? null,
     containerTag,
+    category: opts.category ?? null,
     isLatest: true,
     parentMemoryId: null,
     rootMemoryId: null,
@@ -257,6 +279,7 @@ async function updateMemoryFromAction(
     sourceNoteId: noteId,
     sourceChunkId: existing.sourceChunkId,
     containerTag,
+    category: existing.category,
     isLatest: true,
     parentMemoryId: existing.id,
     rootMemoryId: rootId,
@@ -292,6 +315,13 @@ function deleteMemoryAction(db: BrainDB, existing: MemoryEntry, now: string): vo
   });
 }
 
+function parseCategory(value: unknown): MemoryCategory | null {
+  if (typeof value !== 'string') return null;
+  return VALID_MEMORY_CATEGORIES.includes(value as MemoryCategory)
+    ? (value as MemoryCategory)
+    : null;
+}
+
 async function extractFactsFromChunk(llm: OllamaClient, chunk: Chunk): Promise<ExtractedFact[]> {
   const text = chunk.content;
   if (text.trim().length < 20) return [];
@@ -300,6 +330,26 @@ async function extractFactsFromChunk(llm: OllamaClient, chunk: Chunk): Promise<E
 
   if (!response.trim()) return [];
 
+  // Try JSON parsing first (new format)
+  const jsonMatch = response.match(/\[[\s\S]*\]/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as Array<{ fact: string; category?: string }>;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item) => typeof item.fact === 'string' && item.fact.length > 10)
+          .map((item) => ({
+            fact: item.fact,
+            sourceChunkId: chunk.id,
+            category: parseCategory(item.category),
+          }));
+      }
+    } catch {
+      // Fall through to line-based parsing
+    }
+  }
+
+  // Fallback: line-based parsing (backward compatible)
   const lines = response
     .split('\n')
     .map((l) => l.replace(/^[-*•]\s*/, '').trim())
@@ -308,5 +358,6 @@ async function extractFactsFromChunk(llm: OllamaClient, chunk: Chunk): Promise<E
   return lines.map((fact) => ({
     fact,
     sourceChunkId: chunk.id,
+    category: null,
   }));
 }

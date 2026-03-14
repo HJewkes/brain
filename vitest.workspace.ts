@@ -9,6 +9,7 @@ export default defineWorkspace([
         '__tests__/commands/**/*.test.ts',
         '__tests__/services/**/*.test.ts',
         '__tests__/modules/**/*.test.ts',
+        '__tests__/hooks/**/*.test.ts',
         '__tests__/utils/**/*.test.ts',
         '__tests__/adapters/**/*.test.ts',
       ],

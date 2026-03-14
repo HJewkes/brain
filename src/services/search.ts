@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { BrainDB } from './brain-db.js';
+import { computeHotnessScore, ageDays } from './hotness.js';
 import { addFrontmatterField } from './indexing.js';
 import { rerank } from './reranker.js';
 import type {
@@ -15,6 +16,7 @@ import type {
 import type { ModuleRegistry } from '../modules/registry.js';
 
 const RRF_K = 60;
+const INTENT_SIMILARITY_THRESHOLD = 0.3;
 // Cross-encoder reranker (ms-marco-MiniLM-L-6-v2) has a 512-token window.
 // 500 chars balances rerank quality with response payload size.
 const EXCERPT_MAX_LENGTH = 500;
@@ -32,6 +34,42 @@ interface ScoreEntry {
   bm25Score: number | null;
   vectorDistance: number | null;
   chunkId: string | null;
+}
+
+function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
+}
+
+async function applyIntentFilter(
+  embedder: Embedder,
+  results: SearchResult[],
+  intent: string
+): Promise<SearchResult[]> {
+  if (results.length <= 1) return results;
+
+  const intentVec = await embedQuery(embedder, intent);
+  const excerptTexts = results.map((r) => r.excerpt);
+  const excerptVecs = await embedder.embed(excerptTexts);
+
+  const scored = results.map((r, i) => ({
+    result: r,
+    intentScore: cosineSimilarity(intentVec, new Float32Array(excerptVecs[i])),
+  }));
+
+  const intentFiltered = scored
+    .filter((s) => s.intentScore >= INTENT_SIMILARITY_THRESHOLD)
+    .sort((a, b) => b.intentScore - a.intentScore)
+    .map((s) => s.result);
+
+  return intentFiltered.length > 0 ? intentFiltered : results;
 }
 
 function distanceToCosineSim(distance: number): number {
@@ -265,6 +303,15 @@ export async function search(
     ? ftsResults.filter((r) => allowedNoteIds.has(r.noteId))
     : ftsResults;
 
+  // Step 1b: Trigram fallback when BM25 returns no results
+  let effectiveFts = filteredFts;
+  if (effectiveFts.length === 0) {
+    const trigramResults = db.searchFTSTrigram(query, overfetchLimit);
+    effectiveFts = allowedNoteIds
+      ? trigramResults.filter((r) => allowedNoteIds.has(r.noteId))
+      : trigramResults;
+  }
+
   // Step 2: Vector search
   const queryVec = await embedQuery(embedder, query);
   const vectorResults = db.searchVector(queryVec, overfetchLimit);
@@ -285,8 +332,25 @@ export async function search(
   const strategy: FusionStrategy = options.fusionStrategy ?? 'score';
   const scored =
     strategy === 'score'
-      ? fuseByScore(filteredFts, bestVectorByNote, fusionWeights)
-      : fuseByRRF(filteredFts, bestVectorByNote, fusionWeights);
+      ? fuseByScore(effectiveFts, bestVectorByNote, fusionWeights)
+      : fuseByRRF(effectiveFts, bestVectorByNote, fusionWeights);
+
+  // Step 3b: Blend hotness scores (20% weight)
+  const hotnessWeight = 0.2;
+  if (scored.length > 0) {
+    const noteIdsForHotness = scored.map((s) => s.noteId);
+    const accessCounts = db.getAccessCounts(noteIdsForHotness);
+    const notesForHotness = db.getNotesByIds(noteIdsForHotness);
+
+    const now = new Date();
+    for (const item of scored) {
+      const count = accessCounts.get(item.noteId) ?? 0;
+      const note = notesForHotness.get(item.noteId);
+      const age = ageDays(note?.modifiedAt ?? null, now);
+      const hotness = computeHotnessScore(count, age);
+      item.score = (1 - hotnessWeight) * item.score + hotnessWeight * hotness;
+    }
+  }
 
   scored.sort((a, b) => b.score - a.score);
   const DEFAULT_MIN_SCORE = 0.25;
@@ -307,11 +371,17 @@ export async function search(
   }
 
   // Step 6: Optional cross-encoder reranking
+  let finalResults = results;
   if (options.rerank && results.length > 1) {
-    return rerank(query, results, limit);
+    finalResults = await rerank(query, results, limit);
   }
 
-  return results;
+  // Step 7: Optional intent-based filtering
+  if (options.intent && finalResults.length > 1) {
+    finalResults = await applyIntentFilter(embedder, finalResults, options.intent);
+  }
+
+  return finalResults;
 }
 
 export function computeFacets(

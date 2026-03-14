@@ -28,7 +28,10 @@ import { notesCommand } from './commands/notes.js';
 import { loadModules } from './modules/loader.js';
 import { pmModule } from './modules/pm/index.js';
 import { workflowModule } from './modules/workflow/index.js';
+import { sessionsModule } from './modules/sessions/index.js';
+import { agentsModule } from './modules/agents/index.js';
 import { instancesCommand } from './commands/instances.js';
+import { hookCommand } from './commands/hook.js';
 
 const program = new Command()
   .name('brain')
@@ -62,9 +65,12 @@ program.addCommand(lineageCommand);
 program.addCommand(resetCommand);
 program.addCommand(notesCommand);
 program.addCommand(instancesCommand);
+program.addCommand(hookCommand);
 
 async function main(): Promise<void> {
-  const { registry } = await loadModules({ modules: [pmModule, workflowModule] });
+  const { registry } = await loadModules({
+    modules: [pmModule, workflowModule, sessionsModule, agentsModule],
+  });
   for (const { command } of registry.getCommands()) {
     program.addCommand(command);
   }

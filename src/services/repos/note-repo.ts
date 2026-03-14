@@ -389,6 +389,32 @@ export class NoteRepo {
     return rows;
   }
 
+  upsertNoteFTSTrigram(noteId: string, title: string, content: string): void {
+    this.db.prepare('DELETE FROM notes_fts_trigram WHERE note_id = ?').run(noteId);
+    this.db
+      .prepare('INSERT INTO notes_fts_trigram (note_id, title, content) VALUES (?, ?, ?)')
+      .run(noteId, title, content);
+  }
+
+  searchFTSTrigram(query: string, limit: number): FTSResult[] {
+    if (!query.trim()) return [];
+    const trimmed = query.trim();
+    if (trimmed.length < 3) return [];
+    try {
+      return this.db
+        .prepare(
+          `SELECT note_id as noteId, rank
+           FROM notes_fts_trigram
+           WHERE notes_fts_trigram MATCH ?
+           ORDER BY rank
+           LIMIT ?`
+        )
+        .all(`"${trimmed.replace(/"/g, '""')}"`, limit) as FTSResult[];
+    } catch {
+      return [];
+    }
+  }
+
   // --- Search ---
 
   searchVector(

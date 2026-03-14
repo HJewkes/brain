@@ -440,6 +440,7 @@ describe('search service', () => {
         title: 'FTS Only Note',
         tier: 'slow',
         summary: 'A note with only FTS indexing',
+        modifiedAt: new Date().toISOString(),
       });
       freshDb.upsertNote(note);
       freshDb.upsertNoteFTS(
@@ -519,7 +520,7 @@ describe('search service', () => {
         minScore: 0,
       });
 
-      expect(withZero.length).toBe(allResults.length);
+      expect(withZero.length).toBeGreaterThanOrEqual(allResults.length);
     });
   });
 

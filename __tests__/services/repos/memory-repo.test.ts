@@ -14,6 +14,7 @@ describe('MemoryRepo', () => {
     sourceNoteId: 'test-note',
     sourceChunkId: null,
     containerTag: 'default',
+    category: null,
     isLatest: true,
     parentMemoryId: null,
     rootMemoryId: null,
@@ -268,6 +269,47 @@ describe('MemoryRepo', () => {
       const result = db.getMemoriesByIds(['exists', 'does-not-exist']);
       expect(result.size).toBe(1);
       expect(result.has('exists')).toBe(true);
+    });
+
+    it('stores and retrieves category field', () => {
+      db.addMemory(makeMemory({ id: 'cat-1', category: 'tools' }));
+      const mem = db.getMemory('cat-1');
+      expect(mem).not.toBeNull();
+      expect(mem!.category).toBe('tools');
+    });
+
+    it('defaults category to null', () => {
+      db.addMemory(makeMemory({ id: 'cat-null' }));
+      const mem = db.getMemory('cat-null');
+      expect(mem!.category).toBeNull();
+    });
+
+    it('getMemoriesByCategory returns matching memories', () => {
+      db.addMemory(makeMemory({ id: 'c1', category: 'patterns' }));
+      db.addMemory(makeMemory({ id: 'c2', category: 'tools' }));
+      db.addMemory(makeMemory({ id: 'c3', category: 'patterns' }));
+      db.addMemory(makeMemory({ id: 'c4', category: null }));
+
+      const patterns = db.getMemoriesByCategory('patterns');
+      expect(patterns).toHaveLength(2);
+      expect(patterns.map((m) => m.id).sort()).toEqual(['c1', 'c3']);
+    });
+
+    it('getMemoriesByCategory excludes forgotten and superseded', () => {
+      db.addMemory(makeMemory({ id: 'active', category: 'skills' }));
+      db.addMemory(makeMemory({ id: 'forgotten', category: 'skills', isForgotten: true }));
+      db.addMemory(makeMemory({ id: 'superseded', category: 'skills', isLatest: false }));
+
+      const result = db.getMemoriesByCategory('skills');
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('active');
+    });
+
+    it('updateMemoryCategory changes the category', () => {
+      db.addMemory(makeMemory({ id: 'upd-cat', category: 'tools' }));
+      db.updateMemoryCategory('upd-cat', 'patterns');
+      const mem = db.getMemory('upd-cat');
+      expect(mem!.category).toBe('patterns');
     });
   });
 });

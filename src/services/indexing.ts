@@ -138,6 +138,7 @@ export async function indexSingleFile(
     parsed.frontmatter.summary ?? '',
     ftsContent
   );
+  db.upsertNoteFTSTrigram(parsed.id, parsed.frontmatter.title, ftsContent);
 
   const chunks = rawChunksToChunks(parsed.id, parsed.chunks);
   let vectors: Float32Array[] = [];

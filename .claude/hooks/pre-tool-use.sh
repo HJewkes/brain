@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 # claude/hooks/pre-tool-use.sh
-# Called on every Write/Edit tool call. Pipes hook JSON to ao check-ownership.
+# Called on every Write/Edit tool call. Dispatches through brain hook registry.
 set -euo pipefail
-ao check-ownership
+brain hook dispatch pre-tool-use
