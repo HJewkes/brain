@@ -1,4 +1,5 @@
 import type { TaskCategory } from '../pm/types.js';
+import type { PromptRenderer } from '../../utils/template.js';
 
 export interface PromptContext {
   taskId: string;
@@ -33,6 +34,20 @@ export function renderPrompt(template: SpawnPromptTemplate, context: PromptConte
     lines.push('');
   }
   return lines.join('\n').trimEnd();
+}
+
+/**
+ * Create a PromptRenderer from a SpawnPromptTemplate.
+ * The returned renderer accepts a PromptContext via its render() method,
+ * bridging the section-based template system to the shared PromptRenderer interface.
+ */
+export function createSpawnPromptRenderer(template: SpawnPromptTemplate): PromptRenderer {
+  return {
+    render(variables) {
+      const context = variables as unknown as PromptContext;
+      return renderPrompt(template, context);
+    },
+  };
 }
 
 function formatTaskSection(ctx: PromptContext): string {

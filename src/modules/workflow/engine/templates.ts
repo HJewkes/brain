@@ -2,6 +2,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import type { Result } from '../../../errors.js';
 import { ok, fail } from '../../../errors.js';
+import { substituteVariables, extractTemplateVariables } from '../../../utils/template.js';
 
 function findTemplatesDir(): string {
   // Source layout: engine/templates.ts -> ../templates/
@@ -76,12 +77,7 @@ export function listTemplates(): TemplateInfo[] {
  * Returns unique variable names sorted alphabetically.
  */
 export function extractVariables(content: string): string[] {
-  const matches = content.matchAll(/\{\{(\w+)\}\}/g);
-  const vars = new Set<string>();
-  for (const m of matches) {
-    vars.add(m[1]);
-  }
-  return [...vars].sort();
+  return extractTemplateVariables(content, 'double');
 }
 
 /**
@@ -95,10 +91,6 @@ export function renderTemplate(
   const resolved = resolveTemplate(templateName);
   if (!resolved.ok) return resolved;
 
-  let rendered = resolved.data.content;
-  for (const [key, value] of Object.entries(params)) {
-    rendered = rendered.replaceAll(`{{${key}}}`, value);
-  }
-
+  const rendered = substituteVariables(resolved.data.content, params, 'double');
   return ok(rendered);
 }

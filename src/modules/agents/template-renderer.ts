@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { substituteVariables, findUnfilledPlaceholders } from '../../utils/template.js';
+import type { TemplateVariables } from '../../utils/template.js';
 
-export interface TemplateVariables {
-  [key: string]: string | undefined;
-}
+export type { TemplateVariables };
 
 /**
  * Read a template file from templates/agents/<name>.md and fill {PLACEHOLDER} variables.
@@ -28,15 +28,9 @@ export function renderTemplateFile(
  * Validates that no unfilled {ALLCAPS} placeholders remain.
  */
 export function renderTemplate(template: string, variables: TemplateVariables): string {
-  let result = template;
+  const result = substituteVariables(template, variables, 'single');
 
-  for (const [key, value] of Object.entries(variables)) {
-    if (value === undefined) continue;
-    const placeholder = `{${key}}`;
-    result = result.replaceAll(placeholder, value);
-  }
-
-  const unfilled = findUnfilledPlaceholders(result);
+  const unfilled = findUnfilledPlaceholders(result, 'single');
   if (unfilled.length > 0) {
     throw new Error(`Unfilled placeholders: ${unfilled.join(', ')}`);
   }
@@ -44,15 +38,5 @@ export function renderTemplate(template: string, variables: TemplateVariables): 
   return result;
 }
 
-/**
- * Find {ALLCAPS_UNDERSCORE} placeholders that were not filled.
- */
-export function findUnfilledPlaceholders(text: string): string[] {
-  const pattern = /\{([A-Z][A-Z0-9_]*)\}/g;
-  const found = new Set<string>();
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
-    found.add(match[0]);
-  }
-  return [...found].sort();
-}
+// Re-export for backwards compatibility
+export { findUnfilledPlaceholders } from '../../utils/template.js';
