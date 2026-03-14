@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../../services/brain-service.js';
 import { BurndownOrchestrator } from '../../agents/burndown.js';
@@ -8,19 +6,13 @@ import { listTasks } from '../data/task-ops.js';
 import { getActiveProject } from '../data/queries.js';
 import { countActiveAgents } from '../../agents/data.js';
 import { buildDashboard, formatDashboard } from '../../agents/burndown-dashboard.js';
+import { resolveHookConfig } from '../../../hooks/config.js';
 import type { ActiveAgent, TickResult } from '../../agents/burndown.js';
 
 function readWipFromConfig(projectDir: string): number | null {
-  const configPath = join(projectDir, 'ao.config.json');
-  if (!existsSync(configPath)) return null;
-  try {
-    const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
-    const enforcement = raw.enforcement as Record<string, unknown> | undefined;
-    const wip = enforcement?.wipLimit;
-    return typeof wip === 'number' ? wip : null;
-  } catch {
-    return null;
-  }
+  const config = resolveHookConfig(projectDir);
+  const wip = config.enforcement.wipLimit;
+  return wip > 0 ? wip : null;
 }
 
 function formatProgress(

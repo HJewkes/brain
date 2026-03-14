@@ -7,6 +7,11 @@ import { getPmNotes } from '../../pm/data/queries.js';
 import type { TaskMetadata } from '../../pm/types.js';
 import type { BrainDB } from '../../../services/brain-db.js';
 
+// TODO: Future improvement — write computed ownership to the persisted manifest
+// (`.claude/ownership.json`) before agent dispatch so the hook check
+// (`src/hooks/checks/ownership.ts`) enforces dynamically-derived ownership
+// rather than requiring a manually-maintained manifest.
+
 /**
  * Extract file/directory path references from a task description.
  * Looks for patterns like `src/foo/bar.ts`, `__tests__/x.test.ts`, `templates/`, etc.
@@ -57,6 +62,15 @@ function findWavePeers(db: BrainDB, project: string, taskDisplayId: string): str
   return [];
 }
 
+/**
+ * Dynamically compute file ownership from task descriptions for dispatch context.
+ *
+ * This produces **recommendations** included in the agent's dispatch prompt so it
+ * knows which files it should touch. It is NOT the enforcement mechanism — the
+ * hook in `src/hooks/checks/ownership.ts` enforces ownership by reading the
+ * persisted manifest (`.claude/ownership.json`). If the two diverge, the hook
+ * manifest takes precedence.
+ */
 function computeOwnership(input: DispatchExtensionInput): FileOwnershipManifest | undefined {
   try {
     const { db, taskDisplayId } = input;
