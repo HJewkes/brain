@@ -159,6 +159,8 @@ export interface Chunk {
 
 // === Search Types ===
 
+export type MatchSource = 'bm25' | 'vector' | 'both' | 'rerank' | 'graph';
+
 export interface SearchResult {
   score: number;
   filePath: string;
@@ -168,6 +170,7 @@ export interface SearchResult {
   tier: NoteTier;
   tags: string[];
   confidence: NoteConfidence | null;
+  matchSource: MatchSource;
 }
 
 export type FusionStrategy = 'rrf' | 'score';
