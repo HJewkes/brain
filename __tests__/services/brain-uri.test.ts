@@ -1,12 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { unlinkSync } from 'node:fs';
 import { BrainDB } from '../../src/services/brain-db.js';
-import {
-  parseBrainUri,
-  buildBrainUri,
-  resolveBrainUri,
-} from '../../src/services/brain-uri.js';
-import type { BrainUri } from '../../src/services/brain-uri.js';
+import { parseBrainUri, buildBrainUri, resolveBrainUri } from '../../src/services/brain-uri.js';
+
 import { createTestDb, makeNote, makeMemoryEntry } from '../helpers.js';
 
 describe('parseBrainUri', () => {
@@ -67,9 +63,7 @@ describe('parseBrainUri', () => {
   });
 
   it('throws on non-brain scheme', () => {
-    expect(() => parseBrainUri('http://notes/abc')).toThrow(
-      'must start with "brain://"'
-    );
+    expect(() => parseBrainUri('http://notes/abc')).toThrow('must start with "brain://"');
   });
 
   it('throws on missing resource type', () => {
@@ -77,9 +71,7 @@ describe('parseBrainUri', () => {
   });
 
   it('throws on invalid resource type', () => {
-    expect(() => parseBrainUri('brain://invalid/abc')).toThrow(
-      'Invalid brain URI type "invalid"'
-    );
+    expect(() => parseBrainUri('brain://invalid/abc')).toThrow('Invalid brain URI type "invalid"');
   });
 
   it('throws on missing id for non-search type', () => {
@@ -93,9 +85,7 @@ describe('parseBrainUri', () => {
   });
 
   it('parses search with multiple query params', () => {
-    const result = parseBrainUri(
-      'brain://search?q=test&limit=10&tier=slow'
-    );
+    const result = parseBrainUri('brain://search?q=test&limit=10&tier=slow');
     expect(result.query).toEqual({
       q: 'test',
       limit: '10',
@@ -110,38 +100,36 @@ describe('buildBrainUri', () => {
   });
 
   it('builds a note URI with fragment', () => {
-    expect(
-      buildBrainUri('notes', 'abc-123', { fragment: 'setup' })
-    ).toBe('brain://notes/abc-123#setup');
+    expect(buildBrainUri('notes', 'abc-123', { fragment: 'setup' })).toBe(
+      'brain://notes/abc-123#setup'
+    );
   });
 
   it('builds a memory URI', () => {
-    expect(buildBrainUri('memories', 'mem-1')).toBe(
-      'brain://memories/mem-1'
-    );
+    expect(buildBrainUri('memories', 'mem-1')).toBe('brain://memories/mem-1');
   });
 
   it('builds a search URI with query', () => {
-    expect(
-      buildBrainUri('search', '', { query: { q: 'hello world' } })
-    ).toBe('brain://search?q=hello%20world');
+    expect(buildBrainUri('search', '', { query: { q: 'hello world' } })).toBe(
+      'brain://search?q=hello%20world'
+    );
   });
 
   it('builds a task URI', () => {
-    expect(buildBrainUri('tasks', 'VNM-05.13')).toBe(
-      'brain://tasks/VNM-05.13'
-    );
+    expect(buildBrainUri('tasks', 'VNM-05.13')).toBe('brain://tasks/VNM-05.13');
   });
 
   it('builds a workstream URI', () => {
-    expect(buildBrainUri('workstreams', 'VNM-05')).toBe(
-      'brain://workstreams/VNM-05'
-    );
+    expect(buildBrainUri('workstreams', 'VNM-05')).toBe('brain://workstreams/VNM-05');
   });
 });
 
 describe('round-trip: build then parse', () => {
-  const cases: Array<{ type: Parameters<typeof buildBrainUri>[0]; id: string; options?: Parameters<typeof buildBrainUri>[2] }> = [
+  const cases: Array<{
+    type: Parameters<typeof buildBrainUri>[0];
+    id: string;
+    options?: Parameters<typeof buildBrainUri>[2];
+  }> = [
     { type: 'notes', id: 'my-note-id' },
     { type: 'notes', id: 'my-note-id', options: { fragment: 'heading' } },
     { type: 'memories', id: 'mem-abc' },
@@ -150,9 +138,7 @@ describe('round-trip: build then parse', () => {
   ];
 
   for (const { type, id, options } of cases) {
-    const label = options
-      ? `${type}/${id} with options`
-      : `${type}/${id}`;
+    const label = options ? `${type}/${id} with options` : `${type}/${id}`;
 
     it(`round-trips ${label}`, () => {
       const uri = buildBrainUri(type, id, options);
@@ -208,9 +194,7 @@ describe('resolveBrainUri', () => {
   });
 
   it('throws when resolving a nonexistent note', () => {
-    expect(() =>
-      resolveBrainUri(db, 'brain://notes/does-not-exist')
-    ).toThrow('Note not found');
+    expect(() => resolveBrainUri(db, 'brain://notes/does-not-exist')).toThrow('Note not found');
   });
 
   it('resolves a memory URI', () => {
@@ -230,16 +214,11 @@ describe('resolveBrainUri', () => {
   });
 
   it('throws when resolving a nonexistent memory', () => {
-    expect(() =>
-      resolveBrainUri(db, 'brain://memories/no-such-mem')
-    ).toThrow('Memory not found');
+    expect(() => resolveBrainUri(db, 'brain://memories/no-such-mem')).toThrow('Memory not found');
   });
 
   it('resolves a search URI', () => {
-    const result = resolveBrainUri(
-      db,
-      'brain://search?q=typescript&limit=5'
-    );
+    const result = resolveBrainUri(db, 'brain://search?q=typescript&limit=5');
     expect(result.type).toBe('search');
     if (result.type === 'search') {
       expect(result.query).toBe('typescript');
@@ -248,14 +227,10 @@ describe('resolveBrainUri', () => {
   });
 
   it('throws when resolving a nonexistent task', () => {
-    expect(() =>
-      resolveBrainUri(db, 'brain://tasks/VNM-99.1')
-    ).toThrow('task not found');
+    expect(() => resolveBrainUri(db, 'brain://tasks/VNM-99.1')).toThrow('task not found');
   });
 
   it('throws when resolving a nonexistent workstream', () => {
-    expect(() =>
-      resolveBrainUri(db, 'brain://workstreams/VNM-99')
-    ).toThrow('workstream not found');
+    expect(() => resolveBrainUri(db, 'brain://workstreams/VNM-99')).toThrow('workstream not found');
   });
 });
