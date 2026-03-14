@@ -580,7 +580,7 @@ export function runConsistencyCheck(db: BrainDB, prefix: string, deep: boolean):
   const blockedWithoutCause = findBlockedWithoutCause(db, prefix);
   const cancelledDependencies = findCancelledDependencies(db, prefix);
 
-  const postCompletionActivity = deep ? findPostCompletionActivity(db, prefix) : [];
+  const postCompletionActivity = findPostCompletionActivity(db, prefix);
 
   const structural = {
     orphanedDecisions,
