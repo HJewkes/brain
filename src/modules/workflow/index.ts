@@ -4,6 +4,7 @@ import { createWorkflowCommand } from './commands/workflow.js';
 import { createResourceCommand } from './commands/resource.js';
 import { createLifecycleCommands } from './commands/lifecycle.js';
 import { createCollapseCommand } from './commands/collapse.js';
+import { createObserveCommand } from './commands/observe.js';
 
 export {
   resolveTemplate,
@@ -123,6 +124,7 @@ export const workflowModule: BrainModule = {
       wfCmd.addCommand(cmd);
     }
     wfCmd.addCommand(createCollapseCommand());
+    wfCmd.addCommand(createObserveCommand());
 
     ctx.registerCommand(wfCmd);
   },
