@@ -164,9 +164,7 @@ export const importCommand = new Command('import')
           const fmEnd = markdown.indexOf('---', markdown.indexOf('---') + 3);
           if (fmEnd !== -1) {
             markdown =
-              markdown.slice(0, fmEnd) +
-              'reason: "' + opts.reason + '"\n' +
-              markdown.slice(fmEnd);
+              markdown.slice(0, fmEnd) + 'reason: "' + opts.reason + '"\n' + markdown.slice(fmEnd);
           }
         }
 
