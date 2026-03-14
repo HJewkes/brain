@@ -16,6 +16,7 @@ export const DEFAULT_HOOK_CONFIG: HookConfig = {
     brainResources: false,
     worktreeBudget: 3,
     worktreeBasePath: '.worktrees',
+    worktreeIsolation: false,
   },
   ownershipManifest: '.claude/ownership.json',
 };

@@ -39,6 +39,7 @@ export interface HookConfig {
     brainResources: boolean;
     worktreeBudget: number;
     worktreeBasePath: string;
+    worktreeIsolation: boolean;
   };
   ownershipManifest: string;
 }
