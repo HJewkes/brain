@@ -1,17 +1,11 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../services/brain-service.js';
-import {
-  createAgent,
-  getAgent,
-  listAgents,
-  updateAgentStatus,
-  getAgentContext,
-  setAgentContext,
-} from './data.js';
+import { createAgent, getAgent, listAgents, updateAgentStatus } from './data.js';
 import type { AgentRecord } from './types.js';
 import { createWorktreeCommand } from './worktree-commands.js';
 import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
 import { updateTaskStatus } from '../pm/data/task-ops.js';
+import { migrateAoAgents } from './migrate-ao.js';
 
 function padRight(s: string, len: number): string {
   return s.length >= len ? s.substring(0, len) : s + ' '.repeat(len - s.length);
@@ -286,50 +280,31 @@ export function createAgentCommands(): Command {
       });
     });
 
-  // brain agent context <id>
+  // brain agent migrate-ao
   cmd
-    .command('context')
-    .description('Get or set agent context key/value pairs')
-    .argument('<id>', 'Agent ID')
-    .option('--get [key]', 'Get full context or a specific key')
-    .option('--set <pair>', 'Set a key=value pair (value parsed as JSON, fallback to string)')
-    .action(async (id, opts) => {
+    .command('migrate-ao')
+    .description('Import agent state from ao YAML files into brain SQLite')
+    .option('--cwd <path>', 'Project directory to read ao state from', process.cwd())
+    .option('--dry-run', 'Show what would be imported without writing')
+    .option('--json', 'Output results as JSON')
+    .action(async (opts) => {
       await withDb((svc) => {
-        const agent = getAgent(svc.db, id);
-        if (!agent) {
-          process.stderr.write(`Error: Agent not found: ${id}\n`);
-          process.exitCode = 1;
-          return;
-        }
-
-        if (opts.set) {
-          const eqIdx = (opts.set as string).indexOf('=');
-          if (eqIdx < 1) {
-            process.stderr.write('Error: --set requires key=value format\n');
-            process.exitCode = 1;
+        return migrateAoAgents(svc.db, opts.cwd, !!opts.dryRun).then((result) => {
+          if (opts.json) {
+            process.stdout.write(JSON.stringify(result, null, 2) + '\n');
             return;
           }
-          const key = (opts.set as string).slice(0, eqIdx);
-          const rawValue = (opts.set as string).slice(eqIdx + 1);
-          let value: unknown;
-          try {
-            value = JSON.parse(rawValue);
-          } catch {
-            value = rawValue;
-          }
-          setAgentContext(svc.db, id, key, value);
-          process.stdout.write(`Set context.${key}\n`);
-          return;
-        }
 
-        // Default to --get behavior
-        const key = typeof opts.get === 'string' ? opts.get : undefined;
-        const result = getAgentContext(svc.db, id, key);
-        if (result === undefined) {
-          process.stdout.write('undefined\n');
-        } else {
-          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-        }
+          const prefix = opts.dryRun ? '[dry-run] ' : '';
+          process.stdout.write(`${prefix}Imported: ${result.imported}\n`);
+          process.stdout.write(`${prefix}Skipped:  ${result.skipped}\n`);
+          if (result.errors.length > 0) {
+            process.stdout.write(`${prefix}Errors:   ${result.errors.length}\n`);
+            for (const err of result.errors) {
+              process.stderr.write(`  ${err}\n`);
+            }
+          }
+        });
       });
     });
 
