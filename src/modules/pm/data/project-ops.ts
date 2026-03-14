@@ -3,6 +3,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync, rmSync 
 import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
+import { replaceFrontmatterField } from '../../../utils.js';
 import type { Result } from '../errors.js';
 import type { ProjectMetadata, ProjectCommands, ProjectBranchPrefix } from '../types.js';
 import { ok, fail } from '../errors.js';
@@ -320,22 +321,4 @@ export async function deleteProject(
   }
 
   return ok(undefined);
-}
-
-function replaceFrontmatterField(content: string, field: string, value: string): string {
-  const endOfFrontmatter = content.indexOf('\n---', 4);
-  if (endOfFrontmatter === -1) return content;
-
-  const frontmatter = content.slice(0, endOfFrontmatter);
-  const rest = content.slice(endOfFrontmatter);
-  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const isAlreadyQuoted =
-    (value.startsWith("'") && value.endsWith("'")) ||
-    (value.startsWith('"') && value.endsWith('"'));
-  const quoted = isAlreadyQuoted ? value : value.includes(' ') ? `"${value}"` : value;
-
-  if (fieldRegex.test(frontmatter)) {
-    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
-  }
-  return frontmatter + `\n${field}: ${quoted}` + rest;
 }

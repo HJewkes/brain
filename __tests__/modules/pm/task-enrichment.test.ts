@@ -13,18 +13,7 @@ import { readTaskBody } from '../../../src/modules/pm/engine/dispatch.js';
 import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import type { TaskStatus } from '../../../src/modules/pm/types.js';
 import { createTestTask } from '../../helpers.js';
-
-function replaceFm(content: string, field: string, value: string): string {
-  const endOfFrontmatter = content.indexOf('\n---', 4);
-  if (endOfFrontmatter === -1) return content;
-  const frontmatter = content.slice(0, endOfFrontmatter);
-  const rest = content.slice(endOfFrontmatter);
-  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  if (fieldRegex.test(frontmatter)) {
-    return frontmatter.replace(fieldRegex, `${field}: ${value}`) + rest;
-  }
-  return frontmatter + `\n${field}: ${value}` + rest;
-}
+import { replaceFrontmatterField as replaceFm } from '../../../src/utils.js';
 
 let db: BrainDB;
 let dbPath: string;

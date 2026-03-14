@@ -22,30 +22,12 @@ import { getPmNotes } from '../../../src/modules/pm/data/queries.js';
 import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { indexSingleFile } from '../../../src/services/indexing.js';
+import { replaceFrontmatterField } from '../../../src/utils.js';
 
 let db: BrainDB;
 let notesDir: string;
 let config: BrainConfig;
 const embedder = createMockEmbedder();
-
-function replaceFrontmatterField(content: string, field: string, value: string): string {
-  const endOfFrontmatter = content.indexOf('\n---', 4);
-  if (endOfFrontmatter === -1) return content;
-
-  const frontmatter = content.slice(0, endOfFrontmatter);
-  const rest = content.slice(endOfFrontmatter);
-  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = value.includes(' ') ? `"${value}"` : value;
-
-  if (fieldRegex.test(frontmatter)) {
-    if (!value) {
-      return frontmatter.replace(new RegExp(`\n${field}:.*$`, 'm'), '') + rest;
-    }
-    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
-  }
-  if (!value) return content;
-  return frontmatter + `\n${field}: ${quoted}` + rest;
-}
 
 async function updateTaskMetadataFields(
   displayId: string,
