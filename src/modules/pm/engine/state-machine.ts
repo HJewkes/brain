@@ -93,6 +93,10 @@ export function canClaim(currentWip: number, wipLimit: number | undefined): Resu
   });
 }
 
+export function isTerminalStatus(status: TaskStatus): boolean {
+  return TRANSITIONS[status].length === 0;
+}
+
 export function allowedTransitions(from: TaskStatus): TaskStatus[] {
   return [...TRANSITIONS[from]];
 }

@@ -470,6 +470,23 @@ export function createTaskCommands(): Command {
 
         const currentStatus = taskResult.data.status;
 
+        if (currentStatus === 'done') {
+          const err = pmError('ALREADY_COMPLETED', `Task "${displayId}" is already completed`);
+          process.stderr.write(formatError(err, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        if (currentStatus === 'cancelled' || currentStatus === 'pruned') {
+          const err = pmError(
+            'INVALID_TRANSITION',
+            `Task "${displayId}" is ${currentStatus} and cannot be completed`
+          );
+          process.stderr.write(formatError(err, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
         if (currentStatus === 'pending') {
           process.stderr.write(`Auto-claiming ${displayId}...\n`);
           const claim = generateClaim();
@@ -645,6 +662,16 @@ export function createTaskCommands(): Command {
           return;
         }
 
+        if (taskResult.data.status === 'done') {
+          const err = pmError(
+            'ALREADY_COMPLETED',
+            `Task "${displayId}" is already completed and cannot be claimed`
+          );
+          process.stderr.write(formatError(err, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
         if (taskResult.data.status === 'claimed') {
           const err = pmError('ALREADY_CLAIMED', `Task "${displayId}" is already claimed`);
           process.stderr.write(formatError(err, !!opts.json) + '\n');
@@ -725,6 +752,16 @@ export function createTaskCommands(): Command {
         }
 
         const meta = taskResult.data;
+        if (meta.status === 'done') {
+          const err = pmError(
+            'ALREADY_COMPLETED',
+            `Task "${displayId}" is already completed and cannot be started`
+          );
+          process.stderr.write(formatError(err, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
         if (!meta.claim_token) {
           const err = pmError('INVALID_CLAIM_TOKEN', 'Task has no active claim');
           process.stderr.write(formatError(err, !!opts.json) + '\n');
