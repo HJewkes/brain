@@ -144,6 +144,7 @@ function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
     done_when: meta.done_when as string | undefined,
     acceptance_criteria: meta.acceptance_criteria as string[] | undefined,
     references: meta.references as string[] | undefined,
+    spawn_timestamp: meta.spawn_timestamp as string | undefined,
   };
 }
 
@@ -531,6 +532,10 @@ export async function updateTaskStatus(
   content = replaceFrontmatterField(content, 'status', newStatus);
   const now = new Date().toISOString().slice(0, 10);
   content = replaceFrontmatterField(content, 'modified', now);
+
+  if (newStatus === 'in-progress') {
+    content = replaceFrontmatterField(content, 'spawn_timestamp', new Date().toISOString());
+  }
 
   writeFileSync(filePath, content, 'utf-8');
 
