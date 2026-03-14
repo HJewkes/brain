@@ -29,7 +29,11 @@ export function generateSessionBriefing(
   const suggestedFocus: string[] = [];
 
   if (!project) {
-    return { project: null, sections: [], suggestedFocus: ['Run "brain pm onboard" to set up a project'] };
+    return {
+      project: null,
+      sections: [],
+      suggestedFocus: ['Run "brain pm onboard" to set up a project'],
+    };
   }
 
   // 1. In-progress tasks (stale/active work)

@@ -34,7 +34,12 @@ export function evaluateDod(spec: DodSpec | null): HookResult {
       return { name: criterion.name, passed: true, required: criterion.required };
     } catch (err) {
       const output = (err as { stderr?: string }).stderr ?? '';
-      return { name: criterion.name, passed: false, required: criterion.required, output: output.slice(0, 200) };
+      return {
+        name: criterion.name,
+        passed: false,
+        required: criterion.required,
+        output: output.slice(0, 200),
+      };
     }
   });
 

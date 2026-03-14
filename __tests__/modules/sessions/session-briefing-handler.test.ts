@@ -18,7 +18,10 @@ vi.mock('../../../src/modules/sessions/engine/session-briefing.js', () => ({
 
 import { loadConfig } from '../../../src/services/config.js';
 import { BrainDB } from '../../../src/services/brain-db.js';
-import { generateSessionBriefing, renderBriefingXml } from '../../../src/modules/sessions/engine/session-briefing.js';
+import {
+  generateSessionBriefing,
+  renderBriefingXml,
+} from '../../../src/modules/sessions/engine/session-briefing.js';
 import {
   sessionBriefingHandler,
   resetSessionBriefingHandler,

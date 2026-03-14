@@ -57,9 +57,7 @@ export const sessionRestoreHandler: HookHandler = {
     const context = renderSnapshotContext(resumable.snapshotPath);
     if (!context) return hookAllow();
 
-    return hookAllowJson(
-      `<session-restore>\n${context}\n</session-restore>`
-    );
+    return hookAllowJson(`<session-restore>\n${context}\n</session-restore>`);
   },
 };
 

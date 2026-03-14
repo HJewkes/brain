@@ -18,7 +18,11 @@ function loadOwnershipManifest(manifestPath: string): OwnershipManifest | null {
   }
 }
 
-function isFileOwned(agentName: string, relPath: string, manifest: OwnershipManifest | null): boolean {
+function isFileOwned(
+  agentName: string,
+  relPath: string,
+  manifest: OwnershipManifest | null
+): boolean {
   if (!manifest) return true;
   const agent = manifest.agents[agentName];
   if (!agent) return true;

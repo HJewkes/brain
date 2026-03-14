@@ -37,7 +37,12 @@ const mockComputeEligible = computeEligible as ReturnType<typeof vi.fn>;
 const mockListSessions = listSessions as ReturnType<typeof vi.fn>;
 
 const fakeDb = {} as BrainDB;
-const fakeConfig = { notesDir: '/tmp', dbPath: '/tmp/db', embedder: 'local', fusionWeights: { bm25: 0.3, vector: 0.7 } } as BrainConfig;
+const fakeConfig = {
+  notesDir: '/tmp',
+  dbPath: '/tmp/db',
+  embedder: 'local',
+  fusionWeights: { bm25: 0.3, vector: 0.7 },
+} as BrainConfig;
 
 function makeTask(id: string, status: string, priority = 'medium', title = `Task ${id}`) {
   return {
@@ -91,7 +96,10 @@ describe('generateSessionBriefing', () => {
     mockComputeEligible.mockReturnValue(['VNM-02.01', 'VNM-02.02']);
     mockGetTask
       .mockReturnValueOnce({ ok: true, data: makeTask('VNM-02.01', 'pending', 'low', 'Low task') })
-      .mockReturnValueOnce({ ok: true, data: makeTask('VNM-02.02', 'pending', 'high', 'High task') });
+      .mockReturnValueOnce({
+        ok: true,
+        data: makeTask('VNM-02.02', 'pending', 'high', 'High task'),
+      });
 
     const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
     const eligibleSection = briefing.sections.find((s) => s.heading === 'Eligible Tasks');
@@ -107,7 +115,10 @@ describe('generateSessionBriefing', () => {
       data: [makeTask('VNM-01.01', 'in-progress', 'high', 'Ongoing work')],
     });
     mockComputeEligible.mockReturnValue(['VNM-02.01']);
-    mockGetTask.mockReturnValue({ ok: true, data: makeTask('VNM-02.01', 'pending', 'high', 'New work') });
+    mockGetTask.mockReturnValue({
+      ok: true,
+      data: makeTask('VNM-02.01', 'pending', 'high', 'New work'),
+    });
 
     const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
     expect(briefing.suggestedFocus[0]).toContain('Continue VNM-01.01');
