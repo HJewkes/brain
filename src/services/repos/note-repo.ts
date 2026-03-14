@@ -6,6 +6,7 @@ import type {
   Relation,
   ChunkType,
   CutType,
+  ContentType,
   NoteAccessEvent,
 } from '../../types.js';
 
@@ -136,8 +137,8 @@ export class NoteRepo {
     this.deleteChunksForNote(noteId);
 
     const insertChunk = this.db.prepare(
-      `INSERT INTO chunks (id, note_id, heading, heading_ancestry, content, token_count, chunk_type, cut_type, position)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO chunks (id, note_id, heading, heading_ancestry, content, token_count, chunk_type, cut_type, content_type, position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertVector = this.db.prepare(
       `INSERT INTO chunk_vectors (chunk_id, embedding)
@@ -156,6 +157,7 @@ export class NoteRepo {
           chunk.tokenCount,
           chunk.chunkType,
           chunk.cutType,
+          chunk.contentType,
           chunk.position
         );
         insertVector.run(chunk.id, Buffer.from(embeddings[i].buffer));
@@ -650,6 +652,7 @@ interface ChunkRow {
   token_count: number;
   chunk_type: string;
   cut_type: string;
+  content_type: string | null;
   position: number;
 }
 
@@ -705,6 +708,7 @@ function rowToChunk(row: ChunkRow): Chunk {
     tokenCount: row.token_count,
     chunkType: (row.chunk_type ?? 'section') as ChunkType,
     cutType: (row.cut_type ?? 'heading_boundary') as CutType,
+    contentType: (row.content_type ?? 'prose') as ContentType,
     position: row.position ?? 0,
   };
 }

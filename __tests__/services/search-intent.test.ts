@@ -45,6 +45,7 @@ function addNoteWithChunks(
     tokenCount: content.split(/\s+/).length,
     chunkType: 'section',
     cutType: 'heading_boundary',
+    contentType: 'prose',
     position: 0,
   };
 

@@ -84,6 +84,7 @@ export function rawChunksToChunks(noteId: string, rawChunks: RawChunk[]): Chunk[
     tokenCount: rc.tokenCount,
     chunkType: rc.chunkType,
     cutType: rc.cutType,
+    contentType: rc.contentType,
     position: rc.position,
   }));
 }

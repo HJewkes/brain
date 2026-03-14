@@ -46,6 +46,7 @@ function rawChunksToChunks(
     tokenCount: rc.tokenCount,
     chunkType: 'section' as const,
     cutType: 'heading_boundary' as const,
+    contentType: 'prose' as const,
     position: i,
   }));
 }
@@ -83,6 +84,7 @@ function rechunkBody(body: string, maxTokens: number): RawChunk[] {
         tokenCount: tokens,
         chunkType: 'section',
         cutType: 'heading_boundary',
+        contentType: 'prose',
         position: position++,
       });
     } else {
@@ -100,6 +102,7 @@ function rechunkBody(body: string, maxTokens: number): RawChunk[] {
             tokenCount,
             chunkType: 'paragraph',
             cutType: 'paragraph_end',
+            contentType: 'prose',
             position: position++,
           });
           buffer = para;
@@ -117,6 +120,7 @@ function rechunkBody(body: string, maxTokens: number): RawChunk[] {
           tokenCount,
           chunkType: 'paragraph',
           cutType: 'paragraph_end',
+          contentType: 'prose',
           position: position++,
         });
       }

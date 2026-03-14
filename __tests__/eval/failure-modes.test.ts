@@ -63,6 +63,7 @@ describe('failure modes', { timeout: 120_000 }, () => {
             tokenCount: 6,
             chunkType: 'section',
             cutType: 'heading_boundary' as const,
+            contentType: 'prose',
             position: 0,
           },
         ],

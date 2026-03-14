@@ -35,7 +35,7 @@ export interface ArchiveResult {
   orphanedChildren: string[];
 }
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 export class BrainDB {
   private db: Database.Database;
@@ -90,6 +90,7 @@ export class BrainDB {
     this.applyMigration(currentVersion, 8, () => this.migrateToV8());
     this.applyMigration(currentVersion, 9, () => this.migrateToV9());
     this.applyMigration(currentVersion, 10, () => this.migrateToV10());
+    this.applyMigration(currentVersion, 11, () => this.migrateToV11());
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -268,6 +269,7 @@ export class BrainDB {
         token_count       INTEGER,
         chunk_type        TEXT DEFAULT 'section',
         cut_type          TEXT DEFAULT 'heading_boundary',
+        content_type      TEXT DEFAULT 'prose',
         position          INTEGER DEFAULT 0,
         FOREIGN KEY (note_id) REFERENCES notes(id)
       );
@@ -347,6 +349,14 @@ export class BrainDB {
     const columnNames = new Set(columns.map((c) => c.name));
     if (!columnNames.has('category')) {
       this.db.exec('ALTER TABLE memory_entries ADD COLUMN category TEXT DEFAULT NULL');
+    }
+  }
+
+  private migrateToV11(): void {
+    const columns = this.db.pragma('table_info(chunks)') as { name: string }[];
+    const columnNames = new Set(columns.map((c) => c.name));
+    if (!columnNames.has('content_type')) {
+      this.db.exec("ALTER TABLE chunks ADD COLUMN content_type TEXT DEFAULT 'prose'");
     }
   }
 

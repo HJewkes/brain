@@ -165,6 +165,7 @@ function seedTestNotes(db: BrainDB): void {
       tokenCount: c.content.split(/\s+/).length,
       chunkType: 'section' as const,
       cutType: 'heading_boundary' as const,
+      contentType: 'prose' as const,
       position: i,
     }));
 
@@ -787,6 +788,7 @@ describe('search with PM note inclusion', () => {
         tokenCount: content.split(/\s+/).length,
         chunkType: 'section',
         cutType: 'heading_boundary',
+        contentType: 'prose',
         position: 0,
       };
 
@@ -1004,6 +1006,7 @@ describe('metadata filtering', () => {
       tokenCount: content.split(/\s+/).length,
       chunkType: 'section',
       cutType: 'heading_boundary',
+      contentType: 'prose',
       position: 0,
     };
     const vec = new Array<number>(384).fill(0);

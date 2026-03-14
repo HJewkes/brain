@@ -135,6 +135,8 @@ export type CutType =
   | 'code_fence'
   | 'table_boundary';
 
+export type ContentType = 'prose' | 'code' | 'mixed' | 'table';
+
 export interface RawChunk {
   heading: string | null;
   headingAncestry: string | null;
@@ -142,6 +144,7 @@ export interface RawChunk {
   tokenCount: number;
   chunkType: ChunkType;
   cutType: CutType;
+  contentType: ContentType;
   position: number;
 }
 
@@ -154,6 +157,7 @@ export interface Chunk {
   tokenCount: number;
   chunkType: ChunkType;
   cutType: CutType;
+  contentType: ContentType;
   position: number;
 }
 

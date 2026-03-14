@@ -47,6 +47,7 @@ export function makeChunk(overrides: Partial<Chunk> = {}): Chunk {
     tokenCount: overrides.tokenCount ?? 2,
     chunkType: overrides.chunkType ?? 'section',
     cutType: overrides.cutType ?? 'heading_boundary',
+    contentType: overrides.contentType ?? 'prose',
     position: overrides.position ?? 0,
   };
 }

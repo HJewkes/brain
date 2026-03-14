@@ -153,6 +153,7 @@ describe('rawChunksToChunks', () => {
         tokenCount: 5,
         chunkType: 'section',
         cutType: 'heading_boundary',
+        contentType: 'prose',
         position: 0,
       },
       {
@@ -162,6 +163,7 @@ describe('rawChunksToChunks', () => {
         tokenCount: 4,
         chunkType: 'section',
         cutType: 'heading_boundary',
+        contentType: 'prose',
         position: 1,
       },
     ];
