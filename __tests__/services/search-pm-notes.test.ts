@@ -96,7 +96,7 @@ describe('PM notes in search', () => {
   });
 
   it('default search includes PM notes', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'authentication',
@@ -111,7 +111,7 @@ describe('PM notes in search', () => {
   });
 
   it('excludePm option filters out PM notes', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'authentication',
@@ -126,7 +126,7 @@ describe('PM notes in search', () => {
   });
 
   it('includePm false acts as excludePm for backward compat', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'authentication',
@@ -141,7 +141,7 @@ describe('PM notes in search', () => {
   });
 
   it('includePm true still works', async () => {
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'authentication',
@@ -156,7 +156,7 @@ describe('PM notes in search', () => {
   });
 
   it('includes PM notes when no moduleRegistry is provided', async () => {
-    const results = await search(db, embedder, 'authentication', { limit: 10 });
+    const { results } = await search(db, embedder, 'authentication', { limit: 10 });
 
     const noteIds = results.map((r) => r.noteId);
     expect(noteIds).toContain('pm-task');

@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe('O-216: search score field baseline', () => {
   it('search results include a numeric score field', async () => {
-    const results = await search(db, embedder, 'Task', { limit: 5 });
+    const { results } = await search(db, embedder, 'Task', { limit: 5 });
     expect(results.length).toBeGreaterThan(0);
     for (const r of results) {
       expect(typeof r.score).toBe('number');
@@ -56,7 +56,7 @@ describe('O-216: search score field baseline', () => {
   });
 
   it('search results are sorted by score descending', async () => {
-    const results = await search(db, embedder, 'Task', { limit: 10 });
+    const { results } = await search(db, embedder, 'Task', { limit: 10 });
     expect(results.length).toBeGreaterThan(1);
     for (let i = 1; i < results.length; i++) {
       expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
