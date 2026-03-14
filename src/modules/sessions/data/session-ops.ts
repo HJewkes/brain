@@ -9,6 +9,7 @@ import type {
   CreateSessionInput,
   SessionListFilters,
 } from '../types.js';
+import type { StructuralEvent } from '../structural-events.js';
 import type { Result } from '../errors.js';
 import { ok, fail } from '../errors.js';
 import { indexSingleFile } from '../../../services/indexing.js';
@@ -328,6 +329,70 @@ function noteToSessionMetadata(meta: Record<string, unknown>): SessionMetadata {
     memories_extracted: meta.memories_extracted as number | undefined,
     plan_id: meta.plan_id as string | undefined,
   };
+}
+
+// --- Structural Events ---
+
+type RawDb = {
+  prepare: (sql: string) => {
+    run: (...args: unknown[]) => void;
+    all: (...args: unknown[]) => unknown[];
+  };
+};
+
+function getRawDb(db: BrainDB): RawDb {
+  return (db as unknown as { db: RawDb }).db;
+}
+
+export function upsertStructuralEvent(db: BrainDB, event: StructuralEvent): void {
+  getRawDb(db)
+    .prepare(
+      `INSERT OR IGNORE INTO structural_events (id, session_id, event_type, detail, file_path, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      event.id,
+      event.sessionId,
+      event.eventType,
+      event.detail,
+      event.filePath ?? null,
+      event.timestamp
+    );
+}
+
+interface StructuralEventRow {
+  id: string;
+  session_id: string;
+  event_type: string;
+  detail: string;
+  file_path: string | null;
+  timestamp: string;
+}
+
+function rowToStructuralEvent(r: StructuralEventRow): StructuralEvent {
+  return {
+    id: r.id,
+    sessionId: r.session_id,
+    eventType: r.event_type as StructuralEvent['eventType'],
+    detail: r.detail,
+    filePath: r.file_path ?? undefined,
+    timestamp: r.timestamp,
+  };
+}
+
+export function getStructuralEvents(
+  db: BrainDB,
+  sessionId: string,
+  limit?: number
+): StructuralEvent[] {
+  const sql = limit
+    ? 'SELECT * FROM structural_events WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?'
+    : 'SELECT * FROM structural_events WHERE session_id = ? ORDER BY timestamp ASC';
+  const params = limit ? [sessionId, limit] : [sessionId];
+  const rows = getRawDb(db)
+    .prepare(sql)
+    .all(...params) as StructuralEventRow[];
+  return rows.map(rowToStructuralEvent);
 }
 
 export function getSessionNotes(db: BrainDB, filters?: Record<string, unknown>): NoteRecord[] {

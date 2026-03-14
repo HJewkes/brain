@@ -106,10 +106,10 @@ describe('sessions module', () => {
   });
 
   describe('migrations', () => {
-    it('registers 3 migrations', () => {
+    it('registers 4 migrations', () => {
       const migrations = registry.getMigrations('sessions');
-      expect(migrations).toHaveLength(3);
-      expect(migrations.map((m) => m.migration.version)).toEqual([1, 2, 3]);
+      expect(migrations).toHaveLength(4);
+      expect(migrations.map((m) => m.migration.version)).toEqual([1, 2, 3, 4]);
     });
 
     it('v1 creates frontmatter indexes', () => {
@@ -223,12 +223,12 @@ describe('sessions module', () => {
       `);
 
       const applied = runModuleMigrations(registry, db, new Map());
-      expect(applied).toHaveLength(3);
-      expect(applied.map((a) => a.version)).toEqual([1, 2, 3]);
+      expect(applied).toHaveLength(4);
+      expect(applied.map((a) => a.version)).toEqual([1, 2, 3, 4]);
       expect(applied.every((a) => a.module === 'sessions')).toBe(true);
 
       // Running again with current versions should apply nothing
-      const versions = new Map([['sessions', 3]]);
+      const versions = new Map([['sessions', 4]]);
       const reapplied = runModuleMigrations(registry, db, versions);
       expect(reapplied).toHaveLength(0);
 

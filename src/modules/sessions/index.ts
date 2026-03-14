@@ -232,6 +232,29 @@ export const sessionsModule: BrainModule = {
       },
     });
 
+    // Migration v4: structural events table for lightweight tool-call events
+    ctx.registerMigration({
+      version: 4,
+      description: 'Create structural_events table for tool-call pattern matching',
+      up: (db) => {
+        const rawDb = db as { exec(sql: string): void };
+        rawDb.exec(`
+          CREATE TABLE IF NOT EXISTS structural_events (
+            id          TEXT    PRIMARY KEY,
+            session_id  TEXT    NOT NULL,
+            event_type  TEXT    NOT NULL,
+            detail      TEXT    NOT NULL,
+            file_path   TEXT,
+            timestamp   TEXT    NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_structural_events_session
+            ON structural_events(session_id);
+          CREATE INDEX IF NOT EXISTS idx_structural_events_type
+            ON structural_events(session_id, event_type);
+        `);
+      },
+    });
+
     const sessionCmd = new Command('session').description(
       'Session tracking, analytics, and resumption'
     );
