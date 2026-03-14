@@ -1,5 +1,6 @@
 import type { BrainDB } from '../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../types.js';
+import { replaceFrontmatterField } from '../../utils.js';
 import type { TaskPriority } from '../pm/types.js';
 import type { AgentDispatchContext, DispatchContextOptions } from './dispatch-context.js';
 import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
@@ -120,20 +121,4 @@ async function claimTaskWithToken(
   await indexSingleFile(db, embedder, filePath, content, hash, Date.now());
 
   return true;
-}
-
-function replaceFrontmatterField(content: string, field: string, value: string): string {
-  const endOfFrontmatter = content.indexOf('\n---', 4);
-  if (endOfFrontmatter === -1) return content;
-
-  const frontmatter = content.slice(0, endOfFrontmatter);
-  const rest = content.slice(endOfFrontmatter);
-  const needsQuoting = value.includes(' ') || /^\d{4}-\d{2}-\d{2}/.test(value);
-  const quoted = needsQuoting ? `"${value}"` : value;
-  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-
-  if (fieldRegex.test(frontmatter)) {
-    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
-  }
-  return frontmatter + `\n${field}: ${quoted}` + rest;
 }

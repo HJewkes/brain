@@ -3,6 +3,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from '
 import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder, Relation } from '../../../types.js';
+import { replaceFrontmatterField } from '../../../utils.js';
 import type { Result } from '../errors.js';
 import type { WorkstreamMetadata } from '../types.js';
 import { ok, fail } from '../errors.js';
@@ -50,21 +51,6 @@ function buildWorkstreamMarkdown(
   }
 
   return lines.join('\n');
-}
-
-function replaceFrontmatterField(content: string, field: string, value: string): string {
-  const endOfFrontmatter = content.indexOf('\n---', 4);
-  if (endOfFrontmatter === -1) return content;
-
-  const frontmatter = content.slice(0, endOfFrontmatter);
-  const rest = content.slice(endOfFrontmatter);
-  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = value.includes(' ') ? `"${value}"` : value;
-
-  if (fieldRegex.test(frontmatter)) {
-    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
-  }
-  return frontmatter + `\n${field}: ${quoted}` + rest;
 }
 
 function extractDescription(filePath: string): string | undefined {
