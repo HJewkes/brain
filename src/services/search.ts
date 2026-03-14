@@ -15,6 +15,7 @@ import type {
   NoteConfidence,
 } from '../types.js';
 import type { ModuleRegistry } from '../modules/registry.js';
+import { correctQuery } from './vocabulary.js';
 
 const RRF_K = 60;
 const INTENT_SIMILARITY_THRESHOLD = 0.3;
@@ -267,6 +268,22 @@ function fuseByScore(
   return scored;
 }
 
+function searchWithLevenshteinCorrection(
+  db: BrainDB,
+  query: string,
+  limit: number,
+  allowedNoteIds: Set<string> | null
+): FTSHit[] {
+  const vocabulary = db.getVocabulary();
+  if (vocabulary.length === 0) return [];
+
+  const { corrected, didCorrect } = correctQuery(query, vocabulary);
+  if (!didCorrect) return [];
+
+  const ftsResults = db.searchFTS(corrected, limit);
+  return allowedNoteIds ? ftsResults.filter((r) => allowedNoteIds.has(r.noteId)) : ftsResults;
+}
+
 export async function search(
   db: BrainDB,
   embedder: Embedder,
@@ -328,6 +345,11 @@ export async function search(
     effectiveFts = allowedNoteIds
       ? trigramResults.filter((r) => allowedNoteIds.has(r.noteId))
       : trigramResults;
+  }
+
+  // Step 1c: Levenshtein correction fallback when trigram also returns no results
+  if (effectiveFts.length === 0) {
+    effectiveFts = searchWithLevenshteinCorrection(db, query, overfetchLimit, allowedNoteIds);
   }
 
   // Step 2: Vector search
