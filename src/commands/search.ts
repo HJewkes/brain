@@ -3,6 +3,7 @@ import { withBrain } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
 import { search, searchMemories, computeFacets } from '../services/search.js';
 import { expandResults } from '../services/graph.js';
+import { isJsonFormat } from './format.js';
 import type { SearchOptions, SearchResult, FacetResult } from '../types.js';
 
 export const searchCommand = new Command('search')
@@ -155,7 +156,7 @@ export const searchCommand = new Command('search')
         facetResults = computeFacets(db, opts.facet, resultNoteIds);
       }
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         const output: Record<string, unknown> = { notes: allResults, memories: memoryResults };
         if (facetResults.length > 0) {
           output.facets = Object.fromEntries(facetResults.map((f) => [f.field, f.values]));

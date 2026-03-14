@@ -4,6 +4,7 @@ import { resolve, basename, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { withBrain } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { detectFormat, convertToMarkdown } from '../services/format-adapters/index.js';
 import { INDEXABLE_EXTENSIONS } from '../services/file-scanner.js';
 import { indexSingleFile } from '../services/indexing.js';
@@ -308,7 +309,7 @@ function printOutput(
   dryRun: boolean,
   maxTier: 1 | 2 | 3
 ): void {
-  if (opts.json) {
+  if (isJsonFormat(opts)) {
     const report = {
       dryRun,
       maxTier,

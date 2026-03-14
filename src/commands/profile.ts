@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 
 export const profileCommand = new Command('profile')
   .description('Generate a context profile from stable memories for agent system prompts')
@@ -19,7 +20,7 @@ export const profileCommand = new Command('profile')
       const noteCount = db.getNoteCount();
       const memoryCount = db.getMemoryCount();
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(
           JSON.stringify({
             memories: limited.map((m) => ({

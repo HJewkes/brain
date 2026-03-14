@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 
 export const notesCommand = new Command('notes')
   .description('List and browse notes')
@@ -42,7 +43,7 @@ notesCommand
       const limit = parseInt(opts.limit, 10);
       const limited = notes.slice(0, limit);
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         const output = limited.map((n) => ({
           id: n.id,
           title: n.title,

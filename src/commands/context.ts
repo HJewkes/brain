@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 
 const PM_ID_PATTERN = /^[A-Z]{2,5}(-\d{2}(\.\d{2})?)?$/;
 
@@ -36,7 +37,7 @@ export const contextCommand = new Command('context')
       const relatedNotesById = db.getNotesByIds([...relatedNoteIds]);
       const relatedNotes = [...relatedNotesById.values()];
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(
           JSON.stringify({
             note: { id: note.id, title: note.title, type: note.type, tier: note.tier },
