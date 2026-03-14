@@ -4,6 +4,7 @@ import { breakingChangesExtension } from './breaking-changes-ext.js';
 import { interfaceSnapshotExtension } from './interface-snapshot-ext.js';
 import { completionCheckExtension } from './completion-check-ext.js';
 import { fileOwnershipExtension } from './file-ownership-ext.js';
+import { architectureExtension } from './architecture-ext.js';
 
 let initialized = false;
 
@@ -14,6 +15,7 @@ export function initBuiltinExtensions(): void {
   registerDispatchExtension(breakingChangesExtension);
   registerDispatchExtension(interfaceSnapshotExtension);
   registerDispatchExtension(sessionBriefingExtension);
+  registerDispatchExtension(architectureExtension);
   initialized = true;
 }
 

@@ -11,6 +11,7 @@ import type { SessionBriefing } from '../sessions/engine/session-briefing.js';
 import type { BreakingChange } from './breaking-changes.js';
 import type { CompletionCheck } from './dispatch-guard.js';
 import type { InterfaceSnapshot } from './interface-snapshot.js';
+import type { ArchitectureContext } from './extensions/architecture-ext.js';
 import { getRegisteredExtensions } from './dispatch-extensions.js';
 import { ensureExtensionsInitialized } from './extensions/index.js';
 
@@ -36,6 +37,7 @@ export interface AgentDispatchContext {
   breakingChanges?: BreakingChange[];
   interfaceSnapshot?: InterfaceSnapshot;
   alreadyCompleted?: CompletionCheck;
+  architecture?: ArchitectureContext;
 }
 
 export interface DispatchContextOptions {
@@ -91,6 +93,7 @@ export function buildAgentDispatchContext(
     breakingChanges: extData['breakingChanges'] as BreakingChange[] | undefined,
     interfaceSnapshot: extData['interfaceSnapshot'] as InterfaceSnapshot | undefined,
     alreadyCompleted: completionCheck,
+    architecture: extData['architecture'] as ArchitectureContext | undefined,
   };
 }
 
