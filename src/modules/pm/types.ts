@@ -116,6 +116,7 @@ export interface TaskMetadata {
   done_when?: string;
   acceptance_criteria?: string[];
   references?: string[];
+  spawn_timestamp?: string;
 }
 
 export interface DecisionMetadata {
