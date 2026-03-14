@@ -111,9 +111,7 @@ describe('workflow-resource check', () => {
         updatedAt: '2026-01-01T00:00:00Z',
       })
     );
-    // Use the real project dir so getCurrentBranch works
-    const projectDir = '/Users/hjewkes/Documents/projects/brain';
-    const projResourceDir = join(tmpDir, '.brain', 'modules', 'workflow', 'resources');
+    // Resources are read from input.cwd, so we need resources there
     // Resources are read from input.cwd, so we need resources there
     // But we need git to work, so test with a git repo
     const result = workflowResourceCheck.run(
@@ -196,13 +194,13 @@ describe('workflow-resource check', () => {
     let gitDir: string;
     let gitResourceDir: string;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       gitDir = join(tmpdir(), `hooks-wfr-git-${Date.now()}`);
       gitResourceDir = join(gitDir, '.brain', 'modules', 'workflow', 'resources');
       mkdirSync(gitResourceDir, { recursive: true });
 
       // Initialize a git repo with a commit so getCurrentBranch works
-      const { execSync: exec } = require('node:child_process');
+      const { execSync: exec } = await import('node:child_process');
       exec('git init', { cwd: gitDir });
       exec('git commit --allow-empty -m "init"', { cwd: gitDir });
       exec('git checkout -b test-branch', { cwd: gitDir });
