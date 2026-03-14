@@ -32,6 +32,7 @@ import { sessionsModule } from './modules/sessions/index.js';
 import { agentsModule } from './modules/agents/index.js';
 import { instancesCommand } from './commands/instances.js';
 import { hookCommand } from './commands/hook.js';
+import { mcpCommand } from './commands/mcp.js';
 
 const program = new Command()
   .name('brain')
@@ -67,6 +68,7 @@ program.addCommand(resetCommand);
 program.addCommand(notesCommand);
 program.addCommand(instancesCommand);
 program.addCommand(hookCommand);
+program.addCommand(mcpCommand);
 
 async function main(): Promise<void> {
   const { registry } = await loadModules({
