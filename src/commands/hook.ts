@@ -7,6 +7,7 @@ import { workspaceCheck } from '../hooks/checks/workspace.js';
 import { dodCheck } from '../hooks/checks/dod.js';
 import { wipCheck } from '../hooks/checks/wip.js';
 import { worktreeIsolationCheck } from '../hooks/checks/worktree-isolation.js';
+import { workflowResourceCheck } from '../hooks/checks/workflow-resource.js';
 import { loadModules } from '../modules/loader.js';
 import { pmModule } from '../modules/pm/index.js';
 import { workflowModule } from '../modules/workflow/index.js';
@@ -20,6 +21,7 @@ const VALID_EVENTS = new Set<HookEvent>([
   'prompt-submit',
   'task-completed',
   'agent-done',
+  'session-start',
 ]);
 
 function readStdin(): Promise<string> {
@@ -49,6 +51,7 @@ function createRegistry(): HookRegistry {
   registry.register(dodCheck);
   registry.register(wipCheck);
   registry.register(worktreeIsolationCheck);
+  registry.register(workflowResourceCheck);
   return registry;
 }
 
