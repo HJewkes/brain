@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../../services/brain-service.js';
 import { BurndownOrchestrator } from '../../agents/burndown.js';
+import { BackpressureController } from '../../agents/backpressure.js';
 import { listTasks } from '../data/task-ops.js';
 import { getActiveProject } from '../data/queries.js';
 import { countActiveAgents } from '../../agents/data.js';
@@ -32,7 +33,12 @@ function formatTickResult(result: TickResult): string {
     }
   }
 
-  lines.push(`  Active: ${result.activeCount} | Slots: ${result.availableSlots}`);
+  lines.push(
+    `  Active: ${result.activeCount} | Slots: ${result.availableSlots} | WIP: ${result.effectiveWip}`
+  );
+  if (result.backpressureReason !== 'nominal') {
+    lines.push(`  Backpressure: ${result.backpressureReason}`);
+  }
   return lines.join('\n');
 }
 
@@ -81,10 +87,17 @@ export function createBurndownCommand(): Command {
           return;
         }
 
-        const orchestrator = new BurndownOrchestrator(svc.db, svc.config, svc.embedder, {
-          maxWip: wipLimit,
-          projectDir: process.cwd(),
-        });
+        const backpressure = new BackpressureController(wipLimit);
+        const orchestrator = new BurndownOrchestrator(
+          svc.db,
+          svc.config,
+          svc.embedder,
+          {
+            maxWip: wipLimit,
+            projectDir: process.cwd(),
+          },
+          backpressure
+        );
 
         orchestrator.setSpawner(async (agent) => {
           if (!opts.json) {
@@ -167,10 +180,17 @@ async function runDryRun(
   doneTasks: number,
   json: boolean
 ): Promise<void> {
-  const orchestrator = new BurndownOrchestrator(svc.db, svc.config, svc.embedder, {
-    maxWip: wipLimit,
-    projectDir: process.cwd(),
-  });
+  const backpressure = new BackpressureController(wipLimit);
+  const orchestrator = new BurndownOrchestrator(
+    svc.db,
+    svc.config,
+    svc.embedder,
+    {
+      maxWip: wipLimit,
+      projectDir: process.cwd(),
+    },
+    backpressure
+  );
 
   orchestrator.setSpawner(async () => {});
 
@@ -240,6 +260,8 @@ function outputTickResult(
             stalled: result.stalled,
             activeCount: result.activeCount,
             availableSlots: result.availableSlots,
+            effectiveWip: result.effectiveWip,
+            backpressureReason: result.backpressureReason,
           },
         },
         null,
@@ -247,9 +269,7 @@ function outputTickResult(
       ) + '\n'
     );
   } else {
-    process.stdout.write(
-      formatProgress(project, totalTasks, doneTasks, result.activeCount) + '\n'
-    );
+    process.stdout.write(formatProgress(project, totalTasks, doneTasks, result.activeCount) + '\n');
     process.stdout.write(formatTickResult(result) + '\n');
   }
 }

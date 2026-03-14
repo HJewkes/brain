@@ -3,10 +3,12 @@ import type { BrainConfig, Embedder } from '../../types.js';
 import type { PullResult } from './task-pull.js';
 import type { StalledTaskInfo } from './stall-detector.js';
 import type { RoutingResult } from '../pm/engine/routing.js';
+import type { WipAdjustment } from './backpressure.js';
 import { pullNextTask } from './task-pull.js';
 import { buildSpawnPrompt } from './prompt-builder.js';
 import { detectStalledTasks } from './stall-detector.js';
 import { countActiveAgents } from './data.js';
+import { BackpressureController } from './backpressure.js';
 
 export interface BurndownConfig {
   maxWip: number;
@@ -27,10 +29,19 @@ export interface TickResult {
   stalled: StalledTaskInfo[];
   activeCount: number;
   availableSlots: number;
+  effectiveWip: number;
+  backpressureReason: string;
 }
 
 export type AgentSpawner = (agent: ActiveAgent) => Promise<void>;
 export type StallHandler = (stalled: StalledTaskInfo[]) => Promise<void>;
+
+export interface BurndownEventHooks {
+  onTaskComplete?: (taskId: string, result: TickResult) => void;
+  onWaveComplete?: (waveNumber: number, totalWaves: number, completedTasks: string[]) => void;
+  onStallDetected?: (stalled: StalledTaskInfo[]) => void;
+  onProgress?: (done: number, total: number, activeCount: number) => void;
+}
 
 const DEFAULT_CONFIG: BurndownConfig = {
   maxWip: 4,
@@ -45,19 +56,23 @@ export class BurndownOrchestrator {
   private readonly db: BrainDB;
   private readonly brainConfig: BrainConfig;
   private readonly embedder: Embedder;
+  private readonly backpressure: BackpressureController;
   private onSpawn: AgentSpawner = async () => {};
   private onStall: StallHandler = async () => {};
+  private eventHooks: BurndownEventHooks = {};
 
   constructor(
     db: BrainDB,
     brainConfig: BrainConfig,
     embedder: Embedder,
-    config?: Partial<BurndownConfig>
+    config?: Partial<BurndownConfig>,
+    backpressure?: BackpressureController
   ) {
     this.db = db;
     this.brainConfig = brainConfig;
     this.embedder = embedder;
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.backpressure = backpressure ?? new BackpressureController(this.config.maxWip);
   }
 
   setSpawner(spawner: AgentSpawner): void {
@@ -66,6 +81,10 @@ export class BurndownOrchestrator {
 
   setStallHandler(handler: StallHandler): void {
     this.onStall = handler;
+  }
+
+  setEventHooks(hooks: BurndownEventHooks): void {
+    this.eventHooks = hooks;
   }
 
   start(intervalMs = 60_000): void {
@@ -86,32 +105,47 @@ export class BurndownOrchestrator {
     const stalledTasks = this.detectStalled();
     if (stalledTasks.length > 0) {
       await this.onStall(stalledTasks);
+      this.eventHooks.onStallDetected?.(stalledTasks);
     }
 
-    const spawned = await this.fillSlots();
+    const adjustment = this.backpressure.computeEffectiveWip();
+    const spawned = await this.fillSlots(adjustment);
     const activeCount = countActiveAgents(this.db);
 
-    return {
+    const result: TickResult = {
       spawned,
       stalled: stalledTasks,
       activeCount,
-      availableSlots: Math.max(0, this.config.maxWip - activeCount),
+      availableSlots: Math.max(0, adjustment.effectiveWip - activeCount),
+      effectiveWip: adjustment.effectiveWip,
+      backpressureReason: adjustment.reason,
     };
+
+    this.eventHooks.onProgress?.(
+      spawned.length,
+      spawned.length + result.availableSlots + activeCount,
+      activeCount
+    );
+    return result;
   }
 
   private detectStalled(): StalledTaskInfo[] {
-    return detectStalledTasks(
-      this.db,
-      this.config.projectDir,
-      this.config.stallThresholdMinutes
-    );
+    return detectStalledTasks(this.db, this.config.projectDir, this.config.stallThresholdMinutes);
   }
 
-  private async fillSlots(): Promise<ActiveAgent[]> {
+  onMerge(success: boolean, hadConflict: boolean): void {
+    this.backpressure.recordMerge(success, hadConflict);
+  }
+
+  onStallRecord(workstream: string): void {
+    this.backpressure.recordStall(workstream);
+  }
+
+  private async fillSlots(adjustment: WipAdjustment): Promise<ActiveAgent[]> {
     const spawned: ActiveAgent[] = [];
     let activeCount = countActiveAgents(this.db);
 
-    while (activeCount < this.config.maxWip) {
+    while (activeCount < adjustment.effectiveWip) {
       const pulled = await this.pullAndRoute();
       if (!pulled) break;
 
@@ -124,12 +158,9 @@ export class BurndownOrchestrator {
   }
 
   private async pullAndRoute(): Promise<ActiveAgent | null> {
-    const pullResult = await pullNextTask(
-      this.db,
-      this.brainConfig,
-      this.embedder,
-      { projectDir: this.config.projectDir }
-    );
+    const pullResult = await pullNextTask(this.db, this.brainConfig, this.embedder, {
+      projectDir: this.config.projectDir,
+    });
     if (!pullResult) return null;
 
     const routing = pullResult.dispatchContext.routing;

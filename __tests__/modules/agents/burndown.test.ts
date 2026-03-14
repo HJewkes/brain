@@ -17,6 +17,7 @@ vi.mock('../../../src/modules/agents/data.js', () => ({
 }));
 
 import { BurndownOrchestrator } from '../../../src/modules/agents/burndown.js';
+import { BackpressureController } from '../../../src/modules/agents/backpressure.js';
 import { pullNextTask } from '../../../src/modules/agents/task-pull.js';
 import { buildSpawnPrompt } from '../../../src/modules/agents/prompt-builder.js';
 import { detectStalledTasks } from '../../../src/modules/agents/stall-detector.js';
@@ -76,10 +77,7 @@ describe('BurndownOrchestrator', () => {
         .mockResolvedValueOnce(null);
       mockBuildSpawnPrompt.mockReturnValue('Generated prompt');
       // After each spawn, increment active count
-      mockCountActiveAgents
-        .mockReturnValueOnce(0)
-        .mockReturnValueOnce(1)
-        .mockReturnValueOnce(2);
+      mockCountActiveAgents.mockReturnValueOnce(0).mockReturnValueOnce(1).mockReturnValueOnce(2);
 
       const result = await orchestrator.tick();
 
@@ -101,9 +99,9 @@ describe('BurndownOrchestrator', () => {
       mockPullNextTask.mockResolvedValueOnce(pull1).mockResolvedValueOnce(null);
       mockBuildSpawnPrompt.mockReturnValue('Prompt');
       mockCountActiveAgents
-        .mockReturnValueOnce(0)   // fillSlots: initial check
-        .mockReturnValueOnce(1)   // fillSlots: after spawn
-        .mockReturnValueOnce(1);  // tick: final activeCount
+        .mockReturnValueOnce(0) // fillSlots: initial check
+        .mockReturnValueOnce(1) // fillSlots: after spawn
+        .mockReturnValueOnce(1); // tick: final activeCount
 
       const result = await orchestrator.tick();
 
@@ -125,6 +123,8 @@ describe('BurndownOrchestrator', () => {
       expect(result.spawned).toEqual([]);
       expect(result.activeCount).toBe(0);
       expect(result.availableSlots).toBe(4);
+      expect(result.effectiveWip).toBe(4);
+      expect(result.backpressureReason).toBe('nominal');
     });
 
     it('detects stalled tasks and invokes handler', async () => {
@@ -202,6 +202,192 @@ describe('BurndownOrchestrator', () => {
       const result = await orchestrator.tick();
 
       expect(result.spawned[0].prompt).toBe('Brief for VNM-11.01');
+    });
+  });
+
+  describe('backpressure integration', () => {
+    it('reduces effective WIP when conflict rate is high', async () => {
+      const backpressure = new BackpressureController(4);
+      // Push conflict rate above 30% threshold
+      for (let i = 0; i < 5; i++) {
+        backpressure.recordMerge(true, true);
+      }
+
+      const orchestrator = new BurndownOrchestrator(
+        fakeDb,
+        fakeConfig,
+        fakeEmbedder,
+        { maxWip: 4, projectDir: '/repo' },
+        backpressure
+      );
+
+      mockPullNextTask.mockResolvedValue(null);
+
+      const result = await orchestrator.tick();
+
+      expect(result.effectiveWip).toBeLessThan(4);
+      expect(result.backpressureReason).toContain('conflict rate');
+    });
+
+    it('delegates onMerge to backpressure controller', async () => {
+      const backpressure = new BackpressureController(4);
+      const orchestrator = new BurndownOrchestrator(
+        fakeDb,
+        fakeConfig,
+        fakeEmbedder,
+        { maxWip: 4, projectDir: '/repo' },
+        backpressure
+      );
+
+      // Record enough conflicts to trigger reduction
+      for (let i = 0; i < 5; i++) {
+        orchestrator.onMerge(true, true);
+      }
+
+      mockPullNextTask.mockResolvedValue(null);
+      const result = await orchestrator.tick();
+
+      expect(result.effectiveWip).toBeLessThan(4);
+    });
+
+    it('delegates onStallRecord to backpressure controller', async () => {
+      const backpressure = new BackpressureController(4);
+      const orchestrator = new BurndownOrchestrator(
+        fakeDb,
+        fakeConfig,
+        fakeEmbedder,
+        { maxWip: 4, projectDir: '/repo' },
+        backpressure
+      );
+
+      // Record stalls to exceed 50% stall rate (need stalls > merges)
+      for (let i = 0; i < 5; i++) {
+        orchestrator.onStallRecord('WS-01');
+      }
+      orchestrator.onMerge(true, false);
+
+      mockPullNextTask.mockResolvedValue(null);
+      const result = await orchestrator.tick();
+
+      expect(result.effectiveWip).toBeLessThan(4);
+      expect(result.backpressureReason).toContain('stall rate');
+    });
+
+    it('limits spawning to effective WIP not configured maxWip', async () => {
+      const backpressure = new BackpressureController(4);
+      // Drive effective WIP to 2 via conflicts
+      for (let i = 0; i < 5; i++) {
+        backpressure.recordMerge(true, true);
+      }
+
+      const orchestrator = new BurndownOrchestrator(
+        fakeDb,
+        fakeConfig,
+        fakeEmbedder,
+        { maxWip: 4, projectDir: '/repo' },
+        backpressure
+      );
+      const spawner = vi.fn();
+      orchestrator.setSpawner(spawner);
+
+      const pull1 = makePullResult('T-01');
+      const pull2 = makePullResult('T-02');
+      const pull3 = makePullResult('T-03');
+      mockPullNextTask
+        .mockResolvedValueOnce(pull1)
+        .mockResolvedValueOnce(pull2)
+        .mockResolvedValueOnce(pull3)
+        .mockResolvedValueOnce(null);
+      mockBuildSpawnPrompt.mockReturnValue('prompt');
+
+      const effectiveWip = backpressure.computeEffectiveWip().effectiveWip;
+      // Mock active count incrementing per spawn
+      const countMock = mockCountActiveAgents;
+      for (let i = 0; i <= effectiveWip; i++) {
+        countMock.mockReturnValueOnce(i);
+      }
+      // Final count for tick result
+      countMock.mockReturnValueOnce(effectiveWip);
+
+      const result = await orchestrator.tick();
+
+      expect(result.spawned).toHaveLength(effectiveWip);
+      expect(result.effectiveWip).toBe(effectiveWip);
+    });
+  });
+
+  describe('event hooks', () => {
+    it('fires onStallDetected when stalled tasks exist', async () => {
+      const orchestrator = new BurndownOrchestrator(fakeDb, fakeConfig, fakeEmbedder, {
+        maxWip: 4,
+        projectDir: '/repo',
+      });
+      const onStallDetected = vi.fn();
+      orchestrator.setEventHooks({ onStallDetected });
+
+      const stalledInfo = [
+        { displayId: 'VNM-11.03', lastCommitAge: 45, stalledSince: '2026-01-01T00:00:00Z' },
+      ];
+      mockDetectStalledTasks.mockReturnValue(stalledInfo);
+      mockPullNextTask.mockResolvedValue(null);
+
+      await orchestrator.tick();
+
+      expect(onStallDetected).toHaveBeenCalledWith(stalledInfo);
+    });
+
+    it('does not fire onStallDetected when no stalled tasks', async () => {
+      const orchestrator = new BurndownOrchestrator(fakeDb, fakeConfig, fakeEmbedder, {
+        maxWip: 4,
+        projectDir: '/repo',
+      });
+      const onStallDetected = vi.fn();
+      orchestrator.setEventHooks({ onStallDetected });
+
+      mockDetectStalledTasks.mockReturnValue([]);
+      mockPullNextTask.mockResolvedValue(null);
+
+      await orchestrator.tick();
+
+      expect(onStallDetected).not.toHaveBeenCalled();
+    });
+
+    it('fires onProgress on every tick', async () => {
+      const orchestrator = new BurndownOrchestrator(fakeDb, fakeConfig, fakeEmbedder, {
+        maxWip: 4,
+        projectDir: '/repo',
+      });
+      const onProgress = vi.fn();
+      orchestrator.setEventHooks({ onProgress });
+
+      mockPullNextTask.mockResolvedValue(null);
+      mockCountActiveAgents.mockReturnValue(2);
+
+      await orchestrator.tick();
+
+      expect(onProgress).toHaveBeenCalledTimes(1);
+      expect(onProgress).toHaveBeenCalledWith(0, 4, 2);
+    });
+
+    it('fires onProgress with spawned count', async () => {
+      const orchestrator = new BurndownOrchestrator(fakeDb, fakeConfig, fakeEmbedder, {
+        maxWip: 4,
+        projectDir: '/repo',
+      });
+      const onProgress = vi.fn();
+      orchestrator.setEventHooks({ onProgress });
+
+      const pull = makePullResult('VNM-11.01');
+      mockPullNextTask.mockResolvedValueOnce(pull).mockResolvedValueOnce(null);
+      mockBuildSpawnPrompt.mockReturnValue('Prompt');
+      mockCountActiveAgents
+        .mockReturnValueOnce(0) // fillSlots: initial check
+        .mockReturnValueOnce(1) // fillSlots: after spawn
+        .mockReturnValueOnce(1); // tick: final activeCount
+
+      await orchestrator.tick();
+
+      expect(onProgress).toHaveBeenCalledTimes(1);
     });
   });
 
