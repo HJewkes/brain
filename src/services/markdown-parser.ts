@@ -18,6 +18,7 @@ import {
 import { slugify } from '../utils.js';
 
 const MAX_CHUNK_TOKENS = 512;
+const MAX_CHUNK_CHARS = 4096;
 const FENCE_OPEN = /^```/;
 const FENCE_CLOSE = /^```\s*$/;
 const TABLE_LINE = /^\|.+\|/;
@@ -288,7 +289,7 @@ function chunkBody(body: string): RawChunk[] {
     const contentWithAncestry = prependAncestry(section.headingAncestry, text);
     const tokens = estimateTokens(contentWithAncestry);
     const containsTable = /^\|.+\|/m.test(text);
-    if (tokens <= MAX_CHUNK_TOKENS && !containsTable) {
+    if (tokens <= MAX_CHUNK_TOKENS && !containsTable && !exceedsCharCap(contentWithAncestry)) {
       chunks.push({
         heading: section.heading,
         headingAncestry: section.headingAncestry,
@@ -320,50 +321,65 @@ function splitOversizedSection(
   text: string,
   startPosition: number
 ): RawChunk[] {
-  const paragraphs = splitParagraphsProtectingFences(text);
+  const rawParagraphs = splitParagraphsProtectingFences(text);
+  const ancestryPrefix = headingAncestry ? headingAncestry + '\n\n' : '';
+  const charBudget = charBudgetForContent(ancestryPrefix);
+  const paragraphs = presplitOversizedParagraphs(rawParagraphs, charBudget);
+
+  return assembleParagraphChunks(
+    paragraphs,
+    heading,
+    headingAncestry,
+    ancestryPrefix,
+    startPosition
+  );
+}
+
+function presplitOversizedParagraphs(paragraphs: string[], charBudget: number): string[] {
+  const overlapReserve = Math.ceil(charBudget * 0.15);
+  const safeBudget = charBudget - overlapReserve;
+  const result: string[] = [];
+  for (const para of paragraphs) {
+    if (para.length > safeBudget) {
+      result.push(...splitOversizedParagraph(para, safeBudget));
+    } else {
+      result.push(para);
+    }
+  }
+  return result;
+}
+
+function assembleParagraphChunks(
+  paragraphs: string[],
+  heading: string | null,
+  headingAncestry: string | null,
+  ancestryPrefix: string,
+  startPosition: number
+): RawChunk[] {
   const chunks: RawChunk[] = [];
   let buffer = '';
   let overlapPrefix = '';
   let pos = startPosition;
 
-  const ancestryPrefix = headingAncestry ? headingAncestry + '\n\n' : '';
   const ancestryTokens = estimateTokens(ancestryPrefix);
   const chunkBudget = MAX_CHUNK_TOKENS - ancestryTokens;
 
   for (const para of paragraphs) {
-    const isTablePara = TABLE_LINE.test(para);
-    const bufferIsTable = TABLE_LINE.test(buffer);
-
-    // Force a boundary when transitioning between table and non-table content
-    const boundaryChange = buffer.length > 0 && isTablePara !== bufferIsTable;
-
-    const budgetForContent =
-      overlapPrefix.length > 0 ? chunkBudget - estimateTokens(overlapPrefix + '\n\n') : chunkBudget;
-    const bufferWithPara = buffer.length > 0 ? buffer + '\n\n' + para : para;
-    if (
-      (estimateTokens(bufferWithPara) > budgetForContent || boundaryChange) &&
-      buffer.length > 0
-    ) {
-      const rawText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
-      const chunkText = ancestryPrefix + rawText.trim();
-      const tokenCount = estimateTokens(chunkText);
-      const cutType: CutType = para.startsWith('```')
-        ? 'code_fence'
-        : isTablePara || bufferIsTable
-          ? 'table_boundary'
-          : 'paragraph_end';
-      chunks.push({
+    const shouldFlush = shouldFlushBuffer(buffer, para, overlapPrefix, chunkBudget, ancestryPrefix);
+    if (shouldFlush) {
+      const result = flushBuffer(
+        buffer,
+        overlapPrefix,
+        ancestryPrefix,
         heading,
         headingAncestry,
-        text: chunkText,
-        tokenCount,
-        chunkType: 'paragraph',
-        cutType,
-        contentType: classifyContentType(buffer),
-        position: pos++,
-      });
-      overlapPrefix = bufferIsTable ? '' : extractOverlap(buffer);
+        para,
+        pos
+      );
+      chunks.push(result.chunk);
+      overlapPrefix = TABLE_LINE.test(buffer) ? '' : extractOverlap(buffer);
       buffer = para;
+      pos = result.nextPos;
     } else {
       buffer = buffer.length > 0 ? buffer + '\n\n' + para : para;
     }
@@ -372,12 +388,11 @@ function splitOversizedSection(
   if (buffer.length > 0) {
     const rawText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
     const chunkText = ancestryPrefix + rawText.trim();
-    const tokenCount = estimateTokens(chunkText);
     chunks.push({
       heading,
       headingAncestry,
       text: chunkText,
-      tokenCount,
+      tokenCount: estimateTokens(chunkText),
       chunkType: 'paragraph',
       cutType: 'paragraph_end',
       contentType: classifyContentType(buffer),
@@ -388,11 +403,122 @@ function splitOversizedSection(
   return chunks;
 }
 
+function shouldFlushBuffer(
+  buffer: string,
+  para: string,
+  overlapPrefix: string,
+  chunkBudget: number,
+  ancestryPrefix: string
+): boolean {
+  if (buffer.length === 0) return false;
+
+  const isTablePara = TABLE_LINE.test(para);
+  const bufferIsTable = TABLE_LINE.test(buffer);
+  if (isTablePara !== bufferIsTable) return true;
+
+  const budgetForContent =
+    overlapPrefix.length > 0 ? chunkBudget - estimateTokens(overlapPrefix + '\n\n') : chunkBudget;
+  const bufferWithPara = buffer + '\n\n' + para;
+
+  if (estimateTokens(bufferWithPara) > budgetForContent) return true;
+
+  const candidateChunk = ancestryPrefix + bufferWithPara;
+  if (exceedsCharCap(candidateChunk)) return true;
+
+  return false;
+}
+
+function flushBuffer(
+  buffer: string,
+  overlapPrefix: string,
+  ancestryPrefix: string,
+  heading: string | null,
+  headingAncestry: string | null,
+  nextPara: string,
+  pos: number
+): { chunk: RawChunk; nextPos: number } {
+  const rawText = overlapPrefix.length > 0 ? overlapPrefix + '\n\n' + buffer : buffer;
+  const chunkText = ancestryPrefix + rawText.trim();
+  const isTablePara = TABLE_LINE.test(nextPara);
+  const bufferIsTable = TABLE_LINE.test(buffer);
+  const cutType: CutType = nextPara.startsWith('```')
+    ? 'code_fence'
+    : isTablePara || bufferIsTable
+      ? 'table_boundary'
+      : 'paragraph_end';
+
+  return {
+    chunk: {
+      heading,
+      headingAncestry,
+      text: chunkText,
+      tokenCount: estimateTokens(chunkText),
+      chunkType: 'paragraph',
+      cutType,
+      contentType: classifyContentType(buffer),
+      position: pos,
+    },
+    nextPos: pos + 1,
+  };
+}
+
 function extractOverlap(text: string): string {
   const targetTokens = Math.ceil(estimateTokens(text) * 0.1);
   const targetChars = targetTokens * 4;
   if (text.length <= targetChars) return text;
   return text.slice(-targetChars);
+}
+
+export function splitOversizedParagraph(text: string, maxChars: number): string[] {
+  if (text.length <= maxChars) return [text];
+  const lines = text.split('\n');
+  return groupLinesIntoParts(lines, maxChars);
+}
+
+function groupLinesIntoParts(lines: string[], maxChars: number): string[] {
+  const parts: string[] = [];
+  let buffer = '';
+
+  for (const line of lines) {
+    // If a single line exceeds the limit, split it at word boundaries
+    const subLines = line.length > maxChars ? splitLineAtWordBoundary(line, maxChars) : [line];
+
+    for (const sub of subLines) {
+      const candidate = buffer.length > 0 ? buffer + '\n' + sub : sub;
+      if (candidate.length > maxChars && buffer.length > 0) {
+        parts.push(buffer);
+        buffer = sub;
+      } else {
+        buffer = candidate;
+      }
+    }
+  }
+
+  if (buffer.length > 0) parts.push(buffer);
+  return parts;
+}
+
+function splitLineAtWordBoundary(line: string, maxChars: number): string[] {
+  const parts: string[] = [];
+  let remaining = line;
+
+  while (remaining.length > maxChars) {
+    const boundary = remaining.lastIndexOf(' ', maxChars);
+    const splitAt = boundary > 0 ? boundary : maxChars;
+    parts.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+
+  if (remaining.length > 0) parts.push(remaining);
+  return parts;
+}
+
+function exceedsCharCap(chunkText: string): boolean {
+  return chunkText.length > MAX_CHUNK_CHARS;
+}
+
+function charBudgetForContent(ancestryPrefix: string): number {
+  return MAX_CHUNK_CHARS - ancestryPrefix.length;
 }
 
 function splitParagraphsProtectingFences(text: string): string[] {
