@@ -1,4 +1,6 @@
+import { Command } from '@commander-js/extra-typings';
 import type { BrainModule, ModuleNoteType } from '../types.js';
+import { createCodebaseIndexCommand } from './commands/index-cmd.js';
 
 const ARCHITECTURE_NOTE_TYPE: ModuleNoteType = {
   name: 'architecture',
@@ -44,6 +46,12 @@ export const codebaseModule: BrainModule = {
         );
       },
     });
+
+    const codebaseCmd = new Command('codebase').description(
+      'Codebase architecture scanning and indexing'
+    );
+    codebaseCmd.addCommand(createCodebaseIndexCommand());
+    ctx.registerCommand(codebaseCmd);
   },
 };
 
