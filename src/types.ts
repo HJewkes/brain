@@ -195,6 +195,7 @@ export interface SearchOptions {
   includePm?: boolean;
   excludePm?: boolean;
   intent?: string;
+  multiQuery?: boolean;
   filters?: Array<{ field: string; value: string }>;
   facets?: string[];
 }
