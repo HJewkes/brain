@@ -31,6 +31,7 @@ export const importCommand = new Command('import')
   .option('--json', 'Output result as JSON')
   .option('--dry-run', 'Show what would be imported without creating notes')
   .option('--tier <n>', 'Max extraction tier (1=deterministic, 2=+LLM, 3=full)', '3')
+  .option('--reason <text>', 'Why these files are being imported (embedded for retrieval)')
   .action(async (paths, opts, cmd) => {
     const resolveOpts = parentResolveOpts(cmd);
 
@@ -157,7 +158,15 @@ export const importCommand = new Command('import')
         }
 
         const format = detectFormat(filePath, rawContent);
-        const { markdown } = convertToMarkdown(filePath, rawContent);
+        let { markdown } = convertToMarkdown(filePath, rawContent);
+
+        if (opts.reason && markdown.trimStart().startsWith('---')) {
+          const fmEnd = markdown.indexOf('---', markdown.indexOf('---') + 3);
+          if (fmEnd !== -1) {
+            markdown =
+              markdown.slice(0, fmEnd) + 'reason: "' + opts.reason + '"\n' + markdown.slice(fmEnd);
+          }
+        }
 
         // Index the source note
         const title = basename(filePath).replace(/\.[^.]+$/, '');

@@ -99,6 +99,7 @@ export interface NoteFrontmatter {
   module?: string;
   'module-instance'?: string;
   'content-dir'?: string;
+  reason?: string;
 }
 
 // === Activity Types ===

@@ -28,6 +28,7 @@ function buildFrontmatter(opts: {
   related?: string;
   reviewInterval?: string;
   created?: string;
+  reason?: string;
 }): string {
   const now = new Date().toISOString().slice(0, 10);
   const title = opts.title ?? 'Untitled';
@@ -48,6 +49,7 @@ function buildFrontmatter(opts: {
   if (opts.confidence) lines.push(`confidence: ${opts.confidence}`);
   if (opts.status) lines.push(`status: ${opts.status}`);
   if (opts.category) lines.push(`category: ${opts.category}`);
+  if (opts.reason) lines.push(`reason: "${opts.reason}"`);
   if (opts.reviewInterval) lines.push(`review-interval: ${opts.reviewInterval}`);
   if (opts.related) {
     const relatedList = opts.related.split(',').map((r) => r.trim());
@@ -104,6 +106,7 @@ async function handleUrlAdd(
     related?: string;
     reviewInterval?: string;
     created?: string;
+    reason?: string;
   },
   resolveOpts?: ResolveOptions
 ): Promise<void> {
@@ -137,6 +140,7 @@ async function handleUrlAdd(
   if (opts.confidence) frontmatterLines.push(`confidence: ${opts.confidence}`);
   if (opts.status) frontmatterLines.push(`status: ${opts.status ?? 'draft'}`);
   if (opts.category) frontmatterLines.push(`category: ${opts.category}`);
+  if (opts.reason) frontmatterLines.push(`reason: "${opts.reason}"`);
   if (opts.reviewInterval) frontmatterLines.push(`review-interval: ${opts.reviewInterval}`);
 
   frontmatterLines.push('sources:');
@@ -200,6 +204,7 @@ export const addCommand = new Command('add')
   .option('--review-interval <interval>', 'Review interval (e.g. 90d, 30d, 180d)')
   .option('--created <date>', 'Created date (YYYY-MM-DD), defaults to today')
   .option('--url <url>', 'Fetch URL and create note from extracted content')
+  .option('--reason <text>', 'Why this note is being added (embedded for retrieval)')
   .action(async (file, opts, cmd) => {
     if (opts.type && !VALID_CORE_NOTE_TYPES.includes(opts.type as CoreNoteType)) {
       process.stderr.write(

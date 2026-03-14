@@ -96,6 +96,7 @@ export function coerceFrontmatter(
     module: coerceString(data.module),
     'module-instance': coerceString(data['module-instance']),
     'content-dir': coerceString(data['content-dir']),
+    reason: coerceString(data.reason),
   };
 }
 
