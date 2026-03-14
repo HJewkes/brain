@@ -14,6 +14,7 @@ import { createSessionBriefingCommand } from './commands/briefing.js';
 import { sessionRestoreHandler } from './hooks/session-restore-handler.js';
 import { sessionBriefingHandler } from './hooks/session-briefing-handler.js';
 import { sessionCaptureHandler } from './hooks/session-capture-handler.js';
+import { sessionStartHandler } from './hooks/session-start-handler.js';
 
 const SESSION_NOTE_TYPE: ModuleNoteType = {
   name: 'session',
@@ -144,6 +145,7 @@ export const sessionsModule: BrainModule = {
 
     ctx.registerContentHandler(new SessionContentHandler());
 
+    ctx.registerHookHandler(sessionStartHandler);
     ctx.registerHookHandler(sessionRestoreHandler);
     ctx.registerHookHandler(sessionBriefingHandler);
     ctx.registerHookHandler(sessionCaptureHandler);
