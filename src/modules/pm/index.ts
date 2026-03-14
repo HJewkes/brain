@@ -20,6 +20,7 @@ import { createActivityCommand } from './commands/activity.js';
 import { createReviewCommands } from './commands/review.js';
 import { createPullCommand } from './commands/pull.js';
 import { createRenamePrefixCommand } from './commands/rename-prefix.js';
+import { createBurndownCommand } from './commands/burndown.js';
 import { PmContentHandler } from './content-handler.js';
 
 export type EntityType = 'task' | 'workstream' | 'project';
@@ -315,6 +316,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createReviewCommands());
     pmCmd.addCommand(createPullCommand());
     pmCmd.addCommand(createRenamePrefixCommand());
+    pmCmd.addCommand(createBurndownCommand());
 
     // Catch unknown commands with intelligent resolution
     pmCmd.on('command:*', async (operands: string[]) => {
