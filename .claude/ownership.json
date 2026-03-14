@@ -1,1 +1,1 @@
-{"agents": {"default": {"paths": ["src/", "__tests__/", "docs/", "scripts/", "skill/", "templates/"]}}}
+{"agents": {"default": {"paths": ["src/", "__tests__/", "docs/", "scripts/", "skill/", "templates/", "CLAUDE.md", ".claude/", "ao.config.json"]}}}

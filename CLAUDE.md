@@ -50,6 +50,11 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 | `archive` | Archive old notes |
 | `config` | View/set configuration |
 | `pm` | Project management module (init, tasks, waves, dispatch, audit) |
+| `hook` | Hook dispatch, status, and install (`dispatch`, `status`, `install`) |
+| `agent` | Agent lifecycle management (`list`, `show`, `migrate-ao`) |
+| `session` | Session intelligence (`list`, `analytics`, `restore`) |
+| `workflow` | Workflow engine (`register`, `observe`, `improve`, `report`) |
+| `codebase` | Architecture indexing (`index`, `install-hook`) |
 
 ## Architecture
 
@@ -90,6 +95,16 @@ src/
       commands/         — 15 command groups (incl. check)
       data/             — CRUD operations and queries
       engine/           — State machine, routing, dispatch, templates, worktrees, dependencies, consistency
+    agents/             — Agent orchestration (lifecycle, worktrees, state, done-handler)
+    sessions/           — Session intelligence (capture, restore, briefing, analytics)
+    workflow/           — Workflow engine (definitions, lifecycle, friction, observe, improve)
+    codebase/           — Architecture indexing (scanner, notes, post-merge hook)
+  hooks/                — Hook dispatch infrastructure
+    registry.ts         — HookRegistry with register/dispatch
+    config.ts           — resolveHookConfig from ao.config.json
+    checks/             — Core checks (ownership, git-safety, workspace, dod, wip, worktree, workflow-resource)
+  utils/
+    template.ts         — Shared template substitution (single/double brace styles)
 ```
 
 ### Database Layer
@@ -109,6 +124,11 @@ Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts
 - **LLM**: Ollama integration for memory extraction, reconciliation, and note cleanup
 - **Module System**: Plugin architecture with namespace isolation, visibility tiers, schema enforcement, command registration, directory-backed notes, and module migrations
 - **PM Module**: Project/workstream/task management with dependency waves, agent routing, worktree isolation, claim tokens, verification agents, telemetry, and consistency checking
+- **Agent Module**: Agent lifecycle (spawn, track, complete), worktree allocation, extensible context storage, ao migration
+- **Session Module**: Session intelligence with event capture, analytics, restore/resume context, and briefing generation
+- **Workflow Module**: Workflow definitions, lifecycle, friction detection, observation system, and improvement suggestions
+- **Codebase Module**: Architecture indexing with incremental scanning, note generation, and post-merge hooks
+- **Hook System**: Centralized dispatch for Claude Code hooks (pre-tool-use, session-start, agent-done, etc.) with configurable checks and module handlers
 
 ## Testing
 
@@ -131,12 +151,24 @@ Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts
 - Module notes use `module` field in frontmatter for namespace isolation
 - PM notes are `visibility: 'private'` — kept separate from the user's knowledge base
 
-## Enforcement (ao plugin)
+## Enforcement (brain hooks)
 
-This project uses the `ao` enforcement plugin. Hooks enforce automatically:
-- **File ownership**: Writes scoped to src/, __tests__/, docs/, scripts/, skill/, templates/
-- **WIP limits**: Max 4 concurrent agents
+Hook dispatch via `brain hook dispatch <event>`. Configured in `.claude/settings.local.json`.
+
+Registered checks:
+- **File ownership**: Writes scoped to paths in `.claude/ownership.json`
+- **Git safety**: Blocks destructive git operations on protected branches
+- **WIP limits**: Max concurrent agents (configurable in ao.config.json)
 - **Clean workspace**: Tasks require clean git state
 - **Definition of Done**: Completion requires passing typecheck + tests + lint
+- **Worktree isolation**: Agents confined to their allocated worktree
+- **Workflow resources**: Tool calls validated against workflow resource allocations
 
-Query research insights: `ao query-insights --mechanism hook --status not-started --limit 10`
+Module hook handlers:
+- **agents:agent-done**: Marks agents completed, releases worktrees, updates PM
+- **sessions:start**: Creates session record, generates briefing context
+- **sessions:capture**: Captures tool events for session analytics
+- **workflow:friction**: Real-time friction pattern detection
+
+Install hooks: `brain hook install --project` or `brain hook install --user`
+View status: `brain hook status`
