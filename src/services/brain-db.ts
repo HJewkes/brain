@@ -231,6 +231,8 @@ export class BrainDB {
         module          TEXT,
         module_instance TEXT,
         content_dir     TEXT,
+        l0_abstract     TEXT,
+        l1_overview     TEXT,
         embed_status    TEXT GENERATED ALWAYS AS (json_extract(metadata, '$.embed_status')),
         activity_type   TEXT GENERATED ALWAYS AS (json_extract(metadata, '$.activity_type'))
       );
@@ -353,10 +355,19 @@ export class BrainDB {
   }
 
   private migrateToV11(): void {
-    const columns = this.db.pragma('table_info(chunks)') as { name: string }[];
-    const columnNames = new Set(columns.map((c) => c.name));
-    if (!columnNames.has('content_type')) {
+    const chunkCols = this.db.pragma('table_info(chunks)') as { name: string }[];
+    const chunkColNames = new Set(chunkCols.map((c) => c.name));
+    if (!chunkColNames.has('content_type')) {
       this.db.exec("ALTER TABLE chunks ADD COLUMN content_type TEXT DEFAULT 'prose'");
+    }
+
+    const noteCols = this.db.pragma('table_info(notes)') as { name: string }[];
+    const noteColNames = new Set(noteCols.map((c) => c.name));
+    if (!noteColNames.has('l0_abstract')) {
+      this.db.exec('ALTER TABLE notes ADD COLUMN l0_abstract TEXT DEFAULT NULL');
+    }
+    if (!noteColNames.has('l1_overview')) {
+      this.db.exec('ALTER TABLE notes ADD COLUMN l1_overview TEXT DEFAULT NULL');
     }
   }
 
@@ -533,6 +544,9 @@ export class BrainDB {
 
   upsertNote(record: NoteRecord): NoteRecord {
     return this.noteRepo.upsertNote(record);
+  }
+  updateAbstracts(noteId: string, l0: string, l1: string): void {
+    this.noteRepo.updateAbstracts(noteId, l0, l1);
   }
   getNoteById(id: string): NoteRecord | null {
     return this.noteRepo.getNoteById(id);

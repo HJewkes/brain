@@ -302,6 +302,8 @@ describe('V2: Schema Migration Round-Trip', () => {
         module: 'test-mod',
         moduleInstance: 'inst-1',
         contentDir: '/tmp/dir',
+        l0Abstract: null,
+        l1Overview: null,
       });
 
       const note = db.getNoteById('v7-test');

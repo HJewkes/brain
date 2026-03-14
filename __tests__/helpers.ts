@@ -146,6 +146,8 @@ export function makeNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
     module: overrides.module ?? null,
     moduleInstance: overrides.moduleInstance ?? null,
     contentDir: overrides.contentDir ?? null,
+    l0Abstract: overrides.l0Abstract ?? null,
+    l1Overview: overrides.l1Overview ?? null,
   };
 }
 

@@ -66,6 +66,8 @@ export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): N
     module: fm.module ?? null,
     moduleInstance: fm['module-instance'] ?? null,
     contentDir: fm['content-dir'] ?? null,
+    l0Abstract: null,
+    l1Overview: null,
   };
 }
 
