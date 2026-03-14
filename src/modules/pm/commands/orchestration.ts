@@ -272,9 +272,40 @@ export function createOrchestrationCommands(): Command[] {
     .description('Assemble and output enriched context bundle for a task')
     .argument('<id>', 'Task display ID')
     .option('--json', 'Output JSON')
+    .option('--spawn-prompt', 'Output agent-ready spawn prompt with routing metadata')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
+
+        if (opts.spawnPrompt) {
+          const { buildSpawnPrompt } = await import('../../agents/prompt-builder.js');
+          const { buildAgentDispatchContext } = await import('../../agents/dispatch-context.js');
+          const dispatch = buildAgentDispatchContext(svc.db, displayId);
+          if (!dispatch) {
+            const msg = `Error: Cannot build dispatch context for ${displayId}\n`;
+            process.stderr.write(msg);
+            process.exitCode = 1;
+            return;
+          }
+          const prompt = buildSpawnPrompt(svc.db, displayId, {
+            projectDir: process.cwd(),
+          });
+          const output = {
+            taskId: displayId,
+            prompt: prompt ?? dispatch.context.body,
+            routing: {
+              model: dispatch.routing.model,
+              agentType: dispatch.routing.agentType,
+              isolation: dispatch.routing.isolation,
+              verify: dispatch.routing.verify,
+            },
+            dispatchable: dispatch.agentDispatchable,
+            description: `Implement ${displayId}`,
+          };
+          process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+          return;
+        }
+
         const result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
 
         if (!result.ok) {
