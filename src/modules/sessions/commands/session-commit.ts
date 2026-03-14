@@ -11,11 +11,12 @@ export function createSessionCommitCommand(): Command<any> {
     .description('Commit current session: ingest, summarize, link, extract')
     .argument('[session-id]', 'Session UUID (defaults to $BRAIN_PM_SESSION)')
     .option('--skip-summaries', 'Skip LLM summary generation')
+    .option('--skip-extraction', 'Skip memory extraction from session chunks')
     .option('--json', 'Output JSON')
     .action(
       async (
         sessionIdArg: string | undefined,
-        opts: { skipSummaries?: boolean; json?: boolean }
+        opts: { skipSummaries?: boolean; skipExtraction?: boolean; json?: boolean }
       ) => {
         const sessionId = sessionIdArg ?? process.env.BRAIN_PM_SESSION;
         if (!sessionId) {
@@ -27,10 +28,12 @@ export function createSessionCommitCommand(): Command<any> {
         }
 
         await withBrain(async (svc) => {
-          const ollama = opts.skipSummaries ? null : await safeRequireOllama();
+          const needsOllama = !opts.skipSummaries || !opts.skipExtraction;
+          const ollama = needsOllama ? await safeRequireOllama() : null;
 
           const result = await commitSession(svc.db, svc.config, svc.embedder, sessionId, ollama, {
             skipSummaries: opts.skipSummaries,
+            skipExtraction: opts.skipExtraction,
           });
 
           if (!result.ok) {
@@ -102,6 +105,9 @@ export function createSessionCommitCommand(): Command<any> {
             );
             if (session.summary) {
               process.stdout.write(`  Summary: ${session.summary}\n`);
+            }
+            if (session.memories_extracted) {
+              process.stdout.write(`  Memories extracted: ${session.memories_extracted}\n`);
             }
           }
         });
