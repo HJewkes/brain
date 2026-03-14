@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { renderCoordinatorPrompt } from '../../../src/modules/agents/coordinator.js';
@@ -53,9 +53,16 @@ describe('renderCoordinatorPrompt', () => {
 
   it('renders with real coordinator template', () => {
     // Copy the actual coordinator template
-    const realTemplatePath = join(__dirname, '..', '..', '..', 'templates', 'agents', 'coordinator.md');
-    const { existsSync, readFileSync } = require('node:fs');
-    if (!existsSync(realTemplatePath)) return; // skip if template not present
+    const realTemplatePath = join(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'templates',
+      'agents',
+      'coordinator.md'
+    );
+    if (!existsSync(realTemplatePath)) return;
 
     const content = readFileSync(realTemplatePath, 'utf-8');
     writeFileSync(join(testDir, 'templates', 'agents', 'coordinator.md'), content);
