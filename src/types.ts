@@ -183,6 +183,7 @@ export function estimateTokens(text: string): number {
 export interface SearchResultWithUsage {
   results: SearchResult[];
   tokenUsage: TokenUsage;
+  throttleMessage?: string;
 }
 
 // === Search Types ===
@@ -221,6 +222,7 @@ export interface SearchOptions {
   multiQuery?: boolean;
   filters?: Array<{ field: string; value: string }>;
   facets?: string[];
+  throttle?: import('./services/search-throttle.js').SearchThrottle;
 }
 
 export interface FacetResult {

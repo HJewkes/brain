@@ -8,6 +8,7 @@ import type { ResolveOptions } from '../services/config.js';
 import { BrainDB } from '../services/brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
 import { search } from '../services/search.js';
+import { SearchThrottle } from '../services/search-throttle.js';
 import type { InboxItem, NoteRecord } from '../types.js';
 
 const MCP_SOURCE_NOTE_ID = '_mcp-direct';
@@ -48,6 +49,8 @@ export function createMcpServer(resolveOpts?: ResolveOptions): McpServer {
   const instance = resolveInstance(resolveOpts);
   const config = loadConfig(instance);
 
+  const throttle = new SearchThrottle('mcp-session');
+
   const server = new McpServer(
     { name: 'brain', version: '1.0.0' },
     {
@@ -65,28 +68,24 @@ export function createMcpServer(resolveOpts?: ResolveOptions): McpServer {
       const db = new BrainDB(config.dbPath);
       try {
         const embedder = createEmbedder(config);
-        const { results: hits } = await search(db, embedder, query, {
+        const { results: hits, throttleMessage } = await search(db, embedder, query, {
           limit: limit ?? 10,
+          throttle,
         });
+        const payload = hits.map((r) => ({
+          noteId: r.noteId,
+          filePath: r.filePath,
+          score: r.score,
+          excerpt: r.excerpt,
+          tier: r.tier,
+          tags: r.tags,
+          matchSource: r.matchSource,
+        }));
+        const text = throttleMessage
+          ? `${throttleMessage}\n${JSON.stringify(payload, null, 2)}`
+          : JSON.stringify(payload, null, 2);
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify(
-                hits.map((r) => ({
-                  noteId: r.noteId,
-                  filePath: r.filePath,
-                  score: r.score,
-                  excerpt: r.excerpt,
-                  tier: r.tier,
-                  tags: r.tags,
-                  matchSource: r.matchSource,
-                })),
-                null,
-                2
-              ),
-            },
-          ],
+          content: [{ type: 'text' as const, text }],
         };
       } finally {
         db.close();

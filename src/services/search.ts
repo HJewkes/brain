@@ -313,6 +313,18 @@ export async function search(
   const usage = createEmptyTokenUsage();
   if (!query.trim()) return { results: [], tokenUsage: usage };
 
+  // Throttle check: block or limit results for agent sessions
+  if (options.throttle) {
+    const throttleResult = options.throttle.check();
+    options.throttle.record();
+    if (!throttleResult.allowed) {
+      return { results: [], tokenUsage: usage, throttleMessage: throttleResult.message };
+    }
+    if (throttleResult.maxResults !== undefined) {
+      options = { ...options, limit: Math.min(options.limit, throttleResult.maxResults) };
+    }
+  }
+
   const limit = options.limit;
   const overfetchLimit = limit * OVERFETCH_MULTIPLIER;
 
