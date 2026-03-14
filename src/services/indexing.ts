@@ -129,6 +129,10 @@ export async function indexSingleFile(
   db.upsertNote(noteRecord);
 
   let ftsContent = parsed.content;
+  const reason = parsed.frontmatter.reason;
+  if (reason) {
+    ftsContent = `[Reason: ${reason}]\n\n` + ftsContent;
+  }
   if (noteRecord.contentDir) {
     const dirContent = readIndexableContent(noteRecord.contentDir);
     if (dirContent) {
@@ -146,7 +150,8 @@ export async function indexSingleFile(
   const chunks = rawChunksToChunks(parsed.id, parsed.chunks);
   let vectors: Float32Array[] = [];
   if (chunks.length > 0) {
-    const texts = chunks.map((c) => c.content);
+    const reasonPrefix = reason ? `[Reason: ${reason}]\n\n` : '';
+    const texts = chunks.map((c) => reasonPrefix + c.content);
     const embeddings = await embedder.embed(texts);
     vectors = embeddings.map((e) => new Float32Array(e));
     db.upsertChunks(parsed.id, chunks, vectors);
