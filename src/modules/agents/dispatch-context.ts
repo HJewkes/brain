@@ -1,4 +1,5 @@
 import type { BrainDB } from '../../services/brain-db.js';
+import type { BrainConfig } from '../../types.js';
 import type { RoutingResult } from '../pm/engine/routing.js';
 import { computeRouting, isAgentDispatchable } from '../pm/engine/routing.js';
 import { assembleContext } from '../pm/engine/dispatch.js';
@@ -6,6 +7,8 @@ import { getPmNotes } from '../pm/data/queries.js';
 import type { TaskMetadata } from '../pm/types.js';
 import type { FileOwnershipManifest } from './file-ownership.js';
 import { formatOwnershipBrief } from './file-ownership.js';
+import type { SessionBriefing } from '../sessions/engine/session-briefing.js';
+import { generateSessionBriefing } from '../sessions/engine/session-briefing.js';
 
 export interface AgentDispatchContext {
   taskId: string;
@@ -22,11 +25,18 @@ export interface AgentDispatchContext {
   };
   contextHash: string;
   fileOwnership?: FileOwnershipManifest;
+  sessionBriefing?: SessionBriefing;
+}
+
+export interface DispatchContextOptions {
+  config?: BrainConfig;
+  projectDir?: string;
 }
 
 export function buildAgentDispatchContext(
   db: BrainDB,
-  taskDisplayId: string
+  taskDisplayId: string,
+  options?: DispatchContextOptions
 ): AgentDispatchContext | null {
   const taskMeta = resolveTaskMetadata(db, taskDisplayId);
   if (!taskMeta) return null;
@@ -38,6 +48,16 @@ export function buildAgentDispatchContext(
   if (!ctxResult.ok) return null;
 
   const ctx = ctxResult.data;
+
+  let sessionBriefing: SessionBriefing | undefined;
+  if (options?.config && options?.projectDir) {
+    try {
+      sessionBriefing = generateSessionBriefing(db, options.config, options.projectDir);
+    } catch {
+      // Session briefing is best-effort; don't block dispatch on failure
+    }
+  }
+
   return {
     taskId: taskDisplayId,
     routing,
@@ -56,6 +76,7 @@ export function buildAgentDispatchContext(
       constraints: ctx.constraints,
     },
     contextHash: ctx.contextHash,
+    sessionBriefing,
   };
 }
 
@@ -110,6 +131,36 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
   if (ctx.fileOwnership) {
     lines.push(formatOwnershipBrief(ctx.fileOwnership, ctx.taskId));
     lines.push('');
+  }
+
+  if (ctx.sessionBriefing) {
+    lines.push(formatSessionBriefing(ctx.sessionBriefing));
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+export function formatSessionBriefing(briefing: SessionBriefing): string {
+  const lines: string[] = [];
+  lines.push('--- Session Briefing ---');
+
+  if (briefing.project) {
+    lines.push(`Project: ${briefing.project}`);
+  }
+
+  for (const section of briefing.sections) {
+    lines.push(`[${section.heading}]`);
+    for (const item of section.items) {
+      lines.push(`  ${item}`);
+    }
+  }
+
+  if (briefing.suggestedFocus.length > 0) {
+    lines.push('[Suggested Focus]');
+    for (const focus of briefing.suggestedFocus) {
+      lines.push(`  ${focus}`);
+    }
   }
 
   return lines.join('\n');
