@@ -3,7 +3,8 @@ import { withBrain } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
 import { search, searchMemories, computeFacets } from '../services/search.js';
 import { expandResults } from '../services/graph.js';
-import { isJsonFormat } from './format.js';
+import { resolveFormat } from './format.js';
+import { formatOutput } from '../services/output-formatter.js';
 import type { SearchOptions, SearchResult, FacetResult, TokenUsage } from '../types.js';
 import type { EnrichedSearchResult } from '../services/relational-enrichment.js';
 
@@ -169,7 +170,9 @@ export const searchCommand = new Command('search')
         facetResults = computeFacets(db, opts.facet, resultNoteIds);
       }
 
-      if (isJsonFormat(opts, cmd)) {
+      const format = resolveFormat(opts, cmd);
+
+      if (format === 'json') {
         const output: Record<string, unknown> = { notes: allResults, memories: memoryResults };
         if (facetResults.length > 0) {
           output.facets = Object.fromEntries(facetResults.map((f) => [f.field, f.values]));
@@ -178,6 +181,23 @@ export const searchCommand = new Command('search')
           output.tokenUsage = tokenUsage;
         }
         process.stdout.write(JSON.stringify(output) + '\n');
+      } else if (format === 'table') {
+        const rows = allResults.map((r) => ({
+          score: r.score.toFixed(3),
+          source: r.matchSource,
+          file: r.filePath,
+          heading: r.heading ?? '',
+        }));
+        process.stdout.write(formatOutput(rows, 'table') + '\n');
+        if (memoryResults.length > 0) {
+          process.stdout.write('\nMemories:\n');
+          const memRows = memoryResults.map((m) => ({
+            score: m.score.toFixed(3),
+            memory: m.memory,
+            source: m.sourceNoteId,
+          }));
+          process.stdout.write(formatOutput(memRows, 'table') + '\n');
+        }
       } else {
         if (allResults.length === 0 && memoryResults.length === 0) {
           process.stderr.write(`No results found for "${query}".\n\n`);

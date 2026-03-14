@@ -1,7 +1,8 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
-import { isJsonFormat } from './format.js';
+import { resolveFormat, isJsonFormat } from './format.js';
+import { formatOutput } from '../services/output-formatter.js';
 
 const listCommand = new Command('list')
   .description('List active memories')
@@ -31,7 +32,9 @@ const listCommand = new Command('list')
       }
       const limited = memories.slice(0, limit);
 
-      if (isJsonFormat(opts, cmd)) {
+      const format = resolveFormat(opts, cmd);
+
+      if (format === 'json') {
         process.stdout.write(JSON.stringify(limited) + '\n');
         return;
       }
@@ -41,13 +44,24 @@ const listCommand = new Command('list')
         return;
       }
 
-      for (const m of limited) {
-        process.stdout.write(`[${m.containerTag}] ${m.memory}\n`);
-        process.stdout.write(`  id: ${m.id} | source: ${m.sourceNoteId} | ${m.createdAt}\n`);
-        if (m.parentMemoryId) {
-          process.stdout.write(`  updated from: ${m.parentMemoryId}\n`);
+      if (format === 'table') {
+        const rows = limited.map((m) => ({
+          id: m.id,
+          container: m.containerTag,
+          memory: m.memory.length > 60 ? m.memory.slice(0, 57) + '...' : m.memory,
+          source: m.sourceNoteId,
+          created: m.createdAt,
+        }));
+        process.stdout.write(formatOutput(rows, 'table') + '\n');
+      } else {
+        for (const m of limited) {
+          process.stdout.write(`[${m.containerTag}] ${m.memory}\n`);
+          process.stdout.write(`  id: ${m.id} | source: ${m.sourceNoteId} | ${m.createdAt}\n`);
+          if (m.parentMemoryId) {
+            process.stdout.write(`  updated from: ${m.parentMemoryId}\n`);
+          }
+          process.stdout.write('\n');
         }
-        process.stdout.write('\n');
       }
 
       process.stdout.write(

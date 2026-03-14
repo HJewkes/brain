@@ -40,7 +40,7 @@ const program = new Command()
   .version((createRequire(import.meta.url)('../package.json') as { version: string }).version)
   .option('--global', 'Force use of global brain instance')
   .option('--instance <path>', 'Use specific brain instance at path')
-  .option('--format <type>', 'Output format: json or plain', 'plain');
+  .option('--format <type>', 'Output format: json, table, or plain', 'plain');
 
 program.addCommand(initCommand);
 program.addCommand(indexCommand);
