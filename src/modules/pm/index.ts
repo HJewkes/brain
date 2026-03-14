@@ -18,6 +18,7 @@ import { createOnboardCommand } from './commands/onboard.js';
 import { createRelateCommand } from './commands/relate.js';
 import { createActivityCommand } from './commands/activity.js';
 import { createReviewCommands } from './commands/review.js';
+import { createPullCommand } from './commands/pull.js';
 import { PmContentHandler } from './content-handler.js';
 
 export type EntityType = 'task' | 'workstream' | 'project';
@@ -311,6 +312,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createRelateCommand());
     pmCmd.addCommand(createActivityCommand());
     pmCmd.addCommand(createReviewCommands());
+    pmCmd.addCommand(createPullCommand());
 
     // Catch unknown commands with intelligent resolution
     pmCmd.on('command:*', async (operands: string[]) => {
