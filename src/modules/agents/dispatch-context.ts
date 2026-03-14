@@ -7,15 +7,12 @@ import { computeWaves } from '../pm/engine/dependency.js';
 import { getPmNotes } from '../pm/data/queries.js';
 import type { TaskMetadata } from '../pm/types.js';
 import type { FileOwnershipManifest } from './file-ownership.js';
-import { formatOwnershipBrief } from './file-ownership.js';
 import type { SessionBriefing } from '../sessions/engine/session-briefing.js';
-import { generateSessionBriefing } from '../sessions/engine/session-briefing.js';
 import type { BreakingChange } from './breaking-changes.js';
-import { detectBreakingChanges, formatBreakingChangesBrief } from './breaking-changes.js';
 import type { CompletionCheck } from './dispatch-guard.js';
-import { checkAlreadyCompleted } from './dispatch-guard.js';
 import type { InterfaceSnapshot } from './interface-snapshot.js';
-import { captureInterfaceSnapshot, formatInterfaceSnapshotBrief } from './interface-snapshot.js';
+import { getRegisteredExtensions } from './dispatch-extensions.js';
+import { ensureExtensionsInitialized } from './extensions/index.js';
 
 export interface AgentDispatchContext {
   taskId: string;
@@ -32,6 +29,8 @@ export interface AgentDispatchContext {
   };
   waveInfo?: { waveNumber: number; totalWaves: number; waveTasks: string[] };
   contextHash: string;
+  extensions: Record<string, unknown>;
+  // Typed accessors for backward compatibility
   fileOwnership?: FileOwnershipManifest;
   sessionBriefing?: SessionBriefing;
   breakingChanges?: BreakingChange[];
@@ -53,55 +52,23 @@ export function buildAgentDispatchContext(
   const taskMeta = resolveTaskMetadata(db, taskDisplayId);
   if (!taskMeta) return null;
 
-  const completionCheck = checkAlreadyCompleted(taskDisplayId, options?.projectDir);
+  ensureExtensionsInitialized();
+  const extData = computeExtensions(db, taskDisplayId, options);
 
+  const completionCheck = extData['alreadyCompleted'] as CompletionCheck | undefined;
   const routing = computeRouting(taskMeta.category, taskMeta.mode);
-  const agentDispatchable = isAgentDispatchable(taskMeta.mode) && !completionCheck.alreadyDone;
+  const dispatchable = isAgentDispatchable(taskMeta.mode) && !completionCheck?.alreadyDone;
 
   const ctxResult = assembleContext(db, taskDisplayId);
   if (!ctxResult.ok) return null;
 
   const ctx = ctxResult.data;
-
-  let sessionBriefing: SessionBriefing | undefined;
-  if (options?.config && options?.projectDir) {
-    try {
-      sessionBriefing = generateSessionBriefing(db, options.config, options.projectDir);
-    } catch {
-      // Session briefing is best-effort; don't block dispatch on failure
-    }
-  }
-
-  let breakingChanges: BreakingChange[] | undefined;
-  if (options?.projectDir) {
-    try {
-      const detected = detectBreakingChanges(options.projectDir);
-      if (detected.length > 0) {
-        breakingChanges = detected;
-      }
-    } catch {
-      // Breaking change detection is best-effort
-    }
-  }
-
-  let interfaceSnapshot: InterfaceSnapshot | undefined;
-  if (options?.projectDir && options?.scopePatterns && options.scopePatterns.length > 0) {
-    try {
-      const snapshot = captureInterfaceSnapshot(options.projectDir, options.scopePatterns);
-      if (snapshot.length > 0) {
-        interfaceSnapshot = snapshot;
-      }
-    } catch {
-      // Interface snapshot is best-effort
-    }
-  }
-
   const waveInfo = resolveWaveInfo(db, ctx.task.project, taskDisplayId);
 
   return {
     taskId: taskDisplayId,
     routing,
-    agentDispatchable,
+    agentDispatchable: dispatchable,
     context: {
       title: ctx.task.title ?? taskDisplayId,
       body: ctx.body,
@@ -117,11 +84,29 @@ export function buildAgentDispatchContext(
     },
     waveInfo,
     contextHash: ctx.contextHash,
-    sessionBriefing,
-    breakingChanges,
-    interfaceSnapshot,
-    alreadyCompleted: completionCheck.alreadyDone ? completionCheck : undefined,
+    extensions: extData,
+    // Backward-compatible typed fields from extensions
+    fileOwnership: extData['fileOwnership'] as FileOwnershipManifest | undefined,
+    sessionBriefing: extData['sessionBriefing'] as SessionBriefing | undefined,
+    breakingChanges: extData['breakingChanges'] as BreakingChange[] | undefined,
+    interfaceSnapshot: extData['interfaceSnapshot'] as InterfaceSnapshot | undefined,
+    alreadyCompleted: completionCheck,
   };
+}
+
+function computeExtensions(
+  db: BrainDB,
+  taskDisplayId: string,
+  options?: DispatchContextOptions
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const ext of getRegisteredExtensions()) {
+    const data = ext.compute({ db, taskDisplayId, options });
+    if (data !== undefined) {
+      result[ext.name] = data;
+    }
+  }
+  return result;
 }
 
 function resolveTaskMetadata(db: BrainDB, taskDisplayId: string): TaskMetadata | null {
@@ -170,6 +155,13 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
 
   lines.push('');
 
+  formatCoreContext(lines, ctx);
+  formatExtensionSections(lines, ctx);
+
+  return lines.join('\n');
+}
+
+function formatCoreContext(lines: string[], ctx: AgentDispatchContext): void {
   if (ctx.context.body) {
     lines.push('--- Description ---');
     lines.push(ctx.context.body);
@@ -213,28 +205,23 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
     }
     lines.push('');
   }
+}
 
-  if (ctx.fileOwnership) {
-    lines.push(formatOwnershipBrief(ctx.fileOwnership, ctx.taskId));
-    lines.push('');
+function formatExtensionSections(lines: string[], ctx: AgentDispatchContext): void {
+  ensureExtensionsInitialized();
+  const skipNames = new Set(['alreadyCompleted']);
+
+  for (const ext of getRegisteredExtensions()) {
+    if (skipNames.has(ext.name)) continue;
+    const data =
+      ctx.extensions?.[ext.name] ?? (ctx as unknown as Record<string, unknown>)[ext.name];
+    if (data === undefined) continue;
+    const formatted = ext.format(data, ctx.taskId);
+    if (formatted) {
+      lines.push(formatted);
+      lines.push('');
+    }
   }
-
-  if (ctx.breakingChanges && ctx.breakingChanges.length > 0) {
-    lines.push(formatBreakingChangesBrief(ctx.breakingChanges));
-    lines.push('');
-  }
-
-  if (ctx.interfaceSnapshot && ctx.interfaceSnapshot.length > 0) {
-    lines.push(formatInterfaceSnapshotBrief(ctx.interfaceSnapshot));
-    lines.push('');
-  }
-
-  if (ctx.sessionBriefing) {
-    lines.push(formatSessionBriefing(ctx.sessionBriefing));
-    lines.push('');
-  }
-
-  return lines.join('\n');
 }
 
 export function formatSessionBriefing(briefing: SessionBriefing): string {
