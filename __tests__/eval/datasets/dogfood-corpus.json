@@ -1,0 +1,429 @@
+{
+  "notes": [
+    {
+      "id": "hybrid-search-architecture",
+      "filename": "hybrid-search-architecture.md",
+      "frontmatter": {
+        "title": "Hybrid Search Architecture in Brain",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["search", "bm25", "vector", "architecture"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["embedding-strategies", "search-fusion-methods"],
+        "created": "2025-10-01"
+      },
+      "body": "# Hybrid Search Architecture in Brain\n\n## Overview\n\nThe brain project uses a hybrid search architecture that combines BM25 full-text search with vector similarity search. This approach compensates for the weaknesses of each method: BM25 excels at exact keyword matching but misses semantic similarity, while vector search captures meaning but can miss specific terms.\n\n## BM25 Component\n\nFull-text search is powered by SQLite FTS5 with a trigram tokenizer fallback. The FTS5 index covers note titles, summaries, and body content. BM25 scoring uses the Okapi BM25 formula with default parameters (k1=1.2, b=0.75). When the standard tokenizer fails to find matches, a trigram-based FTS5 index provides fuzzy matching capabilities.\n\n## Vector Search Component\n\nVector similarity search uses sqlite-vec to store and query embedding vectors. Each note is split into chunks, and each chunk is embedded using a configurable embedding model. At query time, the query text is embedded and compared against all chunk vectors using cosine similarity. The top-k most similar chunks are returned with their similarity scores.\n\n## Fusion Strategies\n\nTwo fusion strategies are available for combining BM25 and vector results:\n\n### Reciprocal Rank Fusion (RRF)\n\nRRF assigns scores based on rank position rather than raw scores. For each result, the RRF score is computed as 1/(k + rank) where k is a constant (default 60). Results appearing in both BM25 and vector lists receive the sum of their RRF scores. This method is robust to score distribution differences between the two systems.\n\n### Score Fusion\n\nScore fusion normalizes raw scores from each system to [0, 1] and computes a weighted average. Default weights are 0.3 for BM25 and 0.7 for vector. This gives more influence to semantic similarity while still boosting exact keyword matches.\n\n## Match Source Tracking\n\nEach search result includes a matchSource field indicating its origin: 'bm25' for text-only matches, 'vector' for embedding-only matches, 'both' for results found by both systems, 'rerank' for cross-encoder reranked results, and 'graph' for results added via graph expansion."
+    },
+    {
+      "id": "embedding-strategies",
+      "filename": "embedding-strategies.md",
+      "frontmatter": {
+        "title": "Embedding Model Strategies and Trade-offs",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["embeddings", "models", "ollama", "huggingface"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["hybrid-search-architecture", "chunking-design"],
+        "created": "2025-09-15"
+      },
+      "body": "# Embedding Model Strategies and Trade-offs\n\n## Supported Backends\n\nThe brain project supports three embedding backends through an adapter pattern:\n\n### Local Embedder\n\nUses @huggingface/transformers to run embedding models directly in Node.js. The default model is all-MiniLM-L6-v2, which produces 384-dimensional vectors. This backend requires no external services and works offline, but is slower than GPU-accelerated alternatives. It is used primarily in tests and for initial setup.\n\n### Ollama Embedder\n\nConnects to a local Ollama instance to generate embeddings. The recommended model is nomic-embed-text, producing 768-dimensional vectors. Ollama provides GPU acceleration when available, making it significantly faster than the local embedder for bulk indexing. The embedder implements health checks and graceful fallback when Ollama is unavailable.\n\n### Remote Embedder\n\nDesigned for cloud-hosted embedding APIs. Supports configurable endpoints and API keys. Not commonly used in the default setup but available for users who prefer cloud embedding services.\n\n## Model Selection Considerations\n\nThe choice of embedding model affects both quality and performance. Larger models like nomic-embed-text (768d) generally produce better semantic representations than smaller models like all-MiniLM-L6-v2 (384d), but require more storage and compute. The embedding dimensions must be consistent across all chunks in the database — changing models requires a full re-index.\n\n## Adapter Factory\n\nThe embedder factory in src/adapters/ selects the appropriate backend based on configuration. It checks for Ollama availability first, falls back to local embedding, and supports explicit override via config. Each adapter implements the same Embedder interface with embed() and model/dimensions properties."
+    },
+    {
+      "id": "chunking-design",
+      "filename": "chunking-design.md",
+      "frontmatter": {
+        "title": "Markdown Chunking Strategy for Note Indexing",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["chunking", "markdown", "indexing", "tokenization"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["embedding-strategies", "hybrid-search-architecture"],
+        "created": "2025-09-20"
+      },
+      "body": "# Markdown Chunking Strategy for Note Indexing\n\n## Heading-Aware Chunking\n\nThe markdown parser splits note content into chunks based on heading boundaries. Each heading (H1 through H3) starts a new chunk that includes all content until the next heading of equal or higher level. This preserves the semantic coherence of sections — a chunk about 'Installation' contains only installation-related content.\n\n## Chunk Types\n\nTwo chunk types are produced by the parser:\n\n- **section**: A complete section under a heading, produced when the section fits within the token limit.\n- **paragraph**: A sub-section split at paragraph boundaries, produced when a section exceeds the token limit and must be further divided.\n\n## Cut Types\n\nChunks are annotated with how they were created:\n\n- **heading_boundary**: The chunk boundary aligns with a markdown heading.\n- **paragraph_end**: The chunk was split at a paragraph boundary within a larger section.\n\n## Token Estimation\n\nThe estimateTokens function provides a fast approximation of token count without running a full tokenizer. It uses a character-to-token ratio of approximately 4 characters per token, adjusted for whitespace and special characters. This is accurate enough for chunking decisions while being orders of magnitude faster than BPE tokenization.\n\n## Heading Ancestry\n\nEach chunk tracks its heading ancestry — the chain of parent headings from H1 down to the chunk's own heading. This provides hierarchical context for search results, allowing the UI to show where a chunk fits within the note structure. For example, a chunk under '## Installation > ### macOS' would have ancestry ['Installation', 'macOS'].\n\n## Frontmatter Handling\n\nThe parser extracts YAML frontmatter before chunking the body. Frontmatter fields like title, tags, and summary are indexed separately in the FTS5 table for keyword search. The frontmatter is not included in chunk content to avoid diluting the semantic signal of body text."
+    },
+    {
+      "id": "memory-extraction-pipeline",
+      "filename": "memory-extraction-pipeline.md",
+      "frontmatter": {
+        "title": "LLM-Powered Memory Extraction Pipeline",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["memory", "llm", "extraction", "ollama"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["memory-reconciliation", "three-tier-extraction"],
+        "created": "2025-11-01"
+      },
+      "body": "# LLM-Powered Memory Extraction Pipeline\n\n## Overview\n\nThe memory extraction pipeline uses a local LLM (via Ollama) to extract discrete factual memories from note content. Each memory represents a single piece of knowledge — a fact, preference, decision, or observation — that can be independently retrieved and reasoned about.\n\n## Extraction Process\n\nFor each note, the pipeline:\n\n1. Splits the note into chunks using the standard markdown chunker.\n2. Sends each chunk to the LLM with a structured extraction prompt.\n3. Parses the LLM response to extract individual memory facts.\n4. Deduplicates memories using SHA256 content hashing with a rolling window.\n5. Reconciles new memories against existing ones to detect updates, contradictions, and supersedence.\n6. Stores memories with version chains linking them to their source notes and previous versions.\n\n## Deduplication\n\nThe DedupWindow class maintains a set of SHA256 hashes for recently processed content. When processing multiple notes in batch, a shared dedup window prevents the same fact from being extracted multiple times across different notes that contain overlapping content. The window uses FIFO eviction when it reaches its maximum size (default: 1000 entries).\n\n## Memory Schema\n\nEach memory entry contains:\n- **content**: The factual statement extracted by the LLM.\n- **source_note_id**: The note from which the memory was extracted.\n- **confidence**: LLM-assessed confidence (high, medium, low).\n- **category**: Classification (fact, preference, decision, observation).\n- **temporal_validity**: Optional time bounds for when the memory is valid.\n- **version_chain**: Links to previous versions of the same memory.\n\n## Batch Processing\n\nThe extract command supports --all to process every unextracted note, or individual note IDs. Batch extraction creates a shared DedupWindow across all notes in the run. Progress is reported to stdout, and errors for individual notes are logged without stopping the batch."
+    },
+    {
+      "id": "memory-reconciliation",
+      "filename": "memory-reconciliation.md",
+      "frontmatter": {
+        "title": "Memory Reconciliation and Version Chaining",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["memory", "reconciliation", "versioning"],
+        "confidence": "medium",
+        "status": "current",
+        "related": ["memory-extraction-pipeline"],
+        "created": "2025-11-10"
+      },
+      "body": "# Memory Reconciliation and Version Chaining\n\n## Problem\n\nWhen the same topic is discussed in multiple notes, or when a note is updated, the extraction pipeline may produce memories that overlap with, contradict, or supersede existing memories. Without reconciliation, the memory store would accumulate duplicates and stale entries.\n\n## Reconciliation Strategy\n\nThe reconciler compares each new memory against existing memories from the same source note and semantically similar memories from other notes. It uses the LLM to classify the relationship:\n\n- **Duplicate**: The new memory states the same fact as an existing one. The new memory is discarded.\n- **Update**: The new memory provides more current information about the same topic. The existing memory is marked as superseded and linked to the new one via version chain.\n- **Contradiction**: The new memory directly conflicts with an existing one. Both are kept but flagged for human review.\n- **Novel**: The new memory covers a topic not present in the existing store. It is added as a new entry.\n\n## Version Chains\n\nMemories form version chains through the supersedes/superseded_by fields. When querying memories, the system returns only the latest version in each chain by default. Historical versions can be accessed through the memories history command for auditing how knowledge evolved over time.\n\n## Auto-Forgetting\n\nMemories with temporal_validity that has expired are automatically deprioritized in search results. They are not deleted — temporal validity just reduces their relevance score. This handles facts like 'the current sprint ends Friday' that become stale after their time window passes.\n\n## Confidence Decay\n\nMemories extracted from notes with low confidence scores inherit that uncertainty. Over time, if a memory is not reinforced by new extractions, its effective confidence may be reduced. This mechanism prevents outdated low-confidence memories from polluting search results."
+    },
+    {
+      "id": "module-system-design",
+      "filename": "module-system-design.md",
+      "frontmatter": {
+        "title": "Brain Module System Architecture",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["modules", "architecture", "plugins", "extensibility"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["pm-module-overview", "session-module-design"],
+        "created": "2025-12-01"
+      },
+      "body": "# Brain Module System Architecture\n\n## Overview\n\nThe brain project uses a plugin-based module system to extend its core functionality. Each module registers its own note types, relation types, commands, content handlers, and database migrations. Modules operate in isolated namespaces to prevent naming conflicts.\n\n## Module Interface\n\nEvery module implements the BrainModule interface with three properties: name, version, and description. The register method receives a ModuleContext that provides registration APIs. The context enforces namespace isolation — a module can only register types and handlers within its own namespace.\n\n## Registration APIs\n\nThe ModuleContext provides:\n\n- **registerNoteType**: Define a new note type with JSON schema for frontmatter validation.\n- **registerRelationType**: Define a relation type with optional inverse.\n- **registerExtractionStrategy**: Control whether notes of this module's types should go through memory extraction.\n- **registerFilter**: Define visibility rules (contextual, private, public) that control which notes appear in search results.\n- **registerContentHandler**: Provide custom content processing for module-specific note formats.\n- **registerHookHandler**: Register event hooks (prompt-submit, etc.) for module-specific automation.\n- **registerMigration**: Define schema migrations for module-specific database tables.\n- **registerCommand**: Add CLI commands under the module's namespace.\n\n## Visibility Tiers\n\nModules can set visibility on their note types:\n\n- **public**: Notes appear in all searches (default for knowledge notes).\n- **contextual**: Notes appear only when the search query is relevant (used by sessions module).\n- **private**: Notes never appear in general search (used by PM module to keep tasks separate from the knowledge base).\n\n## Built-in Modules\n\nThree modules are currently registered:\n1. **knowledge**: Core note types (research, guide, reference, etc.).\n2. **pm**: Project management with tasks, workstreams, and dependency tracking.\n3. **sessions**: Claude session tracking with analytics and resumption context."
+    },
+    {
+      "id": "pm-module-overview",
+      "filename": "pm-module-overview.md",
+      "frontmatter": {
+        "title": "Project Management Module Design",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["pm", "tasks", "workstreams", "dependencies"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["module-system-design", "dependency-wave-algorithm"],
+        "created": "2025-12-15"
+      },
+      "body": "# Project Management Module Design\n\n## Overview\n\nThe PM module provides project management capabilities within the brain system. It manages projects, workstreams, and tasks as brain notes with private visibility, keeping them separate from the user's knowledge base while reusing the same storage and indexing infrastructure.\n\n## Data Model\n\nThe PM module uses three entity types:\n\n- **Projects**: Top-level containers identified by a prefix (e.g., VNM). Each project has a name, description, and working directory.\n- **Workstreams**: Logical groupings within a project, identified by project prefix and sequence number (e.g., VNM-01). Workstreams organize related tasks.\n- **Tasks**: Individual work items with display IDs like VNM-01.03 (project-workstream.task). Tasks have status, priority, category, dependencies, and optional descriptions.\n\n## Task Lifecycle\n\nTasks follow a state machine with statuses: pending, claimed, in-progress, done. Virtual states (computed, not stored) include: blocked (has incomplete dependencies), ready (all dependencies met, not yet claimed), and eligible (ready and claimable by an agent).\n\n## Agent Dispatch\n\nThe dispatch system generates structured briefs for AI agents working on tasks. A brief includes the task description, dependency context, relevant file paths, and suggested approach. The routing engine matches tasks to appropriate agent models based on task category and complexity.\n\n## Claim Tokens\n\nTo prevent multiple agents from working on the same task, the PM module uses claim tokens. When an agent claims a task, it receives a unique token that must be presented for status transitions. This implements optimistic locking without database-level locks.\n\n## Consistency Checking\n\nThe pm check command validates data integrity: orphaned tasks (no workstream), circular dependencies, invalid status transitions, and missing required fields. The --deep flag runs additional checks including cross-project reference validation."
+    },
+    {
+      "id": "dependency-wave-algorithm",
+      "filename": "dependency-wave-algorithm.md",
+      "frontmatter": {
+        "title": "Dependency Wave Scheduling Algorithm",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["dependencies", "scheduling", "topological-sort", "pm"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["pm-module-overview"],
+        "created": "2025-12-20"
+      },
+      "body": "# Dependency Wave Scheduling Algorithm\n\n## Problem\n\nTasks in the PM module can depend on other tasks. The system needs to determine which tasks can be worked on in parallel and in what order, respecting dependency constraints.\n\n## Algorithm\n\nThe wave algorithm performs a topological sort of the task dependency graph, grouping tasks into waves:\n\n1. **Wave 0**: Tasks with no dependencies (or all dependencies already completed).\n2. **Wave 1**: Tasks whose dependencies are all in Wave 0.\n3. **Wave N**: Tasks whose dependencies are all in waves 0 through N-1.\n\nWithin each wave, tasks can be worked on in parallel since they have no inter-dependencies. The algorithm detects circular dependencies and reports them as errors rather than entering an infinite loop.\n\n## Implementation\n\nThe implementation uses Kahn's algorithm for topological sorting:\n\n1. Compute in-degree (number of incomplete dependencies) for each task.\n2. Seed the queue with all tasks having in-degree 0.\n3. Process the queue: for each task, decrement the in-degree of all tasks that depend on it.\n4. Tasks processed in the same iteration form a wave.\n5. If tasks remain with non-zero in-degree after the queue empties, a cycle exists.\n\n## Virtual States\n\nThe wave position determines virtual states:\n- Tasks in the current wave (Wave 0) with status 'pending' are 'ready'.\n- Ready tasks not yet claimed are 'eligible' for agent dispatch.\n- Tasks in future waves with incomplete dependencies are 'blocked'.\n\n## Next Command\n\nThe pm next command returns eligible tasks from the current wave, sorted by priority. This is the primary interface for agents requesting work — they call pm next to find the highest-priority unblocked task available."
+    },
+    {
+      "id": "three-tier-extraction",
+      "filename": "three-tier-extraction.md",
+      "frontmatter": {
+        "title": "Three-Tier Note Extraction Pipeline",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["extraction", "import", "tiered-processing"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["memory-extraction-pipeline", "chunking-design"],
+        "created": "2025-10-20"
+      },
+      "body": "# Three-Tier Note Extraction Pipeline\n\n## Overview\n\nThe import command uses a three-tier extraction pipeline to process incoming content. Each tier applies progressively more sophisticated analysis, allowing simple content to be processed quickly while complex content receives deeper treatment.\n\n## Tier 1: Deterministic Extraction\n\nThe first tier uses rule-based heuristics without any LLM involvement:\n\n- Detect content type from file extension and MIME type.\n- Extract metadata from existing frontmatter if present.\n- Parse URLs from the content for link extraction.\n- Apply filename-based classification (e.g., files in a 'research/' directory get type: research).\n- Estimate reading time from word count.\n\nThis tier is fast, deterministic, and runs on every import.\n\n## Tier 2: LLM Classifier\n\nThe second tier sends content to a local LLM for classification:\n\n- Determine the appropriate note type (research, guide, reference, etc.).\n- Suggest tags based on content analysis.\n- Generate a one-line summary.\n- Assess confidence level based on source quality indicators.\n- Identify related notes by comparing against the existing knowledge base.\n\nTier 2 runs when the content cannot be confidently classified by Tier 1 alone.\n\n## Tier 3: Agent Queue\n\nThe third tier handles content that requires human-in-the-loop or multi-step processing:\n\n- Content that the LLM classifier has low confidence about.\n- Multi-source documents that should be split into separate notes.\n- Content requiring fact-checking against external sources.\n- Research papers that need structured decomposition.\n\nTier 3 items are placed in a processing queue for later review.\n\n## Dry Run Mode\n\nThe --dry-run flag processes content through all applicable tiers but does not write any files or database records. This allows previewing how content would be classified and processed before committing to the import."
+    },
+    {
+      "id": "sqlite-storage-layer",
+      "filename": "sqlite-storage-layer.md",
+      "frontmatter": {
+        "title": "SQLite Storage Layer Design",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["sqlite", "database", "storage", "better-sqlite3"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["hybrid-search-architecture", "embedding-strategies"],
+        "created": "2025-08-20"
+      },
+      "body": "# SQLite Storage Layer Design\n\n## Repository Pattern\n\nThe database layer uses a repository pattern with BrainDB as the facade. Three domain repositories handle their respective tables:\n\n- **NoteRepo**: Notes, files, chunks, relations, FTS indexes, and search queries.\n- **MemoryRepo**: Memory entries, version history, and memory vectors.\n- **CaptureRepo**: Inbox items, feed subscriptions, and feed records.\n\nEach repo owns the SQL statements, row type definitions, and result mappers for its domain. Cross-repo operations like deleteNote (which cascades across memories, chunks, FTS, and relations) live in the BrainDB facade.\n\n## FTS5 Integration\n\nFull-text search uses SQLite FTS5 with two index configurations:\n\n- **Standard tokenizer**: Uses the unicode61 tokenizer for word-level matching. Supports prefix queries and phrase matching.\n- **Trigram tokenizer**: A fallback index using the trigram tokenizer that enables substring and fuzzy matching. Used when the standard tokenizer returns no results, with a hotness scoring penalty to prefer exact matches.\n\nThe FTS table indexes three fields: title, summary, and body content. BM25 ranking is computed by FTS5's built-in rank function.\n\n## sqlite-vec for Vector Search\n\nVector embeddings are stored using the sqlite-vec extension, which provides vector similarity search as a virtual table. Vectors are stored as Float32Arrays and queried using cosine distance. The extension supports both exact and approximate nearest neighbor search, though the current implementation uses exact search for the relatively small dataset sizes typical of a personal knowledge base.\n\n## Migration System\n\nDatabase migrations are versioned per-module. Each module registers migrations with a version number, description, and up function. The migration runner tracks which migrations have been applied in a module_migrations table and runs pending migrations in order during initialization.\n\n## Resource Management\n\nDatabase connections are managed through withBrain and withDb helpers in brain-service.ts. These functions handle the lifecycle with try/finally blocks to ensure connections are always closed, even when errors occur. This prevents connection leaks that could lock the SQLite database file."
+    },
+    {
+      "id": "note-lifecycle",
+      "filename": "note-lifecycle.md",
+      "frontmatter": {
+        "title": "Note Lifecycle and Content Management",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["notes", "lifecycle", "frontmatter", "review"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["chunking-design", "memory-extraction-pipeline"],
+        "created": "2025-09-10"
+      },
+      "body": "# Note Lifecycle and Content Management\n\n## Note Structure\n\nEvery note in the brain system is a markdown file with YAML frontmatter. Required frontmatter fields include title, type, and tier. Optional fields include tags, confidence, status, related notes, sources, review-interval, and expiration date.\n\n## Tier System\n\nNotes are organized into two tiers:\n\n- **slow**: Long-lived reference material — research papers, architecture decisions, guides. These notes are expected to remain relevant for months or years. They are stored in the main notes directory and undergo full indexing with chunking and embedding.\n- **fast**: Transient or time-sensitive content — meeting notes, sprint plans, debug sessions. These notes have shorter relevance windows and may include expiration dates for automatic archival.\n\n## Status Tracking\n\nNotes have a status field with values: current, outdated, archived, and superseded. The stale command identifies notes that haven't been reviewed within their review-interval, flagging them for human review. Superseded notes maintain a link to their replacement via the supersedes frontmatter field.\n\n## Inbox Pipeline\n\nThe inbox provides zero-friction capture for thoughts, links, and snippets:\n\n1. The quick command captures text directly from the command line.\n2. The ingest command bulk-imports files from a directory.\n3. The feed command pulls content from RSS subscriptions.\n4. All captured items land in the inbox for later triage.\n5. The inbox command lists and manages pending items.\n\n## Archival\n\nThe archive command moves old notes to an archive directory based on configurable criteria: expiration date passed, last review older than threshold, or manual selection. Archived notes are removed from the active index but preserved on disk for historical reference.\n\n## Doctor Checks\n\nThe doctor command performs health checks on the note system: orphaned database entries (files deleted but not deindexed), missing embeddings, broken relations, and schema validation errors. The --fix flag automatically repairs issues it can handle safely."
+    },
+    {
+      "id": "session-module-design",
+      "filename": "session-module-design.md",
+      "frontmatter": {
+        "title": "Session Intelligence Module Design",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["sessions", "analytics", "hooks", "resumption"],
+        "confidence": "high",
+        "status": "current",
+        "related": ["module-system-design"],
+        "created": "2026-01-15"
+      },
+      "body": "# Session Intelligence Module Design\n\n## Overview\n\nThe sessions module tracks Claude coding sessions as brain notes, providing analytics, resumption context, and workflow improvement observations. Sessions are stored as notes with contextual visibility — they appear in search results only when the query relates to session activity.\n\n## Tiered Summaries\n\nSession content uses a three-level summary hierarchy:\n\n- **L0**: A one-line summary (~100 tokens) stored in the note frontmatter summary field. Used for list views and brief context.\n- **L1**: A structured overview (~2K tokens) stored in the session's content directory as l1-overview.md. Contains key decisions, files modified, and blockers encountered.\n- **L2**: Full event timeline stored as l2-timeline.md. Contains tool call logs, error details, and complete narrative of the session.\n\n## Hook-Based Capture\n\nThe module uses prompt-submit hooks to capture session context:\n\n- **session-restore-handler**: Fires on the first prompt of a session. Detects resumable sessions from snapshot files and injects session context into the conversation.\n- **session-briefing-handler**: Generates a contextual briefing based on recent session history for the current project directory.\n\n## Live Capture Tables\n\nTwo database tables support real-time session tracking:\n\n- **session_events**: Records individual events (tool calls, errors, decisions) with timestamps and content hashes for deduplication.\n- **session_chunks**: Stores periodic conversation snapshots captured during context compaction events.\n\n## Analytics\n\nThe session analytics command computes metrics across sessions: error rates, tool usage patterns, duration distributions, and productivity trends. The session_analytics_rollup table provides pre-computed period-level aggregations for fast dashboard queries.\n\n## Resumption\n\nThe session restore command generates resumption context from the most recent session snapshot. It provides the previous session's open items, active files, and branch context to help the new session continue seamlessly."
+    },
+    {
+      "id": "search-fusion-methods",
+      "filename": "search-fusion-methods.md",
+      "frontmatter": {
+        "title": "Search Result Fusion Methods Comparison",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["search", "fusion", "rrf", "scoring"],
+        "confidence": "medium",
+        "status": "current",
+        "related": ["hybrid-search-architecture"],
+        "created": "2025-10-10"
+      },
+      "body": "# Search Result Fusion Methods Comparison\n\n## Reciprocal Rank Fusion (RRF)\n\nRRF was introduced by Cormack et al. (2009) as a simple, effective method for combining ranked lists. The key insight is that rank position is more stable than raw scores across different retrieval systems.\n\n### Formula\n\nFor a document d appearing at rank r in list L, the RRF score is:\n\n  RRF(d) = sum over all lists L of 1 / (k + rank_L(d))\n\nThe constant k (typically 60) dampens the influence of rank position, preventing the top-ranked result from dominating the fused score. Documents not appearing in a list receive no contribution from that list.\n\n### Advantages\n\n- No score normalization needed — works purely on ranks.\n- Robust to different score distributions between BM25 and vector search.\n- Simple to implement and reason about.\n- Performs well even when individual rankers have very different quality levels.\n\n## Score-Based Fusion\n\nScore fusion uses the actual retrieval scores after normalization to [0, 1]. Min-max normalization is applied within each result set.\n\n### Weighted Average\n\nThe fused score is: w_bm25 * norm_bm25(d) + w_vec * norm_vec(d)\n\nDefault weights are 0.3 for BM25 and 0.7 for vector, reflecting the generally higher quality of semantic matches for natural language queries. These weights can be tuned per use case.\n\n### Advantages\n\n- Preserves score magnitude information that RRF discards.\n- Allows fine-grained tuning of system contributions.\n- Better when one system has consistently higher-quality results.\n\n## Choosing Between Methods\n\nRRF is the default in the brain system because it is more robust to edge cases. Score fusion can outperform RRF when the score distributions are well-understood and the weight parameters are tuned, but it requires more careful calibration. The eval framework supports sweeping both methods to find the best configuration for a given corpus."
+    },
+    {
+      "id": "reranking-pipeline",
+      "filename": "reranking-pipeline.md",
+      "frontmatter": {
+        "title": "Cross-Encoder Reranking Pipeline",
+        "type": "research",
+        "tier": "slow",
+        "tags": ["reranking", "cross-encoder", "search", "relevance"],
+        "confidence": "medium",
+        "status": "current",
+        "related": ["hybrid-search-architecture", "search-fusion-methods"],
+        "created": "2025-10-15"
+      },
+      "body": "# Cross-Encoder Reranking Pipeline\n\n## Motivation\n\nBi-encoder models (used for embedding) encode query and document independently, which enables fast similarity search but loses cross-attention between the query and document tokens. Cross-encoder models process the query-document pair together, achieving higher relevance accuracy at the cost of speed.\n\n## Two-Stage Retrieval\n\nThe brain search pipeline uses a two-stage approach:\n\n1. **Stage 1 (Retrieval)**: Fast hybrid search (BM25 + vector) retrieves a candidate set of top-N results (default N=20).\n2. **Stage 2 (Reranking)**: A cross-encoder model rescores the candidate set, and the top-K results (default K=5) are returned.\n\nThis approach gives the quality benefits of cross-encoder scoring while keeping latency manageable — the cross-encoder only processes 20 documents rather than the entire corpus.\n\n## Implementation\n\nThe reranker in src/services/reranker.ts accepts search results and a query, then:\n\n1. Pairs each result's excerpt with the query text.\n2. Sends pairs through the cross-encoder model to get relevance scores.\n3. Sorts by cross-encoder score descending.\n4. Returns the top-K results with matchSource set to 'rerank'.\n\nThe original hybrid search scores are discarded in favor of the cross-encoder scores, since the cross-encoder provides a more accurate relevance assessment.\n\n## Performance\n\nCross-encoder reranking adds approximately 200-500ms of latency depending on the number of candidates and the model size. For interactive search this is acceptable. For batch operations the --rerank flag can be omitted to use the faster hybrid-only pipeline.\n\n## Graph Expansion\n\nAfter reranking, the search pipeline optionally expands results by following note relations. If a highly-ranked note has 'related' links, those related notes may be added to the result set with matchSource 'graph'. This combines content relevance with structural knowledge graph information."
+    },
+    {
+      "id": "config-management",
+      "filename": "config-management.md",
+      "frontmatter": {
+        "title": "Configuration Management and env-paths",
+        "type": "guide",
+        "tier": "slow",
+        "tags": ["config", "env-paths", "setup"],
+        "confidence": "high",
+        "status": "current",
+        "created": "2025-08-10"
+      },
+      "body": "# Configuration Management and env-paths\n\n## Storage Locations\n\nThe brain project uses the env-paths package to determine platform-appropriate storage locations:\n\n- **Config**: ~/Library/Preferences/brain/config.json (macOS)\n- **Data**: ~/Library/Application Support/brain/brain.db (macOS)\n- **Notes**: Configurable via notesDir in config.json, typically ~/brain/\n\nOn Linux, these map to XDG directories (~/.config/brain, ~/.local/share/brain).\n\n## Configuration Fields\n\nThe config.json file contains:\n\n- **notesDir**: Absolute path to the notes directory.\n- **ollamaUrl**: URL of the Ollama API (default: http://localhost:11434).\n- **embeddingModel**: Name of the embedding model to use.\n- **embeddingBackend**: Which adapter to use (local, ollama, remote).\n- **extractionModel**: LLM model for memory extraction (default: qwen2.5:3b).\n- **reviewIntervalDays**: Default review interval for notes without explicit review-interval.\n\n## Config Command\n\nThe config command provides get/set operations:\n\n- brain config get notesDir — read a single field.\n- brain config set notesDir ~/brain — update a field.\n- brain config — show all configuration.\n\n## Initialization\n\nThe init command creates the config file with sensible defaults, initializes the database, and verifies that the notes directory exists. It also checks for Ollama availability and warns if the embedding model is not installed."
+    }
+  ],
+  "queries": [
+    {
+      "id": "dq01",
+      "text": "How does the brain project combine BM25 and vector search results?",
+      "type": "factual",
+      "relevantNoteIds": ["hybrid-search-architecture", "search-fusion-methods"]
+    },
+    {
+      "id": "dq02",
+      "text": "What is reciprocal rank fusion and how does it work?",
+      "type": "factual",
+      "relevantNoteIds": ["search-fusion-methods", "hybrid-search-architecture"]
+    },
+    {
+      "id": "dq03",
+      "text": "What embedding models are supported and what are their dimensions?",
+      "type": "factual",
+      "relevantNoteIds": ["embedding-strategies"]
+    },
+    {
+      "id": "dq04",
+      "text": "How are markdown notes split into chunks for indexing?",
+      "type": "factual",
+      "relevantNoteIds": ["chunking-design"]
+    },
+    {
+      "id": "dq05",
+      "text": "What happens when a section is too large to fit in a single chunk?",
+      "type": "semantic",
+      "relevantNoteIds": ["chunking-design"]
+    },
+    {
+      "id": "dq06",
+      "text": "How does the system extract factual memories from notes?",
+      "type": "semantic",
+      "relevantNoteIds": ["memory-extraction-pipeline", "three-tier-extraction"]
+    },
+    {
+      "id": "dq07",
+      "text": "What is the SHA256 dedup window used for in memory extraction?",
+      "type": "factual",
+      "relevantNoteIds": ["memory-extraction-pipeline"]
+    },
+    {
+      "id": "dq08",
+      "text": "How does the system handle conflicting memories from different sources?",
+      "type": "semantic",
+      "relevantNoteIds": ["memory-reconciliation"]
+    },
+    {
+      "id": "dq09",
+      "text": "What is version chaining in the memory system?",
+      "type": "factual",
+      "relevantNoteIds": ["memory-reconciliation", "memory-extraction-pipeline"]
+    },
+    {
+      "id": "dq10",
+      "text": "How do modules register custom note types and commands?",
+      "type": "factual",
+      "relevantNoteIds": ["module-system-design"]
+    },
+    {
+      "id": "dq11",
+      "text": "What visibility tiers control whether notes appear in search?",
+      "type": "factual",
+      "relevantNoteIds": ["module-system-design"]
+    },
+    {
+      "id": "dq12",
+      "text": "How does the PM module track task dependencies?",
+      "type": "factual",
+      "relevantNoteIds": ["pm-module-overview", "dependency-wave-algorithm"]
+    },
+    {
+      "id": "dq13",
+      "text": "What algorithm determines which tasks can run in parallel?",
+      "type": "semantic",
+      "relevantNoteIds": ["dependency-wave-algorithm"]
+    },
+    {
+      "id": "dq14",
+      "text": "How does claim token locking prevent duplicate agent work?",
+      "type": "factual",
+      "relevantNoteIds": ["pm-module-overview"]
+    },
+    {
+      "id": "dq15",
+      "text": "What are the three tiers of the import extraction pipeline?",
+      "type": "factual",
+      "relevantNoteIds": ["three-tier-extraction"]
+    },
+    {
+      "id": "dq16",
+      "text": "When does the LLM classifier tier activate during import?",
+      "type": "semantic",
+      "relevantNoteIds": ["three-tier-extraction"]
+    },
+    {
+      "id": "dq17",
+      "text": "How does the repository pattern work in the database layer?",
+      "type": "factual",
+      "relevantNoteIds": ["sqlite-storage-layer"]
+    },
+    {
+      "id": "dq18",
+      "text": "What is the FTS5 trigram tokenizer fallback and when is it used?",
+      "type": "factual",
+      "relevantNoteIds": ["sqlite-storage-layer", "hybrid-search-architecture"]
+    },
+    {
+      "id": "dq19",
+      "text": "How are database migrations handled across modules?",
+      "type": "factual",
+      "relevantNoteIds": ["sqlite-storage-layer", "module-system-design"]
+    },
+    {
+      "id": "dq20",
+      "text": "What is the difference between slow and fast tier notes?",
+      "type": "factual",
+      "relevantNoteIds": ["note-lifecycle"]
+    },
+    {
+      "id": "dq21",
+      "text": "How does the inbox capture pipeline work?",
+      "type": "factual",
+      "relevantNoteIds": ["note-lifecycle"]
+    },
+    {
+      "id": "dq22",
+      "text": "What health checks does the doctor command perform?",
+      "type": "factual",
+      "relevantNoteIds": ["note-lifecycle"]
+    },
+    {
+      "id": "dq23",
+      "text": "How does the session module track coding session analytics?",
+      "type": "factual",
+      "relevantNoteIds": ["session-module-design"]
+    },
+    {
+      "id": "dq24",
+      "text": "What is the L0/L1/L2 summary hierarchy for sessions?",
+      "type": "factual",
+      "relevantNoteIds": ["session-module-design"]
+    },
+    {
+      "id": "dq25",
+      "text": "How does session resumption context get injected into new conversations?",
+      "type": "semantic",
+      "relevantNoteIds": ["session-module-design"]
+    },
+    {
+      "id": "dq26",
+      "text": "Why does cross-encoder reranking improve search quality over bi-encoder search?",
+      "type": "semantic",
+      "relevantNoteIds": ["reranking-pipeline"]
+    },
+    {
+      "id": "dq27",
+      "text": "How does graph expansion add related notes to search results?",
+      "type": "factual",
+      "relevantNoteIds": ["reranking-pipeline", "hybrid-search-architecture"]
+    },
+    {
+      "id": "dq28",
+      "text": "Where does brain store its configuration and database files?",
+      "type": "factual",
+      "relevantNoteIds": ["config-management"]
+    },
+    {
+      "id": "dq29",
+      "text": "How does the wave algorithm order tasks for agents to pick up?",
+      "type": "multi-hop",
+      "relevantNoteIds": ["dependency-wave-algorithm", "pm-module-overview"]
+    },
+    {
+      "id": "dq30",
+      "text": "How do memories become outdated and lose relevance over time?",
+      "type": "multi-hop",
+      "relevantNoteIds": ["memory-reconciliation", "memory-extraction-pipeline"]
+    },
+    {
+      "id": "dq31",
+      "text": "What is the full path from raw note content to searchable embeddings?",
+      "type": "multi-hop",
+      "relevantNoteIds": ["chunking-design", "embedding-strategies", "hybrid-search-architecture"]
+    },
+    {
+      "id": "dq32",
+      "text": "How does the search pipeline go from query to final ranked results?",
+      "type": "multi-hop",
+      "relevantNoteIds": ["hybrid-search-architecture", "search-fusion-methods", "reranking-pipeline"]
+    }
+  ],
+  "offTopicQueries": [
+    "What is the recipe for sourdough bread?",
+    "How do you train a puppy to sit?",
+    "What are the best hiking trails in Colorado?",
+    "How does photosynthesis work in plants?",
+    "What is the population of Tokyo?"
+  ]
+}
