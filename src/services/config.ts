@@ -9,6 +9,10 @@ import type { BrainConfig, EmbedderBackend } from '../types.js';
 
 export const GLOBAL_BRAIN_DIR = join(homedir(), '.brain');
 
+function globalRoot(): string {
+  return process.env.BRAIN_HOME ?? GLOBAL_BRAIN_DIR;
+}
+
 /**
  * Extract ResolveOptions from the parent command's --global and --instance flags.
  * Pass the Command object (last arg in action handlers) to pick up program-level flags.
@@ -63,8 +67,10 @@ export function resolveInstance(opts: ResolveOptions = {}): InstancePaths {
     return { root: resolve(opts.instancePath), isLocal: true, source: 'flag:--instance' };
   }
 
+  const gRoot = globalRoot();
+
   if (opts.forceGlobal) {
-    return { root: GLOBAL_BRAIN_DIR, isLocal: false, source: 'flag:--global' };
+    return { root: gRoot, isLocal: false, source: 'flag:--global' };
   }
 
   let dir = resolve(opts.cwd ?? process.cwd());
@@ -79,29 +85,29 @@ export function resolveInstance(opts: ResolveOptions = {}): InstancePaths {
     dir = parent;
   }
 
-  return { root: GLOBAL_BRAIN_DIR, isLocal: false, source: 'global' };
+  return { root: gRoot, isLocal: false, source: 'global' };
 }
 
 export function getConfigDir(override?: string): string {
-  const dir = override ?? GLOBAL_BRAIN_DIR;
+  const dir = override ?? globalRoot();
   ensureDir(dir);
   return dir;
 }
 
 export function getDataDir(override?: string): string {
-  const dir = override ?? GLOBAL_BRAIN_DIR;
+  const dir = override ?? globalRoot();
   ensureDir(dir);
   return dir;
 }
 
 export function getConfigPath(instanceRoot?: string): string {
-  const root = instanceRoot ?? GLOBAL_BRAIN_DIR;
+  const root = instanceRoot ?? globalRoot();
   ensureDir(root);
   return join(root, 'config.json');
 }
 
 export function getDefaultConfig(instanceRoot?: string): BrainConfig {
-  const root = instanceRoot ?? GLOBAL_BRAIN_DIR;
+  const root = instanceRoot ?? globalRoot();
   return {
     notesDir: join(homedir(), 'brain'),
     dbPath: join(root, 'brain.db'),
@@ -111,8 +117,9 @@ export function getDefaultConfig(instanceRoot?: string): BrainConfig {
 }
 
 export function loadConfig(instance?: InstancePaths): BrainConfig {
-  const globalDefaults = getDefaultConfig(GLOBAL_BRAIN_DIR);
-  const globalPath = getConfigPath(GLOBAL_BRAIN_DIR);
+  const gRoot = globalRoot();
+  const globalDefaults = getDefaultConfig(gRoot);
+  const globalPath = getConfigPath(gRoot);
 
   let config = { ...globalDefaults };
 
@@ -147,7 +154,7 @@ export function loadConfig(instance?: InstancePaths): BrainConfig {
 export function saveConfig(config: Partial<BrainConfig>, instanceRoot?: string): void {
   validateConfig(config);
 
-  const root = instanceRoot ?? GLOBAL_BRAIN_DIR;
+  const root = instanceRoot ?? globalRoot();
   const filePath = getConfigPath(root);
 
   const defaults = getDefaultConfig(root);

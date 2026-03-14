@@ -24,12 +24,20 @@ function makeLocalInstance(root: string): InstancePaths {
 
 describe('config service', () => {
   let instanceRoot: string;
+  const origBrainHome = process.env.BRAIN_HOME;
 
   beforeEach(() => {
     instanceRoot = makeTempDir();
+    // Isolate from user's real global config
+    process.env.BRAIN_HOME = makeTempDir();
   });
 
   afterEach(() => {
+    if (origBrainHome !== undefined) {
+      process.env.BRAIN_HOME = origBrainHome;
+    } else {
+      delete process.env.BRAIN_HOME;
+    }
     rmSync(instanceRoot, { recursive: true, force: true });
   });
 
@@ -172,7 +180,18 @@ describe('config service', () => {
 });
 
 describe('resolveInstance', () => {
+  const origBrainHome = process.env.BRAIN_HOME;
+
+  afterEach(() => {
+    if (origBrainHome !== undefined) {
+      process.env.BRAIN_HOME = origBrainHome;
+    } else {
+      delete process.env.BRAIN_HOME;
+    }
+  });
+
   it('returns global instance when no .brain/ found in ancestors', () => {
+    delete process.env.BRAIN_HOME;
     const instance = resolveInstance({ cwd: tmpdir() });
     expect(instance.root).toBe(join(homedir(), '.brain'));
     expect(instance.isLocal).toBe(false);
@@ -207,6 +226,7 @@ describe('resolveInstance', () => {
   });
 
   it('respects forceGlobal option', () => {
+    delete process.env.BRAIN_HOME;
     const projectDir = mkdtempSync(join(tmpdir(), 'brain-proj-'));
     mkdirSync(join(projectDir, '.brain'));
 
