@@ -14,6 +14,8 @@ import type { BreakingChange } from './breaking-changes.js';
 import { detectBreakingChanges, formatBreakingChangesBrief } from './breaking-changes.js';
 import type { CompletionCheck } from './dispatch-guard.js';
 import { checkAlreadyCompleted } from './dispatch-guard.js';
+import type { InterfaceSnapshot } from './interface-snapshot.js';
+import { captureInterfaceSnapshot, formatInterfaceSnapshotBrief } from './interface-snapshot.js';
 
 export interface AgentDispatchContext {
   taskId: string;
@@ -33,12 +35,14 @@ export interface AgentDispatchContext {
   fileOwnership?: FileOwnershipManifest;
   sessionBriefing?: SessionBriefing;
   breakingChanges?: BreakingChange[];
+  interfaceSnapshot?: InterfaceSnapshot;
   alreadyCompleted?: CompletionCheck;
 }
 
 export interface DispatchContextOptions {
   config?: BrainConfig;
   projectDir?: string;
+  scopePatterns?: string[];
 }
 
 export function buildAgentDispatchContext(
@@ -80,6 +84,18 @@ export function buildAgentDispatchContext(
     }
   }
 
+  let interfaceSnapshot: InterfaceSnapshot | undefined;
+  if (options?.projectDir && options?.scopePatterns && options.scopePatterns.length > 0) {
+    try {
+      const snapshot = captureInterfaceSnapshot(options.projectDir, options.scopePatterns);
+      if (snapshot.length > 0) {
+        interfaceSnapshot = snapshot;
+      }
+    } catch {
+      // Interface snapshot is best-effort
+    }
+  }
+
   const waveInfo = resolveWaveInfo(db, ctx.task.project, taskDisplayId);
 
   return {
@@ -103,6 +119,7 @@ export function buildAgentDispatchContext(
     contextHash: ctx.contextHash,
     sessionBriefing,
     breakingChanges,
+    interfaceSnapshot,
     alreadyCompleted: completionCheck.alreadyDone ? completionCheck : undefined,
   };
 }
@@ -204,6 +221,11 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
 
   if (ctx.breakingChanges && ctx.breakingChanges.length > 0) {
     lines.push(formatBreakingChangesBrief(ctx.breakingChanges));
+    lines.push('');
+  }
+
+  if (ctx.interfaceSnapshot && ctx.interfaceSnapshot.length > 0) {
+    lines.push(formatInterfaceSnapshotBrief(ctx.interfaceSnapshot));
     lines.push('');
   }
 
