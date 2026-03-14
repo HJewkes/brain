@@ -5,12 +5,13 @@ import {
   releaseWorktree,
   checkWorktreePath,
   cleanupStaleAllocations,
+  findGitRoot,
 } from './worktree.js';
 import { getWorktreeAllocations } from './data.js';
 import { resolveHookConfig } from '../../hooks/config.js';
 
 function getProjectRoot(): string {
-  return process.cwd();
+  return findGitRoot();
 }
 
 export function createWorktreeCommand(): Command {

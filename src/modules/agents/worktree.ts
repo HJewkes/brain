@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import {
   allocateWorktree as dbAllocate,
   releaseWorktree as dbRelease,
@@ -30,6 +30,24 @@ export interface CheckWorktreeResult {
 
 const DEFAULT_BUDGET = 3;
 const DEFAULT_BASE_PATH = '.worktrees';
+
+/**
+ * Find the true git repository root, resolving through worktrees.
+ * Uses --git-common-dir to find the main repo even when called
+ * from inside a git worktree, preventing nested worktree paths.
+ */
+export function findGitRoot(): string {
+  try {
+    const gitCommonDir = execFileSync(
+      'git',
+      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { encoding: 'utf-8', stdio: 'pipe' }
+    ).trim();
+    return dirname(gitCommonDir);
+  } catch {
+    return process.cwd();
+  }
+}
 
 /**
  * Allocate a git worktree for a task.
