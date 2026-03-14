@@ -4,6 +4,7 @@ import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder, Relation } from '../../../types.js';
+import { replaceFrontmatterField } from '../../../utils.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import { formatError, fail, pmError } from '../errors.js';
 import type { Result } from '../errors.js';
@@ -837,29 +838,6 @@ function readTaskBodyFromDb(db: BrainDB, displayId: string): string {
   const notes = getPmNotes(db, 'task', { display_id: displayId });
   if (notes.length === 0) return '';
   return readTaskBody(notes[0]);
-}
-
-function needsQuoting(value: string): boolean {
-  return value.includes(' ') || /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function replaceFrontmatterField(content: string, field: string, value: string): string {
-  const endOfFrontmatter = content.indexOf('\n---', 4);
-  if (endOfFrontmatter === -1) return content;
-
-  const frontmatter = content.slice(0, endOfFrontmatter);
-  const rest = content.slice(endOfFrontmatter);
-  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = needsQuoting(value) ? `"${value}"` : value;
-
-  if (fieldRegex.test(frontmatter)) {
-    if (!value) {
-      return frontmatter.replace(new RegExp(`\n${field}:.*$`, 'm'), '') + rest;
-    }
-    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
-  }
-  if (!value) return content;
-  return frontmatter + `\n${field}: ${quoted}` + rest;
 }
 
 async function updateTaskMetadataFields(

@@ -3,6 +3,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync, rmSync 
 import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder, Relation } from '../../../types.js';
+import { replaceFrontmatterField } from '../../../utils.js';
 import type { Result } from '../errors.js';
 import type {
   TaskMetadata,
@@ -114,25 +115,6 @@ function buildTaskMarkdown(input: CreateTaskInput, displayId: string, number: nu
     content += '\n' + input.description.replace(/\\n/g, '\n') + '\n';
   }
   return content;
-}
-
-function needsQuoting(value: string): boolean {
-  return value.includes(' ') || /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function replaceFrontmatterField(content: string, field: string, value: string): string {
-  const endOfFrontmatter = content.indexOf('\n---', 4);
-  if (endOfFrontmatter === -1) return content;
-
-  const frontmatter = content.slice(0, endOfFrontmatter);
-  const rest = content.slice(endOfFrontmatter);
-  const fieldRegex = new RegExp(`^${field}:.*$`, 'm');
-  const quoted = needsQuoting(value) ? `"${value}"` : value;
-
-  if (fieldRegex.test(frontmatter)) {
-    return frontmatter.replace(fieldRegex, `${field}: ${quoted}`) + rest;
-  }
-  return frontmatter + `\n${field}: ${quoted}` + rest;
 }
 
 function coerceDateField(value: unknown): string | undefined {
