@@ -14,17 +14,20 @@ vi.mock('../../src/adapters/index.js', () => ({
 }));
 
 vi.mock('../../src/services/search.js', () => ({
-  search: vi.fn().mockResolvedValue([
-    {
-      noteId: 'note-1',
-      filePath: '/notes/test.md',
-      score: 0.95,
-      excerpt: 'Test excerpt',
-      tier: 'slow',
-      tags: ['test'],
-      matchSource: 'both',
-    },
-  ]),
+  search: vi.fn().mockResolvedValue({
+    results: [
+      {
+        noteId: 'note-1',
+        filePath: '/notes/test.md',
+        score: 0.95,
+        excerpt: 'Test excerpt',
+        tier: 'slow',
+        tags: ['test'],
+        matchSource: 'both',
+      },
+    ],
+    tokenUsage: { queryEmbedTokens: 5, rerankTokens: 0, intentFilterTokens: 0, totalTokens: 5 },
+  }),
 }));
 
 describe('MCP server', () => {

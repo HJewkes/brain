@@ -65,7 +65,7 @@ export function createMcpServer(resolveOpts?: ResolveOptions): McpServer {
       const db = new BrainDB(config.dbPath);
       try {
         const embedder = createEmbedder(config);
-        const results = await search(db, embedder, query, {
+        const { results: hits } = await search(db, embedder, query, {
           limit: limit ?? 10,
         });
         return {
@@ -73,7 +73,7 @@ export function createMcpServer(resolveOpts?: ResolveOptions): McpServer {
             {
               type: 'text' as const,
               text: JSON.stringify(
-                results.map((r) => ({
+                hits.map((r) => ({
                   noteId: r.noteId,
                   filePath: r.filePath,
                   score: r.score,
