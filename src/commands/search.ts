@@ -4,7 +4,7 @@ import { parentResolveOpts } from '../services/config.js';
 import { search, searchMemories, computeFacets } from '../services/search.js';
 import { expandResults } from '../services/graph.js';
 import { isJsonFormat } from './format.js';
-import type { SearchOptions, SearchResult, FacetResult } from '../types.js';
+import type { SearchOptions, SearchResult, FacetResult, TokenUsage } from '../types.js';
 
 export const searchCommand = new Command('search')
   .description('Search notes with hybrid BM25 + vector search')
@@ -33,6 +33,7 @@ export const searchCommand = new Command('search')
   .option('--project <prefix>', 'Filter results to a specific project')
   .option('--filter <expr...>', 'Filter by frontmatter field (field=value, repeatable)')
   .option('--facet <field...>', 'Show facet counts for a frontmatter field (repeatable)')
+  .option('--show-cost', 'display token usage breakdown for the search')
   .action(async (query, opts, cmd) => {
     await withBrain(async ({ db, embedder, config, modules }) => {
       const searchOpts: SearchOptions = {
@@ -65,7 +66,14 @@ export const searchCommand = new Command('search')
         searchOpts.facets = opts.facet;
       }
 
-      const results = await search(db, embedder, query, searchOpts, config.fusionWeights, modules);
+      const { results, tokenUsage } = await search(
+        db,
+        embedder,
+        query,
+        searchOpts,
+        config.fusionWeights,
+        modules
+      );
 
       const expanded: SearchResult[] = [];
       if (opts.expand && results.length > 0) {
@@ -163,6 +171,9 @@ export const searchCommand = new Command('search')
         if (facetResults.length > 0) {
           output.facets = Object.fromEntries(facetResults.map((f) => [f.field, f.values]));
         }
+        if (opts.showCost) {
+          output.tokenUsage = tokenUsage;
+        }
         process.stdout.write(JSON.stringify(output) + '\n');
       } else {
         if (allResults.length === 0 && memoryResults.length === 0) {
@@ -202,6 +213,21 @@ export const searchCommand = new Command('search')
             process.stdout.write(`  ${facet.field}: ${summary}\n`);
           }
         }
+        if (opts.showCost) {
+          printTokenUsage(tokenUsage);
+        }
       }
     }, parentResolveOpts(cmd));
   });
+
+function printTokenUsage(usage: TokenUsage): void {
+  process.stderr.write('\n--- Token Usage ---\n');
+  process.stderr.write(`  Query embedding:  ${usage.queryEmbedTokens}\n`);
+  if (usage.rerankTokens > 0) {
+    process.stderr.write(`  Reranking:        ${usage.rerankTokens}\n`);
+  }
+  if (usage.intentFilterTokens > 0) {
+    process.stderr.write(`  Intent filtering: ${usage.intentFilterTokens}\n`);
+  }
+  process.stderr.write(`  Total:            ${usage.totalTokens}\n`);
+}

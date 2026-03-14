@@ -162,6 +162,29 @@ export interface Chunk {
   position: number;
 }
 
+// === Token Usage Types ===
+
+export interface TokenUsage {
+  queryEmbedTokens: number;
+  rerankTokens: number;
+  intentFilterTokens: number;
+  totalTokens: number;
+}
+
+export function createEmptyTokenUsage(): TokenUsage {
+  return { queryEmbedTokens: 0, rerankTokens: 0, intentFilterTokens: 0, totalTokens: 0 };
+}
+
+/** Rough token estimate: ~4 characters per token for embedding models. */
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+export interface SearchResultWithUsage {
+  results: SearchResult[];
+  tokenUsage: TokenUsage;
+}
+
 // === Search Types ===
 
 export type MatchSource = 'bm25' | 'vector' | 'both' | 'rerank' | 'graph';

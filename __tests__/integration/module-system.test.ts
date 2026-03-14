@@ -179,7 +179,7 @@ describe('V1: Module Registration and Indexing', () => {
     const rContent = readFileSync(regularPath, 'utf-8');
     await indexSingleFile(db, embedder, regularPath, rContent, hashOf(rContent), Date.now());
 
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'rockets',

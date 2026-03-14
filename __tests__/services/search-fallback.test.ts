@@ -98,7 +98,7 @@ describe('three-layer search fallback', () => {
 
   describe('Layer 1: Porter stemming (FTS5)', () => {
     it('returns results for exact term matches', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'bluetooth', {
+      const { results } = await search(ctx.db, ctx.embedder, 'bluetooth', {
         limit: 5,
         minScore: 0,
       });
@@ -108,7 +108,7 @@ describe('three-layer search fallback', () => {
     });
 
     it('returns results for stemmed terms', async () => {
-      const results = await search(ctx.db, ctx.embedder, 'training', {
+      const { results } = await search(ctx.db, ctx.embedder, 'training', {
         limit: 5,
         minScore: 0,
       });
@@ -122,7 +122,7 @@ describe('three-layer search fallback', () => {
     it('returns results via trigram when Porter finds nothing', async () => {
       // A substring that does not match as a full FTS token but
       // shares trigrams with indexed content
-      const results = await search(ctx.db, ctx.embedder, 'blueto', {
+      const { results } = await search(ctx.db, ctx.embedder, 'blueto', {
         limit: 5,
         minScore: 0,
       });
@@ -136,7 +136,7 @@ describe('three-layer search fallback', () => {
   describe('Layer 3: Levenshtein correction fallback', () => {
     it('corrects misspelled query and returns results', async () => {
       // "bluetooh" is misspelled (missing 't') - Levenshtein distance 1 from "bluetooth"
-      const results = await search(ctx.db, ctx.embedder, 'bluetooh', {
+      const { results } = await search(ctx.db, ctx.embedder, 'bluetooh', {
         limit: 5,
         minScore: 0,
       });
@@ -147,7 +147,7 @@ describe('three-layer search fallback', () => {
 
     it('corrects multiple misspelled terms', async () => {
       // "typscript paterns" has two misspellings
-      const results = await search(ctx.db, ctx.embedder, 'typscript paterns', {
+      const { results } = await search(ctx.db, ctx.embedder, 'typscript paterns', {
         limit: 5,
         minScore: 0,
       });
@@ -159,7 +159,7 @@ describe('three-layer search fallback', () => {
     it('returns empty when vocabulary is empty and no matches found', async () => {
       ctx.db.clearVocabulary();
 
-      const results = await search(ctx.db, ctx.embedder, 'xyznonexistentterm', {
+      const { results } = await search(ctx.db, ctx.embedder, 'xyznonexistentterm', {
         limit: 5,
         minScore: 0.9,
       });
@@ -170,7 +170,7 @@ describe('three-layer search fallback', () => {
 
     it('does not correct already-correct terms', async () => {
       // "bluetooth" is correctly spelled - Layer 1 should handle it
-      const results = await search(ctx.db, ctx.embedder, 'bluetooth', {
+      const { results } = await search(ctx.db, ctx.embedder, 'bluetooth', {
         limit: 5,
         minScore: 0,
       });
@@ -183,7 +183,7 @@ describe('three-layer search fallback', () => {
   describe('fallback ordering', () => {
     it('prefers Layer 1 results when available', async () => {
       // Exact match should use Layer 1, not fallbacks
-      const results = await search(ctx.db, ctx.embedder, 'TypeScript', {
+      const { results } = await search(ctx.db, ctx.embedder, 'TypeScript', {
         limit: 5,
         minScore: 0,
       });
@@ -195,7 +195,7 @@ describe('three-layer search fallback', () => {
 
     it('falls through all layers for heavily misspelled query', async () => {
       // "velocty" is misspelled - may need Levenshtein correction
-      const results = await search(ctx.db, ctx.embedder, 'velocty', {
+      const { results } = await search(ctx.db, ctx.embedder, 'velocty', {
         limit: 5,
         minScore: 0,
       });
