@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
-import { isJsonFormat } from './format.js';
+import { resolveFormat } from './format.js';
+import { formatOutput } from '../services/output-formatter.js';
 import { withDb } from '../services/brain-service.js';
 import { parseIntervalDays } from '../utils.js';
 
@@ -57,8 +58,33 @@ export const statusCommand = new Command('status')
         staleNoteIds: staleNotes,
       };
 
-      if (isJsonFormat(opts, cmd)) {
+      const format = resolveFormat(opts, cmd);
+
+      if (format === 'json') {
         process.stdout.write(JSON.stringify(summary) + '\n');
+      } else if (format === 'table') {
+        const rows = [
+          {
+            field: 'Instance',
+            value: `${instance.isLocal ? 'local' : 'global'} (${instance.root})`,
+          },
+          { field: 'Notes', value: String(notes.length) },
+          { field: 'Chunks', value: String(totalChunks) },
+          { field: 'By tier', value: formatMap(byTier) },
+          { field: 'By type', value: formatMap(byType) },
+          {
+            field: 'Embedding',
+            value: embeddingModel
+              ? `${embeddingModel.model} (${embeddingModel.dimensions}d)`
+              : 'none',
+          },
+          {
+            field: 'Last indexed',
+            value: lastIndexed ? new Date(lastIndexed).toISOString() : 'never',
+          },
+          { field: 'Stale notes', value: String(staleNotes.length) },
+        ];
+        process.stdout.write(formatOutput(rows, 'table') + '\n');
       } else {
         const instanceLabel = instance.isLocal ? 'local' : 'global';
         process.stderr.write(`Instance: ${instanceLabel} (${instance.root})\n`);
