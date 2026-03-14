@@ -16,6 +16,7 @@ import type {
 } from '../types.js';
 import type { ModuleRegistry } from '../modules/registry.js';
 import { correctQuery } from './vocabulary.js';
+import { intentSearch } from './search-intent.js';
 
 const RRF_K = 60;
 const INTENT_SIMILARITY_THRESHOLD = 0.3;
@@ -332,6 +333,12 @@ export async function search(
     allowedNoteIds = metaIds;
   }
 
+  // Multi-query intent-based search: classifies intent, expands into sub-queries,
+  // routes each to the optimal strategy, then merges results.
+  if (options.multiQuery) {
+    return executeMultiQuerySearch(db, embedder, query, options, allowedNoteIds);
+  }
+
   // Step 1: BM25 search via FTS5
   const ftsResults = db.searchFTS(query, overfetchLimit);
   const filteredFts = allowedNoteIds
@@ -523,6 +530,37 @@ export function checkAndPromote(
   }
 
   return true;
+}
+
+async function executeMultiQuerySearch(
+  db: BrainDB,
+  embedder: Embedder,
+  query: string,
+  options: SearchOptions,
+  allowedNoteIds: Set<string> | null
+): Promise<SearchResult[]> {
+  const limit = options.limit;
+  const { results: scored } = await intentSearch(db, embedder, query, limit, allowedNoteIds);
+
+  const results = buildSearchResults(
+    db,
+    scored.map((s) => ({
+      noteId: s.noteId,
+      score: s.score,
+      chunkId: s.chunkId,
+      matchSource: s.matchSource,
+    }))
+  );
+
+  for (const result of results) {
+    db.recordAccess(result.noteId, 'search_hit');
+  }
+
+  if (options.rerank && results.length > 1) {
+    return rerank(query, results, limit);
+  }
+
+  return results;
 }
 
 function getPrivateModuleNoteIds(
