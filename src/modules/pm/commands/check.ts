@@ -61,6 +61,17 @@ function formatCheckReport(report: ConsistencyReport): void {
     }
   }
 
+  if (structural.postCompletionActivity.length > 0) {
+    process.stdout.write(
+      `\n  Post-completion activity (${structural.postCompletionActivity.length}):\n`
+    );
+    for (const p of structural.postCompletionActivity) {
+      process.stdout.write(
+        `    ${p.task} - ${p.taskTitle}: ${p.activityAfter.length} event(s) after completion\n`
+      );
+    }
+  }
+
   if (semantic) {
     if (semantic.decisionPairs.length > 0) {
       process.stdout.write(`\n  Decision conflicts (${semantic.decisionPairs.length}):\n`);

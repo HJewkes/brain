@@ -420,6 +420,63 @@ export function computeSupersessionGaps(db: BrainDB, prefix: string): Supersessi
   return gaps;
 }
 
+export interface PostCompletionActivity {
+  task: string;
+  taskTitle: string;
+  completedAt: string;
+  activityAfter: { type: string; timestamp: string; fromState: string; toState: string }[];
+  reason: string;
+}
+
+export function findPostCompletionActivity(db: BrainDB, prefix: string): PostCompletionActivity[] {
+  const activityNotes = getPmNotes(db, 'activity', { project: prefix });
+  if (activityNotes.length === 0) return [];
+
+  const byTask = new Map<
+    string,
+    { type: string; timestamp: string; fromState: string; toState: string }[]
+  >();
+  for (const note of activityNotes) {
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+    const taskId = meta.task_id as string;
+    if (!taskId) continue;
+    if (!byTask.has(taskId)) byTask.set(taskId, []);
+    byTask.get(taskId)!.push({
+      type: meta.activity_type as string,
+      timestamp: (meta.created as string) ?? note.createdAt ?? '',
+      fromState: meta.from_state as string,
+      toState: meta.to_state as string,
+    });
+  }
+
+  const results: PostCompletionActivity[] = [];
+
+  for (const [taskId, activities] of byTask) {
+    const sorted = [...activities].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const completionIdx = sorted.findIndex((a) => a.type === 'complete');
+    if (completionIdx === -1) continue;
+
+    const postCompletion = sorted.slice(completionIdx + 1);
+    if (postCompletion.length === 0) continue;
+
+    const taskNotes = getPmNotes(db, 'task', { display_id: taskId });
+    const taskTitle = taskNotes.length > 0 ? (taskNotes[0].title ?? taskId) : taskId;
+
+    results.push({
+      task: taskId,
+      taskTitle,
+      completedAt: sorted[completionIdx].timestamp,
+      activityAfter: postCompletion,
+      reason: `${postCompletion.length} activity event(s) after completion`,
+    });
+  }
+
+  return results;
+}
+
 function extractTopicKey(title: string): string {
   return title
     .replace(/\s*[vV]\d+\s*$/g, '')
@@ -506,6 +563,7 @@ export interface ConsistencyReport {
     brokenDependencies: BrokenDep[];
     blockedWithoutCause: BlockedTask[];
     cancelledDependencies: CancelledDep[];
+    postCompletionActivity: PostCompletionActivity[];
   };
   semantic?: {
     decisionPairs: DecisionPair[];
@@ -522,12 +580,15 @@ export function runConsistencyCheck(db: BrainDB, prefix: string, deep: boolean):
   const blockedWithoutCause = findBlockedWithoutCause(db, prefix);
   const cancelledDependencies = findCancelledDependencies(db, prefix);
 
+  const postCompletionActivity = deep ? findPostCompletionActivity(db, prefix) : [];
+
   const structural = {
     orphanedDecisions,
     stalePrompts,
     brokenDependencies,
     blockedWithoutCause,
     cancelledDependencies,
+    postCompletionActivity,
   };
 
   const totalTasks = getPmNotes(db, 'task', { project: prefix }).length;
@@ -551,7 +612,8 @@ export function runConsistencyCheck(db: BrainDB, prefix: string, deep: boolean):
     stalePrompts.length +
     brokenDependencies.length +
     blockedWithoutCause.length +
-    cancelledDependencies.length;
+    cancelledDependencies.length +
+    postCompletionActivity.length;
 
   const semanticCount = semantic
     ? semantic.decisionPairs.length + semantic.supersessionGaps.length
