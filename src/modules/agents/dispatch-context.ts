@@ -12,6 +12,8 @@ import type { SessionBriefing } from '../sessions/engine/session-briefing.js';
 import { generateSessionBriefing } from '../sessions/engine/session-briefing.js';
 import type { BreakingChange } from './breaking-changes.js';
 import { detectBreakingChanges, formatBreakingChangesBrief } from './breaking-changes.js';
+import type { CompletionCheck } from './dispatch-guard.js';
+import { checkAlreadyCompleted } from './dispatch-guard.js';
 
 export interface AgentDispatchContext {
   taskId: string;
@@ -31,6 +33,7 @@ export interface AgentDispatchContext {
   fileOwnership?: FileOwnershipManifest;
   sessionBriefing?: SessionBriefing;
   breakingChanges?: BreakingChange[];
+  alreadyCompleted?: CompletionCheck;
 }
 
 export interface DispatchContextOptions {
@@ -46,8 +49,10 @@ export function buildAgentDispatchContext(
   const taskMeta = resolveTaskMetadata(db, taskDisplayId);
   if (!taskMeta) return null;
 
+  const completionCheck = checkAlreadyCompleted(taskDisplayId, options?.projectDir);
+
   const routing = computeRouting(taskMeta.category, taskMeta.mode);
-  const agentDispatchable = isAgentDispatchable(taskMeta.mode);
+  const agentDispatchable = isAgentDispatchable(taskMeta.mode) && !completionCheck.alreadyDone;
 
   const ctxResult = assembleContext(db, taskDisplayId);
   if (!ctxResult.ok) return null;
@@ -98,6 +103,7 @@ export function buildAgentDispatchContext(
     contextHash: ctx.contextHash,
     sessionBriefing,
     breakingChanges,
+    alreadyCompleted: completionCheck.alreadyDone ? completionCheck : undefined,
   };
 }
 
@@ -138,6 +144,13 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
   lines.push(`Model: ${ctx.routing.model} | Agent: ${ctx.routing.agentType}`);
   lines.push(`Isolation: ${ctx.routing.isolation} | Verify: ${ctx.routing.verify}`);
   lines.push(`Dispatchable: ${ctx.agentDispatchable}`);
+
+  if (ctx.alreadyCompleted) {
+    lines.push(
+      `Already Completed: commit ${ctx.alreadyCompleted.commitHash} — ${ctx.alreadyCompleted.commitMessage}`
+    );
+  }
+
   lines.push('');
 
   if (ctx.context.body) {
