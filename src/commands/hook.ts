@@ -1,4 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
+import { isJsonFormat } from './format.js';
 import { HookRegistry, resolveHookConfig } from '../hooks/index.js';
 import { ownershipCheck } from '../hooks/checks/ownership.js';
 import { gitSafetyCheck } from '../hooks/checks/git-safety.js';
@@ -94,7 +95,7 @@ const dispatchSubcommand = new Command('dispatch')
 const statusSubcommand = new Command('status')
   .description('Show registered hook handlers and their status')
   .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     const config = resolveHookConfig(process.cwd());
     const registry = createRegistry();
     await registerModuleHandlers(registry);
@@ -107,7 +108,7 @@ const statusSubcommand = new Command('status')
       enabled: h.enabled(config),
     }));
 
-    if (opts.json) {
+    if (isJsonFormat(opts, cmd)) {
       process.stdout.write(JSON.stringify(info, null, 2) + '\n');
     } else {
       for (const h of info) {

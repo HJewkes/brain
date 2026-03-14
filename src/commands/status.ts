@@ -1,11 +1,12 @@
 import { Command } from '@commander-js/extra-typings';
+import { isJsonFormat } from './format.js';
 import { withDb } from '../services/brain-service.js';
 import { parseIntervalDays } from '../utils.js';
 
 export const statusCommand = new Command('status')
   .description('Show database statistics')
   .option('--json', 'output as JSON')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     await withDb(({ db, instance }) => {
       const notes = db.getAllNotes();
       const embeddingModel = db.getEmbeddingModel();
@@ -56,7 +57,7 @@ export const statusCommand = new Command('status')
         staleNoteIds: staleNotes,
       };
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(summary) + '\n');
       } else {
         const instanceLabel = instance.isLocal ? 'local' : 'global';

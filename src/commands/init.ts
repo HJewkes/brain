@@ -14,6 +14,7 @@ import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig, GLOBAL_BRAIN_DIR } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { registerInstance } from '../services/instance-registry.js';
 import { BrainDB } from '../services/brain-db.js';
 import { getEmbedderInfo } from '../adapters/index.js';
@@ -351,7 +352,7 @@ export const initCommand = new Command('init')
   .option('--embedder <type>', 'embedding backend (local, ollama, remote)')
   .option('--json', 'output result as JSON')
   .option('--verbose', 'show technical details')
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     if (opts.local) {
       try {
         initLocalBrain({
@@ -366,7 +367,7 @@ export const initCommand = new Command('init')
 
       const brainDir = join(process.cwd(), '.brain');
 
-      if (!opts.json && existsSync(join(process.cwd(), '.git'))) {
+      if (!isJsonFormat(opts, cmd) && existsSync(join(process.cwd(), '.git'))) {
         const gitignorePath = join(process.cwd(), '.gitignore');
         const gitignoreContent = existsSync(gitignorePath)
           ? readFileSync(gitignorePath, 'utf-8')
@@ -392,7 +393,7 @@ export const initCommand = new Command('init')
         }
       }
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(
           JSON.stringify({
             type: 'local',
@@ -514,7 +515,7 @@ export const initCommand = new Command('init')
       dirsCreated: created,
     };
 
-    if (opts.json) {
+    if (isJsonFormat(opts, cmd)) {
       process.stdout.write(JSON.stringify(summary) + '\n');
     } else {
       process.stderr.write('Brain initialized successfully!\n\n');

@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { execFileSync } from 'node:child_process';
 import { withDb } from '../services/brain-service.js';
 import { parentResolveOpts } from '../services/config.js';
+import { isJsonFormat } from './format.js';
 import { runAllChecks } from '../services/health.js';
 import type { HealthCheckResult, HealthReport } from '../types.js';
 
@@ -61,7 +62,7 @@ export const doctorCommand = new Command('doctor')
         config.notesDir
       );
 
-      if (opts.json) {
+      if (isJsonFormat(opts, cmd)) {
         process.stdout.write(JSON.stringify(report) + '\n');
         return;
       }
