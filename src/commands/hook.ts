@@ -7,13 +7,12 @@ import { workspaceCheck } from '../hooks/checks/workspace.js';
 import { dodCheck } from '../hooks/checks/dod.js';
 import { wipCheck } from '../hooks/checks/wip.js';
 import { worktreeIsolationCheck } from '../hooks/checks/worktree-isolation.js';
-import { workflowResourceCheck } from '../hooks/checks/workflow-resource.js';
 import { loadModules } from '../modules/loader.js';
 import { pmModule } from '../modules/pm/index.js';
 import { workflowModule } from '../modules/workflow/index.js';
 import { sessionsModule } from '../modules/sessions/index.js';
 import { agentsModule } from '../modules/agents/index.js';
-import { codebaseModule } from '../modules/codebase/index.js';
+import { hookInstallCommand } from './hook-install.js';
 import type { HookEvent, HookInput, HookResult } from '../hooks/types.js';
 
 const VALID_EVENTS = new Set<HookEvent>([
@@ -21,7 +20,6 @@ const VALID_EVENTS = new Set<HookEvent>([
   'prompt-submit',
   'task-completed',
   'agent-done',
-  'session-start',
 ]);
 
 function readStdin(): Promise<string> {
@@ -51,13 +49,12 @@ function createRegistry(): HookRegistry {
   registry.register(dodCheck);
   registry.register(wipCheck);
   registry.register(worktreeIsolationCheck);
-  registry.register(workflowResourceCheck);
   return registry;
 }
 
 async function registerModuleHandlers(registry: HookRegistry): Promise<void> {
   const { registry: moduleRegistry } = await loadModules({
-    modules: [pmModule, workflowModule, sessionsModule, agentsModule, codebaseModule],
+    modules: [pmModule, workflowModule, sessionsModule, agentsModule],
   });
   for (const { handler } of moduleRegistry.getHookHandlers()) {
     registry.register(handler);
@@ -127,4 +124,5 @@ const statusSubcommand = new Command('status')
 export const hookCommand = new Command('hook')
   .description('Hook dispatch and management')
   .addCommand(dispatchSubcommand)
-  .addCommand(statusSubcommand);
+  .addCommand(statusSubcommand)
+  .addCommand(hookInstallCommand);
