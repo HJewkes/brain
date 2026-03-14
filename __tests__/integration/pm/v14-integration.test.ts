@@ -42,7 +42,13 @@ describe('V14 integration', () => {
     await indexSingleFile(db, embedder, path, content, hash, Date.now());
 
     // Search should filter low-score results by default
-    const results = await search(db, embedder, 'TypeScript', { limit: 10 }, config.fusionWeights);
+    const { results } = await search(
+      db,
+      embedder,
+      'TypeScript',
+      { limit: 10 },
+      config.fusionWeights
+    );
     for (const r of results) {
       expect(r.score).toBeGreaterThanOrEqual(0.2);
     }

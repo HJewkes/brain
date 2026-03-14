@@ -36,7 +36,7 @@ async function indexNote(id: string, content: string) {
 describe('search guardrails', () => {
   it('applies default min-score when none specified', async () => {
     await indexNote('relevant', 'TypeScript programming language features');
-    const results = await search(db, embedder, 'TypeScript', { limit: 10 }, weights);
+    const { results } = await search(db, embedder, 'TypeScript', { limit: 10 }, weights);
     // All returned results should have score >= default threshold
     for (const r of results) {
       expect(r.score).toBeGreaterThanOrEqual(0.2);
@@ -45,7 +45,7 @@ describe('search guardrails', () => {
 
   it('explicit minScore overrides default', async () => {
     await indexNote('test-note', 'JavaScript programming basics');
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'JavaScript',
@@ -59,7 +59,7 @@ describe('search guardrails', () => {
   it('returns empty array when all results below threshold', async () => {
     // Query something completely unrelated to indexed content
     await indexNote('cooking', 'Recipe for chocolate cake with vanilla frosting');
-    const results = await search(
+    const { results } = await search(
       db,
       embedder,
       'quantum physics relativity',

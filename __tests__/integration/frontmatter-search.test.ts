@@ -96,7 +96,7 @@ describe('Frontmatter-aware search filtering (integration)', () => {
     await indexNote(f1);
     await indexNote(f2);
 
-    const results = await search(db, embedder, 'enforcement', {
+    const { results } = await search(db, embedder, 'enforcement', {
       limit: 10,
       filters: [{ field: 'enforcement-strength', value: 'deterministic' }],
     });
@@ -135,7 +135,7 @@ describe('Frontmatter-aware search filtering (integration)', () => {
     await indexNote(f1);
     await indexNote(f2);
 
-    const results = await search(db, embedder, 'layer', {
+    const { results } = await search(db, embedder, 'layer', {
       limit: 10,
       filters: [{ field: 'architecture-layer', value: '3' }],
     });
@@ -178,7 +178,7 @@ describe('Frontmatter-aware search filtering (integration)', () => {
     await indexNote(f1);
     await indexNote(f2);
 
-    const results = await search(db, embedder, 'enforcement', {
+    const { results } = await search(db, embedder, 'enforcement', {
       limit: 10,
       filters: [
         { field: 'enforcement-strength', value: 'deterministic' },

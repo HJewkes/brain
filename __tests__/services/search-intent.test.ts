@@ -109,7 +109,7 @@ describe('search with intent filtering', () => {
   });
 
   it('returns results when intent is provided', async () => {
-    const results = await search(ctx.db, ctx.embedder, 'TypeScript', {
+    const { results } = await search(ctx.db, ctx.embedder, 'TypeScript', {
       limit: 10,
       intent: 'I want to learn about design patterns',
     });
@@ -118,10 +118,10 @@ describe('search with intent filtering', () => {
   });
 
   it('search without intent is unchanged', async () => {
-    const withoutIntent = await search(ctx.db, ctx.embedder, 'TypeScript', {
+    const { results: withoutIntent } = await search(ctx.db, ctx.embedder, 'TypeScript', {
       limit: 10,
     });
-    const withUndefinedIntent = await search(ctx.db, ctx.embedder, 'TypeScript', {
+    const { results: withUndefinedIntent } = await search(ctx.db, ctx.embedder, 'TypeScript', {
       limit: 10,
       intent: undefined,
     });
@@ -132,7 +132,7 @@ describe('search with intent filtering', () => {
 
   it('falls back to original results when no results match intent threshold', async () => {
     // Use a very unrelated intent to test fallback
-    const results = await search(ctx.db, ctx.embedder, 'TypeScript', {
+    const { results } = await search(ctx.db, ctx.embedder, 'TypeScript', {
       limit: 10,
       intent: 'xyzzy completely unrelated gibberish topic that matches nothing at all',
     });
@@ -142,7 +142,7 @@ describe('search with intent filtering', () => {
   });
 
   it('does not apply intent filter when only one result', async () => {
-    const results = await search(ctx.db, ctx.embedder, 'TypeScript', {
+    const { results } = await search(ctx.db, ctx.embedder, 'TypeScript', {
       limit: 1,
       intent: 'testing strategies',
     });

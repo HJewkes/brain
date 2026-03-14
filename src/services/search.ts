@@ -11,9 +11,12 @@ import type {
   MemorySearchResult,
   SearchOptions,
   SearchResult,
+  SearchResultWithUsage,
+  TokenUsage,
   NoteTier,
   NoteConfidence,
 } from '../types.js';
+import { createEmptyTokenUsage, estimateTokens } from '../types.js';
 import type { ModuleRegistry } from '../modules/registry.js';
 import { correctQuery } from './vocabulary.js';
 import { intentSearch } from './search-intent.js';
@@ -54,12 +57,18 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 async function applyIntentFilter(
   embedder: Embedder,
   results: SearchResult[],
-  intent: string
+  intent: string,
+  usage?: TokenUsage
 ): Promise<SearchResult[]> {
   if (results.length <= 1) return results;
 
-  const intentVec = await embedQuery(embedder, intent);
+  const intentVec = await embedQuery(embedder, intent, usage);
   const excerptTexts = results.map((r) => r.excerpt);
+  if (usage) {
+    const excerptTokens = excerptTexts.reduce((sum, t) => sum + estimateTokens(t), 0);
+    usage.intentFilterTokens += excerptTokens;
+    usage.totalTokens += excerptTokens;
+  }
   const excerptVecs = await embedder.embed(excerptTexts);
 
   const scored = results.map((r, i) => ({
@@ -84,8 +93,16 @@ function truncateExcerpt(content: string): string {
   return content.slice(0, EXCERPT_MAX_LENGTH);
 }
 
-async function embedQuery(embedder: Embedder, query: string): Promise<Float32Array> {
+async function embedQuery(
+  embedder: Embedder,
+  query: string,
+  usage?: TokenUsage
+): Promise<Float32Array> {
   const queryText = embedder.model.includes('nomic') ? `search_query: ${query}` : query;
+  if (usage) {
+    usage.queryEmbedTokens += estimateTokens(queryText);
+    usage.totalTokens += estimateTokens(queryText);
+  }
   const [embedding] = await embedder.embed([queryText]);
   return new Float32Array(embedding);
 }
@@ -292,8 +309,9 @@ export async function search(
   options: SearchOptions,
   fusionWeights: { bm25: number; vector: number } = { bm25: 0.3, vector: 0.7 },
   moduleRegistry?: ModuleRegistry
-): Promise<SearchResult[]> {
-  if (!query.trim()) return [];
+): Promise<SearchResultWithUsage> {
+  const usage = createEmptyTokenUsage();
+  if (!query.trim()) return { results: [], tokenUsage: usage };
 
   const limit = options.limit;
   const overfetchLimit = limit * OVERFETCH_MULTIPLIER;
@@ -336,7 +354,8 @@ export async function search(
   // Multi-query intent-based search: classifies intent, expands into sub-queries,
   // routes each to the optimal strategy, then merges results.
   if (options.multiQuery) {
-    return executeMultiQuerySearch(db, embedder, query, options, allowedNoteIds);
+    const mqResults = await executeMultiQuerySearch(db, embedder, query, options, allowedNoteIds);
+    return { results: mqResults, tokenUsage: usage };
   }
 
   // Step 1: BM25 search via FTS5
@@ -360,7 +379,7 @@ export async function search(
   }
 
   // Step 2: Vector search
-  const queryVec = await embedQuery(embedder, query);
+  const queryVec = await embedQuery(embedder, query, usage);
   const vectorResults = db.searchVector(queryVec, overfetchLimit);
   const filteredVector = allowedNoteIds
     ? vectorResults.filter((r) => allowedNoteIds.has(r.noteId))
@@ -420,15 +439,21 @@ export async function search(
   // Step 6: Optional cross-encoder reranking
   let finalResults = results;
   if (options.rerank && results.length > 1) {
+    const rerankTokens = results.reduce(
+      (sum, r) => sum + estimateTokens(query) + estimateTokens(r.excerpt),
+      0
+    );
+    usage.rerankTokens += rerankTokens;
+    usage.totalTokens += rerankTokens;
     finalResults = await rerank(query, results, limit);
   }
 
   // Step 7: Optional intent-based filtering
   if (options.intent && finalResults.length > 1) {
-    finalResults = await applyIntentFilter(embedder, finalResults, options.intent);
+    finalResults = await applyIntentFilter(embedder, finalResults, options.intent, usage);
   }
 
-  return finalResults;
+  return { results: finalResults, tokenUsage: usage };
 }
 
 export function computeFacets(

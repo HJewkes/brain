@@ -70,7 +70,7 @@ describe('failure modes', { timeout: 120_000 }, () => {
         [new Float32Array(embedding)]
       );
 
-      const results = await search(db, embedder, 'testing', { limit: 5 });
+      const { results } = await search(db, embedder, 'testing', { limit: 5 });
       expect(results.length).toBeGreaterThan(0);
 
       db.close();
@@ -122,7 +122,7 @@ Some body content that is long enough to pass the minimum chunk length.`;
       const db = new BrainDB(dbPath);
       const embedder = new LocalEmbedder();
 
-      const results = await search(db, embedder, '', { limit: 5 });
+      const { results } = await search(db, embedder, '', { limit: 5 });
       expect(results).toEqual([]);
 
       db.close();
@@ -139,7 +139,7 @@ Some body content that is long enough to pass the minimum chunk length.`;
       const embedder = new LocalEmbedder();
       db.setEmbeddingModel(embedder.model, embedder.dimensions);
 
-      const results = await search(db, embedder, 'test query', { limit: 5 });
+      const { results } = await search(db, embedder, 'test query', { limit: 5 });
       expect(results).toEqual([]);
 
       db.close();
@@ -155,7 +155,7 @@ Some body content that is long enough to pass the minimum chunk length.`;
       const db = new BrainDB(dbPath);
       const embedder = new LocalEmbedder();
 
-      const results = await search(db, embedder, '   \t\n  ', { limit: 5 });
+      const { results } = await search(db, embedder, '   \t\n  ', { limit: 5 });
       expect(results).toEqual([]);
 
       db.close();
@@ -186,7 +186,8 @@ Some body content that is long enough to pass the minimum chunk length.`;
       const results = await Promise.all(searches);
 
       for (const result of results) {
-        expect(Array.isArray(result)).toBe(true);
+        expect(Array.isArray(result.results)).toBe(true);
+        expect(result.tokenUsage).toBeDefined();
       }
 
       db.close();

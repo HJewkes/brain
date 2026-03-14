@@ -4,6 +4,8 @@ import { computeRouting, isAgentDispatchable } from '../pm/engine/routing.js';
 import { assembleContext } from '../pm/engine/dispatch.js';
 import { getPmNotes } from '../pm/data/queries.js';
 import type { TaskMetadata } from '../pm/types.js';
+import type { FileOwnershipManifest } from './file-ownership.js';
+import { formatOwnershipBrief } from './file-ownership.js';
 
 export interface AgentDispatchContext {
   taskId: string;
@@ -19,6 +21,7 @@ export interface AgentDispatchContext {
     constraints: string[];
   };
   contextHash: string;
+  fileOwnership?: FileOwnershipManifest;
 }
 
 export function buildAgentDispatchContext(
@@ -101,6 +104,11 @@ export function formatDispatchBrief(ctx: AgentDispatchContext): string {
     for (const dec of ctx.context.decisions) {
       lines.push(`  ${dec.displayId} [${dec.status}] ${dec.content}`);
     }
+    lines.push('');
+  }
+
+  if (ctx.fileOwnership) {
+    lines.push(formatOwnershipBrief(ctx.fileOwnership, ctx.taskId));
     lines.push('');
   }
 

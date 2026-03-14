@@ -297,7 +297,7 @@ describe('search with multiQuery option', () => {
   });
 
   it('returns results when multiQuery is enabled', async () => {
-    const results = await search(db, embedder, 'TypeScript patterns', {
+    const { results } = await search(db, embedder, 'TypeScript patterns', {
       limit: 10,
       multiQuery: true,
     });
@@ -310,7 +310,7 @@ describe('search with multiQuery option', () => {
   });
 
   it('returns empty array for empty query with multiQuery', async () => {
-    const results = await search(db, embedder, '', {
+    const { results } = await search(db, embedder, '', {
       limit: 10,
       multiQuery: true,
     });
@@ -319,7 +319,7 @@ describe('search with multiQuery option', () => {
   });
 
   it('records access events for multi-query results', async () => {
-    const results = await search(db, embedder, 'TypeScript', {
+    const { results } = await search(db, embedder, 'TypeScript', {
       limit: 5,
       multiQuery: true,
     });
@@ -330,7 +330,7 @@ describe('search with multiQuery option', () => {
   });
 
   it('respects limit parameter', async () => {
-    const results = await search(db, embedder, 'TypeScript', {
+    const { results } = await search(db, embedder, 'TypeScript', {
       limit: 1,
       multiQuery: true,
     });
@@ -339,13 +339,23 @@ describe('search with multiQuery option', () => {
   });
 
   it('produces different ordering than standard search for certain queries', async () => {
-    const standardResults = await search(db, embedder, 'how to setup React with TypeScript', {
-      limit: 10,
-    });
-    const multiResults = await search(db, embedder, 'how to setup React with TypeScript', {
-      limit: 10,
-      multiQuery: true,
-    });
+    const { results: standardResults } = await search(
+      db,
+      embedder,
+      'how to setup React with TypeScript',
+      {
+        limit: 10,
+      }
+    );
+    const { results: multiResults } = await search(
+      db,
+      embedder,
+      'how to setup React with TypeScript',
+      {
+        limit: 10,
+        multiQuery: true,
+      }
+    );
 
     expect(standardResults.length).toBeGreaterThan(0);
     expect(multiResults.length).toBeGreaterThan(0);
@@ -363,7 +373,7 @@ describe('search with multiQuery option', () => {
   it('applies reranking when both multiQuery and rerank are set', async () => {
     const { rerank } = await import('../../src/services/reranker.js');
 
-    const results = await search(db, embedder, 'TypeScript patterns', {
+    const { results } = await search(db, embedder, 'TypeScript patterns', {
       limit: 5,
       multiQuery: true,
       rerank: true,
