@@ -3,6 +3,7 @@ import { withDb } from '../../services/brain-service.js';
 import { createAgent, getAgent, listAgents, updateAgentStatus } from './data.js';
 import type { AgentRecord } from './types.js';
 import { createWorktreeCommand } from './worktree-commands.js';
+import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
 
 function padRight(s: string, len: number): string {
   return s.length >= len ? s.substring(0, len) : s + ' '.repeat(len - s.length);
@@ -217,6 +218,29 @@ export function createAgentCommands(): Command {
           'Age';
         const rows = agents.map(formatAgentLine);
         process.stdout.write([header, ...rows].join('\n') + '\n');
+      });
+    });
+
+  // brain agent dispatch <task-id>
+  cmd
+    .command('dispatch')
+    .description('Show PM dispatch context an agent would receive for a task')
+    .argument('<task-id>', 'PM task display_id (e.g. VNM-01.03)')
+    .option('--json', 'Output JSON')
+    .action(async (taskId, opts) => {
+      await withDb((svc) => {
+        const ctx = buildAgentDispatchContext(svc.db, taskId.toUpperCase());
+        if (!ctx) {
+          process.stderr.write(`Error: Task not found: ${taskId}\n`);
+          process.exitCode = 1;
+          return;
+        }
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(ctx, null, 2) + '\n');
+        } else {
+          process.stdout.write(formatDispatchBrief(ctx) + '\n');
+        }
       });
     });
 
