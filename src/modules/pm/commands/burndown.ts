@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../../services/brain-service.js';
 import { BurndownOrchestrator } from '../../agents/burndown.js';
@@ -7,6 +9,19 @@ import { getActiveProject } from '../data/queries.js';
 import { countActiveAgents } from '../../agents/data.js';
 import { buildDashboard, formatDashboard } from '../../agents/burndown-dashboard.js';
 import type { ActiveAgent, TickResult } from '../../agents/burndown.js';
+
+function readWipFromConfig(projectDir: string): number | null {
+  const configPath = join(projectDir, 'ao.config.json');
+  if (!existsSync(configPath)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    const enforcement = raw.enforcement as Record<string, unknown> | undefined;
+    const wip = enforcement?.wipLimit;
+    return typeof wip === 'number' ? wip : null;
+  } catch {
+    return null;
+  }
+}
 
 function formatProgress(
   project: string,
@@ -187,11 +202,14 @@ export function createBurndownCommand(): Command {
 
         const { renderCoordinatorPrompt } = await import('../../agents/coordinator.js');
 
+        const configWip = readWipFromConfig(process.cwd());
+        const wipLimit = opts.wipLimit !== '4' ? parseInt(opts.wipLimit, 10) : (configWip ?? 4);
+
         const teamName = `${opts.teamName}-${project.toLowerCase()}`;
         const result = renderCoordinatorPrompt({
           projectDir: process.cwd(),
           teamName,
-          wipLimit: parseInt(opts.wipLimit, 10),
+          wipLimit,
           templateName: opts.template,
         });
 
@@ -214,7 +232,7 @@ export function createBurndownCommand(): Command {
               {
                 project,
                 teamName,
-                wipLimit: parseInt(opts.wipLimit, 10),
+                wipLimit,
                 totalTasks,
                 doneTasks,
                 dryRun: !!opts.dryRun,
@@ -230,10 +248,8 @@ export function createBurndownCommand(): Command {
         if (opts.dryRun) {
           process.stdout.write(`Dry run — ${project}\n`);
           process.stdout.write(`Team: ${teamName}\n`);
-          process.stdout.write(`WIP limit: ${opts.wipLimit}\n`);
-          process.stdout.write(
-            `Tasks: ${doneTasks}/${totalTasks} done\n\n`
-          );
+          process.stdout.write(`WIP limit: ${wipLimit}\n`);
+          process.stdout.write(`Tasks: ${doneTasks}/${totalTasks} done\n\n`);
           process.stdout.write('--- Coordinator Prompt ---\n');
           process.stdout.write(result.prompt + '\n');
           return;
