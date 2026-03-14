@@ -40,5 +40,6 @@ export async function rerank(
   return scored.slice(0, limit).map(({ result, rerankScore }) => ({
     ...result,
     score: rerankScore,
+    matchSource: 'rerank' as const,
   }));
 }

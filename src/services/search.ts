@@ -7,6 +7,7 @@ import type {
   Embedder,
   FacetResult,
   FusionStrategy,
+  MatchSource,
   MemorySearchResult,
   SearchOptions,
   SearchResult,
@@ -104,7 +105,12 @@ interface VectorHit {
   noteId: string;
   distance: number;
 }
-type ScoredResult = { noteId: string; score: number; chunkId: string | null };
+type ScoredResult = {
+  noteId: string;
+  score: number;
+  chunkId: string | null;
+  matchSource: MatchSource;
+};
 
 /**
  * Find the largest relative score gap between consecutive results and cut there,
@@ -178,7 +184,13 @@ function fuseByRRF(
     if (entry.vectorRank !== null) {
       score += weights.vector * (1 / (RRF_K + entry.vectorRank));
     }
-    scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId });
+    const matchSource: MatchSource =
+      entry.bm25Rank !== null && entry.vectorRank !== null
+        ? 'both'
+        : entry.bm25Rank !== null
+          ? 'bm25'
+          : 'vector';
+    scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId, matchSource });
   }
 
   return scored;
@@ -243,7 +255,13 @@ function fuseByScore(
       score += weights.vector * Math.max(0, cosineSim);
     }
 
-    scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId });
+    const matchSource: MatchSource =
+      entry.bm25Score !== null && entry.vectorDistance !== null
+        ? 'both'
+        : entry.bm25Score !== null
+          ? 'bm25'
+          : 'vector';
+    scored.push({ noteId: entry.noteId, score, chunkId: entry.chunkId, matchSource });
   }
 
   return scored;
@@ -417,6 +435,7 @@ function buildSearchResults(db: BrainDB, topResults: ScoredResult[]): SearchResu
       tier: note.tier as NoteTier,
       tags: parseTags(note.tags),
       confidence: note.confidence as NoteConfidence | null,
+      matchSource: item.matchSource,
     });
   }
 
