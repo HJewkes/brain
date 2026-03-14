@@ -11,7 +11,7 @@ export const workspaceCheck: HookHandler = {
     return config.enforcement.workspaceClean;
   },
 
-  run(input: HookInput): HookResult {
+  run(_input: HookInput): HookResult {
     if (!detectGitRepo()) return hookAllow();
 
     const status = getGitStatus();

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { HookInput, HookConfig } from '../../../src/hooks/types.js';
+import type { HookInput } from '../../../src/hooks/types.js';
 import { DEFAULT_HOOK_CONFIG } from '../../../src/hooks/config.js';
 
 // Mock session-restore before importing the handler
