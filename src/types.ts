@@ -223,6 +223,7 @@ export interface SearchOptions {
   filters?: Array<{ field: string; value: string }>;
   facets?: string[];
   throttle?: import('./services/search-throttle.js').SearchThrottle;
+  enrich?: boolean;
 }
 
 export interface FacetResult {

@@ -5,6 +5,7 @@ import { search, searchMemories, computeFacets } from '../services/search.js';
 import { expandResults } from '../services/graph.js';
 import { isJsonFormat } from './format.js';
 import type { SearchOptions, SearchResult, FacetResult, TokenUsage } from '../types.js';
+import type { EnrichedSearchResult } from '../services/relational-enrichment.js';
 
 export const searchCommand = new Command('search')
   .description('Search notes with hybrid BM25 + vector search')
@@ -33,6 +34,7 @@ export const searchCommand = new Command('search')
   .option('--project <prefix>', 'Filter results to a specific project')
   .option('--filter <expr...>', 'Filter by frontmatter field (field=value, repeatable)')
   .option('--facet <field...>', 'Show facet counts for a frontmatter field (repeatable)')
+  .option('--enrich', 'show related notes for top results')
   .option('--show-cost', 'display token usage breakdown for the search')
   .action(async (query, opts, cmd) => {
     await withBrain(async ({ db, embedder, config, modules }) => {
@@ -50,6 +52,7 @@ export const searchCommand = new Command('search')
         excludePm: opts.excludePm,
         intent: opts.intent,
         multiQuery: opts.multiQuery,
+        enrich: opts.enrich,
       };
 
       if (opts.filter) {
@@ -192,6 +195,14 @@ export const searchCommand = new Command('search')
           }
           if (r.excerpt) {
             process.stdout.write(`  ${r.excerpt}\n`);
+          }
+          const enriched = r as EnrichedSearchResult;
+          if (enriched.relatedNotes?.length) {
+            process.stdout.write('  Related:\n');
+            for (const rel of enriched.relatedNotes) {
+              const abstract = rel.abstract ? ` - ${rel.abstract}` : '';
+              process.stdout.write(`    [${rel.relationType}] ${rel.title}${abstract}\n`);
+            }
           }
           process.stdout.write('\n');
         }
