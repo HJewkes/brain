@@ -524,7 +524,7 @@ export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewPro
     setLoading(true);
     setError(null);
 
-    const apiBase = window.__BRAIN_API__ ?? '';
+    const apiBase = window.__BRAIN_API__ ?? 'http://localhost:7800';
     fetch(`${apiBase}/api/sessions/${encodeURIComponent(sessionId)}/detail`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -646,11 +646,12 @@ const CLAUDE_BG = '#1a1400';
 const CLAUDE_BORDER = 'rgba(255,121,0,0.25)';
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-  body: { flex: 1, flexDirection: 'row' as const },
-  minimapColumn: { width: 8, position: 'relative' as const },
+  root: { flex: 1, backgroundColor: C.bg, height: '100%' as unknown as number },
+  body: { flex: 1, flexDirection: 'row' as const, height: '100%' as unknown as number },
+  minimapColumn: { width: 8, position: 'relative' as const, flexShrink: 0 },
   sidebarScroll: {
-    width: 224,
+    width: 180,
+    flexShrink: 0,
     borderLeftWidth: 1,
     borderLeftColor: C.border,
     backgroundColor: C.surface1,

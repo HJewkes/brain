@@ -209,7 +209,7 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
       />
 
       <View style={styles.main}>
-        <View style={styles.content}>
+        <View style={activeView === 'session' ? styles.contentFullBleed : styles.content}>
           {activeView === 'overview' && (
             <OverviewView audit={audit} status={status} dashboard={dashboard} />
           )}
@@ -425,9 +425,15 @@ const styles = {
     flex: 1,
     backgroundColor: BG,
     overflowY: 'auto' as unknown as undefined,
+    overflow: 'hidden' as unknown as undefined,
   },
   content: {
     maxWidth: 1200,
     padding: 24,
+  },
+  contentFullBleed: {
+    flex: 1,
+    padding: 0,
+    maxWidth: undefined,
   },
 };
