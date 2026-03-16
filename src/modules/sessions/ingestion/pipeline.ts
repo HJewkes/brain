@@ -9,6 +9,7 @@ import { detectLinks } from './linker.js';
 import { createSession, linkSessionToTask, populateSessionFiles } from '../data/session-ops.js';
 import { buildSegments } from '../engine/segmenter.js';
 import { createSegments } from '../data/segment-ops.js';
+import { buildStructuredEvents, writeStructuredEvents } from './structured-events.js';
 import { IngestionState } from './state.js';
 import { discoverSessions } from './discovery.js';
 import type { DiscoveredSession, DiscoveryOptions } from './discovery.js';
@@ -158,6 +159,14 @@ async function ingestOne(
       });
     }
     return false;
+  }
+
+  // Write structured events JSON for dashboard API
+  try {
+    const structuredEvents = buildStructuredEvents(analytics);
+    writeStructuredEvents(config.notesDir, result.data.display_id, structuredEvents);
+  } catch {
+    // Non-fatal — dashboard will work without it
   }
 
   // Populate session_files with file touch data
