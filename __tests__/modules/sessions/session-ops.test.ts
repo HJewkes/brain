@@ -88,6 +88,69 @@ describe('createSession', () => {
     expect(result.error.code).toBe('DUPLICATE_SESSION');
   });
 
+  it('round-trips all new metadata fields', async () => {
+    const result = await createSession(db, config, embedder, {
+      session_id: 'rt-fields',
+      project_dir: '/test',
+      status: 'completed',
+      started_at: '2026-03-15T10:00:00Z',
+      completed_at: '2026-03-15T11:00:00Z',
+      duration_minutes: 60,
+      session_type: 'agent',
+      outcome: 'success',
+      cost_usd: 0.42,
+      jsonl_path: '/tmp/sessions/abc.jsonl',
+      jsonl_size_bytes: 123456,
+      pr_links: ['https://github.com/org/repo/pull/1', 'https://github.com/org/repo/pull/2'],
+      files_written: ['src/foo.ts', 'src/bar.ts'],
+      segment_count: 3,
+      instance_id: 'inst-abc-123',
+      plan_id: 'plan-1',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const session = getSession(db, result.data.display_id);
+    expect(session).not.toBeNull();
+    expect(session!.session_type).toBe('agent');
+    expect(session!.outcome).toBe('success');
+    expect(session!.cost_usd).toBe(0.42);
+    expect(session!.jsonl_path).toBe('/tmp/sessions/abc.jsonl');
+    expect(session!.jsonl_size_bytes).toBe(123456);
+    expect(session!.pr_links).toEqual([
+      'https://github.com/org/repo/pull/1',
+      'https://github.com/org/repo/pull/2',
+    ]);
+    expect(session!.files_written).toEqual(['src/foo.ts', 'src/bar.ts']);
+    expect(session!.segment_count).toBe(3);
+    expect(session!.instance_id).toBe('inst-abc-123');
+  });
+
+  it('omits new metadata fields when not provided', async () => {
+    const result = await createSession(db, config, embedder, {
+      session_id: 'rt-minimal',
+      project_dir: '/test',
+      status: 'active',
+      started_at: '2026-03-15T10:00:00Z',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const session = getSession(db, result.data.display_id);
+    expect(session).not.toBeNull();
+    expect(session!.session_type).toBeUndefined();
+    expect(session!.outcome).toBeUndefined();
+    expect(session!.cost_usd).toBeUndefined();
+    expect(session!.jsonl_path).toBeUndefined();
+    expect(session!.jsonl_size_bytes).toBeUndefined();
+    expect(session!.pr_links).toBeUndefined();
+    expect(session!.files_written).toBeUndefined();
+    expect(session!.segment_count).toBeUndefined();
+    expect(session!.instance_id).toBeUndefined();
+  });
+
   it('rejects missing session_id', async () => {
     const result = await createSession(db, config, embedder, {
       session_id: '',

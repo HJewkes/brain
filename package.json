@@ -18,7 +18,7 @@
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
-    "build": "tsup && mkdir -p dist/templates && cp src/modules/workflow/templates/*.md dist/templates/",
+    "build": "tsup && mkdir -p dist/templates && cp src/modules/workflow/templates/*.md dist/templates/ && npm run build:dashboard",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run --project unit",
@@ -31,7 +31,8 @@
     "test:coverage": "vitest run --coverage",
     "postinstall": "node scripts/postinstall.js",
     "preuninstall": "node scripts/preuninstall.js",
-    "lint:staged": "lint-staged"
+    "lint:staged": "lint-staged",
+    "build:dashboard": "vite build --config src/dashboard/vite.config.ts"
   },
   "dependencies": {
     "@commander-js/extra-typings": "^13.1.0",

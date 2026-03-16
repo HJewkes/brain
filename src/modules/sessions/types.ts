@@ -30,6 +30,15 @@ export interface SessionMetadata {
   commits?: string[];
   memories_extracted?: number;
   plan_id?: string;
+  session_type?: string;
+  outcome?: string;
+  cost_usd?: number;
+  jsonl_path?: string;
+  jsonl_size_bytes?: number;
+  pr_links?: string[];
+  files_written?: string[];
+  segment_count?: number;
+  instance_id?: string;
   analyticsExt?: SessionAnalyticsExt;
 }
 
@@ -66,6 +75,15 @@ export interface CreateSessionInput {
   notes_created?: string[];
   commits?: string[];
   plan_id?: string;
+  session_type?: string;
+  outcome?: string;
+  cost_usd?: number;
+  jsonl_path?: string;
+  jsonl_size_bytes?: number;
+  pr_links?: string[];
+  files_written?: string[];
+  segment_count?: number;
+  instance_id?: string;
   l1Content?: string;
   l2Content?: string;
   observationsContent?: string;
@@ -136,7 +154,15 @@ export interface ToolCall {
   outcome: 'success' | 'error' | 'pending';
   errorMessage?: string;
   durationMs?: number;
+  byteOffset?: number;
   isSidechain: boolean;
+}
+
+export interface PrLink {
+  number: number;
+  repo: string;
+  url: string;
+  timestamp?: string;
 }
 
 export interface ErrorEvent {
@@ -194,4 +220,37 @@ export interface SessionAnalytics {
   hookPreventionCount: number;
   capturedViaHooks: boolean;
   capturedViaJsonl: boolean;
+  slug: string | null;
+  logicalParentUuid: string | null;
+  compactionTimestamps: string[];
+  compactionSummaries: string[];
+  compactionByteOffsets: number[];
+  prLinks: PrLink[];
+  filesTouched: Map<string, Set<string>>;
+  filesWritten: string[];
+  taskRefs: string[];
+  modelCounts: Map<string, number>;
+  thinkingBlockCount: number;
+  planPresent: boolean;
+  permissionMode: string | null;
+  serviceTier: string | null;
+  gitCommandCount: number;
+  commitCount: number;
+  subagentCount: number;
+  skillUsage: Map<string, number>;
+}
+
+export interface SegmentMetadata {
+  segment_index: number;
+  parent_session: string;
+  started_at: string;
+  ended_at: string;
+  duration_minutes: number;
+  boundary_type: 'compaction' | 'task_switch' | 'idle_gap' | 'manual';
+  tool_calls: number;
+  error_count: number;
+  tasks_worked?: string[];
+  compaction_summary?: string;
+  jsonl_byte_start?: number;
+  jsonl_byte_end?: number;
 }

@@ -4,8 +4,11 @@ import type { OllamaClient } from '../../../services/ollama.js';
 import { parseSessionFile } from '../engine/parser.js';
 import { generateSummaries, generateL2Timeline } from './summarizer.js';
 import { computeSessionAnalyticsExt } from '../analytics/metrics.js';
+import { classifySession } from '../engine/classifier.js';
 import { detectLinks } from './linker.js';
-import { createSession, linkSessionToTask } from '../data/session-ops.js';
+import { createSession, linkSessionToTask, populateSessionFiles } from '../data/session-ops.js';
+import { buildSegments } from '../engine/segmenter.js';
+import { createSegments } from '../data/segment-ops.js';
 import { IngestionState } from './state.js';
 import { discoverSessions } from './discovery.js';
 import type { DiscoveredSession, DiscoveryOptions } from './discovery.js';
@@ -16,7 +19,9 @@ export interface IngestOptions {
   projectDir?: string;
   since?: Date;
   dryRun?: boolean;
+  force?: boolean;
   skipSummaries?: boolean;
+  batchSize?: number;
   verbose?: boolean;
   claudeProjectsDir?: string;
 }
@@ -48,7 +53,7 @@ export async function runIngestionPipeline(
   report.discovered = discovered.length;
 
   for (const session of discovered) {
-    if (state.hasSession(session.sessionId)) {
+    if (!opts.force && state.hasSession(session.sessionId)) {
       report.skipped++;
       continue;
     }
@@ -101,6 +106,9 @@ async function ingestOne(
   // Link detection
   const links = await detectLinks(db, analytics, config);
 
+  // Session classification
+  const classification = classifySession(analytics);
+
   // Compute duration
   const durationMinutes = Math.round(analytics.durationMs / 60000);
 
@@ -132,6 +140,9 @@ async function ingestOne(
     commits: links.commits,
     l1Content: l1 || undefined,
     l2Content: l2 || undefined,
+    session_type: classification.sessionType,
+    outcome: classification.outcome,
+    cost_usd: classification.costUsd,
   });
 
   if (!result.ok) {
@@ -149,9 +160,30 @@ async function ingestOne(
     return false;
   }
 
+  // Populate session_files with file touch data
+  try {
+    populateSessionFiles(db, analytics.sessionId, analytics.filesTouched, analytics.projectDir);
+  } catch {
+    // Table may not exist if migrations are behind — non-fatal
+  }
+
   // Create task relations
   for (const taskId of links.tasksWorked) {
     linkSessionToTask(db, result.data.display_id, taskId);
+  }
+
+  // Create segment notes if session has multiple segments
+  const segments = buildSegments(analytics);
+  if (segments.length > 1) {
+    await createSegments(
+      db,
+      embedder,
+      result.data.display_id,
+      result.data.note_id,
+      analytics,
+      segments,
+      config.notesDir
+    );
   }
 
   // Record ingestion state — read only first 4KB for hash

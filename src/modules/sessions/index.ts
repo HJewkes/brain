@@ -15,6 +15,7 @@ import { sessionRestoreHandler } from './hooks/session-restore-handler.js';
 import { sessionBriefingHandler } from './hooks/session-briefing-handler.js';
 import { sessionCaptureHandler } from './hooks/session-capture-handler.js';
 import { sessionStartHandler } from './hooks/session-start-handler.js';
+import { sessionCompactHandler } from './hooks/session-compact-handler.js';
 
 const SESSION_NOTE_TYPE: ModuleNoteType = {
   name: 'session',
@@ -62,6 +63,23 @@ const SESSION_NOTE_TYPE: ModuleNoteType = {
       commits: { type: 'array', description: 'Git commit SHAs' },
       memories_extracted: { type: 'number', description: 'Memories extracted post-session' },
       plan_id: { type: 'string', description: 'Agent orchestration plan ID' },
+      segment_count: { type: 'number', description: 'Number of segments in this session' },
+      jsonl_path: { type: 'string', description: 'Absolute path to the source JSONL file' },
+      jsonl_size_bytes: { type: 'number', description: 'JSONL file size at ingest time' },
+      session_type: {
+        type: 'string',
+        enum: ['solo', 'coordinated', 'agent'],
+        description: 'Session execution type',
+      },
+      outcome: {
+        type: 'string',
+        enum: ['success', 'partial', 'abandoned', 'unknown'],
+        description: 'Session outcome classification',
+      },
+      cost_usd: { type: 'number', description: 'Estimated API cost in USD' },
+      pr_links: { type: 'array', description: 'Pull request URLs opened during session' },
+      instance_id: { type: 'string', description: 'Brain instance identifier' },
+      files_written: { type: 'array', description: 'File paths written during session' },
     },
     required: ['session_id', 'status', 'started_at'],
   },
@@ -78,12 +96,37 @@ const SESSION_NOTE_TYPE: ModuleNoteType = {
   },
 };
 
+const SESSION_SEGMENT_NOTE_TYPE: ModuleNoteType = {
+  name: 'session-segment',
+  description: 'A bounded segment within a session, split at context compaction boundaries',
+  tier: 'slow',
+  schema: {
+    type: 'object',
+    properties: {
+      segment_index: { type: 'number', description: 'Segment index within parent session' },
+      parent_session: { type: 'string', description: 'Parent session display_id' },
+      started_at: { type: 'string', description: 'Segment start time' },
+      ended_at: { type: 'string', description: 'Segment end time' },
+      duration_minutes: { type: 'number', description: 'Segment duration' },
+      boundary_type: { type: 'string', description: 'What caused this segment boundary' },
+      tool_calls: { type: 'number', description: 'Tool calls in this segment' },
+      error_count: { type: 'number', description: 'Errors in this segment' },
+      tasks_worked: { type: 'array', description: 'Task IDs worked in this segment' },
+      compaction_summary: { type: 'string', description: 'LLM compaction summary text' },
+      jsonl_byte_start: { type: 'number', description: 'JSONL byte offset start' },
+      jsonl_byte_end: { type: 'number', description: 'JSONL byte offset end' },
+    },
+    required: ['segment_index', 'parent_session', 'started_at'],
+  },
+};
+
 export const sessionsModule: BrainModule = {
   name: 'sessions',
   version: '1.0.0',
   description: 'Claude session tracking and analytics',
   register(ctx) {
     ctx.registerNoteType(SESSION_NOTE_TYPE);
+    ctx.registerNoteType(SESSION_SEGMENT_NOTE_TYPE);
 
     // Relations (8 total, 4 with inverses)
     ctx.registerRelationType({
@@ -123,15 +166,36 @@ export const sessionsModule: BrainModule = {
       description: 'Git commits made in this session',
     });
     ctx.registerRelationType({
-      name: 'observed-in',
-      description: 'Workflow-improvement observation detected in this session',
-      inverse: 'has-observation',
+      name: 'has-segment',
+      description: 'Session contains this segment',
+      inverse: 'segment-of',
     });
     ctx.registerRelationType({
-      name: 'has-observation',
-      description: 'Session has workflow-improvement observation',
-      inverse: 'observed-in',
+      name: 'segment-of',
+      description: 'Segment belongs to this session',
+      inverse: 'has-segment',
     });
+    ctx.registerRelationType({
+      name: 'next-segment',
+      description: 'Next segment in session chain',
+      inverse: 'prev-segment',
+    });
+    ctx.registerRelationType({
+      name: 'prev-segment',
+      description: 'Previous segment in session chain',
+      inverse: 'next-segment',
+    });
+    ctx.registerRelationType({
+      name: 'spawned-agent',
+      description: 'Agent note spawned during this session',
+      inverse: 'spawned-in',
+    });
+    ctx.registerRelationType({
+      name: 'spawned-in',
+      description: 'Session in which this agent was spawned',
+      inverse: 'spawned-agent',
+    });
+    // observed-in / has-observation registered by workflow module to avoid duplicate registration
 
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
 
@@ -149,6 +213,7 @@ export const sessionsModule: BrainModule = {
     ctx.registerHookHandler(sessionRestoreHandler);
     ctx.registerHookHandler(sessionBriefingHandler);
     ctx.registerHookHandler(sessionCaptureHandler);
+    ctx.registerHookHandler(sessionCompactHandler);
 
     // Migration v1: json_extract indexes for session frontmatter queries
     ctx.registerMigration({
@@ -253,6 +318,28 @@ export const sessionsModule: BrainModule = {
             ON structural_events(session_id);
           CREATE INDEX IF NOT EXISTS idx_structural_events_type
             ON structural_events(session_id, event_type);
+        `);
+      },
+    });
+
+    // Migration v5: session_files table for tracking files touched per session
+    ctx.registerMigration({
+      version: 5,
+      description: 'Create session_files table for per-session file access tracking',
+      up: (db) => {
+        const rawDb = db as { exec(sql: string): void };
+        rawDb.exec(`
+          CREATE TABLE IF NOT EXISTS session_files (
+            session_id      TEXT NOT NULL,
+            file_path       TEXT NOT NULL,
+            operations      TEXT NOT NULL DEFAULT '[]',
+            last_touched_at TEXT,
+            PRIMARY KEY (session_id, file_path)
+          );
+          CREATE INDEX IF NOT EXISTS idx_session_files_path
+            ON session_files(file_path);
+          CREATE INDEX IF NOT EXISTS idx_session_files_session
+            ON session_files(session_id);
         `);
       },
     });
