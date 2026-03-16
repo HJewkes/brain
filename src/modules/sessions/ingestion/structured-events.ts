@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { SessionAnalytics, ToolCall, TokenSnapshot } from '../types.js';
+import { summarizeInput } from './summarizer.js';
 
 export interface ConversationTurn {
   index: number;
@@ -8,9 +9,14 @@ export interface ConversationTurn {
   userText?: string;
   assistantText?: string;
   toolCalls: Array<{
+    id: string;
     toolName: string;
+    inputSummary: string;
     outcome: 'success' | 'error' | 'pending';
+    errorMessage?: string;
     durationMs?: number;
+    byteOffset?: number;
+    agentId?: string;
   }>;
 }
 
@@ -85,9 +91,14 @@ function buildTurns(analytics: SessionAnalytics): ConversationTurn[] {
       timestamp,
       assistantText: assistantText?.slice(0, 500),
       toolCalls: groupedTools.map((tc) => ({
+        id: tc.toolUseId,
         toolName: tc.toolName,
+        inputSummary: summarizeInput(tc.toolName, tc.input) ?? '',
         outcome: tc.outcome,
+        errorMessage: tc.errorMessage,
         durationMs: tc.durationMs,
+        byteOffset: tc.byteOffset,
+        agentId: inferAgentId(tc),
       })),
     });
   }
@@ -166,6 +177,13 @@ function inferTaskEventType(pattern: string): TaskBoundaryEvent['type'] | null {
 function extractTaskId(cmd: string): string | null {
   const match = cmd.match(/\b([A-Z]+-\d+)\b/);
   return match?.[1] ?? null;
+}
+
+function inferAgentId(tc: ToolCall): string | undefined {
+  if (tc.toolName === 'Agent' || tc.toolName === 'Task' || tc.toolName === 'TaskCreate') {
+    return tc.toolUseId;
+  }
+  return undefined;
 }
 
 function extractAgentEvents(analytics: SessionAnalytics): AgentEvent[] {

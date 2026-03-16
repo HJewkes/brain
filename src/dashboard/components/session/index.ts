@@ -15,3 +15,4 @@ export type { SubagentDrawerProps } from './SubagentDrawer.js';
 export { bisect } from './bisect.js';
 export { buildTimelines } from './precompute.js';
 export type { PrecomputedTimelines, AgentEntry, FileEntry, ToolCategory } from './precompute.js';
+export { widgetLabel, formatTimeShort } from './shared-styles.js';

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { TaskEvent } from '../../types.js';
+import { widgetLabel, formatTimeShort } from './shared-styles.js';
 
 interface Props {
   taskEvents: TaskEvent[];
@@ -113,13 +114,6 @@ function computeKanbanState(
   return { added, active, done };
 }
 
-function formatTimeShort(iso: string): string {
-  const d = new Date(iso);
-  const h = d.getHours().toString().padStart(2, '0');
-  const m = d.getMinutes().toString().padStart(2, '0');
-  return `${h}:${m}`;
-}
-
 const HEADER_STYLES = {
   added: {
     bg: { backgroundColor: 'rgba(212,165,32,0.12)' },
@@ -158,15 +152,7 @@ const PILL_STYLES = {
 
 const styles = StyleSheet.create({
   container: {},
-  label: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 9,
-    fontWeight: '700',
-    color: C.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 6,
-  },
+  label: widgetLabel,
   cols: {
     flexDirection: 'row',
     gap: 4,

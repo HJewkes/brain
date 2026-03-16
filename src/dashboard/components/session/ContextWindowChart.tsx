@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { TokenSnapshot, CompactionEvent } from '../../types.js';
+import { widgetLabel } from './shared-styles.js';
 
 interface Props {
   tokenTimeline: TokenSnapshot[];
@@ -190,15 +191,7 @@ function drawPlayhead(
 
 const styles = StyleSheet.create({
   container: {},
-  label: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 9,
-    fontWeight: '700',
-    color: C.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 6,
-  },
+  label: widgetLabel,
   wrap: {
     backgroundColor: C.surface2,
     borderWidth: 1,

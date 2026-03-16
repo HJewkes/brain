@@ -180,7 +180,7 @@ export interface CompactionEvent {
 
 export interface TaskEvent {
   taskId: string;
-  action: 'started' | 'completed' | 'blocked' | 'abandoned';
+  action: 'added' | 'started' | 'completed' | 'blocked' | 'abandoned';
   timestamp: string;
   detail: string | null;
 }

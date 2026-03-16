@@ -419,16 +419,16 @@ export class BrainServiceClass {
           index: t.index,
           userMessage: t.userText ?? '',
           assistantResponse: t.assistantText ?? '',
-          toolCalls: t.toolCalls.map((tc) => ({
-            id: '',
+          toolCalls: t.toolCalls.map((tc, i) => ({
+            id: tc.id || `${tc.toolName}-${t.timestamp}-${i}`,
             timestamp: t.timestamp,
             toolName: tc.toolName,
-            inputSummary: '',
+            inputSummary: tc.inputSummary ?? '',
             outcome: tc.outcome,
-            errorMessage: null,
+            errorMessage: tc.errorMessage ?? null,
             durationMs: tc.durationMs ?? null,
-            byteOffset: null,
-            agentId: null,
+            byteOffset: tc.byteOffset ?? null,
+            agentId: tc.agentId ?? null,
           })),
           timestamp: t.timestamp,
           tokenUsage: null,
@@ -455,7 +455,7 @@ export class BrainServiceClass {
               ? ('started' as const)
               : te.type === 'task_done'
                 ? ('completed' as const)
-                : ('started' as const),
+                : ('added' as const),
           timestamp: te.timestamp,
           detail: null,
         })),

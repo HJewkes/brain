@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { FileEntry } from './precompute.js';
+import { widgetLabel } from './shared-styles.js';
 
 interface Props {
   filesTimeline: FileEntry[];
@@ -85,15 +86,7 @@ function BarRow({ letter, color, current, total, pct }: BarRowProps) {
 
 const styles = StyleSheet.create({
   container: {},
-  label: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 9,
-    fontWeight: '700',
-    color: C.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 6,
-  },
+  label: widgetLabel,
   summary: {
     fontFamily: 'Space Grotesk',
     fontSize: 12,

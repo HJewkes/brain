@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
+import { widgetLabel } from './shared-styles.js';
 
 interface Props {
   startedAt: string;
@@ -54,15 +55,7 @@ function fmtDur(mins: number): string {
 
 const styles = StyleSheet.create({
   container: {},
-  label: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 9,
-    fontWeight: '700',
-    color: C.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 6,
-  },
+  label: widgetLabel,
   pct: {
     fontFamily: 'Space Grotesk',
     fontSize: 11,

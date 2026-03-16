@@ -4,6 +4,7 @@ import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import type { ToolCategory } from './precompute.js';
+import { widgetLabel } from './shared-styles.js';
 
 interface Props {
   toolTimestamps: Record<ToolCategory, number[]>;
@@ -55,15 +56,7 @@ export function ToolBreakdownWidget({ toolTimestamps, toolTotals, startedAt }: P
 
 const styles = StyleSheet.create({
   container: {},
-  label: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 9,
-    fontWeight: '700',
-    color: C.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 6,
-  },
+  label: widgetLabel,
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,6 +4,7 @@ import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import type { AgentEntry } from './precompute.js';
+import { widgetLabel, formatTimeShort } from './shared-styles.js';
 
 interface Props {
   agentTimeline: AgentEntry[];
@@ -100,11 +101,6 @@ function isMainActive(allToolTs: number[], tsMs: number): boolean {
   return nearPrev || nearNext;
 }
 
-function formatTimeShort(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-}
-
 const DOT_STYLES: Record<Status, object> = {
   live: { backgroundColor: '#22c55e', shadowColor: 'rgba(34,197,94,0.5)' },
   idle: { backgroundColor: '#F4A736', shadowColor: 'rgba(244,167,54,0.4)' },
@@ -119,15 +115,7 @@ const NAME_STYLES: Record<Status, object> = {
 
 const styles = StyleSheet.create({
   container: {},
-  label: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 9,
-    fontWeight: '700',
-    color: C.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 6,
-  },
+  label: widgetLabel,
   empty: {
     fontFamily: 'Inter',
     fontSize: 10,
