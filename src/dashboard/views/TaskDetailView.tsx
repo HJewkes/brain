@@ -212,7 +212,11 @@ function StageTimeline({ transitions }: { transitions: DashboardStageTransition[
               <Text style={s.timelineArrow}>→</Text>
               <Text style={[s.timelineStage, { color: colColor(t.toState) }]}>{colLabel(t.toState)}</Text>
             </View>
-            {t.agentId && <Text style={s.timelineAgent}>via {t.agentId}</Text>}
+            {t.agentId && (
+              <Pressable onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(t.agentId!)}`; }}>
+                <Text style={[s.timelineAgent, s.link]}>via {t.agentId}</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       ))}

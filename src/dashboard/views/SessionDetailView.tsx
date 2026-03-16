@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import type { DashboardData, SessionDetailData, SessionTurn, SessionToolCall, SubagentSummary } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { TimeSyncProvider, SessionSidebar, ActivityMinimap } from '../components/session/index.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -102,6 +103,39 @@ function matchesSearch(turn: SessionTurn, query: string): boolean {
   return false;
 }
 
+/** Match task refs like VNM-21.04 or SNS-042 in plain text segments */
+const TASK_REF_RE = /\b([A-Z]{2,5}-\d+(?:\.\d+)?)\b/g;
+
+function renderTextWithRefs(text: string, keyPrefix: string, baseStyle: object): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(TASK_REF_RE)) {
+    const idx = m.index ?? 0;
+    if (idx > last) {
+      parts.push(<Text key={`${keyPrefix}-${last}`} style={baseStyle}>{text.slice(last, idx)}</Text>);
+    }
+    const ref = m[1];
+    const isSession = ref.startsWith('SNS-');
+    const hash = isSession
+      ? `#session?id=${encodeURIComponent(ref)}`
+      : `#task?id=${encodeURIComponent(ref)}`;
+    parts.push(
+      <Text
+        key={`${keyPrefix}-ref-${idx}`}
+        style={s.taskRefLink}
+        onPress={() => { window.location.hash = hash; }}
+      >
+        {ref}
+      </Text>,
+    );
+    last = idx + m[0].length;
+  }
+  if (last < text.length) {
+    parts.push(<Text key={`${keyPrefix}-${last}`} style={baseStyle}>{text.slice(last)}</Text>);
+  }
+  return parts.length > 0 ? parts : [<Text key={keyPrefix} style={baseStyle}>{text}</Text>];
+}
+
 function renderSimpleMarkdown(text: string): React.ReactNode[] {
   return text.split('\n\n').map((para, i) => {
     const parts: React.ReactNode[] = [];
@@ -112,12 +146,12 @@ function renderSimpleMarkdown(text: string): React.ReactNode[] {
       .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
     if (combined.length === 0) {
-      parts.push(<Text key={`p${i}`} style={s.claudeParaText}>{para}</Text>);
+      parts.push(...renderTextWithRefs(para, `p${i}`, s.claudeParaText));
     } else {
       for (const match of combined) {
         const idx = match.index ?? 0;
         if (idx > last) {
-          parts.push(<Text key={`t${i}-${last}`} style={s.claudeParaText}>{para.slice(last, idx)}</Text>);
+          parts.push(...renderTextWithRefs(para.slice(last, idx), `t${i}-${last}`, s.claudeParaText));
         }
         if (match[0].startsWith('**')) {
           parts.push(<Text key={`b${i}-${idx}`} style={s.claudeBoldText}>{match[1]}</Text>);
@@ -127,7 +161,7 @@ function renderSimpleMarkdown(text: string): React.ReactNode[] {
         last = idx + match[0].length;
       }
       if (last < para.length) {
-        parts.push(<Text key={`e${i}`} style={s.claudeParaText}>{para.slice(last)}</Text>);
+        parts.push(...renderTextWithRefs(para.slice(last), `e${i}`, s.claudeParaText));
       }
     }
     return (
@@ -234,9 +268,12 @@ function ToolCallRow({ call }: { call: SessionToolCall }) {
       )}
       <View style={[s.statusDotSmall, { backgroundColor: isError ? C.error : C.success }]} />
       {isAgent && (
-        <View style={s.agentChip}>
+        <Pressable
+          onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(call.agentId!)}`; }}
+          style={s.agentChip}
+        >
           <Text style={s.agentChipText}>Spawned subagent</Text>
-        </View>
+        </Pressable>
       )}
       {isError && call.errorMessage && (
         <Pressable onPress={() => setShowError(e => !e)}>
@@ -290,25 +327,34 @@ function ToolSummaryCard({ calls, expanded, onToggle }: {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components: TruncatableText
+// Sub-components: ExpandableText (unified truncation component)
 // ---------------------------------------------------------------------------
 
-function TruncatableText({ text, style, limit }: {
+function ExpandableText({ text, style, showMoreStyle, limit, renderContent, fade }: {
   text: string;
-  style: object;
+  style?: object;
+  showMoreStyle?: object;
   limit?: number;
+  renderContent?: (displayed: string) => React.ReactNode;
+  fade?: boolean;
 }) {
   const max = limit ?? TEXT_TRUNCATE_LIMIT;
   const needsTruncate = text.length > max;
   const [expanded, setExpanded] = useState(false);
 
-  const displayed = !needsTruncate || expanded ? text : text.slice(0, max) + '...';
+  const displayed = !needsTruncate || expanded ? text : text.slice(0, max) + (renderContent ? '' : '...');
+  const content = renderContent
+    ? renderContent(displayed)
+    : <Text style={style}>{displayed}</Text>;
+
   return (
     <View>
-      <Text style={style}>{displayed}</Text>
+      <View style={!expanded && needsTruncate && fade ? s.claudeTextTruncated : undefined}>
+        {content}
+      </View>
       {needsTruncate && (
         <Pressable onPress={() => setExpanded(e => !e)}>
-          <Text style={s.showMore}>{expanded ? 'Show less' : 'Show more'}</Text>
+          <Text style={showMoreStyle ?? s.showMore}>{expanded ? 'Show less' : 'Show more'}</Text>
         </Pressable>
       )}
     </View>
@@ -327,7 +373,7 @@ function UserMessage({ text, timestamp }: { text: string; timestamp: string }) {
         <Text style={s.userLabel}>USER</Text>
         <Text style={s.userTime}>{fmtTime(timestamp)}</Text>
       </View>
-      <TruncatableText text={text} style={s.userText} />
+      <ExpandableText text={text} style={s.userText} />
     </View>
   );
 }
@@ -335,26 +381,6 @@ function UserMessage({ text, timestamp }: { text: string; timestamp: string }) {
 // ---------------------------------------------------------------------------
 // Sub-components: ClaudeResponse
 // ---------------------------------------------------------------------------
-
-function ClaudeResponseText({ text }: { text: string }) {
-  const needsTruncate = text.length > TEXT_TRUNCATE_LIMIT;
-  const [expanded, setExpanded] = useState(false);
-
-  const displayed = !needsTruncate || expanded ? text : text.slice(0, TEXT_TRUNCATE_LIMIT);
-
-  return (
-    <View>
-      <View style={!expanded && needsTruncate ? s.claudeTextTruncated : undefined}>
-        {renderSimpleMarkdown(displayed)}
-      </View>
-      {needsTruncate && (
-        <Pressable onPress={() => setExpanded(e => !e)}>
-          <Text style={s.claudeShowMore}>{expanded ? 'Show less' : 'Show more'}</Text>
-        </Pressable>
-      )}
-    </View>
-  );
-}
 
 function ClaudeResponse({ text, timestamp, toolCalls, turnExpanded, onToggleTools }: {
   text: string;
@@ -371,7 +397,14 @@ function ClaudeResponse({ text, timestamp, toolCalls, turnExpanded, onToggleTool
         <Text style={s.claudeLabel}>CLAUDE</Text>
         <Text style={s.claudeTime}>{fmtTime(timestamp)}</Text>
       </View>
-      {text.length > 0 && <ClaudeResponseText text={text} />}
+      {text.length > 0 && (
+        <ExpandableText
+          text={text}
+          showMoreStyle={s.claudeShowMore}
+          fade
+          renderContent={(displayed) => <>{renderSimpleMarkdown(displayed)}</>}
+        />
+      )}
       <ToolSummaryCard
         calls={toolCalls}
         expanded={turnExpanded}
@@ -445,13 +478,19 @@ function SubagentPanel({ subagents, onClose }: {
           {subagents.map(sa => (
             <View key={sa.agentId} style={s.subagentRow}>
               <View style={s.subagentHeader}>
-                <Text style={s.subagentId}>{sa.agentId}</Text>
+                <Pressable onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(sa.agentId)}`; }}>
+                  <Text style={[s.subagentId, s.crossLink]}>{sa.agentId}</Text>
+                </Pressable>
                 <View style={[s.statusBadge, { backgroundColor: sa.status === 'completed' ? `${C.success}1A` : `${C.warning}1A`, borderColor: sa.status === 'completed' ? `${C.success}40` : `${C.warning}40` }]}>
                   <Text style={[s.statusText, { color: sa.status === 'completed' ? C.success : C.warning }]}>{sa.status}</Text>
                 </View>
               </View>
               {sa.model && <Text style={s.subagentMeta}>Model: {sa.model}</Text>}
-              {sa.taskId && <Text style={s.subagentMeta}>Task: {sa.taskId}</Text>}
+              {sa.taskId && (
+                <Pressable onPress={() => { window.location.hash = `#task?id=${encodeURIComponent(sa.taskId!)}`; }}>
+                  <Text style={[s.subagentMeta, s.crossLink]}>Task: {sa.taskId}</Text>
+                </Pressable>
+              )}
               <Text style={s.subagentMeta}>
                 {sa.toolCalls} tool calls · {sa.errors} errors
                 {sa.durationMs != null ? ` · ${fmtDuration(sa.durationMs)}` : ''}
@@ -478,6 +517,7 @@ export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewPro
   const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showSubagents, setShowSubagents] = useState(false);
+  const timelineRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -551,29 +591,42 @@ export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewPro
   return (
     <View style={s.root}>
       <SessionHeader data={data} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-      <ScrollView style={s.timeline} contentContainerStyle={s.timelineContent}>
-        {turnsWithGaps.map((item, i) => {
-          if (item.type === 'gap') {
-            return <GapIndicator key={`gap-${i}`} ms={item.ms} />;
-          }
-          const { turn } = item;
-          const dimmed = hasSearch && !matchesSearch(turn, searchQuery.trim());
-          return (
-            <ConversationTurn
-              key={turn.index}
-              turn={turn}
-              expanded={expandedTurns.has(turn.index)}
-              onToggle={() => toggleTurn(turn.index)}
-              dimmed={dimmed}
-            />
-          );
-        })}
-        {data.turns.length === 0 && (
-          <View style={s.centered}>
-            <Text style={s.emptyText}>No conversation turns in this session</Text>
+      <TimeSyncProvider
+        initialTimestamp={data.session.startedAt}
+        timelineRef={timelineRef as unknown as React.RefObject<HTMLElement | null>}
+      >
+        <View style={s.body}>
+          <View style={s.minimapColumn}>
+            <ActivityMinimap data={data} timelineRef={timelineRef} height={600} />
           </View>
-        )}
-      </ScrollView>
+          <ScrollView ref={timelineRef} style={s.timeline} contentContainerStyle={s.timelineContent}>
+            {turnsWithGaps.map((item, i) => {
+              if (item.type === 'gap') {
+                return <GapIndicator key={`gap-${i}`} ms={item.ms} />;
+              }
+              const { turn } = item;
+              const dimmed = hasSearch && !matchesSearch(turn, searchQuery.trim());
+              return (
+                <ConversationTurn
+                  key={turn.index}
+                  turn={turn}
+                  expanded={expandedTurns.has(turn.index)}
+                  onToggle={() => toggleTurn(turn.index)}
+                  dimmed={dimmed}
+                />
+              );
+            })}
+            {data.turns.length === 0 && (
+              <View style={s.centered}>
+                <Text style={s.emptyText}>No conversation turns in this session</Text>
+              </View>
+            )}
+          </ScrollView>
+          <ScrollView style={s.sidebarScroll}>
+            <SessionSidebar data={data} />
+          </ScrollView>
+        </View>
+      </TimeSyncProvider>
       {showSubagents && (
         <SubagentPanel subagents={data.subagents} onClose={() => setShowSubagents(false)} />
       )}
@@ -594,6 +647,14 @@ const CLAUDE_BORDER = 'rgba(255,121,0,0.25)';
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  body: { flex: 1, flexDirection: 'row' as const },
+  minimapColumn: { width: 8, position: 'relative' as const },
+  sidebarScroll: {
+    width: 224,
+    borderLeftWidth: 1,
+    borderLeftColor: C.border,
+    backgroundColor: C.surface1,
+  },
 
   // Centered states
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
@@ -811,4 +872,8 @@ const s = StyleSheet.create({
   subagentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subagentId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
   subagentMeta: { fontSize: 11, color: C.textTertiary },
+
+  // Cross-view navigation links
+  taskRefLink: { color: C.brand, fontSize: 13, lineHeight: 21, cursor: 'pointer' as never },
+  crossLink: { color: C.brand },
 });
