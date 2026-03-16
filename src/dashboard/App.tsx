@@ -9,13 +9,14 @@ import { SessionsView } from './views/SessionsView.js';
 import { GraphView } from './views/GraphView.js';
 import { QualityView } from './views/QualityView.js';
 import { TaskDetailView } from './views/TaskDetailView.js';
+import { SessionDetailView } from './views/SessionDetailView.js';
 import { CommandPalette } from './components/shared/CommandPalette.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task';
+type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task' | 'session';
 
 interface NavItem {
   id: ViewId;
@@ -53,7 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'quality', label: 'Quality', icon: '◆', hash: '#quality' },
 ];
 
-const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task']);
+const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task', 'session']);
 
 function parseHash(hash: string): HashLocation {
   // Format: #view?param=value&param2=value2
@@ -99,7 +100,8 @@ function Sidebar({ active, onSelect, projectName, generatedAt, onOpenPalette, li
       {/* Nav items */}
       <View style={styles.navList}>
         {NAV_ITEMS.map((item) => {
-          const isActive = item.id === active;
+          const effectiveActive = active === 'session' ? 'sessions' : active;
+          const isActive = item.id === effectiveActive;
           return (
             <Pressable
               key={item.id}
@@ -191,6 +193,7 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
   const taskIdParam = location.params.get('id') ?? undefined;
   const agentParam = location.params.get('agent') ?? undefined;
   const sessionParam = location.params.get('session') ?? undefined;
+  const sessionIdParam = activeView === 'session' ? (location.params.get('id') ?? undefined) : undefined;
 
   return (
     <View style={styles.root}>
@@ -230,6 +233,9 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
           )}
           {activeView === 'task' && (
             <TaskDetailView taskId={taskIdParam ?? ''} dashboard={dashboard} />
+          )}
+          {activeView === 'session' && (
+            <SessionDetailView sessionId={sessionIdParam ?? ''} dashboard={dashboard} />
           )}
         </View>
       </View>

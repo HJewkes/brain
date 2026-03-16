@@ -155,7 +155,7 @@ function SessionHeader({ data, searchQuery, onSearchChange }: {
   return (
     <View style={s.header}>
       <View style={s.headerLeft}>
-        <Pressable onPress={() => window.history.back()} style={s.backBtn}>
+        <Pressable onPress={() => { window.location.hash = '#sessions'; }} style={s.backBtn}>
           <Text style={s.backBtnText}>← Sessions</Text>
         </Pressable>
         <View style={s.headerDivider} />
@@ -539,7 +539,7 @@ export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewPro
       <View style={s.centered}>
         <Text style={s.errorTitle}>Failed to load session</Text>
         <Text style={s.errorDetail}>{error ?? 'No data returned'}</Text>
-        <Pressable onPress={() => window.history.back()} style={s.backBtnLarge}>
+        <Pressable onPress={() => { window.location.hash = '#sessions'; }} style={s.backBtnLarge}>
           <Text style={s.backBtnText}>← Go Back</Text>
         </Pressable>
       </View>

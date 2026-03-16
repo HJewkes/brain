@@ -59,7 +59,7 @@ function SessionRow({ session, selected, onPress }: {
   onPress: () => void;
 }) {
   const handlePress = () => {
-    window.location.hash = `#sessions?session=${encodeURIComponent(session.displayId)}`;
+    window.location.hash = `#session?id=${encodeURIComponent(session.displayId)}`;
     onPress();
   };
   return (
