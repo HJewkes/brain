@@ -135,6 +135,18 @@ export function createHttpHandler(
       return;
     }
 
+    const compositeDetailMatch = path.match(/^\/api\/sessions\/([^/]+)\/detail$/);
+    if (compositeDetailMatch && req.method === 'GET') {
+      const displayId = compositeDetailMatch[1];
+      const detail = service.sessionDetail(displayId);
+      if (!detail) {
+        notFound(res);
+        return;
+      }
+      json(res, detail);
+      return;
+    }
+
     const sessionDetailMatch = path.match(/^\/api\/sessions\/([^/]+)$/);
     if (sessionDetailMatch && req.method === 'GET') {
       const displayId = sessionDetailMatch[1];
@@ -169,6 +181,36 @@ export function createHttpHandler(
         return;
       }
       json(res, result);
+      return;
+    }
+
+    const turnsMatch = path.match(/^\/api\/sessions\/([^/]+)\/turns$/);
+    if (turnsMatch && req.method === 'GET') {
+      const displayId = turnsMatch[1];
+      const session = service.sessionGet(displayId);
+      if (!session) {
+        notFound(res);
+        return;
+      }
+      const from = url.searchParams.has('from')
+        ? parseInt(url.searchParams.get('from')!, 10)
+        : undefined;
+      const limit = url.searchParams.has('limit')
+        ? parseInt(url.searchParams.get('limit')!, 10)
+        : undefined;
+      json(res, service.sessionTurns(displayId, from, limit));
+      return;
+    }
+
+    const tokenTimelineMatch = path.match(/^\/api\/sessions\/([^/]+)\/token-timeline$/);
+    if (tokenTimelineMatch && req.method === 'GET') {
+      const displayId = tokenTimelineMatch[1];
+      const session = service.sessionGet(displayId);
+      if (!session) {
+        notFound(res);
+        return;
+      }
+      json(res, service.sessionTokenTimeline(displayId));
       return;
     }
 

@@ -21,7 +21,9 @@ import {
   listSessions,
   getSessionsForTask,
 } from '../modules/sessions/data/session-ops.js';
-import type { SessionMetadata, SegmentMetadata } from '../modules/sessions/types.js';
+import type { SessionMetadata, SegmentMetadata, TokenSnapshot } from '../modules/sessions/types.js';
+import type { ConversationTurn, StructuredEventsOutput } from '../modules/sessions/ingestion/structured-events.js';
+import type { SessionDetailData } from '../dashboard/types.js';
 import { loadRegistry } from './instance-registry.js';
 
 export interface DbService {
@@ -291,6 +293,190 @@ export class BrainServiceClass {
       }));
     } catch {
       return [];
+    }
+  }
+
+  sessionTurns(
+    displayId: string,
+    from?: number,
+    limit?: number
+  ): ConversationTurn[] {
+    try {
+      const filePath = join(
+        this.config.notesDir,
+        'modules',
+        'sessions',
+        displayId,
+        'structured-events.json'
+      );
+      if (!existsSync(filePath)) return [];
+      const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as StructuredEventsOutput;
+      let turns = raw.turns ?? [];
+      if (from !== undefined) {
+        turns = turns.filter((t) => t.index >= from);
+      }
+      if (limit !== undefined) {
+        turns = turns.slice(0, limit);
+      }
+      return turns;
+    } catch {
+      return [];
+    }
+  }
+
+  sessionTokenTimeline(displayId: string): TokenSnapshot[] {
+    try {
+      const filePath = join(
+        this.config.notesDir,
+        'modules',
+        'sessions',
+        displayId,
+        'structured-events.json'
+      );
+      if (!existsSync(filePath)) return [];
+      const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as StructuredEventsOutput;
+      return raw.tokenTimeline ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  sessionDetail(displayId: string): SessionDetailData | null {
+    try {
+      const session = getSession(this.db, displayId);
+      if (!session) return null;
+
+      const camelSession = {
+        sessionId: session.session_id,
+        displayId: session.display_id,
+        projectDir: session.project_dir,
+        project: session.project ?? null,
+        workstream: session.workstream ?? null,
+        status: session.status,
+        startedAt: session.started_at,
+        completedAt: session.completed_at ?? null,
+        durationMinutes: session.duration_minutes ?? null,
+        branch: session.branch ?? null,
+        worktreePath: session.worktree_path ?? null,
+        agentModel: session.agent_model ?? null,
+        mode: session.mode ?? null,
+        compactCount: session.compact_count ?? 0,
+        summary: session.summary ?? null,
+        totalTurns: session.total_turns ?? 0,
+        toolCalls: session.tool_calls ?? 0,
+        errorCount: session.error_count ?? 0,
+        errorRate: session.error_rate ?? 0,
+        tokensInput: session.tokens_input ?? 0,
+        tokensOutput: session.tokens_output ?? 0,
+        tasksWorked: session.tasks_worked ?? [],
+        tasksCompleted: session.tasks_completed ?? [],
+        notesCreated: session.notes_created ?? [],
+        commits: session.commits ?? [],
+        memoriesExtracted: session.memories_extracted ?? 0,
+      };
+
+      const eventsPath = join(
+        this.config.notesDir,
+        'modules',
+        'sessions',
+        displayId,
+        'structured-events.json'
+      );
+
+      if (!existsSync(eventsPath)) {
+        return {
+          session: camelSession,
+          turns: [],
+          tokenTimeline: [],
+          compactions: [],
+          taskEvents: [],
+          agentEvents: [],
+          subagents: [],
+          frictionSignals: [],
+          totalToolCalls: camelSession.toolCalls,
+          totalErrors: camelSession.errorCount,
+          errorRate: camelSession.errorRate,
+        };
+      }
+
+      const events = JSON.parse(
+        readFileSync(eventsPath, 'utf-8')
+      ) as StructuredEventsOutput;
+
+      const totalToolCalls = events.turns.reduce(
+        (sum, t) => sum + t.toolCalls.length,
+        0
+      );
+      const totalErrors = events.turns.reduce(
+        (sum, t) =>
+          sum + t.toolCalls.filter((tc) => tc.outcome === 'error').length,
+        0
+      );
+
+      return {
+        session: camelSession,
+        turns: events.turns.map((t) => ({
+          index: t.index,
+          userMessage: t.userText ?? '',
+          assistantResponse: t.assistantText ?? '',
+          toolCalls: t.toolCalls.map((tc) => ({
+            id: '',
+            timestamp: t.timestamp,
+            toolName: tc.toolName,
+            inputSummary: '',
+            outcome: tc.outcome,
+            errorMessage: null,
+            durationMs: tc.durationMs ?? null,
+            byteOffset: null,
+            agentId: null,
+          })),
+          timestamp: t.timestamp,
+          tokenUsage: null,
+        })),
+        tokenTimeline: events.tokenTimeline.map((ts) => ({
+          timestamp: ts.timestamp,
+          cumulativeInput: ts.cumulativeInput,
+          cumulativeOutput: ts.cumulativeOutput,
+          messageInput: 0,
+          messageOutput: 0,
+          isCompaction: false,
+        })),
+        compactions: events.compactions.map((c) => ({
+          timestamp: c.timestamp,
+          turnIndex: c.index,
+          tokensBefore: 0,
+          tokensAfter: 0,
+          summaryPreview: '',
+        })),
+        taskEvents: events.taskEvents.map((te) => ({
+          taskId: te.taskId,
+          action:
+            te.type === 'task_claim'
+              ? ('started' as const)
+              : te.type === 'task_done'
+                ? ('completed' as const)
+                : ('started' as const),
+          timestamp: te.timestamp,
+          detail: null,
+        })),
+        agentEvents: events.agentEvents.map((ae) => ({
+          agentId: ae.detail,
+          action:
+            ae.type === 'agent_spawn'
+              ? ('spawned' as const)
+              : ('completed' as const),
+          timestamp: ae.timestamp,
+          taskId: null,
+          model: null,
+        })),
+        subagents: [],
+        frictionSignals: [],
+        totalToolCalls,
+        totalErrors,
+        errorRate: totalToolCalls > 0 ? totalErrors / totalToolCalls : 0,
+      };
+    } catch {
+      return null;
     }
   }
 
