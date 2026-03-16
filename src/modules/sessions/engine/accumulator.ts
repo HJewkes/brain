@@ -67,6 +67,8 @@ export class AnalyticsAccumulator {
   private compactionTimestamps: string[] = [];
   private compactionSummaries: string[] = [];
   private compactionByteOffsets: number[] = [];
+  private tokenSnapshots: Array<{ timestamp: string; cumulativeInput: number; cumulativeOutput: number }> = [];
+  private assistantTexts: string[] = [];
   private logicalParentUuid: string | null = null;
   private sidechainEventCount = 0;
   private hookEventCount = 0;
@@ -177,12 +179,19 @@ export class AnalyticsAccumulator {
       if (!this.serviceTier && usage.service_tier) {
         this.serviceTier = usage.service_tier as string;
       }
+      // Record token snapshot for context window chart
+      this.tokenSnapshots.push({
+        timestamp,
+        cumulativeInput: this.tokens.inputTokens,
+        cumulativeOutput: this.tokens.outputTokens,
+      });
     }
 
     const content = message.content as MessageContent[] | undefined;
     if (!Array.isArray(content)) return;
 
     let hasSubstantiveContent = false;
+    let assistantText = '';
     const isSidechain = !!event.isSidechain;
 
     for (const block of content) {
@@ -199,9 +208,13 @@ export class AnalyticsAccumulator {
         hasSubstantiveContent = true;
       } else if (block.type === 'text' && block.text) {
         hasSubstantiveContent = true;
+        assistantText += block.text;
       } else if (block.type === 'thinking') {
         this.thinkingBlockCount++;
       }
+    }
+    if (assistantText) {
+      this.assistantTexts.push(assistantText.slice(0, 2000));
     }
 
     if (hasSubstantiveContent) this.assistantTurns++;
@@ -448,6 +461,8 @@ export class AnalyticsAccumulator {
       compactionTimestamps: this.compactionTimestamps,
       compactionSummaries: this.compactionSummaries,
       compactionByteOffsets: this.compactionByteOffsets,
+      tokenSnapshots: this.tokenSnapshots,
+      assistantTexts: this.assistantTexts,
       logicalParentUuid: this.logicalParentUuid,
       thinkingBlockCount: this.thinkingBlockCount,
       skillUsage: this.skillUsage,

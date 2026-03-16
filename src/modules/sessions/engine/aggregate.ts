@@ -190,6 +190,8 @@ export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionA
     compactionTimestamps: [],
     compactionSummaries: [],
     compactionByteOffsets: [],
+    tokenSnapshots: [],
+    assistantTexts: [],
     logicalParentUuid: null,
     thinkingBlockCount: 0,
     skillUsage: new Map(),

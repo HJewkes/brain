@@ -165,6 +165,15 @@ export interface PrLink {
   timestamp?: string;
 }
 
+export interface AnalyticsTokenSnapshot {
+  timestamp: string;
+  cumulativeInput: number;
+  cumulativeOutput: number;
+}
+
+/** Alias for structured-events module compatibility */
+export type TokenSnapshot = AnalyticsTokenSnapshot;
+
 export interface ErrorEvent {
   timestamp: string;
   toolName?: string;
@@ -225,6 +234,8 @@ export interface SessionAnalytics {
   compactionTimestamps: string[];
   compactionSummaries: string[];
   compactionByteOffsets: number[];
+  tokenSnapshots: AnalyticsTokenSnapshot[];
+  assistantTexts: string[];
   prLinks: PrLink[];
   filesTouched: Map<string, Set<string>>;
   filesWritten: string[];
