@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { C } from '../components/shared/colors.js';
-import { columnColor, priorityColor, priorityStripeColor } from '../utils/semantic-colors.js';
+import { columnColor, priorityColor, priorityStripeColor, statusColor } from '../utils/semantic-colors.js';
 import { AVATAR_COLORS } from '../utils/avatar.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { StageBadge } from '../components/shared/StageBadge.js';
@@ -159,7 +159,7 @@ function SpecimenAvatar({ name, color, size }: { name: string; color: string; si
 }
 
 function SpecimenAgentCard({ name, status, color }: { name: string; status: string; color: string }) {
-  const statusColor = status === 'active' ? C.success : status === 'idle' ? C.textTertiary : C.textTertiary;
+  const agentStatusColor = statusColor(status);
   return (
     <View style={{
       backgroundColor: C.surface1, borderWidth: 1, borderColor: C.border,
@@ -170,7 +170,7 @@ function SpecimenAgentCard({ name, status, color }: { name: string; status: stri
         <View style={{
           position: 'absolute', bottom: -1, right: -1,
           width: 10, height: 10, borderRadius: 5,
-          backgroundColor: statusColor, borderWidth: 2, borderColor: C.surface1,
+          backgroundColor: agentStatusColor, borderWidth: 2, borderColor: C.surface1,
         }} />
       </View>
       <Text style={{ fontSize: 12, fontWeight: '600', color: C.textPrimary }}>{name}</Text>
@@ -200,7 +200,7 @@ function SpecimenTopoNode({ name, role, color, isActive }: { name: string; role:
 }
 
 function SpecimenSessionRow({ displayId, status, selected }: { displayId: string; status: string; selected: boolean }) {
-  const sColor = status === 'active' ? C.success : status === 'error' ? C.error : C.textTertiary;
+  const sColor = statusColor(status);
   return (
     <View style={{
       padding: 12, borderBottomWidth: 1, borderBottomColor: C.border,
