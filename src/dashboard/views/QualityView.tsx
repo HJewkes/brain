@@ -4,6 +4,7 @@ import type { DashboardData } from '../types.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { C } from '../components/shared/colors.js';
 import { Section } from '../components/shared/Section.js';
+import { ChartContainer, GridLines, xPos, yPos } from '../components/shared/chart/index.js';
 import {
   computeDodPassRate,
   computeFunnel,
@@ -134,16 +135,11 @@ function VelocityChart({ points }: { points: VelocityPoint[] }) {
   const W = 560;
   const H = 160;
   const PAD = { top: 10, right: 20, bottom: 28, left: 32 };
-  const cW = W - PAD.left - PAD.right;
-  const cH = H - PAD.top - PAD.bottom;
   const maxY = Math.max(...points.map(p => p.count), 1);
+  const cfg = { width: W, height: H, padding: PAD };
 
-  function xp(i: number) {
-    return PAD.left + (i / (points.length - 1)) * cW;
-  }
-  function yp(v: number) {
-    return PAD.top + cH - (v / maxY) * cH;
-  }
+  const xp = (i: number) => xPos(i, points.length, cfg);
+  const yp = (v: number) => yPos(v, maxY, cfg);
 
   const linePath = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${xp(i).toFixed(1)},${yp(p.count).toFixed(1)}`)
@@ -156,42 +152,29 @@ function VelocityChart({ points }: { points: VelocityPoint[] }) {
   const gridYs = [0, Math.round(maxY / 2), maxY];
 
   return (
-    <View style={styles.chartWrap}>
-      {/* @ts-ignore — svg is valid in react-native-web */}
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
-        {gridYs.map(v => (
-          <g key={v}>
-            <line
-              x1={PAD.left}
-              y1={yp(v)}
-              x2={W - PAD.right}
-              y2={yp(v)}
-              stroke={C.border}
-              strokeWidth="0.5"
-              opacity="0.6"
-            />
-            <text x={PAD.left - 4} y={yp(v) + 3} fill={C.textTertiary} fontSize="9" textAnchor="end">
-              {v}
+    <ChartContainer width={W} height={H} padding={PAD}>
+      <GridLines horizontal={3} width={W} height={H} padding={PAD} />
+      {gridYs.map(v => (
+        <text key={v} x={PAD.left - 4} y={yp(v) + 3} fill={C.textTertiary} fontSize="9" textAnchor="end">
+          {v}
+        </text>
+      ))}
+      {points
+        .filter((_, i) => i % xStep === 0 || i === points.length - 1)
+        .map(p => {
+          const i = points.indexOf(p);
+          return (
+            <text key={i} x={xp(i)} y={H - 4} fill={C.textTertiary} fontSize="9" textAnchor="middle">
+              {p.label}
             </text>
-          </g>
-        ))}
-        {points
-          .filter((_, i) => i % xStep === 0 || i === points.length - 1)
-          .map(p => {
-            const i = points.indexOf(p);
-            return (
-              <text key={i} x={xp(i)} y={H - 4} fill={C.textTertiary} fontSize="9" textAnchor="middle">
-                {p.label}
-              </text>
-            );
-          })}
-        <path d={areaPath} fill={C.success} opacity="0.12" />
-        <path d={linePath} fill="none" stroke={C.success} strokeWidth="2" />
-        {points.map((p, i) =>
-          p.count > 0 ? <circle key={i} cx={xp(i)} cy={yp(p.count)} r="3" fill={C.success} /> : null,
-        )}
-      </svg>
-    </View>
+          );
+        })}
+      <path d={areaPath} fill={C.success} opacity="0.12" />
+      <path d={linePath} fill="none" stroke={C.success} strokeWidth="2" />
+      {points.map((p, i) =>
+        p.count > 0 ? <circle key={i} cx={xp(i)} cy={yp(p.count)} r="3" fill={C.success} /> : null,
+      )}
+    </ChartContainer>
   );
 }
 
@@ -342,6 +325,4 @@ const styles = StyleSheet.create({
   stageDurBottleneck: { backgroundColor: C.warning },
   stageDurVal: { fontSize: 12, color: C.textSecondary, minWidth: 64, textAlign: 'right' },
 
-  // Velocity chart
-  chartWrap: { width: '100%' },
 });
