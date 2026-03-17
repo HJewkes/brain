@@ -9,6 +9,9 @@ import { columnColor, priorityColor, statusColor, priorityStripeColor } from '..
 import {
   Badge,
   Avatar,
+  Card,
+  UserAvatar,
+  ClaudeAvatar,
   Section,
   StatCard,
   StageBadge,
@@ -18,6 +21,9 @@ import {
   GridLines,
   DEFAULT_PADDING,
 } from '../components/shared/index.js';
+
+// Lucide icons for iconography section
+import { User, Bot, GitBranch, Terminal, FileText, Search, Folder } from 'lucide-react';
 
 // Session atoms
 import {
@@ -182,6 +188,35 @@ export function SpecimenUnifiedView() {
           <Swatch color={colors.textSecondary} label="textSecondary" />
           <Swatch color={colors.textTertiary} label="textTertiary" />
           <Swatch color={colors.border} label="border" />
+        </View>
+      </Spec>
+
+      <Spec title="Semantic color language — status">
+        <View style={s.swatchGrid}>
+          <Swatch color="#14B8A6" label="success/done" />
+          <Swatch color="#FF7900" label="active/running" />
+          <Swatch color="#DC050C" label="error/blocked" />
+          <Swatch color="#F4A736" label="warning/idle" />
+          <Swatch color="#2196F3" label="info/inprogress" />
+          <Swatch color="#A855F7" label="review" />
+        </View>
+      </Spec>
+
+      <Spec title="Semantic color language — tool types">
+        <View style={s.swatchGrid}>
+          <Swatch color="#7BAFDE" label="read" />
+          <Swatch color="#14B8A6" label="write" />
+          <Swatch color="#F4A736" label="edit" />
+          <Swatch color="#9CA3AF" label="bash" />
+          <Swatch color="#C084FC" label="grep/glob" />
+          <Swatch color="#FF7900" label="agent" />
+        </View>
+      </Spec>
+
+      <Spec title="Semantic color language — roles">
+        <View style={s.swatchGrid}>
+          <Swatch color="#5B9BD5" label="user" />
+          <Swatch color="#FF7900" label="claude" />
         </View>
       </Spec>
 
@@ -493,6 +528,74 @@ export function SpecimenUnifiedView() {
               <Text style={s.avatarColorChipText}>{color}</Text>
             </View>
           ))}
+        </View>
+      </Spec>
+
+      {/* ═══════════════════════ 5b. ICONOGRAPHY ═══════════════════════ */}
+      <TierHeader title="5b. Iconography" />
+
+      <Spec title="Role avatars — UserAvatar / ClaudeAvatar at 16, 20, 24, 32">
+        <View style={{ gap: 16 }}>
+          <View style={s.avatarRow}>
+            <Text style={s.avatarRowLabel}>UserAvatar</Text>
+            <Variants
+              items={[16, 20, 24, 32].map((sz) => ({
+                label: `${sz}px`,
+                node: <UserAvatar size={sz} />,
+              }))}
+            />
+          </View>
+          <View style={s.avatarRow}>
+            <Text style={s.avatarRowLabel}>ClaudeAvatar</Text>
+            <Variants
+              items={[16, 20, 24, 32].map((sz) => ({
+                label: `${sz}px`,
+                node: <ClaudeAvatar size={sz} />,
+              }))}
+            />
+          </View>
+        </View>
+      </Spec>
+
+      <Spec title="Lucide icons — useful glyphs at 16px">
+        <Variants
+          items={[
+            { label: 'User', node: <User size={16} color={C.textSecondary} /> },
+            { label: 'Bot', node: <Bot size={16} color={C.textSecondary} /> },
+            { label: 'GitBranch', node: <GitBranch size={16} color={C.textSecondary} /> },
+            { label: 'Terminal', node: <Terminal size={16} color={C.textSecondary} /> },
+            { label: 'FileText', node: <FileText size={16} color={C.textSecondary} /> },
+            { label: 'Search', node: <Search size={16} color={C.textSecondary} /> },
+            { label: 'Folder', node: <Folder size={16} color={C.textSecondary} /> },
+          ]}
+        />
+      </Spec>
+
+      {/* ═══════════════════════ 5c. CARD VARIANTS ═══════════════════════ */}
+      <TierHeader title="5c. Card Variants" />
+
+      <Spec title="Card — plain / accent (blue) / accent (orange) / subtle">
+        <View style={{ maxWidth: 520, gap: 12 }}>
+          <Card variant="plain">
+            <Text style={{ color: C.textPrimary, fontSize: 13 }}>
+              Plain card — surface2 background with standard border.
+            </Text>
+          </Card>
+          <Card variant="accent" accentColor="#5B9BD5">
+            <Text style={{ color: C.textPrimary, fontSize: 13 }}>
+              Accent card (blue) — colored left border, like UserMessageCard.
+            </Text>
+          </Card>
+          <Card variant="accent" accentColor={C.brand} accentWidth={3} bg="#1a1400">
+            <Text style={{ color: C.textPrimary, fontSize: 13 }}>
+              Accent card (orange) — brand left border, like ClaudeResponseCard.
+            </Text>
+          </Card>
+          <Card variant="subtle" accentColor={C.brand}>
+            <Text style={{ color: C.textPrimary, fontSize: 13 }}>
+              Subtle card — semi-transparent bg with colored border, like TurnSummaryCard.
+            </Text>
+          </Card>
         </View>
       </Spec>
 

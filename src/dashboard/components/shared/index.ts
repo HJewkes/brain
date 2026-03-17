@@ -1,4 +1,7 @@
 export { Avatar } from './Avatar.js';
+export { Card } from './Card.js';
+export type { CardProps } from './Card.js';
+export { UserAvatar, ClaudeAvatar } from './RoleAvatar.js';
 export { AgentHoverCard } from './AgentHoverCard.js';
 export { Badge } from './Badge.js';
 export type { BadgeProps } from './Badge.js';

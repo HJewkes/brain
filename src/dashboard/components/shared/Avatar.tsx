@@ -6,10 +6,12 @@ interface AvatarProps {
   name: string;
   size?: number;
   rounded?: boolean; // true = full circle, false = rounded rect (default true)
+  icon?: React.ReactNode; // render icon instead of initials
+  bg?: string; // background color override
 }
 
-export function Avatar({ name, size = 32, rounded = true }: AvatarProps) {
-  const bg = avatarColor(name);
+export function Avatar({ name, size = 32, rounded = true, icon, bg }: AvatarProps) {
+  const backgroundColor = bg ?? avatarColor(name);
   const letters = initials(name);
   const radius = rounded ? size / 2 : Math.min(size / 4, 8);
   const fontSize = Math.max(Math.round(size * 0.35), 8);
@@ -20,14 +22,16 @@ export function Avatar({ name, size = 32, rounded = true }: AvatarProps) {
         width: size,
         height: size,
         borderRadius: radius,
-        backgroundColor: bg,
+        backgroundColor,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Text style={{ fontSize, fontWeight: '700', color: '#fff', fontFamily: 'Space Grotesk, sans-serif' }}>
-        {letters}
-      </Text>
+      {icon ?? (
+        <Text style={{ fontSize, fontWeight: '700', color: '#fff', fontFamily: 'Space Grotesk, sans-serif' }}>
+          {letters}
+        </Text>
+      )}
     </View>
   );
 }
