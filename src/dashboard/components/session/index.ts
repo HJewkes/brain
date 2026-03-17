@@ -17,6 +17,7 @@ export { buildTimelines } from './precompute.js';
 export type { PrecomputedTimelines, AgentEntry, FileEntry, ToolCategory } from './precompute.js';
 export { widgetLabel, formatTimeShort } from './shared-styles.js';
 export {
+  Dot,
   StatusDot,
   TimelineDot,
   MiniStatusDot,
@@ -64,11 +65,7 @@ export type {
   ErrorBlockProps,
   GapIndicatorProps,
 } from './molecules.js';
-export {
-  UserMessageCard,
-  ClaudeResponseCard,
-  ConversationTurn,
-} from './organisms.js';
+export { UserMessageCard, ClaudeResponseCard, ConversationTurn } from './organisms.js';
 export type {
   UserMessageCardProps,
   ClaudeResponseCardProps,

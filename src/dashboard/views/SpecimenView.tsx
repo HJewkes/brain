@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { C } from '../components/shared/colors.js';
 import {
+  Dot,
   StatusDot,
   TimelineDot,
   MiniStatusDot,
@@ -379,7 +380,32 @@ export function SpecimenView() {
       </Text>
 
       {/* ════════════════════ ATOMS ════════════════════ */}
-      <Text style={s.tier}>Atoms (14)</Text>
+      <Text style={s.tier}>Atoms (15)</Text>
+
+      {/* A0. Dot (base atom) */}
+      <Section title="A0. Dot">
+        <CompareRow
+          label="Unified dot: size, color, border, glow"
+          html={
+            <Variants
+              items={[
+                { label: '5px plain', node: <HtmlDot size={5} color="#14B8A6" /> },
+                { label: '8px border', node: <HtmlDot size={8} color="#5B9BD5" border={`2px solid ${C.bg}`} /> },
+                { label: '7px glow', node: <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 4px rgba(34,197,94,0.5)', display: 'inline-block' }} /> },
+              ]}
+            />
+          }
+          react={
+            <Variants
+              items={[
+                { label: '5px plain', node: <Dot size={5} color="#14B8A6" /> },
+                { label: '8px border', node: <Dot size={8} color="#5B9BD5" border={{ width: 2, color: C.bg }} /> },
+                { label: '7px glow', node: <Dot size={7} color="#22c55e" glow="rgba(34,197,94,0.5)" /> },
+              ]}
+            />
+          }
+        />
+      </Section>
 
       {/* A1. StatusDot */}
       <Section title="A1. StatusDot">

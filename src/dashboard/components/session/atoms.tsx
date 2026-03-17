@@ -88,10 +88,38 @@ export type MiniStatusOutcome = 'success' | 'error' | 'pending';
 export type AgentDotState = 'live' | 'idle' | 'done';
 export type TaskPillState = 'ready' | 'active' | 'done';
 
+/* ── 0. Dot (base atom) ── */
+
+interface DotProps {
+  size?: number;
+  color: string;
+  border?: { width: number; color: string };
+  glow?: string;
+}
+
+export function Dot({ size = 6, color, border, glow }: DotProps) {
+  const radius = size / 2;
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: radius,
+          backgroundColor: color,
+          flexShrink: 0,
+        },
+        border && { borderWidth: border.width, borderColor: border.color },
+        glow ? ({ boxShadow: `0 0 4px ${glow}` } as object) : undefined,
+      ]}
+    />
+  );
+}
+
 /* ── 1. StatusDot ── */
 
 export function StatusDot({ color }: { color: string }) {
-  return <View style={[styles.statusDot, { backgroundColor: color }]} />;
+  return <Dot size={5} color={color} />;
 }
 
 /* ── 2. TimelineDot ── */
@@ -99,12 +127,10 @@ export function StatusDot({ color }: { color: string }) {
 export function TimelineDot({ type }: { type: TimelineDotType }) {
   const isUser = type === 'user';
   return (
-    <View
-      style={[
-        styles.timelineDot,
-        isUser && styles.timelineDotUser,
-        { backgroundColor: TIMELINE_DOT_COLORS[type] },
-      ]}
+    <Dot
+      size={isUser ? 10 : 8}
+      color={TIMELINE_DOT_COLORS[type]}
+      border={{ width: 2, color: C.bg }}
     />
   );
 }
@@ -118,11 +144,7 @@ const MINI_STATUS_COLORS: Record<MiniStatusOutcome, string> = {
 };
 
 export function MiniStatusDot({ outcome }: { outcome: MiniStatusOutcome }) {
-  return (
-    <View
-      style={[styles.miniStatusDot, { backgroundColor: MINI_STATUS_COLORS[outcome] }]}
-    />
-  );
+  return <Dot size={6} color={MINI_STATUS_COLORS[outcome]} />;
 }
 
 /* ── 4. SectionLabel ── */
@@ -228,16 +250,7 @@ export function TaskPill({
 
 export function AgentDot({ state }: { state: AgentDotState }) {
   const config = AGENT_DOT_STYLES[state];
-  return (
-    <View
-      style={[
-        styles.agentDot,
-        { backgroundColor: config.bg },
-        // boxShadow is web-only; cast to bypass RN types
-        config.shadow ? ({ boxShadow: config.shadow } as object) : undefined,
-      ]}
-    />
-  );
+  return <Dot size={7} color={config.bg} glow={config.shadow ?? undefined} />;
 }
 
 /* ── 10. Separator ── */
@@ -349,35 +362,6 @@ export function StatusBadge({
 /* ── Styles ── */
 
 const styles = StyleSheet.create({
-  /* 1. StatusDot */
-  statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-
-  /* 2. TimelineDot */
-  timelineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: C.bg,
-    flexShrink: 0,
-  },
-  timelineDotUser: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-
-  /* 3. MiniStatusDot */
-  miniStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-
   /* 4. SectionLabel */
   sectionLabel: {
     fontFamily: "'Space Grotesk', sans-serif",
@@ -452,14 +436,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '600',
     lineHeight: 13.5,
-  },
-
-  /* 9. AgentDot */
-  agentDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    flexShrink: 0,
   },
 
   /* 10. Separator */
