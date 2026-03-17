@@ -12,6 +12,7 @@ import {
   type AgentPerf, type BurndownPoint, type ResumptionStats,
 } from './productivityMetrics.js';
 import { Avatar } from '../components/shared/Avatar.js';
+import { ChartContainer, GridLines, xPos, yPos } from '../components/shared/chart/index.js';
 
 interface ProductivityViewProps {
   dashboard: DashboardData | null;
@@ -121,12 +122,11 @@ function BurndownChart({ points }: { points: BurndownPoint[] }) {
   const W = 580;
   const H = 180;
   const PAD = { top: 10, right: 50, bottom: 28, left: 36 };
-  const cW = W - PAD.left - PAD.right;
-  const cH = H - PAD.top - PAD.bottom;
+  const cfg = { width: W, height: H, padding: PAD };
   const maxY = Math.max(...points.map(p => Math.max(p.ideal, p.actual)), 1);
 
-  function xp(i: number) { return PAD.left + (i / (points.length - 1)) * cW; }
-  function yp(v: number) { return PAD.top + cH - (v / maxY) * cH; }
+  const xp = (i: number) => xPos(i, points.length, cfg);
+  const yp = (v: number) => yPos(v, maxY, cfg);
 
   const idealPath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xp(i).toFixed(1)},${yp(p.ideal).toFixed(1)}`).join(' ');
   const actualPath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xp(i).toFixed(1)},${yp(p.actual).toFixed(1)}`).join(' ');
@@ -138,17 +138,17 @@ function BurndownChart({ points }: { points: BurndownPoint[] }) {
 
   return (
     <View style={styles.chartWrap}>
-      {/* @ts-ignore — svg is valid in react-native-web */}
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+      <ChartContainer width={W} height={H} padding={PAD}>
+        <GridLines horizontal={3} width={W} height={H} padding={PAD} />
         {gridYs.map(v => (
-          <g key={v}>
-            <line x1={PAD.left} y1={yp(v)} x2={W - PAD.right} y2={yp(v)} stroke={C.border} strokeWidth="0.5" opacity="0.6" />
-            <text x={PAD.left - 4} y={yp(v) + 3} fill={C.textTertiary} fontSize="9" textAnchor="end">{v}</text>
-          </g>
+          <text key={v} x={PAD.left - 4} y={yp(v) + 3} fill={C.textTertiary} fontSize="9" textAnchor="end">{v}</text>
         ))}
-        {visiblePoints.map((p, i) => (
-          <text key={i} x={xp(points.indexOf(p))} y={H - 4} fill={C.textTertiary} fontSize="9" textAnchor="middle">{p.label}</text>
-        ))}
+        {visiblePoints.map(p => {
+          const i = points.indexOf(p);
+          return (
+            <text key={i} x={xp(i)} y={H - 4} fill={C.textTertiary} fontSize="9" textAnchor="middle">{p.label}</text>
+          );
+        })}
         <path d={areaPath} fill={C.brand} opacity="0.12" />
         <path d={idealPath} fill="none" stroke={C.textSecondary} strokeWidth="1.5" strokeDasharray="4,4" />
         <path d={actualPath} fill="none" stroke={C.brand} strokeWidth="2" />
@@ -157,7 +157,7 @@ function BurndownChart({ points }: { points: BurndownPoint[] }) {
         ))}
         <text x={xp(points.length - 1) + 4} y={yp(points[points.length - 1].actual) + 3} fill={C.brand} fontSize="9">Actual</text>
         <text x={xp(points.length - 1) + 4} y={yp(points[points.length - 1].ideal) + 3} fill={C.textTertiary} fontSize="9">Ideal</text>
-      </svg>
+      </ChartContainer>
     </View>
   );
 }
