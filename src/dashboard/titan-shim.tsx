@@ -6,6 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ViewStyle, TextStyle } from 'react-native';
+import { palette, colors } from './tokens.js';
 
 // Re-export shared colors so consumers can import from this module.
 export { C } from './components/shared/colors.js';
@@ -51,10 +52,10 @@ const VARIANT_STYLES: Record<string, TextStyle> = {
 };
 
 const COLOR_MAP: Record<string, string> = {
-  primary: '#F3F4F6',
-  secondary: '#9CA3AF',
-  tertiary: '#6B7280',
-  brand: '#FF7900',
+  primary:   colors.textPrimary,
+  secondary: colors.textSecondary,
+  tertiary:  colors.textTertiary,
+  brand:     colors.brand,
 };
 
 export function Typography({ children, variant = 'body', color = 'primary', style }: TypographyProps) {
@@ -71,11 +72,11 @@ export function Typography({ children, variant = 'body', color = 'primary', styl
 export type BadgeColor = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
 const BADGE_COLORS: Record<BadgeColor, { bg: string; text: string }> = {
-  success: { bg: 'rgba(20,184,166,0.15)', text: '#14B8A6' },
-  warning: { bg: 'rgba(255,176,32,0.15)', text: '#FFB020' },
-  error: { bg: 'rgba(209,67,67,0.15)', text: '#D14343' },
-  info: { bg: 'rgba(33,150,243,0.15)', text: '#2196F3' },
-  neutral: { bg: 'rgba(107,114,128,0.15)', text: '#9CA3AF' },
+  success: { bg: palette.teal.dim15,   text: palette.teal.base },
+  warning: { bg: palette.amber.dim15,  text: palette.amber.base },
+  error:   { bg: palette.red.dim12,    text: palette.red.base },
+  info:    { bg: 'rgba(33,150,243,0.15)', text: palette.blue.base },
+  neutral: { bg: palette.gray.dim15,   text: colors.textSecondary },
 };
 
 export function Badge({ children, color = 'neutral' }: { children: React.ReactNode; color?: BadgeColor }) {
@@ -107,10 +108,10 @@ export function MetricGroup({ children, style }: { children: React.ReactNode; st
 // ---------------------------------------------------------------------------
 // Progress
 // ---------------------------------------------------------------------------
-export function Progress({ value, max = 100, color = '#FF7900' }: { value: number; max?: number; color?: string }) {
+export function Progress({ value, max = 100, color = colors.brand }: { value: number; max?: number; color?: string }) {
   const pct = Math.min(100, Math.round((value / max) * 100));
   return (
-    <View style={{ height: 6, backgroundColor: '#1e1e1e', borderRadius: 3, overflow: 'hidden' }}>
+    <View style={{ height: 6, backgroundColor: palette.surface3, borderRadius: 3, overflow: 'hidden' }}>
       <View style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 3 }} />
     </View>
   );
@@ -207,7 +208,7 @@ const sectionStyles = StyleSheet.create({
   title: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
@@ -219,14 +220,14 @@ const sectionStyles = StyleSheet.create({
 // ---------------------------------------------------------------------------
 export function Label({ children }: { children: React.ReactNode }) {
   return (
-    <Text style={{ fontSize: 11, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
       {children}
     </Text>
   );
 }
 
 export function Muted({ children }: { children: React.ReactNode }) {
-  return <Text style={{ fontSize: 13, color: '#9CA3AF' }}>{children}</Text>;
+  return <Text style={{ fontSize: 13, color: colors.textSecondary }}>{children}</Text>;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,7 +236,7 @@ export function Muted({ children }: { children: React.ReactNode }) {
 export function EmptyState({ message }: { message: string }) {
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 24 }}>
-      <Text style={{ fontSize: 13, color: '#6B7280', fontStyle: 'italic' }}>{message}</Text>
+      <Text style={{ fontSize: 13, color: colors.textTertiary, fontStyle: 'italic' }}>{message}</Text>
     </View>
   );
 }
@@ -245,9 +246,9 @@ export function EmptyState({ message }: { message: string }) {
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#161616',
+    backgroundColor: colors.surface1,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: colors.border,
     borderRadius: 10,
     overflow: 'hidden',
   },
@@ -255,12 +256,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: colors.border,
   },
   cardTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F3F4F6',
+    color: colors.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -273,18 +274,18 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 11,
-    color: '#6B7280',
+    color: colors.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   metricValue: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#F3F4F6',
+    color: colors.textPrimary,
   },
   metricDelta: {
     fontSize: 11,
-    color: '#14B8A6',
+    color: palette.teal.base,
     fontWeight: '600',
   },
   metricGroup: {
@@ -297,32 +298,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e1e1e',
+    borderBottomColor: palette.surface3,
   },
   dataRowLabel: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   dataRowValue: {
     fontSize: 13,
-    color: '#F3F4F6',
+    color: colors.textPrimary,
     fontWeight: '500',
   },
   table: {
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: colors.border,
     borderRadius: 8,
     overflow: 'hidden',
   },
   tableHeader: {
-    backgroundColor: '#191919',
+    backgroundColor: colors.surface2,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: colors.border,
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e1e1e',
+    borderBottomColor: palette.surface3,
   },
   tableCell: {
     flex: 1,
@@ -332,12 +333,12 @@ const styles = StyleSheet.create({
   tableHeaderText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   tableCellText: {
     fontSize: 13,
-    color: '#F3F4F6',
+    color: colors.textPrimary,
   },
 });
