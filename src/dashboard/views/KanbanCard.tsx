@@ -32,9 +32,11 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
     backgroundColor: C.surface2,
     borderWidth: highlighted ? 2 : 1,
     borderColor: highlighted ? C.brand : hovered ? C.steel : C.border,
+    borderLeftWidth: 3,
+    borderLeftColor: stripeColor,
     borderRadius: 8,
     padding: 10,
-    paddingLeft: 14,
+    paddingLeft: 12,
     position: 'relative' as const,
     overflow: 'hidden' as const,
     cursor: 'pointer' as const,
@@ -56,9 +58,6 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
       onPress={handleCardPress}
       style={cardStyle}
     >
-      {/* Priority stripe */}
-      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: stripeColor, borderRadius: 8 }} />
-
       {/* Top row: ID + optional age badge */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
         <Text style={{ fontSize: 11, fontWeight: '600', color: C.brand, fontFamily: 'Space Grotesk, monospace' }}>
