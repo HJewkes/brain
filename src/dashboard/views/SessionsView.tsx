@@ -3,6 +3,8 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardSession, SessionTimelineEvent } from '../types.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
 import { C } from '../components/shared/colors.js';
+import { fmtK, relativeTime, fmtTimestampLong, fmtSessionDuration } from '../utils/formatting.js';
+import { statusColor } from '../utils/semantic-colors.js';
 
 interface SessionsViewProps {
   dashboard: DashboardData | null;
@@ -10,48 +12,6 @@ interface SessionsViewProps {
 }
 
 type StatusFilter = 'all' | 'active' | 'completed';
-
-function fmtK(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
-
-function relativeTime(iso: string): string {
-  const now = Date.now();
-  const then = new Date(iso).getTime();
-  const diffMs = now - then;
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h ago`;
-  const diffD = Math.floor(diffH / 24);
-  if (diffD === 1) return 'yesterday';
-  return `${diffD}d ago`;
-}
-
-function duration(start: string, end: string | null): string {
-  const endMs = end ? new Date(end).getTime() : Date.now();
-  const diffMs = endMs - new Date(start).getTime();
-  const s = Math.floor(diffMs / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-function fmtTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
-}
-
-function statusColor(status: string): string {
-  if (status === 'active') return C.success;
-  if (status === 'error') return C.error;
-  return C.textTertiary;
-}
 
 function SessionRow({ session, selected, onPress }: {
   session: DashboardSession;
@@ -193,17 +153,17 @@ function SessionDetail({ session }: { session: DashboardSession }) {
       <View style={styles.timestamps}>
         <View style={styles.tsRow}>
           <Text style={styles.tsLabel}>Started</Text>
-          <Text style={styles.tsValue}>{fmtTimestamp(session.startedAt)}</Text>
+          <Text style={styles.tsValue}>{fmtTimestampLong(session.startedAt)}</Text>
         </View>
         {session.endedAt && (
           <View style={styles.tsRow}>
             <Text style={styles.tsLabel}>Ended</Text>
-            <Text style={styles.tsValue}>{fmtTimestamp(session.endedAt)}</Text>
+            <Text style={styles.tsValue}>{fmtTimestampLong(session.endedAt)}</Text>
           </View>
         )}
         <View style={styles.tsRow}>
           <Text style={styles.tsLabel}>Duration</Text>
-          <Text style={styles.tsValue}>{duration(session.startedAt, session.endedAt)}</Text>
+          <Text style={styles.tsValue}>{fmtSessionDuration(session.startedAt, session.endedAt)}</Text>
         </View>
       </View>
 

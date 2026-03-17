@@ -1,3 +1,4 @@
+export { fmtMinutes } from '../utils/formatting.js';
 import type { DashboardData, DashboardAgent, DashboardStageTransition } from '../types.js';
 
 export interface LeadTimeResult {
@@ -165,39 +166,7 @@ export function computeBurndown(data: DashboardData): BurndownPoint[] {
   return points;
 }
 
-// Format minutes as human-readable duration
-export function fmtMinutes(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-// Deterministic avatar color from agent name
-const AVATAR_COLORS = [
-  '#882E72',
-  '#1965B0',
-  '#4EB265',
-  '#F4A736',
-  '#7BAFDE',
-  '#DC050C',
-  '#406D87',
-  '#F7F056',
-];
-
-export function avatarColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffff;
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-export function initials(name: string): string {
-  return name
-    .split(/[-_\s]+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-}
+export { AVATAR_COLORS, avatarColor, initials } from '../utils/avatar.js';
 
 // ── Resumption analytics ────────────────────────────────────────────────────
 

@@ -1,15 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C } from './colors.js';
+import { fmtK } from '../../utils/formatting.js';
 
 interface Props {
   tokensIn: number;
   tokensOut: number;
   maxTokens?: number;
-}
-
-function fmtK(n: number): string {
-  return `${(n / 1000).toFixed(1)}k`;
 }
 
 export function TokenGauge({ tokensIn, tokensOut, maxTokens = 200000 }: Props) {

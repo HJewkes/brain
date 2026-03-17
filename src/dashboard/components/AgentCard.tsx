@@ -5,8 +5,7 @@ import { C } from './shared/colors.js';
 import { TokenGauge } from './shared/TokenGauge.js';
 import { ActivitySparkline } from './shared/ActivitySparkline.js';
 import type { SparkEvent } from './shared/ActivitySparkline.js';
-
-const AVATAR_COLORS = [C.brand, C.info, C.success, C.steel, C.warning, '#8B5CF6', '#EC4899'];
+import { AVATAR_COLORS } from '../utils/avatar.js';
 
 interface Props {
   agent: DashboardAgent;

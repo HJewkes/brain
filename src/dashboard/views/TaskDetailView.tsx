@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardTask, DashboardStageTransition } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { columnColor, priorityColor } from '../utils/semantic-colors.js';
+import { Section } from '../components/shared/Section.js';
 
 interface TaskDetailViewProps {
   taskId: string;
@@ -18,21 +20,6 @@ function colLabel(col: string): string {
     review: 'Review', done: 'Done',
   };
   return MAP[col] ?? col;
-}
-
-function colColor(col: string): string {
-  const MAP: Record<string, string> = {
-    blocked: C.error, ready: C.info, inprogress: C.warning,
-    review: C.steel, done: C.success,
-  };
-  return MAP[col] ?? C.textTertiary;
-}
-
-function priorityColor(p: string): string {
-  const MAP: Record<string, string> = {
-    critical: '#FF3B30', high: C.error, medium: C.warning, low: C.info,
-  };
-  return MAP[p] ?? C.textTertiary;
 }
 
 function fmtTimestamp(ts: string): string {
@@ -71,17 +58,8 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <View style={s.sectionHeader}>
-      <Text style={s.sectionTitle}>{title}</Text>
-      <View style={s.sectionLine} />
-    </View>
-  );
-}
-
 function ColBadge({ col }: { col: string }) {
-  const color = colColor(col);
+  const color = columnColor(col);
   return (
     <View style={[s.badge, { backgroundColor: `${color}18`, borderColor: `${color}40` }]}>
       <View style={[s.badgeDot, { backgroundColor: color }]} />
@@ -107,7 +85,7 @@ interface DepNode { id: string; title?: string; col?: string; children: DepNode[
 
 function DepTreeNode({ node, depth }: { node: DepNode; depth: number }) {
   const [expanded, setExpanded] = useState(true);
-  const color = colColor(node.col ?? '');
+  const color = columnColor(node.col ?? '');
   const hasChildren = node.children.length > 0;
   const indent = depth * 20;
 
@@ -208,9 +186,9 @@ function StageTimeline({ transitions }: { transitions: DashboardStageTransition[
           <View style={s.timelineContent}>
             <Text style={s.timelineTs}>{fmtTimestamp(t.timestamp)}</Text>
             <View style={s.timelineStages}>
-              <Text style={[s.timelineStage, { color: colColor(t.fromState) }]}>{colLabel(t.fromState)}</Text>
+              <Text style={[s.timelineStage, { color: columnColor(t.fromState) }]}>{colLabel(t.fromState)}</Text>
               <Text style={s.timelineArrow}>→</Text>
-              <Text style={[s.timelineStage, { color: colColor(t.toState) }]}>{colLabel(t.toState)}</Text>
+              <Text style={[s.timelineStage, { color: columnColor(t.toState) }]}>{colLabel(t.toState)}</Text>
             </View>
             {t.agentId && (
               <Pressable onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(t.agentId!)}`; }}>
@@ -303,33 +281,29 @@ export function TaskDetailView({ taskId, dashboard }: TaskDetailViewProps) {
         </View>
       </View>
 
-      <View style={s.section}>
-        <SectionHeader title="Dependencies" />
+      <Section variant="inline" title="Dependencies">
         <DepTree taskId={taskId} tasks={tasks} />
-      </View>
+      </Section>
 
       {task.description && (
-        <View style={s.section}>
-          <SectionHeader title="Note Content" />
+        <Section variant="inline" title="Note Content">
           <NoteText description={task.description} />
-        </View>
+        </Section>
       )}
 
-      <View style={s.section}>
-        <SectionHeader title="Stage History" />
+      <Section variant="inline" title="Stage History">
         <StageTimeline transitions={taskHistory} />
-      </View>
+      </Section>
 
       {agent && (
-        <View style={s.section}>
-          <SectionHeader title="Related" />
+        <Section variant="inline" title="Related">
           <View style={s.relatedRow}>
             <Text style={s.relatedLabel}>Agent</Text>
             <Pressable onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(agent.name)}`; }}>
               <Text style={[s.infoText, s.link]}>{agent.name} ({agent.status})</Text>
             </Pressable>
           </View>
-        </View>
+        </Section>
       )}
     </ScrollView>
   );
@@ -372,11 +346,6 @@ const s = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
   badgeText: { fontSize: 11, fontWeight: '500' },
-
-  section: { gap: 12 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: C.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 },
-  sectionLine: { flex: 1, height: 1, backgroundColor: C.border },
 
   // Dep tree
   depTreeContainer: { gap: 12 },

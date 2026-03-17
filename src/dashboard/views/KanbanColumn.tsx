@@ -2,15 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import type { DashboardTask, DashboardAgent } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { columnColor } from '../utils/semantic-colors.js';
 import { KanbanCard } from './KanbanCard.js';
-
-const COL_ACCENT: Record<string, string> = {
-  blocked: C.error,
-  ready: C.warning,
-  inprogress: C.brand,
-  review: C.info,
-  done: C.success,
-};
 
 const COL_LABEL: Record<string, string> = {
   blocked: 'Blocked',
@@ -38,7 +31,7 @@ const WS_COLORS = [C.brand, '#1965B0', '#4EB265', '#882E72', '#F4A736', '#7BAFDE
 
 export function KanbanColumn({ col, tasks, allTasks, agents, workstreams = {}, highlightedTask, onAgentHover, onAgentLeave, onAgentClick }: KanbanColumnProps) {
   const [collapsed, setCollapsed] = useState(col === 'done');
-  const accent = COL_ACCENT[col] ?? C.textSecondary;
+  const accent = columnColor(col);
   const label = COL_LABEL[col] ?? col;
   const width = col === 'inprogress' ? 380 : col === 'review' ? 320 : 300;
 

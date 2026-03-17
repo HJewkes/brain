@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardAgent } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { fmtK } from '../utils/formatting.js';
 import { AgentCard } from '../components/AgentCard.js';
+import { AVATAR_COLORS } from '../utils/avatar.js';
 
 interface AgentsViewProps {
   dashboard: DashboardData | null;
@@ -32,12 +34,6 @@ function StatsBar({ agents }: { agents: DashboardAgent[] }) {
   const totalTools = agents.reduce((s, a) => s + a.toolCalls, 0);
   const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
   const errRate = totalTools > 0 ? ((totalErrors / totalTools) * 100).toFixed(1) : '0.0';
-
-  function fmtK(n: number): string {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-    return String(n);
-  }
 
   const stats: [string, string, string][] = [
     ['Total Agents', String(agents.length), C.textPrimary],
@@ -151,7 +147,6 @@ function TopologyView({ agents, dimHistorical }: { agents: DashboardAgent[]; dim
   );
 }
 
-const AVATAR_COLORS = [C.brand, C.info, C.success, C.steel, C.warning, '#8B5CF6', '#EC4899'];
 
 interface TopoNodeProps {
   agent: DashboardAgent;

@@ -2,20 +2,8 @@ import React, { useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import type { DashboardTask } from '../types.js';
 import { C } from '../components/shared/colors.js';
-
-export function formatAge(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
-
-const PRIORITY_STRIPE: Record<string, string> = {
-  high: C.error,
-  medium: C.warning,
-  low: '#1965B0',
-};
+import { priorityStripeColor } from '../utils/semantic-colors.js';
+import { formatAge } from '../utils/formatting.js';
 
 interface KanbanCardProps {
   task: DashboardTask;
@@ -30,7 +18,7 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
   const [hovered, setHovered] = React.useState(false);
   const avatarRef = useRef<View>(null);
 
-  const stripeColor = PRIORITY_STRIPE[task.priority] ?? C.textTertiary;
+  const stripeColor = priorityStripeColor(task.priority);
   const isBlocked = task.col === 'blocked';
 
   // Find unmet deps (deps that exist in allTasks and aren't done)

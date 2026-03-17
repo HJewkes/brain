@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import type { DashboardData, SessionDetailData, SessionTurn, SessionToolCall, SubagentSummary } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { statusColor } from '../utils/semantic-colors.js';
+import { fmtTime, fmtTimestamp, fmtDuration, fmtGap } from '../utils/formatting.js';
 import {
   TimeSyncProvider,
   SessionSidebar,
@@ -46,32 +48,6 @@ const TOOL_BADGE_MAP: Record<string, { letter: string; bg: string; fg: string }>
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function fmtTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-function fmtDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  return `${m}m ${s % 60}s`;
-}
-
-function fmtGap(ms: number): string {
-  const m = Math.floor(ms / 60000);
-  if (m < 60) return `${m}m gap`;
-  const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m gap`;
-}
 
 function toolBadgeInfo(toolName: string): { letter: string; bg: string; fg: string } {
   return TOOL_BADGE_MAP[toolName] ?? { letter: toolName.charAt(0).toUpperCase(), bg: 'rgba(107,114,128,0.15)', fg: C.textTertiary };
@@ -173,9 +149,7 @@ function SessionHeader({ data, searchQuery, onSearchChange }: {
   onSearchChange: (q: string) => void;
 }) {
   const { session } = data;
-  const statusColor = session.status === 'active' ? C.success
-    : session.status === 'completed' ? C.success
-    : C.textTertiary;
+  const sessionStatusColor = statusColor(session.status);
 
   return (
     <View style={s.header}>
@@ -185,9 +159,9 @@ function SessionHeader({ data, searchQuery, onSearchChange }: {
         </Pressable>
         <View style={s.headerDivider} />
         <Text style={s.headerTitle}>{session.displayId}</Text>
-        <View style={[s.statusBadge, { backgroundColor: `${statusColor}1A`, borderColor: `${statusColor}40` }]}>
-          <View style={[s.statusDot, { backgroundColor: statusColor }]} />
-          <Text style={[s.statusText, { color: statusColor }]}>{session.status}</Text>
+        <View style={[s.statusBadge, { backgroundColor: `${sessionStatusColor}1A`, borderColor: `${sessionStatusColor}40` }]}>
+          <View style={[s.statusDot, { backgroundColor: sessionStatusColor }]} />
+          <Text style={[s.statusText, { color: sessionStatusColor }]}>{session.status}</Text>
         </View>
       </View>
       <View style={s.headerMeta}>

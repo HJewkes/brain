@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { C } from '../components/shared/colors.js';
+import { columnColor, priorityColor, priorityStripeColor } from '../utils/semantic-colors.js';
+import { AVATAR_COLORS } from '../utils/avatar.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { StageBadge } from '../components/shared/StageBadge.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
@@ -59,21 +61,6 @@ const SPARK_EVENTS: SparkEvent[] = [
   { type: 'bash', magnitude: 2 },
 ];
 
-const PRIORITY_STRIPE: Record<string, string> = {
-  critical: '#FF3B30',
-  high: C.error,
-  medium: C.warning,
-  low: '#1965B0',
-};
-
-const COL_ACCENT: Record<string, string> = {
-  blocked: C.error,
-  ready: C.warning,
-  inprogress: C.brand,
-  review: C.info,
-  done: C.success,
-};
-
 const COL_LABEL: Record<string, string> = {
   blocked: 'Blocked',
   ready: 'Ready',
@@ -82,7 +69,6 @@ const COL_LABEL: Record<string, string> = {
   done: 'Done',
 };
 
-const AVATAR_COLORS = [C.brand, C.info, C.success, C.steel, C.warning, '#8B5CF6', '#EC4899'];
 
 /* ── Inline specimen primitives (self-contained, no external deps needed) ── */
 
@@ -133,7 +119,7 @@ function SpecimenBadgeWithDot({ label, dotColor, bg, fg, border }: { label: stri
 }
 
 function SpecimenColumnHeader({ col }: { col: string }) {
-  const accent = COL_ACCENT[col] ?? C.textSecondary;
+  const accent = columnColor(col);
   const label = COL_LABEL[col] ?? col;
   return (
     <View style={{
@@ -271,7 +257,7 @@ function SpecimenInfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function SpecimenDepNode({ icon, iconColor, id, title, col }: { icon: string; iconColor: string; id: string; title: string; col: string }) {
-  const cColor = colColor(col);
+  const cColor = columnColor(col);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
       <View style={{ width: 12, height: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: C.border }} />
@@ -308,20 +294,6 @@ function SpecimenTimelineDot() {
   );
 }
 
-function colColor(col: string): string {
-  const MAP: Record<string, string> = {
-    blocked: C.error, ready: C.info, inprogress: C.warning,
-    review: C.steel, done: C.success,
-  };
-  return MAP[col] ?? C.textTertiary;
-}
-
-function priorityColor(p: string): string {
-  const MAP: Record<string, string> = {
-    critical: '#FF3B30', high: C.error, medium: C.warning, low: C.info,
-  };
-  return MAP[p] ?? C.textTertiary;
-}
 
 /* ── SVG chart helpers ── */
 
@@ -550,7 +522,7 @@ export function SpecimenGlobalView() {
       {/* K1. Priority stripe */}
       <Section title="K1. Priority Stripe Pattern">
         <ComponentRow label="3px left border colored by priority level">
-          <Variants items={Object.entries(PRIORITY_STRIPE).map(([p, color]) => ({
+          <Variants items={Object.entries({ critical: priorityStripeColor("critical"), high: priorityStripeColor("high"), medium: priorityStripeColor("medium"), low: priorityStripeColor("low") }).map(([p, color]) => ({
             label: p,
             node: <SpecimenPriorityStripe priority={p} color={color} />,
           }))} />
@@ -738,7 +710,7 @@ export function SpecimenGlobalView() {
             <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
               <Text style={{ fontSize: 10, color: C.textTertiary, width: 55, paddingTop: 4 }}>Column</Text>
               {['blocked', 'ready', 'inprogress', 'review', 'done'].map(col => {
-                const c = colColor(col);
+                const c = columnColor(col);
                 return (
                   <SpecimenBadgeWithDot
                     key={col}

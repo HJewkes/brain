@@ -1,3 +1,4 @@
+export { fmtMinutes } from '../utils/formatting.js';
 import type { DashboardData, DashboardStageTransition } from '../types.js';
 
 export interface DodResult {
@@ -162,12 +163,4 @@ export function computeVelocity(transitions: DashboardStageTransition[]): Veloci
     points.push({ label, count: doneCounts[i]?.size ?? 0 });
   }
   return points;
-}
-
-export function fmtMinutes(minutes: number): string {
-  if (minutes === 0) return '0m';
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }

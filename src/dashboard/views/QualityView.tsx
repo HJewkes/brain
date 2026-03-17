@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import type { DashboardData } from '../types.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { C } from '../components/shared/colors.js';
+import { Section } from '../components/shared/Section.js';
 import {
   computeDodPassRate,
   computeFunnel,
@@ -18,17 +19,6 @@ import {
 
 interface QualityViewProps {
   dashboard: DashboardData | null;
-}
-
-// ── Section wrapper ─────────────────────────────────────────────────────────
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -293,21 +283,6 @@ const styles = StyleSheet.create({
 
   kpiRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   kpiCell: { flex: 1, minWidth: 160 },
-
-  section: {
-    backgroundColor: C.surface1,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 10,
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: C.textPrimary,
-    fontFamily: 'Space Grotesk, sans-serif',
-    marginBottom: 16,
-  },
 
   twoCol: { flexDirection: 'row', gap: 16, flexWrap: 'wrap' },
   colLeft: { flex: 2, minWidth: 300 },
