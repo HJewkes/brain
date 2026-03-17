@@ -12,13 +12,14 @@ import { TaskDetailView } from './views/TaskDetailView.js';
 import { SessionDetailView } from './views/SessionDetailView.js';
 import { SpecimenView } from './views/SpecimenView.js';
 import { SpecimenGlobalView } from './views/SpecimenGlobalView.js';
+import { SpecimenUnifiedView } from './views/SpecimenUnifiedView.js';
 import { CommandPalette } from './components/shared/CommandPalette.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task' | 'session' | 'specimen' | 'specimen-global';
+type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task' | 'session' | 'specimen' | 'specimen-global' | 'specimen-unified';
 
 interface NavItem {
   id: ViewId;
@@ -56,7 +57,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'quality', label: 'Quality', icon: '◆', hash: '#quality' },
 ];
 
-const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task', 'session', 'specimen', 'specimen-global']);
+const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task', 'session', 'specimen', 'specimen-global', 'specimen-unified']);
 
 function parseHash(hash: string): HashLocation {
   // Format: #view?param=value&param2=value2
@@ -211,7 +212,7 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
       />
 
       <View style={styles.main}>
-        <View style={activeView === 'session' || activeView === 'specimen' || activeView === 'specimen-global' ? styles.contentFullBleed : styles.content}>
+        <View style={activeView === 'session' || activeView === 'specimen' || activeView === 'specimen-global' || activeView === 'specimen-unified' ? styles.contentFullBleed : styles.content}>
           {activeView === 'overview' && (
             <OverviewView audit={audit} status={status} dashboard={dashboard} />
           )}
@@ -244,6 +245,9 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
           )}
           {activeView === 'specimen-global' && (
             <SpecimenGlobalView />
+          )}
+          {activeView === 'specimen-unified' && (
+            <SpecimenUnifiedView />
           )}
         </View>
       </View>
