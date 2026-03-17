@@ -1,5 +1,7 @@
 export { Avatar } from './Avatar.js';
 export { AgentHoverCard } from './AgentHoverCard.js';
+export { Badge } from './Badge.js';
+export type { BadgeProps } from './Badge.js';
 export { StatCard } from './StatCard.js';
 export { StageBadge } from './StageBadge.js';
 export { TokenGauge } from './TokenGauge.js';

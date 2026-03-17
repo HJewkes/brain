@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardTask, DashboardStageTransition } from '../types.js';
 import { C } from '../components/shared/colors.js';
 import { columnColor, priorityColor } from '../utils/semantic-colors.js';
-import { Section } from '../components/shared/Section.js';
+import { Section, Badge } from '../components/shared/index.js';
 
 interface TaskDetailViewProps {
   taskId: string;
@@ -59,22 +59,12 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 function ColBadge({ col }: { col: string }) {
-  const color = columnColor(col);
-  return (
-    <View style={[s.badge, { backgroundColor: `${color}18`, borderColor: `${color}40` }]}>
-      <View style={[s.badgeDot, { backgroundColor: color }]} />
-      <Text style={[s.badgeText, { color }]}>{colLabel(col)}</Text>
-    </View>
-  );
+  return <Badge label={colLabel(col)} color={columnColor(col)} dot />;
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
-  const color = priorityColor(priority);
-  return (
-    <View style={[s.badge, { backgroundColor: `${color}18`, borderColor: `${color}40` }]}>
-      <Text style={[s.badgeText, { color }]}>{priority.charAt(0).toUpperCase() + priority.slice(1)}</Text>
-    </View>
-  );
+  const label = priority.charAt(0).toUpperCase() + priority.slice(1);
+  return <Badge label={label} color={priorityColor(priority)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,10 +332,6 @@ const s = StyleSheet.create({
 
   monoBadge: { backgroundColor: C.surface3, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   monoText: { fontSize: 12, color: C.textSecondary, fontFamily: 'monospace' },
-
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
-  badgeDot: { width: 6, height: 6, borderRadius: 3 },
-  badgeText: { fontSize: 11, fontWeight: '500' },
 
   // Dep tree
   depTreeContainer: { gap: 12 },
