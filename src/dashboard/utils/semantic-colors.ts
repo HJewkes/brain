@@ -7,7 +7,7 @@
  *   - inprogress -> info (blue): "active work"
  *   - review/pr -> purple: "under review"
  */
-import { C, palette, semantic } from '../components/shared/colors.js';
+import { C, semantic } from '../components/shared/colors.js';
 
 // ---------------------------------------------------------------------------
 // Column colors (task workflow stage)
