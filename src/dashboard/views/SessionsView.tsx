@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardSession, SessionTimelineEvent } from '../types.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
+import { Badge } from '../components/shared/Badge.js';
 import { C } from '../components/shared/colors.js';
 import { fmtK, relativeTime, fmtTimestampLong, fmtSessionDuration } from '../utils/formatting.js';
 import { statusColor } from '../utils/semantic-colors.js';
@@ -29,11 +30,7 @@ function SessionRow({ session, selected, onPress }: {
     >
       <View style={styles.rowTop}>
         <Text style={styles.displayId}>{session.displayId}</Text>
-        <View style={[styles.badge, { backgroundColor: statusColor(session.status) + '26' }]}>
-          <Text style={[styles.badgeText, { color: statusColor(session.status) }]}>
-            {session.status}
-          </Text>
-        </View>
+        <Badge label={session.status} color={statusColor(session.status)} dot size="sm" />
       </View>
       <Text style={styles.rowTime}>{relativeTime(session.startedAt)}</Text>
       <View style={styles.rowMeta}>
@@ -143,11 +140,7 @@ function SessionDetail({ session }: { session: DashboardSession }) {
     <ScrollView style={styles.detail} contentContainerStyle={styles.detailContent}>
       <View style={styles.detailHeader}>
         <Text style={styles.detailId}>{session.displayId}</Text>
-        <View style={[styles.badge, { backgroundColor: statusColor(session.status) + '26' }]}>
-          <Text style={[styles.badgeText, { color: statusColor(session.status) }]}>
-            {session.status}
-          </Text>
-        </View>
+        <Badge label={session.status} color={statusColor(session.status)} dot />
       </View>
 
       <View style={styles.timestamps}>
@@ -287,8 +280,6 @@ const styles = StyleSheet.create({
   sessionRowSelected: { borderLeftWidth: 3, borderLeftColor: C.brand, paddingLeft: 9 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
   displayId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
-  badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeText: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
   rowTime: { fontSize: 11, color: C.textTertiary, marginBottom: 4 },
   rowMeta: { flexDirection: 'row', justifyContent: 'space-between' },
   metaText: { fontSize: 11, color: C.textSecondary },

@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardAgent } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { Badge } from '../components/shared/Badge.js';
 import { fmtK } from '../utils/formatting.js';
 import { AgentCard } from '../components/AgentCard.js';
 import { Avatar } from '../components/shared/Avatar.js';
+import { statusColor } from '../utils/semantic-colors.js';
 
 interface AgentsViewProps {
   dashboard: DashboardData | null;
@@ -157,7 +159,7 @@ interface TopoNodeProps {
 
 function TopoNode({ agent, role, index: _index, isDimmed }: TopoNodeProps) {
   const isActive = agent.status === 'active' || agent.status === 'running';
-  const statusDotColor = isActive ? C.success : C.textTertiary;
+  const statusLabel = isActive ? 'active' : 'idle';
   const roleLabel = role === 'coordinator' ? 'coordinator' : 'worker';
 
   return (
@@ -165,12 +167,7 @@ function TopoNode({ agent, role, index: _index, isDimmed }: TopoNodeProps) {
       <Avatar name={agent.name} size={40} rounded={false} />
       <Text style={s.topoName}>{agent.name}</Text>
       <Text style={s.topoRole}>{roleLabel}</Text>
-      <View style={s.topoStatus}>
-        <View style={[s.topoStatusDot, { backgroundColor: statusDotColor }]} />
-        <Text style={[s.topoStatusText, { color: statusDotColor }]}>
-          {isActive ? 'active' : 'idle'}
-        </Text>
-      </View>
+      <Badge label={statusLabel} color={statusColor(statusLabel)} dot size="sm" />
     </View>
   );
 }
@@ -414,12 +411,4 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  topoStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  topoStatusDot: { width: 6, height: 6, borderRadius: 3 },
-  topoStatusText: { fontSize: 10, fontWeight: '500' },
 });

@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import type { DashboardTask } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { Badge } from '../components/shared/Badge.js';
 import { Avatar } from '../components/shared/Avatar.js';
 import { priorityStripeColor } from '../utils/semantic-colors.js';
 import { formatAge } from '../utils/formatting.js';
@@ -64,9 +65,7 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
           {task.id}
         </Text>
         {task.col === 'ready' && task.queueAge != null && task.queueAge > 0 && (
-          <View style={{ backgroundColor: 'rgba(255,176,32,0.1)', borderWidth: 1, borderColor: 'rgba(255,176,32,0.2)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 }}>
-            <Text style={{ fontSize: 10, color: C.warning }}>{formatAge(task.queueAge)}</Text>
-          </View>
+          <Badge label={formatAge(task.queueAge)} color={C.warning} size="sm" />
         )}
       </View>
 
@@ -111,15 +110,13 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
       {/* PR badge for review column */}
       {task.pr && (
         <View style={{ marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-          <View style={{ backgroundColor: 'rgba(33,150,243,0.1)', borderWidth: 1, borderColor: 'rgba(33,150,243,0.2)', borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 }}>
-            <Text style={{ fontSize: 10, color: C.info }}>PR #{task.pr.url.split('/').pop()}</Text>
-          </View>
+          <Badge label={`PR #${task.pr.url.split('/').pop()}`} color={C.info} size="sm" />
           {task.pr.reviewStatus && (
-            <View style={reviewStatusStyle(task.pr.reviewStatus)}>
-              <Text style={{ fontSize: 10, color: reviewStatusColor(task.pr.reviewStatus) }}>
-                {task.pr.reviewStatus}
-              </Text>
-            </View>
+            <Badge
+              label={task.pr.reviewStatus}
+              color={reviewStatusColor(task.pr.reviewStatus)}
+              size="sm"
+            />
           )}
         </View>
       )}
@@ -148,16 +145,6 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
       )}
     </Pressable>
   );
-}
-
-function reviewStatusStyle(status: string) {
-  const configs: Record<string, { bg: string; border: string }> = {
-    approved: { bg: 'rgba(20,184,166,0.1)', border: 'rgba(20,184,166,0.2)' },
-    changes: { bg: 'rgba(255,176,32,0.1)', border: 'rgba(255,176,32,0.2)' },
-    pending: { bg: 'rgba(107,114,128,0.15)', border: 'rgba(107,114,128,0.2)' },
-  };
-  const c = configs[status] ?? configs.pending;
-  return { backgroundColor: c.bg, borderWidth: 1, borderColor: c.border, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 };
 }
 
 function reviewStatusColor(status: string): string {

@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { C } from './colors.js';
+import { Badge } from './Badge.js';
 
 interface Props {
   stage: string;
@@ -24,42 +24,7 @@ function fmtAge(minutes: number): string {
 }
 
 export function StageBadge({ stage, ageMinutes, p50, p85 }: Props) {
-  const dotColor = ageColor(ageMinutes, p50, p85);
-  const bgColor = dotColor === C.success
-    ? 'rgba(20,184,166,0.12)'
-    : dotColor === C.warning
-    ? 'rgba(255,176,32,0.12)'
-    : dotColor === C.error
-    ? 'rgba(209,67,67,0.12)'
-    : 'rgba(107,114,128,0.12)';
-
-  return (
-    <View style={[styles.badge, { backgroundColor: bgColor }]}>
-      <View style={[styles.dot, { backgroundColor: dotColor }]} />
-      <Text style={[styles.label, { color: dotColor }]}>
-        {stage}{ageMinutes !== undefined ? ` · ${fmtAge(ageMinutes)}` : ''}
-      </Text>
-    </View>
-  );
+  const color = ageColor(ageMinutes, p50, p85);
+  const label = `${stage}${ageMinutes !== undefined ? ` · ${fmtAge(ageMinutes)}` : ''}`;
+  return <Badge label={label} color={color} dot />;
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-});
