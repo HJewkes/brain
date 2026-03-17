@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import type { DashboardTask, DashboardAgent } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { Avatar } from '../components/shared/Avatar.js';
 import { columnColor } from '../utils/semantic-colors.js';
 import { KanbanCard } from './KanbanCard.js';
 
@@ -235,11 +236,9 @@ function AgentSwimlane({ agentName, agent, tasks, allTasks, highlightedTask, onA
           onHoverIn={(e) => onAgentHover(agentName, e.target as HTMLElement)}
           onHoverOut={onAgentLeave}
           onPress={() => onAgentClick(agentName)}
-          style={{ width: 26, height: 26, borderRadius: 6, backgroundColor: isActive ? C.brand : C.steel, alignItems: 'center', justifyContent: 'center', cursor: 'pointer' as const }}
+          style={{ cursor: 'pointer' as const }}
         >
-          <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>
-            {agentName.slice(0, 2).toUpperCase()}
-          </Text>
+          <Avatar name={agentName} size={26} rounded={false} />
         </Pressable>
         <Text style={{ fontSize: 12, fontWeight: '600', color: C.textPrimary, flex: 1 }}>{agentName}</Text>
         <Text style={{ fontSize: 11, color: C.textSecondary }}>{tasks.length} task{tasks.length !== 1 ? 's' : ''}</Text>

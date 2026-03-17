@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import type { DashboardTask } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { Avatar } from '../components/shared/Avatar.js';
 import { priorityStripeColor } from '../utils/semantic-colors.js';
 import { formatAge } from '../utils/formatting.js';
 
@@ -90,11 +91,9 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
                 e.stopPropagation();
                 onAgentClick(task.agent!);
               }}
-              style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', cursor: 'pointer' as const }}
+              style={{ cursor: 'pointer' as const }}
             >
-              <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>
-                {task.agent.slice(0, 2).toUpperCase()}
-              </Text>
+              <Avatar name={task.agent} size={20} rounded={true} />
             </Pressable>
           ) : null}
           {task.agent && (

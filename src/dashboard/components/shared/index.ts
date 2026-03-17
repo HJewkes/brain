@@ -1,3 +1,4 @@
+export { Avatar } from './Avatar.js';
 export { AgentHoverCard } from './AgentHoverCard.js';
 export { StatCard } from './StatCard.js';
 export { StageBadge } from './StageBadge.js';

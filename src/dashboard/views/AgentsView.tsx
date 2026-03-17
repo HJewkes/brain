@@ -4,7 +4,7 @@ import type { DashboardData, DashboardAgent } from '../types.js';
 import { C } from '../components/shared/colors.js';
 import { fmtK } from '../utils/formatting.js';
 import { AgentCard } from '../components/AgentCard.js';
-import { AVATAR_COLORS } from '../utils/avatar.js';
+import { Avatar } from '../components/shared/Avatar.js';
 
 interface AgentsViewProps {
   dashboard: DashboardData | null;
@@ -155,17 +155,14 @@ interface TopoNodeProps {
   isDimmed?: boolean;
 }
 
-function TopoNode({ agent, role, index, isDimmed }: TopoNodeProps) {
+function TopoNode({ agent, role, index: _index, isDimmed }: TopoNodeProps) {
   const isActive = agent.status === 'active' || agent.status === 'running';
-  const avatarBg = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const statusDotColor = isActive ? C.success : C.textTertiary;
   const roleLabel = role === 'coordinator' ? 'coordinator' : 'worker';
 
   return (
     <View style={[s.topoNode, isDimmed && s.topoNodeDimmed]}>
-      <View style={[s.topoAvatar, { backgroundColor: avatarBg }]}>
-        <Text style={s.topoAvatarText}>{agent.name.slice(0, 2).toUpperCase()}</Text>
-      </View>
+      <Avatar name={agent.name} size={40} rounded={false} />
       <Text style={s.topoName}>{agent.name}</Text>
       <Text style={s.topoRole}>{roleLabel}</Text>
       <View style={s.topoStatus}>
@@ -405,20 +402,6 @@ const s = StyleSheet.create({
     minWidth: 120,
   },
   topoNodeDimmed: { opacity: 0.55 },
-  topoAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  topoAvatarText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
-    fontFamily: 'Space Grotesk, sans-serif',
-  },
   topoName: {
     fontSize: 12,
     fontWeight: '600',

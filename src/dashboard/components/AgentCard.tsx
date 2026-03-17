@@ -5,7 +5,7 @@ import { C } from './shared/colors.js';
 import { TokenGauge } from './shared/TokenGauge.js';
 import { ActivitySparkline } from './shared/ActivitySparkline.js';
 import type { SparkEvent } from './shared/ActivitySparkline.js';
-import { AVATAR_COLORS } from '../utils/avatar.js';
+import { Avatar } from './shared/Avatar.js';
 
 interface Props {
   agent: DashboardAgent;
@@ -17,12 +17,11 @@ function buildSparkEvents(domains: string[]): SparkEvent[] {
   return domains.slice(-15).map(type => ({ type }));
 }
 
-export function AgentCard({ agent, index }: Props) {
+export function AgentCard({ agent, index: _index }: Props) {
   const isActive = agent.status === 'active' || agent.status === 'running';
   const errRate = agent.toolCalls > 0
     ? ((agent.errors / agent.toolCalls) * 100).toFixed(1)
     : '0.0';
-  const avatarBg = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const statusBg = isActive ? 'rgba(20,184,166,0.15)' : 'rgba(107,114,128,0.15)';
   const statusDotColor = isActive ? C.success : C.textTertiary;
   const statusLabel = isActive ? 'Active' : (agent.status === 'completed' ? 'Done' : 'Idle');
@@ -33,9 +32,7 @@ export function AgentCard({ agent, index }: Props) {
       {/* Header */}
       <View style={s.header}>
         <View style={s.nameGroup}>
-          <View style={[s.avatar, { backgroundColor: avatarBg }]}>
-            <Text style={s.avatarText}>{agent.name.slice(0, 2).toUpperCase()}</Text>
-          </View>
+          <Avatar name={agent.name} size={32} rounded={false} />
           <View>
             <Text style={s.name}>{agent.name}</Text>
             <View style={[s.statusBadge, { backgroundColor: statusBg }]}>
@@ -103,19 +100,6 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   nameGroup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
-    fontFamily: 'Space Grotesk, sans-serif',
-  },
   name: {
     fontSize: 13,
     fontWeight: '600',

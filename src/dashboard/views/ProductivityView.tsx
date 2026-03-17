@@ -8,9 +8,10 @@ import { Section } from '../components/shared/Section.js';
 import {
   computeThroughput, computeLeadTimeP85, computeFlowEfficiency,
   computeWIPAge, computeAgentPerf, computeBurndown, computeResumptionStats,
-  fmtMinutes, avatarColor, initials,
+  fmtMinutes,
   type AgentPerf, type BurndownPoint, type ResumptionStats,
 } from './productivityMetrics.js';
+import { Avatar } from '../components/shared/Avatar.js';
 
 interface ProductivityViewProps {
   dashboard: DashboardData | null;
@@ -52,12 +53,10 @@ function KPIRow({ dashboard }: { dashboard: DashboardData }) {
 // ── Agent Avatar ───────────────────────────────────────────────────────────────
 
 function AgentAvatar({ agent }: { agent: DashboardAgent }) {
-  const color = avatarColor(agent.name);
-  const ini = initials(agent.name);
   const isActive = agent.status === 'active' || agent.status === 'running';
   return (
-    <View style={[styles.avatar, { backgroundColor: color }]}>
-      <Text style={styles.avatarText}>{ini}</Text>
+    <View style={styles.avatarWrap}>
+      <Avatar name={agent.name} size={32} rounded={true} />
       <View style={[styles.statusDot, { backgroundColor: isActive ? C.success : C.textTertiary }]} />
     </View>
   );
@@ -325,16 +324,12 @@ const styles = StyleSheet.create({
   agentStatVal: { fontSize: 16, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
   agentStatLabel: { fontSize: 10, color: C.textTertiary, textTransform: 'uppercase' },
 
-  // Avatar
-  avatar: {
+  // Avatar wrapper (holds Avatar + status dot)
+  avatarWrap: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
     position: 'relative',
   },
-  avatarText: { fontSize: 11, fontWeight: '700', color: '#fff' },
   statusDot: {
     position: 'absolute',
     bottom: -1,
