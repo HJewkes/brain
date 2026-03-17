@@ -3,6 +3,8 @@ export { Card } from './Card.js';
 export type { CardProps } from './Card.js';
 export { UserAvatar, ClaudeAvatar } from './RoleAvatar.js';
 export { AgentHoverCard } from './AgentHoverCard.js';
+export { Pill } from './Pill.js';
+export type { PillProps } from './Pill.js';
 export { Badge } from './Badge.js';
 export type { BadgeProps } from './Badge.js';
 export { StatCard } from './StatCard.js';

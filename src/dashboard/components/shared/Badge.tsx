@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Pill } from './Pill.js';
 
 export interface BadgeProps {
   label: string;
@@ -30,23 +30,17 @@ export function Badge({
   dot = false,
   size = 'md',
 }: BadgeProps) {
+  const pillSize = size === 'sm' ? 'xs' : 'sm';
   return (
-    <View
-      style={[
-        styles.pill,
-        {
-          backgroundColor: hexToRgba(color, bgOpacity),
-          borderColor: hexToRgba(color, borderOpacity),
-        },
-      ]}
-    >
-      {dot && (
-        <View style={[styles.dot, { backgroundColor: color }]} />
-      )}
-      <Text style={[styles.label, { color, fontSize: size === 'sm' ? 9 : 10 }]}>
-        {label}
-      </Text>
-    </View>
+    <Pill
+      label={label}
+      color={color}
+      bg={hexToRgba(color, bgOpacity)}
+      borderColor={hexToRgba(color, borderOpacity)}
+      rounded
+      size={pillSize}
+      dot={dot ? { color, size: 6 } : undefined}
+    />
   );
 }
 
@@ -67,30 +61,5 @@ function hexToRgba(color: string, opacity: number): string {
     const [r, g, b] = match3[1].split('').map(c => parseInt(c + c, 16));
     return `rgba(${r},${g},${b},${opacity})`;
   }
-  // Already rgb/rgba or named color — return as-is (caller provides pre-formatted value).
   return hex;
 }
-
-const styles = StyleSheet.create({
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-    flexShrink: 0,
-    alignSelf: 'flex-start',
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    flexShrink: 0,
-  },
-  label: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontWeight: '600',
-  },
-});

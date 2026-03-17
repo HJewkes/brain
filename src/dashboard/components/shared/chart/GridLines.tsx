@@ -1,5 +1,4 @@
 import React from 'react';
-import { C } from '../colors.js';
 
 export interface GridLinesProps {
   /** Number of horizontal lines (evenly spaced top-to-bottom in the chart area). */
@@ -12,7 +11,7 @@ export interface GridLinesProps {
   height: number;
   /** Padding applied to the chart — lines are drawn within the inner area. */
   padding: { top: number; right: number; bottom: number; left: number };
-  /** Stroke color for grid lines. Defaults to C.border. */
+  /** Stroke color for grid lines. Defaults to subtle white overlay. */
   color?: string;
 }
 
@@ -25,7 +24,7 @@ export function GridLines({
   width,
   height,
   padding,
-  color = C.border,
+  color = 'rgba(255,255,255,0.06)',
 }: GridLinesProps) {
   const x1 = padding.left;
   const x2 = width - padding.right;

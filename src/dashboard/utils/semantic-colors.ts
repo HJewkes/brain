@@ -4,8 +4,8 @@
  * Single source of truth — resolves conflicts between COL_ACCENT (KanbanColumn)
  * and colColor (TaskDetailView). Design intent follows the Kanban board headers:
  *   - ready → warning (amber): "queued, waiting"
- *   - inprogress → brand (orange): "active work"
- *   - review → info (blue): "under review"
+ *   - inprogress → info (blue): "active work"
+ *   - review/pr → purple: "under review"
  */
 import { C } from '../components/shared/colors.js';
 
@@ -16,8 +16,9 @@ import { C } from '../components/shared/colors.js';
 const COLUMN_COLOR_MAP: Record<string, string> = {
   blocked: C.error,
   ready: C.warning,
-  inprogress: C.brand,
-  review: C.info,
+  inprogress: C.info,
+  review: '#A855F7',
+  pr: '#A855F7',
   done: C.success,
 };
 
@@ -68,7 +69,7 @@ export function priorityStripeColor(priority: string): string {
 export function statusColor(status: string | undefined | null): string {
   if (!status) return C.textTertiary;
   const s = status.toLowerCase();
-  if (s === 'active' || s === 'running') return C.success;
+  if (s === 'active' || s === 'running') return C.brand;
   if (s === 'completed' || s === 'done') return C.success;
   if (s === 'error' || s === 'failed') return C.error;
   return C.textTertiary;

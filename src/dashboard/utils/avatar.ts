@@ -1,6 +1,6 @@
-import { C } from '../components/shared/colors.js';
+import { AVATAR_COLORS } from '../tokens.js';
 
-export const AVATAR_COLORS = [C.brand, C.info, C.success, C.steel, C.warning, '#8B5CF6', '#EC4899'];
+export { AVATAR_COLORS };
 
 export function avatarColor(name: string): string {
   let hash = 0;

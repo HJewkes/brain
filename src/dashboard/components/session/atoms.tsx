@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { C } from '../shared/colors.js';
+import { Pill } from '../shared/Pill.js';
+import { Badge } from '../shared/Badge.js';
 
 /* ── Color constants ── */
 
@@ -183,23 +185,13 @@ export function ToolPill({
 }) {
   const config = type ? TOOL_PILL_STYLES[type] : undefined;
   return (
-    <View
-      style={[
-        styles.toolPill,
-        config
-          ? { backgroundColor: config.bg }
-          : { backgroundColor: SURFACE4 },
-      ]}
-    >
-      <Text
-        style={[
-          styles.toolPillText,
-          { color: config ? config.fg : C.textTertiary },
-        ]}
-      >
-        {label}
-      </Text>
-    </View>
+    <Pill
+      label={label}
+      color={config ? config.fg : C.textTertiary}
+      bg={config ? config.bg : SURFACE4}
+      rounded
+      size="sm"
+    />
   );
 }
 
@@ -215,12 +207,15 @@ export function TaskChip({
   onPress?: () => void;
 }) {
   return (
-    <Pressable
+    <Pill
+      label={label}
+      color="#FF7900"
+      bg={active ? 'rgba(255,121,0,0.25)' : BRAND_DIM}
+      borderColor={active ? '#FF7900' : 'rgba(255,121,0,0.25)'}
+      rounded={false}
+      size="md"
       onPress={onPress}
-      style={[styles.taskChip, active === true && styles.taskChipActive]}
-    >
-      <Text style={styles.taskChipText}>{label}</Text>
-    </Pressable>
+    />
   );
 }
 
@@ -233,16 +228,17 @@ export function TaskPill({
   label: string;
   state: TaskPillState;
 }) {
-  const colors = TASK_PILL_COLORS[state];
+  const cfg = TASK_PILL_COLORS[state];
   return (
-    <View
-      style={[
-        styles.taskPill,
-        { backgroundColor: colors.bg, borderLeftColor: colors.border },
-      ]}
-    >
-      <Text style={[styles.taskPillText, { color: colors.fg }]}>{label}</Text>
-    </View>
+    <Pill
+      label={label}
+      color={cfg.fg}
+      bg={cfg.bg}
+      borderLeftColor={cfg.border}
+      borderLeftWidth={2}
+      rounded={false}
+      size="xs"
+    />
   );
 }
 
@@ -347,20 +343,11 @@ export function StatusBadge({
 }) {
   const config = STATUS_BADGE_STYLES[variant] ?? STATUS_BADGE_STYLES.complete;
   return (
-    <View
-      style={[
-        styles.statusBadge,
-        {
-          backgroundColor: config.bg,
-          borderColor: config.border,
-        },
-      ]}
-    >
-      <StatusDot color={config.fg} />
-      <Text style={[styles.statusBadgeText, { color: config.fg }]}>
-        {label}
-      </Text>
-    </View>
+    <Badge
+      label={label}
+      color={config.fg}
+      dot
+    />
   );
 }
 
@@ -396,52 +383,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* 6. ToolPill */
-  toolPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 99,
-  },
-  toolPillText: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 10,
-    fontWeight: '600',
-  },
-
-  /* 7. TaskChip */
-  taskChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    backgroundColor: BRAND_DIM,
-    borderWidth: 1,
-    borderColor: 'rgba(255,121,0,0.25)',
-    flexShrink: 0,
-  },
-  taskChipActive: {
-    backgroundColor: 'rgba(255,121,0,0.25)',
-    borderColor: '#FF7900',
-  },
-  taskChipText: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FF7900',
-  },
-
-  /* 8. TaskPill */
-  taskPill: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
-    borderLeftWidth: 2,
-  },
-  taskPillText: {
-    fontFamily: "'Space Grotesk', monospace",
-    fontSize: 9,
-    fontWeight: '600',
-    lineHeight: 13.5,
-  },
+  /* 6–8: ToolPill, TaskChip, TaskPill — now composed via Pill */
 
   /* 10. Separator */
   separator: {
@@ -473,20 +415,5 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
 
-  /* 14. StatusBadge */
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 20,
-    borderWidth: 1,
-    flexShrink: 0,
-  },
-  statusBadgeText: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 10,
-    fontWeight: '600',
-  },
+  /* 14: StatusBadge — now composed via Badge */
 });

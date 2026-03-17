@@ -45,6 +45,21 @@ export const TOOL_COLORS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Categorical color palettes — for avatar hashing, chart series, etc.
+// ---------------------------------------------------------------------------
+
+/** Stable palette for deterministic avatar / agent coloring. */
+export const AVATAR_COLORS = [
+  colors.brand,
+  colors.info,
+  colors.success,
+  colors.steel,
+  colors.warning,
+  '#8B5CF6',
+  '#EC4899',
+] as const;
+
+// ---------------------------------------------------------------------------
 // Spacing scale (px values)
 // ---------------------------------------------------------------------------
 
