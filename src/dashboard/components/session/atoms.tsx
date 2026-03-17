@@ -259,7 +259,50 @@ export function Separator() {
   return <View style={styles.separator} />;
 }
 
-/* ── 11. DurationBar ── */
+/* ── 11. ProgressBar (unified) ── */
+
+interface ProgressBarProps {
+  /** Fill percentage 0-100 */
+  pct: number;
+  /** Bar height in px, default 6 */
+  height?: number;
+  /** Fill color, default C.brand */
+  color?: string;
+  /** Track color, default SURFACE4 */
+  trackColor?: string;
+  /** Fixed track width (e.g. 60 for DurationBar), undefined = flex */
+  trackWidth?: number;
+}
+
+export function ProgressBar({
+  pct,
+  height = 6,
+  color = C.brand,
+  trackColor = SURFACE4,
+  trackWidth,
+}: ProgressBarProps) {
+  const clampedPct = Math.min(Math.max(pct, 0), 100);
+  const trackStyle = {
+    height,
+    backgroundColor: trackColor,
+    borderRadius: height / 2,
+    overflow: 'hidden' as const,
+    ...(trackWidth !== undefined ? { width: trackWidth, flexShrink: 0 as const } : { flex: 1 }),
+  };
+  const fillStyle = {
+    height,
+    width: `${clampedPct}%` as unknown as number,
+    backgroundColor: color,
+    borderRadius: height / 2,
+  };
+  return (
+    <View style={trackStyle}>
+      <View style={fillStyle} />
+    </View>
+  );
+}
+
+/* ── 12. DurationBar (thin wrapper over ProgressBar) ── */
 
 export function DurationBar({
   widthPct,
@@ -268,35 +311,7 @@ export function DurationBar({
   widthPct: number;
   color: string;
 }) {
-  const clampedPct = Math.min(Math.max(widthPct, 1), 100);
-  return (
-    <View style={styles.durationBarTrack}>
-      <View
-        style={[
-          styles.durationBar,
-          {
-            width: `${clampedPct}%` as unknown as number,
-            backgroundColor: color,
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-/* ── 12. ProgressBar ── */
-
-export function ProgressBar({ pct }: { pct: number }) {
-  return (
-    <View style={styles.progressBarTrack}>
-      <View
-        style={[
-          styles.progressBarFill,
-          { width: `${Math.min(pct, 100)}%` as unknown as number },
-        ]}
-      />
-    </View>
-  );
+  return <ProgressBar pct={widthPct} height={3} color={color} trackWidth={60} />;
 }
 
 /* ── 13. MiniBar ── */
@@ -315,17 +330,7 @@ export function MiniBar({
   return (
     <View style={styles.miniBarRow}>
       <Text style={styles.miniBarLabel}>{label}</Text>
-      <View style={styles.miniBarTrack}>
-        <View
-          style={[
-            styles.miniBarFill,
-            {
-              width: `${Math.min(pct, 100)}%` as unknown as number,
-              backgroundColor: color,
-            },
-          ]}
-        />
-      </View>
+      <ProgressBar pct={pct} color={color} />
       <Text style={styles.miniBarCount}>{count}</Text>
     </View>
   );
@@ -444,32 +449,6 @@ const styles = StyleSheet.create({
     backgroundColor: C.border,
   },
 
-  /* 11. DurationBar */
-  durationBarTrack: {
-    width: 60,
-    height: 3,
-    flexShrink: 0,
-  },
-  durationBar: {
-    height: 3,
-    borderRadius: 2,
-    minWidth: 2,
-    maxWidth: 60,
-  },
-
-  /* 12. ProgressBar */
-  progressBarTrack: {
-    height: 6,
-    backgroundColor: SURFACE4,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: 6,
-    backgroundColor: C.brand,
-    borderRadius: 3,
-  },
-
   /* 13. MiniBar */
   miniBarRow: {
     flexDirection: 'row',
@@ -484,17 +463,6 @@ const styles = StyleSheet.create({
     color: C.textSecondary,
     width: 38,
     flexShrink: 0,
-  },
-  miniBarTrack: {
-    flex: 1,
-    height: 6,
-    backgroundColor: SURFACE4,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  miniBarFill: {
-    height: 6,
-    borderRadius: 3,
   },
   miniBarCount: {
     fontFamily: "'Space Grotesk', sans-serif",
