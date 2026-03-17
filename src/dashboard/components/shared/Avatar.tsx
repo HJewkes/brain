@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { avatarColor, initials } from '../../utils/avatar.js';
+import { semantic } from '../../tokens.js';
 
 interface AvatarProps {
   name: string;
@@ -28,7 +29,7 @@ export function Avatar({ name, size = 32, rounded = true, icon, bg }: AvatarProp
       }}
     >
       {icon ?? (
-        <Text style={{ fontSize, fontWeight: '700', color: '#fff', fontFamily: 'Space Grotesk, sans-serif' }}>
+        <Text style={{ fontSize, fontWeight: '700', color: semantic.text.inverse, fontFamily: 'Space Grotesk, sans-serif' }}>
           {letters}
         </Text>
       )}

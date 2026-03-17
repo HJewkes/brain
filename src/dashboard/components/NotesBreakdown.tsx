@@ -6,13 +6,9 @@ import {
   CardTitle,
   CardContent,
 } from '@titan-design/react-ui';
-import { C } from './shared/colors.js';
+import { C, palette } from './shared/colors.js';
 
-const DATA_COLORS = [
-  '#FF7900', '#1965B0', '#14B8A6', '#882E72',
-  '#4EB265', '#F4A736', '#7BAFDE', '#DC050C',
-  '#8B5CF6', '#EC4899',
-];
+const DATA_COLORS = palette.dataColors;
 
 interface NotesBreakdownProps {
   title: string;

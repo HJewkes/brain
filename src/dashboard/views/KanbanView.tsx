@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import type { DashboardData, DashboardTask, DashboardAgent } from '../types.js';
 import { AgentHoverCard } from '../components/shared/AgentHoverCard.js';
-import { C } from '../components/shared/colors.js';
+import { C, palette } from '../components/shared/colors.js';
 import { KanbanColumn } from './KanbanColumn.js';
 
 interface KanbanViewProps {
@@ -233,7 +233,7 @@ const styles = {
   },
   filterBtnActive: {
     borderColor: C.brand,
-    backgroundColor: 'rgba(255,121,0,0.08)',
+    backgroundColor: palette.brand.dim08,
   },
   filterBtnText: {
     fontSize: 13,

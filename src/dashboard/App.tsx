@@ -14,6 +14,7 @@ import { SpecimenView } from './views/SpecimenView.js';
 import { SpecimenGlobalView } from './views/SpecimenGlobalView.js';
 import { SpecimenUnifiedView } from './views/SpecimenUnifiedView.js';
 import { CommandPalette } from './components/shared/CommandPalette.js';
+import { palette, semantic, component } from './tokens.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -266,17 +267,17 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
 // Styles
 // ---------------------------------------------------------------------------
 
-const BRAND = '#FF7900';
-const BG = '#101010';
-const SIDEBAR_BG = '#161616';
-const BORDER = '#2a2a2a';
-const TEXT_PRIMARY = '#F3F4F6';
-const TEXT_SECONDARY = '#9CA3AF';
-const TEXT_TERTIARY = '#6B7280';
-const ACTIVE_BG = 'rgba(255, 121, 0, 0.08)';
-const HOVER_BG = 'rgba(255, 255, 255, 0.04)';
-const SURFACE2 = '#191919';
-const SURFACE3 = '#1e1e1e';
+const BRAND = palette.brand.base;
+const BG = palette.bg;
+const SIDEBAR_BG = component.sidebar.bg;
+const BORDER = semantic.border;
+const TEXT_PRIMARY = semantic.text.primary;
+const TEXT_SECONDARY = semantic.text.secondary;
+const TEXT_TERTIARY = semantic.text.tertiary;
+const ACTIVE_BG = component.sidebar.navActiveBg;
+const HOVER_BG = component.sidebar.navHoverBg;
+const SURFACE2 = palette.surface2;
+const SURFACE3 = palette.surface3;
 
 const styles = {
   root: {
@@ -418,10 +419,10 @@ const styles = {
     borderRadius: 4,
   },
   liveDotActive: {
-    backgroundColor: '#14B8A6',
+    backgroundColor: component.liveIndicator.active,
   },
   liveDotStatic: {
-    backgroundColor: '#4B5563',
+    backgroundColor: component.liveIndicator.static,
   },
   liveLabel: {
     fontSize: 11,

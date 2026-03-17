@@ -1,4 +1,5 @@
 import React from 'react';
+import { palette } from '../../../tokens.js';
 
 export interface GridLinesProps {
   /** Number of horizontal lines (evenly spaced top-to-bottom in the chart area). */
@@ -24,7 +25,7 @@ export function GridLines({
   width,
   height,
   padding,
-  color = 'rgba(255,255,255,0.06)',
+  color = palette.overlay.white06,
 }: GridLinesProps) {
   const x1 = padding.left;
   const x2 = width - padding.right;

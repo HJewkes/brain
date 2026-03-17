@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import { sectionH3 } from './shared-styles.js';
@@ -10,7 +10,7 @@ interface Props {
   startedAt: string;
 }
 
-const ERROR_COLOR = '#DC050C';
+const ERROR_COLOR = palette.red.base;
 
 export function ErrorsWidget({ errorTimestamps, startedAt }: Props) {
   const currentTs = useCurrentTimestamp();
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   count: {
     fontFamily: 'Space Grotesk',
     fontSize: 10,
-    color: '#F87171',
+    color: palette.red.light,
     width: 42,
     textAlign: 'right',
     flexShrink: 0,

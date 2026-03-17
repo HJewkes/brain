@@ -1,43 +1,45 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette, semantic, component } from '../shared/colors.js';
 import { Pill } from '../shared/Pill.js';
 import { Badge } from '../shared/Badge.js';
 
-/* ── Color constants ── */
+/* ── Color constants (re-exported for backward compat) ── */
 
-export const SURFACE4 = '#1f1f1f';
-export const BRAND_DIM = 'rgba(255,121,0,0.12)';
+/** @deprecated Use `palette.surface3` */
+export const SURFACE4 = palette.surface3;
+/** @deprecated Use `palette.brand.dim12` */
+export const BRAND_DIM = palette.brand.dim12;
 
 /** Tool badge config keyed by tool type. */
 export const TOOL_BADGE_STYLES: Record<
   ToolBadgeType,
   { bg: string; fg: string; letter: string }
 > = {
-  read:  { bg: 'rgba(25,101,176,0.2)',  fg: '#7BAFDE', letter: 'R' },
-  write: { bg: 'rgba(20,184,166,0.2)',   fg: '#14B8A6', letter: 'W' },
-  edit:  { bg: 'rgba(244,167,54,0.2)',   fg: '#F4A736', letter: 'E' },
-  bash:  { bg: 'rgba(107,114,128,0.2)',  fg: '#9CA3AF', letter: '$' },
-  grep:  { bg: 'rgba(130,60,160,0.2)',   fg: '#C084FC', letter: '/' },
-  glob:  { bg: 'rgba(130,60,160,0.2)',   fg: '#C084FC', letter: '/' },
-  agent: { bg: BRAND_DIM,                fg: '#FF7900', letter: 'A' },
+  read:  { bg: semantic.tool.read.bg,  fg: semantic.tool.read.fg,  letter: 'R' },
+  write: { bg: semantic.tool.write.bg, fg: semantic.tool.write.fg, letter: 'W' },
+  edit:  { bg: semantic.tool.edit.bg,  fg: semantic.tool.edit.fg,  letter: 'E' },
+  bash:  { bg: semantic.tool.bash.bg,  fg: semantic.tool.bash.fg,  letter: '$' },
+  grep:  { bg: semantic.tool.grep.bg,  fg: semantic.tool.grep.fg,  letter: '/' },
+  glob:  { bg: semantic.tool.glob.bg,  fg: semantic.tool.glob.fg,  letter: '/' },
+  agent: { bg: semantic.tool.agent.bg, fg: semantic.tool.agent.fg, letter: 'A' },
 };
 
 /** Tool pill colors keyed by category. */
 export const TOOL_PILL_STYLES: Record<string, { bg: string; fg: string }> = {
-  read:  { bg: 'rgba(25,101,176,0.2)',  fg: '#7BAFDE' },
-  write: { bg: 'rgba(20,184,166,0.2)',  fg: '#14B8A6' },
-  bash:  { bg: 'rgba(244,167,54,0.15)', fg: '#F4A736' },
-  agent: { bg: BRAND_DIM,               fg: '#FF7900' },
+  read:  { bg: semantic.toolPill.read.bg,  fg: semantic.toolPill.read.fg },
+  write: { bg: semantic.toolPill.write.bg, fg: semantic.toolPill.write.fg },
+  bash:  { bg: semantic.toolPill.bash.bg,  fg: semantic.toolPill.bash.fg },
+  agent: { bg: semantic.toolPill.agent.bg, fg: semantic.toolPill.agent.fg },
 };
 
 /** Timeline dot colors keyed by type. */
 export const TIMELINE_DOT_COLORS: Record<TimelineDotType, string> = {
-  user:  '#5B9BD5',
-  ok:    '#14B8A6',
-  err:   '#DC050C',
-  agent: '#FF7900',
-  info:  C.textTertiary,
+  user:  component.timelineDot.user,
+  ok:    component.timelineDot.ok,
+  err:   component.timelineDot.err,
+  agent: component.timelineDot.agent,
+  info:  component.timelineDot.info,
 };
 
 /** Agent dot variants. */
@@ -45,9 +47,9 @@ export const AGENT_DOT_STYLES: Record<
   AgentDotState,
   { bg: string; shadow: string | undefined }
 > = {
-  live: { bg: '#22c55e', shadow: '0 0 4px rgba(34,197,94,0.5)' },
-  idle: { bg: '#F4A736', shadow: '0 0 4px rgba(244,167,54,0.4)' },
-  done: { bg: C.textTertiary, shadow: undefined },
+  live: { bg: component.agentDot.live.bg, shadow: `0 0 4px ${component.agentDot.live.glow}` },
+  idle: { bg: component.agentDot.idle.bg, shadow: `0 0 4px ${component.agentDot.idle.glow}` },
+  done: { bg: component.agentDot.done.bg, shadow: undefined },
 };
 
 /** Task pill state colors (sidebar kanban). */
@@ -55,9 +57,9 @@ export const TASK_PILL_COLORS: Record<
   TaskPillState,
   { bg: string; fg: string; border: string }
 > = {
-  ready:  { bg: 'rgba(212,165,32,0.15)', fg: '#D4A520', border: '#D4A520' },
-  active: { bg: 'rgba(255,121,0,0.15)',  fg: '#FF7900', border: '#FF7900' },
-  done:   { bg: 'rgba(20,184,166,0.12)', fg: '#14B8A6', border: '#14B8A6' },
+  ready:  component.taskPill.ready,
+  active: component.taskPill.active,
+  done:   component.taskPill.done,
 };
 
 /** Status badge variant colors. */
@@ -65,21 +67,9 @@ export const STATUS_BADGE_STYLES: Record<
   string,
   { bg: string; fg: string; border: string }
 > = {
-  complete: {
-    bg: 'rgba(20,184,166,0.12)',
-    fg: '#14B8A6',
-    border: 'rgba(20,184,166,0.25)',
-  },
-  error: {
-    bg: 'rgba(220,5,12,0.12)',
-    fg: '#DC050C',
-    border: 'rgba(220,5,12,0.25)',
-  },
-  active: {
-    bg: BRAND_DIM,
-    fg: '#FF7900',
-    border: 'rgba(255,121,0,0.25)',
-  },
+  complete: component.statusBadge.complete,
+  error:    component.statusBadge.error,
+  active:   component.statusBadge.active,
 };
 
 /* ── Types ── */
@@ -140,9 +130,9 @@ export function TimelineDot({ type }: { type: TimelineDotType }) {
 /* ── 3. MiniStatusDot ── */
 
 const MINI_STATUS_COLORS: Record<MiniStatusOutcome, string> = {
-  success: '#14B8A6',
-  error: '#DC050C',
-  pending: C.textTertiary,
+  success: component.miniStatus.success,
+  error:   component.miniStatus.error,
+  pending: component.miniStatus.pending,
 };
 
 export function MiniStatusDot({ outcome }: { outcome: MiniStatusOutcome }) {
@@ -188,7 +178,7 @@ export function ToolPill({
     <Pill
       label={label}
       color={config ? config.fg : C.textTertiary}
-      bg={config ? config.bg : SURFACE4}
+      bg={config ? config.bg : palette.surface3}
       rounded
       size="sm"
     />
@@ -209,9 +199,9 @@ export function TaskChip({
   return (
     <Pill
       label={label}
-      color="#FF7900"
-      bg={active ? 'rgba(255,121,0,0.25)' : BRAND_DIM}
-      borderColor={active ? '#FF7900' : 'rgba(255,121,0,0.25)'}
+      color={component.taskChip.color}
+      bg={active ? component.taskChip.activeBg : component.taskChip.bg}
+      borderColor={active ? palette.brand.base : component.taskChip.borderColor}
       rounded={false}
       size="md"
       onPress={onPress}
@@ -264,7 +254,7 @@ interface ProgressBarProps {
   height?: number;
   /** Fill color, default C.brand */
   color?: string;
-  /** Track color, default SURFACE4 */
+  /** Track color, default palette.surface3 */
   trackColor?: string;
   /** Fixed track width (e.g. 60 for DurationBar), undefined = flex */
   trackWidth?: number;
@@ -274,7 +264,7 @@ export function ProgressBar({
   pct,
   height = 6,
   color = C.brand,
-  trackColor = SURFACE4,
+  trackColor = palette.surface3,
   trackWidth,
 }: ProgressBarProps) {
   const clampedPct = Math.min(Math.max(pct, 0), 100);

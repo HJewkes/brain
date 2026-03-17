@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardTask, DashboardStageTransition } from '../types.js';
-import { C } from '../components/shared/colors.js';
+import { C, component, semantic } from '../components/shared/colors.js';
 import { columnColor, priorityColor } from '../utils/semantic-colors.js';
 import { Section, Badge } from '../components/shared/index.js';
 
@@ -314,7 +314,7 @@ const s = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '600', color: C.textPrimary, lineHeight: 28 },
 
   workstreamRow: { flexDirection: 'row' },
-  workstreamBadge: { backgroundColor: 'rgba(64,109,135,0.15)', borderWidth: 1, borderColor: 'rgba(64,109,135,0.3)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
+  workstreamBadge: { backgroundColor: component.workstreamBadge.bg, borderWidth: 1, borderColor: component.workstreamBadge.border, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
   workstreamText: { fontSize: 12, color: C.steel, fontWeight: '500' },
 
   infoGrid: { flexDirection: 'row', gap: 24, flexWrap: 'wrap' },
@@ -328,7 +328,7 @@ const s = StyleSheet.create({
 
   agentRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   agentAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
-  agentAvatarText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  agentAvatarText: { fontSize: 10, fontWeight: '700', color: semantic.text.inverse },
 
   monoBadge: { backgroundColor: C.surface3, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   monoText: { fontSize: 12, color: C.textSecondary, fontFamily: 'monospace' },

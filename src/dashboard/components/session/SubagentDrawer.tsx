@@ -6,7 +6,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette, semantic, component } from '../shared/colors.js';
 import type { SessionDetailData, SubagentSummary, SessionToolCall } from '../../types.js';
 
 export interface SubagentDrawerProps {
@@ -32,11 +32,11 @@ interface AgentToolCall {
 }
 
 const TOOL_COLORS: Record<string, string> = {
-  Read: '#1965B0',
-  Write: '#14B8A6',
-  Bash: '#F4A736',
-  Agent: '#FF7900',
-  Other: '#6B7280',
+  Read: palette.blue.dark,
+  Write: palette.teal.base,
+  Bash: palette.amber.base,
+  Agent: palette.brand.base,
+  Other: semantic.text.tertiary,
 };
 
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
@@ -224,7 +224,7 @@ function ToolCallRow({ tc }: { tc: AgentToolCall }) {
   return (
     <View style={[styles.tableRow, isErr && styles.tableRowErr]}>
       <Text style={styles.tcTime}>{time}</Text>
-      <Text style={[styles.tcName, { color: isErr ? '#F87171' : nameColor }]}>{tc.toolName}</Text>
+      <Text style={[styles.tcName, { color: isErr ? palette.red.light : nameColor }]}>{tc.toolName}</Text>
       <Text style={styles.tcDetail} numberOfLines={1}>{tc.inputSummary}</Text>
       <Text style={styles.tcDur}>{durText}</Text>
     </View>
@@ -317,7 +317,7 @@ function formatTime(iso: string): string {
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: component.drawer.backdrop,
     zIndex: 499,
   } as object,
   drawer: {
@@ -389,18 +389,18 @@ const styles = StyleSheet.create({
     color: C.textSecondary,
   },
   badgeAgent: {
-    backgroundColor: 'rgba(255,121,0,0.12)',
-    borderColor: 'rgba(255,121,0,0.3)',
+    backgroundColor: palette.brand.dim12,
+    borderColor: palette.brand.dim30,
   },
   badgeAgentText: {
     color: C.brand,
   },
   badgeError: {
-    backgroundColor: 'rgba(220,5,12,0.1)',
-    borderColor: 'rgba(220,5,12,0.3)',
+    backgroundColor: palette.red.dim10,
+    borderColor: palette.red.dim30,
   },
   badgeErrorText: {
-    color: '#F87171',
+    color: palette.red.light,
   },
   body: {
     flex: 1,
@@ -420,11 +420,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   promptBox: {
-    backgroundColor: 'rgba(37,99,235,0.06)',
+    backgroundColor: component.subagentToolRow.bg,
     borderWidth: 1,
-    borderColor: 'rgba(37,99,235,0.15)',
+    borderColor: component.subagentToolRow.border,
     borderLeftWidth: 4,
-    borderLeftColor: 'rgba(37,99,235,0.4)',
+    borderLeftColor: component.subagentToolRow.leftAccent,
     borderRadius: 6,
     padding: 10,
     maxHeight: 200,
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: palette.overlay.white06,
     overflow: 'hidden',
   },
   breakdownFill: {
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tableRowErr: {
-    backgroundColor: 'rgba(220,5,12,0.05)',
+    backgroundColor: palette.red.dim05,
   },
   tcTime: {
     fontFamily: 'Space Grotesk',

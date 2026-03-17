@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import type { ToolCategory } from './precompute.js';
@@ -13,10 +13,10 @@ interface Props {
 }
 
 const TOOL_COLORS: Record<ToolCategory, string> = {
-  Read: '#1965B0',
-  Write: '#14B8A6',
-  Bash: '#F4A736',
-  Agent: '#FF7900',
+  Read: palette.blue.dark,
+  Write: palette.teal.base,
+  Bash: palette.amber.base,
+  Agent: palette.brand.base,
 };
 
 const CATEGORIES: ToolCategory[] = ['Read', 'Write', 'Bash', 'Agent'];

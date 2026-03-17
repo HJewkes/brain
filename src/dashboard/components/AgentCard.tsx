@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardAgent } from '../types.js';
-import { C } from './shared/colors.js';
+import { C, palette } from './shared/colors.js';
 import { TokenGauge } from './shared/TokenGauge.js';
 import { ActivitySparkline } from './shared/ActivitySparkline.js';
 import type { SparkEvent } from './shared/ActivitySparkline.js';
@@ -22,7 +22,7 @@ export function AgentCard({ agent, index: _index }: Props) {
   const errRate = agent.toolCalls > 0
     ? ((agent.errors / agent.toolCalls) * 100).toFixed(1)
     : '0.0';
-  const statusBg = isActive ? 'rgba(20,184,166,0.15)' : 'rgba(107,114,128,0.15)';
+  const statusBg = isActive ? palette.teal.dim15 : palette.gray.dim15;
   const statusDotColor = isActive ? C.success : C.textTertiary;
   const statusLabel = isActive ? 'Active' : (agent.status === 'completed' ? 'Done' : 'Idle');
   const sparkEvents = buildSparkEvents(agent.toolDomains);

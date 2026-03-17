@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { colors } from '../../tokens.js';
+import { colors, palette, component } from '../../tokens.js';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -54,7 +54,7 @@ export function Card({
       <View
         style={{
           ...baseStyle,
-          backgroundColor: bg ?? 'rgba(255,255,255,0.03)',
+          backgroundColor: bg ?? component.card.subtleBg,
           borderColor: borderColor ?? `${accent}40`,
         }}
       >

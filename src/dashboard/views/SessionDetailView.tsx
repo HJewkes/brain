@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import type { DashboardData, SessionDetailData, SessionTurn, SessionToolCall, SubagentSummary } from '../types.js';
-import { C } from '../components/shared/colors.js';
+import { C, palette, semantic, component } from '../components/shared/colors.js';
 import { statusColor } from '../utils/semantic-colors.js';
 import { fmtTime, fmtTimestamp, fmtDuration, fmtGap } from '../utils/formatting.js';
 import {
@@ -35,14 +35,14 @@ interface SessionDetailViewProps {
 const GAP_THRESHOLD_MS = 10 * 60 * 1000;
 
 const TOOL_BADGE_MAP: Record<string, { letter: string; bg: string; fg: string }> = {
-  Read:  { letter: 'R', bg: 'rgba(25,101,176,0.2)', fg: '#7BAFDE' },
-  Write: { letter: 'W', bg: 'rgba(20,184,166,0.2)', fg: C.success },
-  Edit:  { letter: 'E', bg: 'rgba(244,167,54,0.2)', fg: C.warning },
-  Bash:  { letter: '$', bg: 'rgba(107,114,128,0.2)', fg: C.textSecondary },
-  Grep:  { letter: 'G', bg: 'rgba(130,60,160,0.2)', fg: '#C084FC' },
-  Glob:  { letter: 'G', bg: 'rgba(130,60,160,0.2)', fg: '#C084FC' },
-  Task:  { letter: 'T', bg: 'rgba(255,121,0,0.12)', fg: C.brand },
-  Agent: { letter: 'A', bg: 'rgba(255,121,0,0.12)', fg: C.brand },
+  Read:  { letter: 'R', bg: semantic.tool.read.bg,  fg: semantic.tool.read.fg },
+  Write: { letter: 'W', bg: semantic.tool.write.bg, fg: semantic.tool.write.fg },
+  Edit:  { letter: 'E', bg: semantic.tool.edit.bg,  fg: semantic.tool.edit.fg },
+  Bash:  { letter: '$', bg: semantic.tool.bash.bg,  fg: semantic.tool.bash.fg },
+  Grep:  { letter: 'G', bg: semantic.tool.grep.bg,  fg: semantic.tool.grep.fg },
+  Glob:  { letter: 'G', bg: semantic.tool.glob.bg,  fg: semantic.tool.glob.fg },
+  Task:  { letter: 'T', bg: semantic.tool.agent.bg, fg: semantic.tool.agent.fg },
+  Agent: { letter: 'A', bg: semantic.tool.agent.bg, fg: semantic.tool.agent.fg },
 };
 
 // ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ const TOOL_BADGE_MAP: Record<string, { letter: string; bg: string; fg: string }>
 // ---------------------------------------------------------------------------
 
 function toolBadgeInfo(toolName: string): { letter: string; bg: string; fg: string } {
-  return TOOL_BADGE_MAP[toolName] ?? { letter: toolName.charAt(0).toUpperCase(), bg: 'rgba(107,114,128,0.15)', fg: C.textTertiary };
+  return TOOL_BADGE_MAP[toolName] ?? { letter: toolName.charAt(0).toUpperCase(), bg: palette.gray.dim15, fg: C.textTertiary };
 }
 
 function groupToolCalls(calls: SessionToolCall[]): Array<{ name: string; count: number }> {
@@ -498,7 +498,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     zIndex: 100,
   },
-  drawerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  drawerBackdrop: { flex: 1, backgroundColor: component.drawer.backdrop },
   drawer: {
     width: 340,
     backgroundColor: C.surface1,

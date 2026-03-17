@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { C } from '../components/shared/colors.js';
+import { C, palette, semantic, component } from '../components/shared/colors.js';
 import { colors, spacing, radii, typography, elevation } from '../tokens.js';
 import { AVATAR_COLORS } from '../utils/avatar.js';
 import { columnColor, priorityColor, statusColor, priorityStripeColor } from '../utils/semantic-colors.js';
@@ -193,30 +193,30 @@ export function SpecimenUnifiedView() {
 
       <Spec title="Semantic color language — status">
         <View style={s.swatchGrid}>
-          <Swatch color="#14B8A6" label="success/done" />
-          <Swatch color="#FF7900" label="active/running" />
-          <Swatch color="#DC050C" label="error/blocked" />
-          <Swatch color="#F4A736" label="warning/idle" />
-          <Swatch color="#2196F3" label="info/inprogress" />
-          <Swatch color="#A855F7" label="review" />
+          <Swatch color={semantic.status.success} label="success/done" />
+          <Swatch color={semantic.status.active} label="active/running" />
+          <Swatch color={semantic.status.error} label="error/blocked" />
+          <Swatch color={semantic.status.warning} label="warning/idle" />
+          <Swatch color={semantic.status.info} label="info/inprogress" />
+          <Swatch color={semantic.column.review} label="review" />
         </View>
       </Spec>
 
       <Spec title="Semantic color language — tool types">
         <View style={s.swatchGrid}>
-          <Swatch color="#7BAFDE" label="read" />
-          <Swatch color="#14B8A6" label="write" />
-          <Swatch color="#F4A736" label="edit" />
-          <Swatch color="#9CA3AF" label="bash" />
-          <Swatch color="#C084FC" label="grep/glob" />
-          <Swatch color="#FF7900" label="agent" />
+          <Swatch color={semantic.tool.read.fg} label="read" />
+          <Swatch color={semantic.tool.write.fg} label="write" />
+          <Swatch color={semantic.tool.edit.fg} label="edit" />
+          <Swatch color={semantic.tool.bash.fg} label="bash" />
+          <Swatch color={semantic.tool.grep.fg} label="grep/glob" />
+          <Swatch color={semantic.tool.agent.fg} label="agent" />
         </View>
       </Spec>
 
       <Spec title="Semantic color language — roles">
         <View style={s.swatchGrid}>
-          <Swatch color="#5B9BD5" label="user" />
-          <Swatch color="#FF7900" label="claude" />
+          <Swatch color={semantic.role.user.accent} label="user" />
+          <Swatch color={semantic.role.claude.accent} label="claude" />
         </View>
       </Spec>
 
@@ -282,8 +282,8 @@ export function SpecimenUnifiedView() {
             { label: '7px', node: <Dot size={7} color={C.info} /> },
             { label: '8px', node: <Dot size={8} color={C.warning} /> },
             { label: '10px', node: <Dot size={10} color={C.error} /> },
-            { label: 'border', node: <Dot size={8} color="#5B9BD5" border={{ width: 2, color: C.bg }} /> },
-            { label: 'glow', node: <Dot size={7} color="#22c55e" glow="rgba(34,197,94,0.5)" /> },
+            { label: 'border', node: <Dot size={8} color={palette.userBlue.base} border={{ width: 2, color: C.bg }} /> },
+            { label: 'glow', node: <Dot size={7} color={palette.green.base} glow={palette.green.dim50} /> },
           ]}
         />
       </Spec>
@@ -475,11 +475,11 @@ export function SpecimenUnifiedView() {
 
       <Spec title="MiniBar — multiple rows">
         <View style={{ width: 220 }}>
-          <MiniBar label="Read" pct={65} count={142} color="#7BAFDE" />
-          <MiniBar label="Write" pct={30} count={66} color="#14B8A6" />
-          <MiniBar label="Bash" pct={45} count={98} color="#F4A736" />
-          <MiniBar label="Agent" pct={15} count={32} color="#FF7900" />
-          <MiniBar label="Grep" pct={20} count={44} color="#C084FC" />
+          <MiniBar label="Read" pct={65} count={142} color={semantic.tool.read.fg} />
+          <MiniBar label="Write" pct={30} count={66} color={semantic.tool.write.fg} />
+          <MiniBar label="Bash" pct={45} count={98} color={semantic.tool.edit.fg} />
+          <MiniBar label="Agent" pct={15} count={32} color={semantic.tool.agent.fg} />
+          <MiniBar label="Grep" pct={20} count={44} color={semantic.tool.grep.fg} />
         </View>
       </Spec>
 
@@ -581,12 +581,12 @@ export function SpecimenUnifiedView() {
               Plain card — surface2 background with standard border.
             </Text>
           </Card>
-          <Card variant="accent" accentColor="#5B9BD5">
+          <Card variant="accent" accentColor={palette.userBlue.base}>
             <Text style={{ color: C.textPrimary, fontSize: 13 }}>
               Accent card (blue) — colored left border, like UserMessageCard.
             </Text>
           </Card>
-          <Card variant="accent" accentColor={C.brand} accentWidth={3} bg="#1a1400">
+          <Card variant="accent" accentColor={C.brand} accentWidth={3} bg={semantic.role.claude.bg}>
             <Text style={{ color: C.textPrimary, fontSize: 13 }}>
               Accent card (orange) — brand left border, like ClaudeResponseCard.
             </Text>
@@ -874,7 +874,7 @@ const s = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 10,
     borderBottomWidth: 2,
-    borderBottomColor: 'rgba(255,121,0,0.25)',
+    borderBottomColor: palette.brand.dim25,
   },
   tierTitle: {
     fontFamily: "'Space Grotesk', sans-serif",
@@ -1128,7 +1128,7 @@ const s = StyleSheet.create({
   avatarColorChipText: {
     fontFamily: 'monospace',
     fontSize: 9,
-    color: '#fff',
+    color: semantic.text.inverse,
     fontWeight: '600',
   },
 });

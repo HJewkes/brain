@@ -1,17 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette, semantic, component } from '../shared/colors.js';
 import { TurnSummaryCard } from './molecules.js';
 import type { TurnSummaryCardProps } from './molecules.js';
-
-/* ── Color constants ── */
-
-const USER_BG = 'rgba(20,50,90,0.35)';
-const USER_BORDER = 'rgba(91,155,213,0.5)';
-const USER_ACCENT = '#5B9BD5';
-const USER_TEXT_COLOR = '#7BAFDE';
-const CLAUDE_BG = '#1a1400';
-const CLAUDE_BORDER = 'rgba(255,121,0,0.25)';
 
 /* ── Helpers ── */
 
@@ -229,11 +220,11 @@ export function ConversationTurn({
 const s = StyleSheet.create({
   /* User message card */
   userCard: {
-    backgroundColor: USER_BG,
+    backgroundColor: component.userCard.bg,
     borderWidth: 1,
-    borderColor: USER_BORDER,
+    borderColor: component.userCard.border,
     borderLeftWidth: 4,
-    borderLeftColor: USER_ACCENT,
+    borderLeftColor: component.userCard.accent,
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -250,31 +241,31 @@ const s = StyleSheet.create({
     fontFamily: 'Space Grotesk',
     fontSize: 10,
     fontWeight: '600',
-    color: USER_TEXT_COLOR,
+    color: component.userCard.labelColor,
     letterSpacing: 0.04 * 10,
     textTransform: 'uppercase',
   },
   userTime: {
     fontSize: 10,
-    color: USER_TEXT_COLOR,
+    color: component.userCard.labelColor,
     fontFamily: 'Space Grotesk',
     marginLeft: 'auto' as unknown as number,
   },
-  userText: { fontSize: 13, lineHeight: 20, color: C.textPrimary },
-  userShowMore: { fontSize: 11, color: USER_TEXT_COLOR, marginTop: 5, opacity: 0.8 },
+  userText: { fontSize: 13, lineHeight: 20, color: semantic.text.primary },
+  userShowMore: { fontSize: 11, color: semantic.role.user.text, marginTop: 5, opacity: 0.8 },
 
   /* Claude response card */
   claudeCard: {
-    backgroundColor: CLAUDE_BG,
+    backgroundColor: component.claudeCard.bg,
     borderWidth: 1,
-    borderColor: CLAUDE_BORDER,
+    borderColor: component.claudeCard.border,
     borderLeftWidth: 3,
-    borderLeftColor: C.brand,
+    borderLeftColor: component.claudeCard.accent,
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  claudeCardError: { borderLeftColor: C.error },
+  claudeCardError: { borderLeftColor: component.claudeCard.errorAccent },
   claudeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -286,7 +277,7 @@ const s = StyleSheet.create({
     fontFamily: 'Space Grotesk',
     fontSize: 10,
     fontWeight: '600',
-    color: C.brand,
+    color: component.claudeCard.labelColor,
     letterSpacing: 0.04 * 10,
     textTransform: 'uppercase',
     flex: 1,
@@ -296,13 +287,13 @@ const s = StyleSheet.create({
     fontSize: 10,
     color: C.textTertiary,
   },
-  claudeParaText: { fontSize: 13, lineHeight: 21, color: C.textPrimary },
-  claudeBoldText: { fontSize: 13, lineHeight: 21, color: C.textPrimary, fontWeight: '700' },
+  claudeParaText: { fontSize: 13, lineHeight: 21, color: semantic.text.primary },
+  claudeBoldText: { fontSize: 13, lineHeight: 21, color: semantic.text.primary, fontWeight: '700' },
   claudeCodeText: {
     fontSize: 11,
     color: C.textSecondary,
     fontFamily: 'monospace',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: component.claudeCard.codeInlineBg,
     borderRadius: 3,
   },
   claudeParagraph: { marginTop: 8 },
@@ -314,7 +305,7 @@ const s = StyleSheet.create({
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,121,0,0.12)',
+    borderTopColor: component.claudeCard.toolSectionBorder,
   },
 
   /* Conversation turn */

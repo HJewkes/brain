@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import type { DashboardData } from '../../types.js';
-import { C } from './colors.js';
+import { C, component, palette } from './colors.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -132,7 +132,7 @@ const rowStyles = {
     cursor: 'pointer' as unknown as undefined,
   },
   rowSelected: {
-    backgroundColor: 'rgba(255,121,0,0.08)',
+    backgroundColor: component.commandPalette.activeItemBg,
   },
   badge: {
     borderWidth: 1,
@@ -304,7 +304,7 @@ const paletteStyles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: component.commandPalette.overlayBg,
     alignItems: 'center' as const,
     justifyContent: 'flex-start' as const,
     paddingTop: 80,
@@ -313,7 +313,7 @@ const paletteStyles = {
   modal: {
     width: 600,
     maxWidth: '90vw' as unknown as number,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: component.commandPalette.panelBg,
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 12,

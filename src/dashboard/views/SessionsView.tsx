@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardSession, SessionTimelineEvent } from '../types.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
 import { Badge } from '../components/shared/Badge.js';
-import { C } from '../components/shared/colors.js';
+import { C, semantic } from '../components/shared/colors.js';
 import { fmtK, relativeTime, fmtTimestampLong, fmtSessionDuration } from '../utils/formatting.js';
 import { statusColor } from '../utils/semantic-colors.js';
 
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   filterBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface2 },
   filterBtnActive: { backgroundColor: C.brand, borderColor: C.brand },
   filterBtnText: { fontSize: 11, color: C.textTertiary, fontWeight: '500' },
-  filterBtnTextActive: { color: '#fff' },
+  filterBtnTextActive: { color: semantic.text.inverse },
   list: { flex: 1 },
 
   // Session row

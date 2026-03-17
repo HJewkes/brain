@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette, semantic, component } from '../shared/colors.js';
 import {
   TimelineDot,
   ToolBadge,
@@ -9,7 +9,6 @@ import {
   AgentDot,
   TaskPill,
   ToolPill,
-  SURFACE4,
 } from './atoms.js';
 import type {
   ToolBadgeType,
@@ -98,7 +97,7 @@ export function AgentRow({ state, name, duration }: AgentRowProps) {
     state === 'live'
       ? C.textPrimary
       : state === 'idle'
-        ? '#F4A736'
+        ? palette.amber.base
         : C.textTertiary;
 
   return (
@@ -120,9 +119,9 @@ const KANBAN_HEAD_STYLES: Record<
   KanbanColumnVariant,
   { bg: string; fg: string }
 > = {
-  ready: { bg: 'rgba(212,165,32,0.12)', fg: '#D4A520' },
-  active: { bg: 'rgba(255,121,0,0.12)', fg: C.brand },
-  done: { bg: 'rgba(20,184,166,0.10)', fg: C.success },
+  ready:  component.kanbanHead.ready,
+  active: component.kanbanHead.active,
+  done:   component.kanbanHead.done,
 };
 
 export interface KanbanColumnProps {
@@ -285,12 +284,12 @@ const s = StyleSheet.create({
     borderColor: 'transparent',
   },
   bodyErr: {
-    borderColor: 'rgba(220,5,12,0.25)',
-    backgroundColor: 'rgba(220,5,12,0.05)',
+    borderColor: component.toolCallRow.errorBorder,
+    backgroundColor: component.toolCallRow.errorBg,
   },
   bodyAgent: {
-    borderColor: 'rgba(255,121,0,0.2)',
-    backgroundColor: 'rgba(255,121,0,0.06)',
+    borderColor: component.toolCallRow.agentBorder,
+    backgroundColor: component.toolCallRow.agentBg,
   },
   row: {
     flexDirection: 'row',
@@ -397,15 +396,15 @@ const s = StyleSheet.create({
 
   /* M4 — TurnSummaryCard */
   summaryCard: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: component.summaryCard.bg,
     borderWidth: 1,
-    borderColor: 'rgba(255,121,0,0.15)',
+    borderColor: component.summaryCard.border,
     borderRadius: 5,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
   summaryCardErrors: {
-    borderColor: 'rgba(220,5,12,0.25)',
+    borderColor: component.summaryCard.errorBorder,
   },
   summaryTop: {
     flexDirection: 'row',
@@ -423,7 +422,7 @@ const s = StyleSheet.create({
     fontWeight: '600',
   },
   statErrors: {
-    color: '#F87171',
+    color: semantic.errorText,
     fontWeight: '600',
   },
   expandBtn: {
@@ -454,16 +453,16 @@ const s = StyleSheet.create({
   },
   errToggleText: {
     fontSize: 11,
-    color: '#DC050C',
+    color: component.errorBlock.toggleColor,
   },
   errBlockWrap: {
     marginTop: 6,
     paddingLeft: 27,
   },
   errBlock: {
-    backgroundColor: 'rgba(220,5,12,0.08)',
+    backgroundColor: component.errorBlock.bg,
     borderWidth: 1,
-    borderColor: 'rgba(220,5,12,0.2)',
+    borderColor: component.errorBlock.border,
     borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 10,
@@ -473,7 +472,7 @@ const s = StyleSheet.create({
   errBlockText: {
     fontFamily: "'Space Grotesk', monospace",
     fontSize: 10,
-    color: '#F87171',
+    color: component.errorBlock.textColor,
     lineHeight: 15,
   },
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, component, palette } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { TokenSnapshot, CompactionEvent } from '../../types.js';
 import { widgetLabel } from './shared-styles.js';
@@ -22,9 +22,9 @@ interface ChartData {
 }
 
 const CHART_H = 60;
-const INPUT_COLOR = '#1965B0';
-const OUTPUT_COLOR = '#FF7900';
-const COMP_COLOR = '#DC050C';
+const INPUT_COLOR = component.contextChart.input;
+const OUTPUT_COLOR = component.contextChart.output;
+const COMP_COLOR = component.contextChart.compaction;
 
 export function ContextWindowChart({ tokenTimeline, compactions, startedAt, endedAt }: Props) {
   const currentTs = useCurrentTimestamp();
@@ -174,13 +174,13 @@ function drawPlayhead(
   W: number, H: number,
 ): void {
   const x = frac * W;
-  ctx.strokeStyle = '#fff';
+  ctx.strokeStyle = component.contextChart.marker;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x, 0);
   ctx.lineTo(x, H);
   ctx.stroke();
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = component.contextChart.marker;
   ctx.beginPath();
   ctx.moveTo(x - 3, 0);
   ctx.lineTo(x + 3, 0);

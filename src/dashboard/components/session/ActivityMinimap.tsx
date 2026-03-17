@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import type { ScrollView } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, component } from '../shared/colors.js';
 import type { SessionDetailData } from '../../types.js';
 
 export interface ActivityMinimapProps {
@@ -12,9 +12,9 @@ export interface ActivityMinimapProps {
 
 const STRIP_WIDTH = 8;
 const AMBER = [244, 167, 54];
-const BLUE_TICK = 'rgba(91,155,213,0.35)';
-const VIEWPORT_BG = 'rgba(255,255,255,0.12)';
-const VIEWPORT_BORDER = 'rgba(255,255,255,0.25)';
+const BLUE_TICK = component.minimap.blueTick;
+const VIEWPORT_BG = component.minimap.viewportBg;
+const VIEWPORT_BORDER = component.minimap.viewportBorder;
 
 interface DensityData {
   buckets: number[];

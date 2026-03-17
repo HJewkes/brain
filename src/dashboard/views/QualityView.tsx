@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { DashboardData } from '../types.js';
 import { StatCard } from '../components/shared/StatCard.js';
-import { C } from '../components/shared/colors.js';
+import { C, component } from '../components/shared/colors.js';
 import { Section } from '../components/shared/Section.js';
 import { ChartContainer, GridLines, xPos, yPos } from '../components/shared/chart/index.js';
 import {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   agentName: { fontSize: 13, color: C.textPrimary, fontWeight: '500' },
   errorText: { color: C.error },
   boldText: { fontWeight: '600' },
-  errorBadge: { backgroundColor: 'rgba(209,67,67,0.15)', borderRadius: 4, paddingHorizontal: 4 },
+  errorBadge: { backgroundColor: component.statCard.negativeDeltaBg, borderRadius: 4, paddingHorizontal: 4 },
 
   // Stage duration
   stageDurWrap: { gap: 12 },

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, component, palette } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import type { AgentEntry } from './precompute.js';
@@ -102,8 +102,8 @@ function isMainActive(allToolTs: number[], tsMs: number): boolean {
 }
 
 const DOT_STYLES: Record<Status, object> = {
-  live: { backgroundColor: '#22c55e', shadowColor: 'rgba(34,197,94,0.5)' },
-  idle: { backgroundColor: '#F4A736', shadowColor: 'rgba(244,167,54,0.4)' },
+  live: { backgroundColor: component.agentDot.live.bg, shadowColor: component.agentDot.live.glow },
+  idle: { backgroundColor: component.agentDot.idle.bg, shadowColor: component.agentDot.idle.glow },
   done: { backgroundColor: C.textTertiary },
 };
 

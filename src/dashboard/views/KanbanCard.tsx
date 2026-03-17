@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import type { DashboardTask } from '../types.js';
-import { C } from '../components/shared/colors.js';
+import { C, palette } from '../components/shared/colors.js';
 import { Badge } from '../components/shared/Badge.js';
 import { Avatar } from '../components/shared/Avatar.js';
 import { priorityStripeColor } from '../utils/semantic-colors.js';
@@ -44,7 +44,7 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
     transform: hovered ? ([{ translateY: -1 }] as object) : undefined,
     boxShadow: highlighted
       ? (`0 0 0 2px ${C.brand}44` as object)
-      : hovered ? ('0 4px 12px rgba(0,0,0,0.3)' as object) : undefined,
+      : hovered ? (`0 4px 12px ${palette.overlay.black30}` as object) : undefined,
   };
 
   // Navigate to task detail view

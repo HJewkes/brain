@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { C } from './colors.js';
+import { C, palette, semantic } from './colors.js';
 
 export const hoverStyles = StyleSheet.create({
   card: {
@@ -11,7 +11,7 @@ export const hoverStyles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     zIndex: 9999,
-    shadowColor: '#000',
+    shadowColor: palette.black,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -24,7 +24,7 @@ export const hoverStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  avatarText: { fontSize: 13, fontWeight: '700', color: semantic.text.inverse },
   name: { fontSize: 13, fontWeight: '600', color: C.textPrimary, marginBottom: 2 },
   statusBadge: {
     flexDirection: 'row',

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import { widgetLabel } from './shared-styles.js';
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
   },
   track: {
     height: 6,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: palette.surface3,
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 4,

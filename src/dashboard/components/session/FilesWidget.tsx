@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, component, palette } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { FileEntry } from './precompute.js';
 import { widgetLabel } from './shared-styles.js';
@@ -12,9 +12,9 @@ interface Props {
   startedAt: string;
 }
 
-const READ_LABEL_COLOR = '#7BAFDE';
-const READ_FILL_COLOR = '#1965B0';
-const WRITE_COLOR = '#14B8A6';
+const READ_LABEL_COLOR = component.filesWidget.readLabel;
+const READ_FILL_COLOR = component.filesWidget.readFill;
+const WRITE_COLOR = component.filesWidget.writeColor;
 
 export function FilesWidget({ filesTimeline, totalReadFiles, totalWriteFiles, startedAt }: Props) {
   const currentTs = useCurrentTimestamp();
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   barTrack: {
     flex: 1,
     height: 5,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: component.filesWidget.trackBg,
     borderRadius: 3,
     overflow: 'hidden',
     position: 'relative',

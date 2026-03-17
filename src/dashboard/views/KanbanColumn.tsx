@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import type { DashboardTask, DashboardAgent } from '../types.js';
-import { C } from '../components/shared/colors.js';
+import { C, palette } from '../components/shared/colors.js';
 import { Avatar } from '../components/shared/Avatar.js';
 import { columnColor } from '../utils/semantic-colors.js';
 import { KanbanCard } from './KanbanCard.js';
+import { component } from '../tokens.js';
 
 const COL_LABEL: Record<string, string> = {
   blocked: 'Blocked',
@@ -28,7 +29,7 @@ interface KanbanColumnProps {
   onAgentClick: (agentName: string) => void;
 }
 
-const WS_COLORS = [C.brand, '#1965B0', '#4EB265', '#882E72', '#F4A736', '#7BAFDE', '#DC050C', '#F7F056'];
+const WS_COLORS = palette.series;
 
 export function KanbanColumn({ col, tasks, allTasks, agents, workstreams = {}, highlightedTask, onAgentHover, onAgentLeave, onAgentClick }: KanbanColumnProps) {
   const [collapsed, setCollapsed] = useState(col === 'done');
@@ -231,7 +232,7 @@ function AgentSwimlane({ agentName, agent, tasks, allTasks, highlightedTask, onA
   return (
     <View style={{ backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border, borderRadius: 8, overflow: 'hidden' }}>
       {/* Swimlane header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.02)', borderBottomWidth: 1, borderBottomColor: C.border }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: component.swimlaneHeader.bg, borderBottomWidth: 1, borderBottomColor: C.border }}>
         <Pressable
           onHoverIn={(e) => onAgentHover(agentName, e.target as HTMLElement)}
           onHoverOut={onAgentLeave}

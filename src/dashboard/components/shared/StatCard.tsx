@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from './colors.js';
+import { C, component } from './colors.js';
 
 interface Props {
   label: string;
@@ -34,7 +34,7 @@ export function StatCard({ label, value, delta, deltaPositive = true, sparkData 
       <View style={styles.valueRow}>
         <Text style={styles.value}>{value}</Text>
         {delta && (
-          <View style={[styles.deltaBadge, { backgroundColor: deltaPositive ? 'rgba(20,184,166,0.15)' : 'rgba(209,67,67,0.15)' }]}>
+          <View style={[styles.deltaBadge, { backgroundColor: deltaPositive ? component.statCard.positiveDeltaBg : component.statCard.negativeDeltaBg }]}>
             <Text style={[styles.deltaText, { color: deltaColor }]}>{delta}</Text>
           </View>
         )}

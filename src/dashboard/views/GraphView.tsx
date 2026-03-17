@@ -2,16 +2,14 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@titan-design/react-ui';
 import type { AuditReport, DashboardData } from '../types.js';
+import { palette, semantic } from '../tokens.js';
 
 interface GraphViewProps {
   dashboard: DashboardData | null;
   audit: AuditReport;
 }
 
-const BAR_COLORS = [
-  '#FF7900', '#1965B0', '#14B8A6', '#882E72',
-  '#4EB265', '#F4A736', '#7BAFDE', '#DC050C',
-];
+const BAR_COLORS = palette.series;
 
 function BarChart({ title, data }: { title: string; data: Record<string, number> }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
@@ -142,7 +140,7 @@ const s = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#F3F4F6',
+    color: semantic.text.primary,
     fontFamily: 'Space Grotesk, sans-serif',
   },
   badges: {
@@ -152,16 +150,16 @@ const s = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#F3F4F6',
+    color: semantic.text.primary,
   },
   body: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: semantic.text.secondary,
     lineHeight: 20,
   },
   muted: {
     fontSize: 12,
-    color: '#6B7280',
+    color: semantic.text.tertiary,
     lineHeight: 18,
   },
   row: {
@@ -175,15 +173,15 @@ const s = StyleSheet.create({
   },
   barKey: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: semantic.text.secondary,
   },
   barVal: {
     fontSize: 12,
-    color: '#6B7280',
+    color: semantic.text.tertiary,
   },
   barTrack: {
     height: 8,
-    backgroundColor: '#1e1e1e',
+    backgroundColor: palette.surface3,
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -193,11 +191,11 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e1e1e',
+    borderBottomColor: palette.surface3,
   },
   statValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F3F4F6',
+    color: semantic.text.primary,
   },
 });

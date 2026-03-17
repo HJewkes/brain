@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardData, AuditReport, DashboardAgent } from '../types.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
-import { C } from '../components/shared/colors.js';
+import { C, palette, component } from '../components/shared/colors.js';
 import { Section } from '../components/shared/Section.js';
 import {
   computeThroughput, computeLeadTimeP85, computeFlowEfficiency,
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     borderBottomColor: C.border,
   },
   agentRowHighlighted: {
-    backgroundColor: 'rgba(255,121,0,0.06)',
+    backgroundColor: palette.brand.dim06,
     borderRadius: 6,
     paddingHorizontal: 6,
   },
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  errorRateBadgeHigh: { backgroundColor: 'rgba(209,67,67,0.15)' },
+  errorRateBadgeHigh: { backgroundColor: component.statCard.negativeDeltaBg },
   errorRateText: { fontSize: 11, color: C.textSecondary },
   errorRateTextHigh: { color: C.error, fontWeight: '600' },
   errorVal: { color: C.error },
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  resumptionBadgeHigh: { backgroundColor: 'rgba(209,67,67,0.15)' },
+  resumptionBadgeHigh: { backgroundColor: component.statCard.negativeDeltaBg },
   resumptionBadgeText: { fontSize: 11, color: C.textSecondary, fontWeight: '600' },
   resumptionBadgeTextHigh: { color: C.error },
 });

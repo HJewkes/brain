@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import type { DashboardAgent } from '../../types.js';
-import { C } from './colors.js';
+import { C, palette } from './colors.js';
 import { TokenGauge } from './TokenGauge.js';
 import { ActivitySparkline } from './ActivitySparkline.js';
 import { hoverStyles as s } from './hoverStyles.js';
@@ -43,7 +43,7 @@ export function AgentHoverCard({ agent, anchorEl, visible }: Props) {
   if (!visible) return null;
 
   const avatarBg = isActive ? C.brand : C.steel;
-  const statusBg = isActive ? 'rgba(20,184,166,0.15)' : 'rgba(107,114,128,0.15)';
+  const statusBg = isActive ? palette.teal.dim15 : palette.gray.dim15;
   const statusDotColor = isActive ? C.success : C.textTertiary;
   const statusLabel = isActive ? 'Active' : 'Idle';
   const events = agent.toolDomains.slice(0, 15).map(type => ({ type }));

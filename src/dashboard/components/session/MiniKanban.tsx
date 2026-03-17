@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '../shared/colors.js';
+import { C, palette, component } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { TaskEvent } from '../../types.js';
 import { widgetLabel, formatTimeShort } from './shared-styles.js';
@@ -116,37 +116,37 @@ function computeKanbanState(
 
 const HEADER_STYLES = {
   added: {
-    bg: { backgroundColor: 'rgba(212,165,32,0.12)' },
-    text: { color: '#D4A520' },
+    bg: { backgroundColor: component.kanbanHead.ready.bg },
+    text: { color: component.kanbanHead.ready.fg },
   },
   active: {
-    bg: { backgroundColor: 'rgba(255,121,0,0.12)' },
-    text: { color: C.brand },
+    bg: { backgroundColor: component.kanbanHead.active.bg },
+    text: { color: component.kanbanHead.active.fg },
   },
   done: {
-    bg: { backgroundColor: 'rgba(20,184,166,0.10)' },
-    text: { color: C.success },
+    bg: { backgroundColor: component.kanbanHead.done.bg },
+    text: { color: component.kanbanHead.done.fg },
   },
 } as const;
 
 const PILL_STYLES = {
   added: {
-    backgroundColor: 'rgba(212,165,32,0.15)',
-    color: '#D4A520',
+    backgroundColor: component.taskPill.ready.bg,
+    color: component.taskPill.ready.fg,
     borderLeftWidth: 2,
-    borderLeftColor: '#D4A520',
+    borderLeftColor: component.taskPill.ready.border,
   },
   active: {
-    backgroundColor: 'rgba(255,121,0,0.15)',
-    color: C.brand,
+    backgroundColor: component.taskPill.active.bg,
+    color: component.taskPill.active.fg,
     borderLeftWidth: 2,
-    borderLeftColor: C.brand,
+    borderLeftColor: component.taskPill.active.border,
   },
   done: {
-    backgroundColor: 'rgba(20,184,166,0.12)',
-    color: C.success,
+    backgroundColor: component.taskPill.done.bg,
+    color: component.taskPill.done.fg,
     borderLeftWidth: 2,
-    borderLeftColor: C.success,
+    borderLeftColor: component.taskPill.done.border,
   },
 } as const;
 

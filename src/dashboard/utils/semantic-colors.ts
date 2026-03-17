@@ -3,23 +3,23 @@
  *
  * Single source of truth — resolves conflicts between COL_ACCENT (KanbanColumn)
  * and colColor (TaskDetailView). Design intent follows the Kanban board headers:
- *   - ready → warning (amber): "queued, waiting"
- *   - inprogress → info (blue): "active work"
- *   - review/pr → purple: "under review"
+ *   - ready -> warning (amber): "queued, waiting"
+ *   - inprogress -> info (blue): "active work"
+ *   - review/pr -> purple: "under review"
  */
-import { C } from '../components/shared/colors.js';
+import { C, palette, semantic } from '../components/shared/colors.js';
 
 // ---------------------------------------------------------------------------
 // Column colors (task workflow stage)
 // ---------------------------------------------------------------------------
 
 const COLUMN_COLOR_MAP: Record<string, string> = {
-  blocked: C.error,
-  ready: C.warning,
-  inprogress: C.info,
-  review: '#A855F7',
-  pr: '#A855F7',
-  done: C.success,
+  blocked: semantic.column.blocked,
+  ready: semantic.column.ready,
+  inprogress: semantic.column.inprogress,
+  review: semantic.column.review,
+  pr: semantic.column.review,
+  done: semantic.column.done,
 };
 
 /** Maps a task column/stage name to its representative color. */
@@ -32,10 +32,10 @@ export function columnColor(col: string): string {
 // ---------------------------------------------------------------------------
 
 const PRIORITY_COLOR_MAP: Record<string, string> = {
-  critical: '#FF3B30',
-  high: C.error,
-  medium: C.warning,
-  low: C.info,
+  critical: semantic.priority.critical,
+  high: semantic.priority.high,
+  medium: semantic.priority.medium,
+  low: semantic.priority.low,
 };
 
 /** Maps a priority level to its representative text/badge color. */
@@ -48,10 +48,10 @@ export function priorityColor(priority: string): string {
  * Uses a darker navy for 'low' to distinguish the stripe from badge text color.
  */
 const PRIORITY_STRIPE_MAP: Record<string, string> = {
-  critical: '#FF3B30',
-  high: C.error,
-  medium: C.warning,
-  low: '#1965B0',
+  critical: semantic.priority.critical,
+  high: semantic.priority.high,
+  medium: semantic.priority.medium,
+  low: semantic.priority.lowStripe,
 };
 
 export function priorityStripeColor(priority: string): string {
@@ -69,8 +69,8 @@ export function priorityStripeColor(priority: string): string {
 export function statusColor(status: string | undefined | null): string {
   if (!status) return C.textTertiary;
   const s = status.toLowerCase();
-  if (s === 'active' || s === 'running') return C.brand;
-  if (s === 'completed' || s === 'done') return C.success;
-  if (s === 'error' || s === 'failed') return C.error;
+  if (s === 'active' || s === 'running') return semantic.status.active;
+  if (s === 'completed' || s === 'done') return semantic.status.success;
+  if (s === 'error' || s === 'failed') return semantic.status.error;
   return C.textTertiary;
 }
