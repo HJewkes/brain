@@ -4,7 +4,7 @@ import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import type { ToolCategory } from './precompute.js';
-import { widgetLabel } from './shared-styles.js';
+import { sectionH3 } from './shared-styles.js';
 
 interface Props {
   toolTimestamps: Record<ToolCategory, number[]>;
@@ -56,23 +56,24 @@ export function ToolBreakdownWidget({ toolTimestamps, toolTotals, startedAt }: P
 
 const styles = StyleSheet.create({
   container: {},
-  label: widgetLabel,
+  label: sectionH3,
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 5,
   },
   rowLabel: {
     fontFamily: 'Space Grotesk',
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
     color: C.textSecondary,
     width: 38,
+    flexShrink: 0,
   },
   track: {
     flex: 1,
-    height: 6,
+    height: 10,
     borderRadius: 3,
     overflow: 'hidden',
     position: 'relative',
@@ -87,16 +88,18 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   fill: {
-    height: 6,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
     borderRadius: 3,
-    position: 'relative',
-    zIndex: 1,
   },
   count: {
     fontFamily: 'Space Grotesk',
-    fontSize: 9,
+    fontSize: 10,
     color: C.textTertiary,
-    width: 44,
+    width: 42,
     textAlign: 'right',
+    flexShrink: 0,
   },
 });

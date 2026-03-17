@@ -12,7 +12,8 @@ interface Props {
   startedAt: string;
 }
 
-const READ_COLOR = '#1965B0';
+const READ_LABEL_COLOR = '#7BAFDE';
+const READ_FILL_COLOR = '#1965B0';
 const WRITE_COLOR = '#14B8A6';
 
 export function FilesWidget({ filesTimeline, totalReadFiles, totalWriteFiles, startedAt }: Props) {
@@ -43,14 +44,16 @@ export function FilesWidget({ filesTimeline, totalReadFiles, totalWriteFiles, st
       </Text>
       <BarRow
         letter="R"
-        color={READ_COLOR}
+        labelColor={READ_LABEL_COLOR}
+        fillColor={READ_FILL_COLOR}
         current={readCount}
         total={totalReadFiles}
         pct={readPct}
       />
       <BarRow
         letter="W"
-        color={WRITE_COLOR}
+        labelColor={WRITE_COLOR}
+        fillColor={WRITE_COLOR}
         current={writeCount}
         total={totalWriteFiles}
         pct={writePct}
@@ -66,18 +69,19 @@ export function FilesWidget({ filesTimeline, totalReadFiles, totalWriteFiles, st
 
 interface BarRowProps {
   letter: string;
-  color: string;
+  labelColor: string;
+  fillColor: string;
   current: number;
   total: number;
   pct: number;
 }
 
-function BarRow({ letter, color, current, total, pct }: BarRowProps) {
+function BarRow({ letter, labelColor, fillColor, current, total, pct }: BarRowProps) {
   return (
     <View style={styles.barRow}>
-      <Text style={[styles.barLabel, { color }]}>{letter}</Text>
+      <Text style={[styles.barLabel, { color: labelColor }]}>{letter}</Text>
       <View style={styles.barTrack}>
-        <View style={[styles.barFill, { width: `${pct}%` as unknown as number, backgroundColor: color }]} />
+        <View style={[styles.barFill, { width: `${pct}%` as unknown as number, backgroundColor: fillColor }]} />
       </View>
       <Text style={styles.barCount}>{current}/{total}</Text>
     </View>
@@ -90,43 +94,45 @@ const styles = StyleSheet.create({
   summary: {
     fontFamily: 'Space Grotesk',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: C.textPrimary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   barRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     marginBottom: 3,
   },
   barLabel: {
     fontFamily: 'Space Grotesk',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
-    width: 14,
-    textAlign: 'center',
+    width: 10,
+    flexShrink: 0,
   },
   barTrack: {
     flex: 1,
-    height: 6,
+    height: 5,
     backgroundColor: '#1f1f1f',
     borderRadius: 3,
     overflow: 'hidden',
+    position: 'relative',
   },
   barFill: {
-    height: 6,
+    height: 5,
     borderRadius: 3,
   },
   barCount: {
     fontFamily: 'Space Grotesk',
     fontSize: 9,
     color: C.textTertiary,
-    width: 38,
+    width: 32,
     textAlign: 'right',
+    flexShrink: 0,
   },
   latest: {
-    fontFamily: 'Inter',
+    fontFamily: 'Space Grotesk',
     fontSize: 9,
     color: C.textTertiary,
     marginTop: 4,

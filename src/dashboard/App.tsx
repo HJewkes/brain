@@ -10,13 +10,15 @@ import { GraphView } from './views/GraphView.js';
 import { QualityView } from './views/QualityView.js';
 import { TaskDetailView } from './views/TaskDetailView.js';
 import { SessionDetailView } from './views/SessionDetailView.js';
+import { SpecimenView } from './views/SpecimenView.js';
+import { SpecimenGlobalView } from './views/SpecimenGlobalView.js';
 import { CommandPalette } from './components/shared/CommandPalette.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task' | 'session';
+type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task' | 'session' | 'specimen' | 'specimen-global';
 
 interface NavItem {
   id: ViewId;
@@ -54,7 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'quality', label: 'Quality', icon: '◆', hash: '#quality' },
 ];
 
-const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task', 'session']);
+const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task', 'session', 'specimen', 'specimen-global']);
 
 function parseHash(hash: string): HashLocation {
   // Format: #view?param=value&param2=value2
@@ -209,7 +211,7 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
       />
 
       <View style={styles.main}>
-        <View style={activeView === 'session' ? styles.contentFullBleed : styles.content}>
+        <View style={activeView === 'session' || activeView === 'specimen' || activeView === 'specimen-global' ? styles.contentFullBleed : styles.content}>
           {activeView === 'overview' && (
             <OverviewView audit={audit} status={status} dashboard={dashboard} />
           )}
@@ -236,6 +238,12 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
           )}
           {activeView === 'session' && (
             <SessionDetailView sessionId={sessionIdParam ?? ''} dashboard={dashboard} />
+          )}
+          {activeView === 'specimen' && (
+            <SpecimenView />
+          )}
+          {activeView === 'specimen-global' && (
+            <SpecimenGlobalView />
           )}
         </View>
       </View>

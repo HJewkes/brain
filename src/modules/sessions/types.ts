@@ -236,6 +236,7 @@ export interface SessionAnalytics {
   compactionByteOffsets: number[];
   tokenSnapshots: AnalyticsTokenSnapshot[];
   assistantTexts: string[];
+  userTexts: string[];
   prLinks: PrLink[];
   filesTouched: Map<string, Set<string>>;
   filesWritten: string[];

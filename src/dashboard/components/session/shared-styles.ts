@@ -7,8 +7,19 @@ export const widgetLabel: TextStyle = {
   fontWeight: '700',
   color: C.textTertiary,
   textTransform: 'uppercase',
-  letterSpacing: 0.7,
+  letterSpacing: 0.72,
   marginBottom: 6,
+};
+
+/** Section header used by .sb-section h3 (Tool Breakdown, Errors) */
+export const sectionH3: TextStyle = {
+  fontFamily: 'Space Grotesk',
+  fontSize: 10,
+  fontWeight: '700',
+  color: C.textTertiary,
+  textTransform: 'uppercase',
+  letterSpacing: 0.6,
+  marginBottom: 10,
 };
 
 export function formatTimeShort(iso: string): string {

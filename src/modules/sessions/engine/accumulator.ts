@@ -69,6 +69,7 @@ export class AnalyticsAccumulator {
   private compactionByteOffsets: number[] = [];
   private tokenSnapshots: Array<{ timestamp: string; cumulativeInput: number; cumulativeOutput: number }> = [];
   private assistantTexts: string[] = [];
+  private userTexts: string[] = [];
   private logicalParentUuid: string | null = null;
   private sidechainEventCount = 0;
   private hookEventCount = 0;
@@ -274,15 +275,18 @@ export class AnalyticsAccumulator {
       this.extractTaskRefs(content);
       this.friction.onUserMessage(content, timestamp);
       this.userTurns++;
+      this.userTexts.push(content.slice(0, 2000));
       return;
     }
 
     if (!Array.isArray(content)) return;
 
     let hasTextContent = false;
+    let userText = '';
     for (const block of content as MessageContent[]) {
       if (block.type === 'text' && block.text) {
         hasTextContent = true;
+        userText += block.text;
         if (block.text.startsWith(COMPACTION_MARKER)) {
           this.compactionCount++;
           this.compactionTimestamps.push(timestamp);
@@ -329,7 +333,10 @@ export class AnalyticsAccumulator {
       }
     }
 
-    if (hasTextContent) this.userTurns++;
+    if (hasTextContent) {
+      this.userTurns++;
+      if (userText) this.userTexts.push(userText.slice(0, 2000));
+    }
   }
 
   private handleSystem(event: Record<string, unknown>, timestamp: string): void {
@@ -463,6 +470,7 @@ export class AnalyticsAccumulator {
       compactionByteOffsets: this.compactionByteOffsets,
       tokenSnapshots: this.tokenSnapshots,
       assistantTexts: this.assistantTexts,
+      userTexts: this.userTexts,
       logicalParentUuid: this.logicalParentUuid,
       thinkingBlockCount: this.thinkingBlockCount,
       skillUsage: this.skillUsage,

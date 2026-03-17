@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 2,
   },
   stat: {
     fontFamily: 'Space Grotesk',

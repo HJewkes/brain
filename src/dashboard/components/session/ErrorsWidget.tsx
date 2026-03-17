@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { C } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
-import { widgetLabel } from './shared-styles.js';
+import { sectionH3 } from './shared-styles.js';
 
 interface Props {
   errorTimestamps: number[];
@@ -38,15 +38,15 @@ export function ErrorsWidget({ errorTimestamps, startedAt }: Props) {
 
 const styles = StyleSheet.create({
   container: {},
-  label: widgetLabel,
+  label: sectionH3,
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   track: {
     flex: 1,
-    height: 6,
+    height: 10,
     borderRadius: 3,
     overflow: 'hidden',
     position: 'relative',
@@ -62,17 +62,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   fill: {
-    height: 6,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
     backgroundColor: ERROR_COLOR,
     borderRadius: 3,
-    position: 'relative',
-    zIndex: 1,
   },
   count: {
     fontFamily: 'Space Grotesk',
-    fontSize: 9,
-    color: C.textTertiary,
-    width: 44,
+    fontSize: 10,
+    color: '#F87171',
+    width: 42,
     textAlign: 'right',
+    flexShrink: 0,
   },
 });

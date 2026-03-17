@@ -171,7 +171,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 5,
-    paddingVertical: 3,
+    paddingTop: 3,
+    paddingBottom: 2,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
@@ -180,7 +181,8 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    letterSpacing: 0.32,
+    lineHeight: 8,
   },
   colCount: {
     fontFamily: 'Space Grotesk',
@@ -199,7 +201,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 3,
-    lineHeight: 14,
+    lineHeight: 13.5,
   },
   morePill: {
     fontFamily: 'Space Grotesk',

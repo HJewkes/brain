@@ -2,7 +2,20 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import type { DashboardData, SessionDetailData, SessionTurn, SessionToolCall, SubagentSummary } from '../types.js';
 import { C } from '../components/shared/colors.js';
-import { TimeSyncProvider, SessionSidebar, ActivityMinimap } from '../components/session/index.js';
+import {
+  TimeSyncProvider,
+  SessionSidebar,
+  ActivityMinimap,
+  ToolCallRow as ToolCallRowMolecule,
+  GapIndicator as GapIndicatorMolecule,
+  ConversationTurn,
+} from '../components/session/index.js';
+import type {
+  ToolBadgeType,
+  TimelineDotType,
+  MiniStatusOutcome,
+  TurnSummaryCardProps,
+} from '../components/session/index.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -17,7 +30,6 @@ interface SessionDetailViewProps {
 // Constants
 // ---------------------------------------------------------------------------
 
-const TEXT_TRUNCATE_LIMIT = 500;
 const GAP_THRESHOLD_MS = 10 * 60 * 1000;
 
 const TOOL_BADGE_MAP: Record<string, { letter: string; bg: string; fg: string }> = {
@@ -29,15 +41,6 @@ const TOOL_BADGE_MAP: Record<string, { letter: string; bg: string; fg: string }>
   Glob:  { letter: 'G', bg: 'rgba(130,60,160,0.2)', fg: '#C084FC' },
   Task:  { letter: 'T', bg: 'rgba(255,121,0,0.12)', fg: C.brand },
   Agent: { letter: 'A', bg: 'rgba(255,121,0,0.12)', fg: C.brand },
-};
-
-const TOOL_PILL_MAP: Record<string, { bg: string; fg: string }> = {
-  Read:  { bg: 'rgba(25,101,176,0.2)', fg: '#7BAFDE' },
-  Write: { bg: 'rgba(20,184,166,0.2)', fg: C.success },
-  Edit:  { bg: 'rgba(244,167,54,0.15)', fg: C.warning },
-  Bash:  { bg: 'rgba(107,114,128,0.2)', fg: C.textSecondary },
-  Grep:  { bg: 'rgba(130,60,160,0.2)', fg: '#C084FC' },
-  Glob:  { bg: 'rgba(130,60,160,0.2)', fg: '#C084FC' },
 };
 
 // ---------------------------------------------------------------------------
@@ -74,10 +77,6 @@ function toolBadgeInfo(toolName: string): { letter: string; bg: string; fg: stri
   return TOOL_BADGE_MAP[toolName] ?? { letter: toolName.charAt(0).toUpperCase(), bg: 'rgba(107,114,128,0.15)', fg: C.textTertiary };
 }
 
-function toolPillInfo(toolName: string): { bg: string; fg: string } {
-  return TOOL_PILL_MAP[toolName] ?? { bg: 'rgba(107,114,128,0.1)', fg: C.textTertiary };
-}
-
 function groupToolCalls(calls: SessionToolCall[]): Array<{ name: string; count: number }> {
   const map = new Map<string, number>();
   for (const c of calls) {
@@ -103,73 +102,65 @@ function matchesSearch(turn: SessionTurn, query: string): boolean {
   return false;
 }
 
-/** Match task refs like VNM-21.04 or SNS-042 in plain text segments */
-const TASK_REF_RE = /\b([A-Z]{2,5}-\d+(?:\.\d+)?)\b/g;
-
-function renderTextWithRefs(text: string, keyPrefix: string, baseStyle: object): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  let last = 0;
-  for (const m of text.matchAll(TASK_REF_RE)) {
-    const idx = m.index ?? 0;
-    if (idx > last) {
-      parts.push(<Text key={`${keyPrefix}-${last}`} style={baseStyle}>{text.slice(last, idx)}</Text>);
-    }
-    const ref = m[1];
-    const isSession = ref.startsWith('SNS-');
-    const hash = isSession
-      ? `#session?id=${encodeURIComponent(ref)}`
-      : `#task?id=${encodeURIComponent(ref)}`;
-    parts.push(
-      <Text
-        key={`${keyPrefix}-ref-${idx}`}
-        style={s.taskRefLink}
-        onPress={() => { window.location.hash = hash; }}
-      >
-        {ref}
-      </Text>,
-    );
-    last = idx + m[0].length;
-  }
-  if (last < text.length) {
-    parts.push(<Text key={`${keyPrefix}-${last}`} style={baseStyle}>{text.slice(last)}</Text>);
-  }
-  return parts.length > 0 ? parts : [<Text key={keyPrefix} style={baseStyle}>{text}</Text>];
+/** Map tool name to the ToolBadgeType atom key. */
+function toBadgeType(toolName: string): ToolBadgeType {
+  const key = toolName.toLowerCase();
+  if (key === 'read') return 'read';
+  if (key === 'write') return 'write';
+  if (key === 'edit') return 'edit';
+  if (key === 'bash') return 'bash';
+  if (key === 'grep') return 'grep';
+  if (key === 'glob') return 'glob';
+  if (key === 'agent' || key === 'task') return 'agent';
+  return 'bash'; // fallback
 }
 
-function renderSimpleMarkdown(text: string): React.ReactNode[] {
-  return text.split('\n\n').map((para, i) => {
-    const parts: React.ReactNode[] = [];
-    const boldRegex = /\*\*(.+?)\*\*/g;
-    const codeRegex = /`([^`]+)`/g;
-    let last = 0;
-    const combined = [...para.matchAll(boldRegex), ...para.matchAll(codeRegex)]
-      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+/** Map tool name to the ToolPill type key. */
+function toPillType(toolName: string): string | undefined {
+  const key = toolName.toLowerCase();
+  if (key === 'read' || key === 'grep' || key === 'glob') return 'read';
+  if (key === 'write' || key === 'edit') return 'write';
+  if (key === 'bash') return 'bash';
+  if (key === 'agent' || key === 'task') return 'agent';
+  return undefined;
+}
 
-    if (combined.length === 0) {
-      parts.push(...renderTextWithRefs(para, `p${i}`, s.claudeParaText));
-    } else {
-      for (const match of combined) {
-        const idx = match.index ?? 0;
-        if (idx > last) {
-          parts.push(...renderTextWithRefs(para.slice(last, idx), `t${i}-${last}`, s.claudeParaText));
-        }
-        if (match[0].startsWith('**')) {
-          parts.push(<Text key={`b${i}-${idx}`} style={s.claudeBoldText}>{match[1]}</Text>);
-        } else {
-          parts.push(<Text key={`c${i}-${idx}`} style={s.claudeCodeText}>{match[1]}</Text>);
-        }
-        last = idx + match[0].length;
-      }
-      if (last < para.length) {
-        parts.push(...renderTextWithRefs(para.slice(last), `e${i}`, s.claudeParaText));
-      }
-    }
-    return (
-      <View key={i} style={i > 0 ? s.claudeParagraph : undefined}>
-        <Text>{parts}</Text>
-      </View>
-    );
-  });
+/** Map tool call outcome to TimelineDotType. */
+function toDotType(call: SessionToolCall): TimelineDotType {
+  if (call.agentId != null) return 'agent';
+  if (call.outcome === 'error') return 'err';
+  return 'ok';
+}
+
+/** Map tool call outcome to MiniStatusOutcome. */
+function toStatusOutcome(call: SessionToolCall): MiniStatusOutcome {
+  if (call.outcome === 'error') return 'error';
+  if (call.outcome === 'pending') return 'pending';
+  return 'success';
+}
+
+/** Build TurnSummaryCardProps from a list of tool calls. */
+function buildSummaryProps(
+  calls: SessionToolCall[],
+  expanded: boolean,
+  onToggle: () => void,
+): TurnSummaryCardProps | undefined {
+  if (calls.length === 0) return undefined;
+  const errorCount = calls.filter(c => c.outcome === 'error').length;
+  const groups = groupToolCalls(calls);
+  const dur = totalDurationMs(calls);
+  return {
+    callCount: calls.length,
+    errorCount,
+    duration: fmtDuration(dur),
+    pills: groups.map(g => ({
+      label: `${g.name}${g.count > 1 ? ` x${g.count}` : ''}`,
+      type: toPillType(g.name),
+    })),
+    hasErrors: errorCount > 0,
+    onToggleExpand: onToggle,
+    expanded,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -222,236 +213,36 @@ function SessionHeader({ data, searchQuery, onSearchChange }: {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components: Tool pills
+// Sub-components: Expanded tool call rows (uses ToolCallRow molecule)
 // ---------------------------------------------------------------------------
 
-function ToolPills({ groups }: { groups: Array<{ name: string; count: number }> }) {
+function ExpandedToolCalls({ calls }: { calls: SessionToolCall[] }) {
   return (
-    <View style={s.toolPills}>
-      {groups.map(({ name, count }) => {
-        const { bg, fg } = toolPillInfo(name);
+    <View style={s.toolCallsExpanded}>
+      {calls.map(call => {
+        const badge = toolBadgeInfo(call.toolName);
+        const isError = call.outcome === 'error';
+        const isAgent = call.agentId != null;
+        const maxDur = Math.max(...calls.map(c => c.durationMs ?? 0), 1);
+        const durPct = call.durationMs != null ? (call.durationMs / maxDur) * 100 : undefined;
+
         return (
-          <View key={name} style={[s.toolPill, { backgroundColor: bg }]}>
-            <Text style={[s.toolPillText, { color: fg }]}>
-              {name} {count > 1 ? `x${count}` : ''}
-            </Text>
-          </View>
+          <ToolCallRowMolecule
+            key={call.id}
+            time={fmtTime(call.timestamp)}
+            dotType={toDotType(call)}
+            badgeType={toBadgeType(call.toolName)}
+            name={call.toolName}
+            path={call.inputSummary}
+            durationLabel={call.durationMs != null ? fmtDuration(call.durationMs) : undefined}
+            durationPct={durPct}
+            durationColor={badge.fg}
+            status={toStatusOutcome(call)}
+            variant={isError ? 'error' : isAgent ? 'agent' : 'normal'}
+            onPress={isAgent ? () => { window.location.hash = `#agents?agent=${encodeURIComponent(call.agentId!)}`; } : undefined}
+          />
         );
       })}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components: Tool call row
-// ---------------------------------------------------------------------------
-
-function ToolCallRow({ call }: { call: SessionToolCall }) {
-  const [showError, setShowError] = useState(false);
-  const badge = toolBadgeInfo(call.toolName);
-  const isError = call.outcome === 'error';
-  const isAgent = call.agentId != null;
-
-  return (
-    <View style={[s.toolRow, isError && s.toolRowError]}>
-      <Text style={s.toolRowTime}>{fmtTime(call.timestamp)}</Text>
-      <View style={[s.toolBadge, { backgroundColor: badge.bg }]}>
-        <Text style={[s.toolBadgeLetter, { color: badge.fg }]}>{badge.letter}</Text>
-      </View>
-      <Text style={[s.toolName, { color: badge.fg }]}>{call.toolName}</Text>
-      <Text style={s.toolPath} numberOfLines={1}>{call.inputSummary}</Text>
-      {call.durationMs != null && (
-        <View style={s.durWrap}>
-          <View style={[s.durBar, { width: Math.min(60, Math.max(2, call.durationMs / 100)), backgroundColor: badge.fg }]} />
-          <Text style={s.durLabel}>{fmtDuration(call.durationMs)}</Text>
-        </View>
-      )}
-      <View style={[s.statusDotSmall, { backgroundColor: isError ? C.error : C.success }]} />
-      {isAgent && (
-        <Pressable
-          onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(call.agentId!)}`; }}
-          style={s.agentChip}
-        >
-          <Text style={s.agentChipText}>Spawned subagent</Text>
-        </Pressable>
-      )}
-      {isError && call.errorMessage && (
-        <Pressable onPress={() => setShowError(e => !e)}>
-          <Text style={s.errToggle}>{showError ? 'Hide error' : 'Show error'}</Text>
-        </Pressable>
-      )}
-      {showError && call.errorMessage && (
-        <View style={s.errBlock}>
-          <Text style={s.errBlockText}>{call.errorMessage}</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components: Tool summary card
-// ---------------------------------------------------------------------------
-
-function ToolSummaryCard({ calls, expanded, onToggle }: {
-  calls: SessionToolCall[];
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  if (calls.length === 0) return null;
-
-  const errorCount = calls.filter(c => c.outcome === 'error').length;
-  const groups = groupToolCalls(calls);
-  const dur = totalDurationMs(calls);
-
-  return (
-    <View style={s.toolSection}>
-      <Pressable onPress={onToggle} style={[s.summaryCard, errorCount > 0 && s.summaryCardError]}>
-        <View style={s.summaryTop}>
-          <Text style={s.summaryStats}>
-            <Text style={s.summaryCallCount}>{calls.length} calls</Text>
-            {errorCount > 0 && <Text style={s.summaryErrorCount}> · {errorCount} errors</Text>}
-            <Text style={s.summaryDur}> · {fmtDuration(dur)}</Text>
-          </Text>
-          <Text style={s.expandBtn}>{expanded ? '−' : '+'}</Text>
-        </View>
-        <ToolPills groups={groups} />
-      </Pressable>
-      {expanded && (
-        <View style={s.toolCallsExpanded}>
-          {calls.map(call => <ToolCallRow key={call.id} call={call} />)}
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components: ExpandableText (unified truncation component)
-// ---------------------------------------------------------------------------
-
-function ExpandableText({ text, style, showMoreStyle, limit, renderContent, fade }: {
-  text: string;
-  style?: object;
-  showMoreStyle?: object;
-  limit?: number;
-  renderContent?: (displayed: string) => React.ReactNode;
-  fade?: boolean;
-}) {
-  const max = limit ?? TEXT_TRUNCATE_LIMIT;
-  const needsTruncate = text.length > max;
-  const [expanded, setExpanded] = useState(false);
-
-  const displayed = !needsTruncate || expanded ? text : text.slice(0, max) + (renderContent ? '' : '...');
-  const content = renderContent
-    ? renderContent(displayed)
-    : <Text style={style}>{displayed}</Text>;
-
-  return (
-    <View>
-      <View style={!expanded && needsTruncate && fade ? s.claudeTextTruncated : undefined}>
-        {content}
-      </View>
-      {needsTruncate && (
-        <Pressable onPress={() => setExpanded(e => !e)}>
-          <Text style={showMoreStyle ?? s.showMore}>{expanded ? 'Show less' : 'Show more'}</Text>
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components: UserMessage
-// ---------------------------------------------------------------------------
-
-function UserMessage({ text, timestamp }: { text: string; timestamp: string }) {
-  return (
-    <View style={s.userCard}>
-      <View style={s.userHeader}>
-        <Text style={s.userIcon}>{'💬'}</Text>
-        <Text style={s.userLabel}>USER</Text>
-        <Text style={s.userTime}>{fmtTime(timestamp)}</Text>
-      </View>
-      <ExpandableText text={text} style={s.userText} />
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components: ClaudeResponse
-// ---------------------------------------------------------------------------
-
-function ClaudeResponse({ text, timestamp, toolCalls, turnExpanded, onToggleTools }: {
-  text: string;
-  timestamp: string;
-  toolCalls: SessionToolCall[];
-  turnExpanded: boolean;
-  onToggleTools: () => void;
-}) {
-  const hasErrors = toolCalls.some(c => c.outcome === 'error');
-  return (
-    <View style={[s.claudeCard, hasErrors && s.claudeCardError]}>
-      <View style={s.claudeHeader}>
-        <Text style={s.claudeIcon}>{'🤖'}</Text>
-        <Text style={s.claudeLabel}>CLAUDE</Text>
-        <Text style={s.claudeTime}>{fmtTime(timestamp)}</Text>
-      </View>
-      {text.length > 0 && (
-        <ExpandableText
-          text={text}
-          showMoreStyle={s.claudeShowMore}
-          fade
-          renderContent={(displayed) => <>{renderSimpleMarkdown(displayed)}</>}
-        />
-      )}
-      <ToolSummaryCard
-        calls={toolCalls}
-        expanded={turnExpanded}
-        onToggle={onToggleTools}
-      />
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components: ConversationTurn
-// ---------------------------------------------------------------------------
-
-function ConversationTurn({ turn, expanded, onToggle, dimmed }: {
-  turn: SessionTurn;
-  expanded: boolean;
-  onToggle: () => void;
-  dimmed: boolean;
-}) {
-  return (
-    <View style={[s.turn, dimmed && s.turnDimmed]}>
-      {turn.userMessage.length > 0 && (
-        <UserMessage text={turn.userMessage} timestamp={turn.timestamp} />
-      )}
-      {(turn.assistantResponse.length > 0 || turn.toolCalls.length > 0) && (
-        <ClaudeResponse
-          text={turn.assistantResponse}
-          timestamp={turn.timestamp}
-          toolCalls={turn.toolCalls}
-          turnExpanded={expanded}
-          onToggleTools={onToggle}
-        />
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components: GapIndicator
-// ---------------------------------------------------------------------------
-
-function GapIndicator({ ms }: { ms: number }) {
-  return (
-    <View style={s.gap}>
-      <View style={s.gapLine} />
-      <Text style={s.gapLabel}>{fmtGap(ms)}</Text>
-      <View style={s.gapLine} />
     </View>
   );
 }
@@ -602,18 +393,31 @@ export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewPro
           <ScrollView ref={timelineRef} style={s.timeline} contentContainerStyle={s.timelineContent}>
             {turnsWithGaps.map((item, i) => {
               if (item.type === 'gap') {
-                return <GapIndicator key={`gap-${i}`} ms={item.ms} />;
+                return <GapIndicatorMolecule key={`gap-${i}`} label={fmtGap(item.ms)} />;
               }
               const { turn } = item;
               const dimmed = hasSearch && !matchesSearch(turn, searchQuery.trim());
+              const expanded = expandedTurns.has(turn.index);
+              const summaryProps = buildSummaryProps(
+                turn.toolCalls,
+                expanded,
+                () => toggleTurn(turn.index),
+              );
               return (
                 <ConversationTurn
                   key={turn.index}
-                  turn={turn}
-                  expanded={expandedTurns.has(turn.index)}
-                  onToggle={() => toggleTurn(turn.index)}
+                  userMessage={turn.userMessage}
+                  userTimestamp={fmtTime(turn.timestamp)}
+                  assistantResponse={turn.assistantResponse}
+                  assistantTimestamp={fmtTime(turn.timestamp)}
+                  hasErrors={turn.toolCalls.some(c => c.outcome === 'error')}
+                  summary={summaryProps}
                   dimmed={dimmed}
-                />
+                >
+                  {expanded && turn.toolCalls.length > 0 ? (
+                    <ExpandedToolCalls calls={turn.toolCalls} />
+                  ) : null}
+                </ConversationTurn>
               );
             })}
             {data.turns.length === 0 && (
@@ -635,15 +439,8 @@ export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewPro
 }
 
 // ---------------------------------------------------------------------------
-// Styles
+// Styles (layout-level only — card/component styles are in organisms/molecules)
 // ---------------------------------------------------------------------------
-
-const USER_BG = 'rgba(20,50,90,0.35)';
-const USER_BORDER = 'rgba(91,155,213,0.5)';
-const USER_COLOR = '#5B9BD5';
-const USER_TEXT_COLOR = '#7BAFDE';
-const CLAUDE_BG = '#1a1400';
-const CLAUDE_BORDER = 'rgba(255,121,0,0.25)';
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg, height: '100%' as unknown as number },
@@ -695,7 +492,7 @@ const s = StyleSheet.create({
     outlineStyle: 'none' as never,
   },
 
-  // Status badge
+  // Status badge (header)
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -717,121 +514,8 @@ const s = StyleSheet.create({
   timeline: { flex: 1 },
   timelineContent: { padding: 20, paddingBottom: 80, maxWidth: 900 },
 
-  // Conversation turn
-  turn: { marginBottom: 12 },
-  turnDimmed: { opacity: 0.15 },
-
-  // User message card
-  userCard: {
-    backgroundColor: USER_BG,
-    borderWidth: 1,
-    borderColor: USER_BORDER,
-    borderLeftWidth: 4,
-    borderLeftColor: USER_COLOR,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 6,
-  },
-  userHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 },
-  userIcon: { fontSize: 13 },
-  userLabel: { fontSize: 10, fontWeight: '600', color: USER_TEXT_COLOR, letterSpacing: 0.5, textTransform: 'uppercase', fontFamily: 'Space Grotesk, sans-serif' },
-  userTime: { fontSize: 10, color: USER_TEXT_COLOR, fontFamily: 'Space Grotesk, sans-serif', marginLeft: 'auto' as unknown as number },
-  userText: { fontSize: 13, lineHeight: 20, color: C.textPrimary },
-
-  // Claude response card
-  claudeCard: {
-    backgroundColor: CLAUDE_BG,
-    borderWidth: 1,
-    borderColor: CLAUDE_BORDER,
-    borderLeftWidth: 3,
-    borderLeftColor: C.brand,
-    borderRadius: 8,
-    padding: 10,
-  },
-  claudeCardError: { borderLeftColor: C.error },
-  claudeHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  claudeIcon: { fontSize: 13 },
-  claudeLabel: { fontSize: 10, fontWeight: '600', color: C.brand, letterSpacing: 0.5, textTransform: 'uppercase', fontFamily: 'Space Grotesk, sans-serif', flex: 1 },
-  claudeTime: { fontSize: 10, color: C.textTertiary, fontFamily: 'Space Grotesk, sans-serif' },
-  claudeParaText: { fontSize: 13, lineHeight: 21, color: C.textPrimary },
-  claudeBoldText: { fontSize: 13, lineHeight: 21, color: C.textPrimary, fontWeight: '700' },
-  claudeCodeText: { fontSize: 11, color: C.textSecondary, fontFamily: 'monospace', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3 },
-  claudeParagraph: { marginTop: 8 },
-  claudeTextTruncated: { maxHeight: 130, overflow: 'hidden' },
-  claudeShowMore: { fontSize: 11, color: C.brand, marginTop: 6, opacity: 0.8 },
-  showMore: { fontSize: 11, color: USER_TEXT_COLOR, marginTop: 5, opacity: 0.8 },
-
-  // Tool section
-  toolSection: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,121,0,0.12)' },
-  summaryCard: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,121,0,0.15)',
-    borderRadius: 5,
-    padding: 6,
-    paddingHorizontal: 10,
-  },
-  summaryCardError: { borderColor: 'rgba(220,5,12,0.25)' },
-  summaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryStats: { fontSize: 11, color: C.textSecondary, fontFamily: 'Space Grotesk, sans-serif' },
-  summaryCallCount: { color: C.textPrimary, fontWeight: '600' },
-  summaryErrorCount: { color: '#F87171', fontWeight: '600' },
-  summaryDur: { color: C.textTertiary },
-  expandBtn: { fontSize: 12, fontWeight: '600', color: C.textTertiary, paddingHorizontal: 6, paddingVertical: 2 },
-
-  // Tool pills
-  toolPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 5 },
-  toolPill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 99 },
-  toolPillText: { fontSize: 10, fontWeight: '600', fontFamily: 'Space Grotesk, sans-serif' },
-
   // Expanded tool calls
   toolCallsExpanded: { paddingTop: 6, borderTopWidth: 1, borderTopColor: C.border, marginTop: 6, gap: 2 },
-
-  // Tool call row
-  toolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    borderRadius: 5,
-    flexWrap: 'wrap',
-  },
-  toolRowError: { backgroundColor: 'rgba(220,5,12,0.05)', borderWidth: 1, borderColor: 'rgba(220,5,12,0.25)' },
-  toolRowTime: { fontSize: 10, color: C.textTertiary, fontFamily: 'monospace', width: 55 },
-  toolBadge: {
-    width: 20, height: 20, borderRadius: 4,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  toolBadgeLetter: { fontSize: 10, fontWeight: '700', fontFamily: 'Space Grotesk, sans-serif' },
-  toolName: { fontSize: 12, fontWeight: '600', fontFamily: 'Space Grotesk, sans-serif' },
-  toolPath: { flex: 1, fontSize: 11, color: C.textTertiary, fontFamily: 'monospace', minWidth: 40 },
-  durWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  durBar: { height: 3, borderRadius: 2 },
-  durLabel: { fontSize: 10, color: C.textTertiary, fontFamily: 'Space Grotesk, sans-serif', minWidth: 30, textAlign: 'right' as const },
-  statusDotSmall: { width: 6, height: 6, borderRadius: 3 },
-
-  // Agent chip
-  agentChip: { backgroundColor: 'rgba(255,121,0,0.12)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  agentChipText: { fontSize: 10, fontWeight: '600', color: C.brand, fontFamily: 'Space Grotesk, sans-serif' },
-
-  // Error display
-  errToggle: { fontSize: 11, color: C.error, marginTop: 4 },
-  errBlock: {
-    backgroundColor: 'rgba(220,5,12,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(220,5,12,0.2)',
-    borderRadius: 4,
-    padding: 8,
-    marginTop: 4,
-    width: '100%' as unknown as number,
-  },
-  errBlockText: { fontSize: 10, color: '#F87171', fontFamily: 'monospace', lineHeight: 15 },
-
-  // Gap indicator
-  gap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 12, paddingHorizontal: 4 },
-  gapLine: { flex: 1, height: 1, backgroundColor: C.border },
-  gapLabel: { fontSize: 10, color: C.textTertiary, fontFamily: 'Space Grotesk, sans-serif', letterSpacing: 0.3 },
 
   // Subagent drawer
   drawerOverlay: {
@@ -875,6 +559,5 @@ const s = StyleSheet.create({
   subagentMeta: { fontSize: 11, color: C.textTertiary },
 
   // Cross-view navigation links
-  taskRefLink: { color: C.brand, fontSize: 13, lineHeight: 21, cursor: 'pointer' as never },
   crossLink: { color: C.brand },
 });

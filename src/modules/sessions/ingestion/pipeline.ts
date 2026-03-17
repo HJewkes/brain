@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { OllamaClient } from '../../../services/ollama.js';
@@ -147,8 +148,23 @@ async function ingestOne(
   });
 
   if (!result.ok) {
-    // Record state even on duplicate so we don't retry
     if (result.error.code === 'DUPLICATE_SESSION') {
+      // Still generate structured-events.json for existing sessions that lack it
+      try {
+        const { getSessionBySessionId } = await import('../data/session-ops.js');
+        const existing = getSessionBySessionId(db, analytics.sessionId);
+        if (existing?.display_id) {
+          const seFile = join(config.notesDir, 'modules', 'sessions', existing.display_id, 'structured-events.json');
+          const { existsSync } = await import('node:fs');
+          if (!existsSync(seFile)) {
+            const structuredEvents = buildStructuredEvents(analytics);
+            writeStructuredEvents(config.notesDir, existing.display_id, structuredEvents);
+            return true;
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
       state.upsertRecord({
         sessionId: analytics.sessionId,
         displayId: 'existing',

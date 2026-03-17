@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import type { SessionAnalytics, ToolCall, TokenSnapshot } from '../types.js';
 import { summarizeInput } from './summarizer.js';
 
@@ -78,10 +78,19 @@ function buildTurns(analytics: SessionAnalytics): ConversationTurn[] {
   const turns: ConversationTurn[] = [];
   const toolsByTimestamp = groupToolCallsByTimestamp(analytics.toolCalls);
 
-  const turnCount = Math.max(analytics.assistantTurns, analytics.assistantTexts.length);
-  for (let i = 0; i < turnCount; i++) {
-    const assistantText = analytics.assistantTexts[i];
-    const snapshot = analytics.tokenSnapshots[i];
+  // Pair user and assistant texts into conversation turns
+  const userTexts = analytics.userTexts ?? [];
+  const assistantTexts = analytics.assistantTexts ?? [];
+  const maxTurns = Math.max(
+    userTexts.length,
+    assistantTexts.length,
+    analytics.assistantTurns,
+  );
+
+  for (let i = 0; i < maxTurns; i++) {
+    const userText = userTexts[i];
+    const assistantText = assistantTexts[i];
+    const snapshot = (analytics.tokenSnapshots ?? [])[i];
     const timestamp = snapshot?.timestamp ?? analytics.startTime;
 
     const groupedTools = toolsByTimestamp.get(i) ?? [];
@@ -89,6 +98,7 @@ function buildTurns(analytics: SessionAnalytics): ConversationTurn[] {
     turns.push({
       index: i,
       timestamp,
+      userText: userText?.slice(0, 500),
       assistantText: assistantText?.slice(0, 500),
       toolCalls: groupedTools.map((tc) => ({
         id: tc.toolUseId,

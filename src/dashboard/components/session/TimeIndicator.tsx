@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: C.textPrimary,
-    letterSpacing: 0.4,
+    letterSpacing: 0.44,
     lineHeight: 22,
     marginBottom: 2,
   },

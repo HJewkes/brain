@@ -80,8 +80,12 @@ function Separator() {
 const styles = StyleSheet.create({
   sidebar: {
     width: 224,
-    padding: 12,
-    gap: 0,
+    flexShrink: 0,
+    backgroundColor: C.surface1,
+    borderLeftWidth: 1,
+    borderLeftColor: C.border,
+    padding: 14,
+    gap: 22,
   },
   sep: {
     height: 1,
