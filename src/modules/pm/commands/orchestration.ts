@@ -29,6 +29,8 @@ import {
 import { listWorkstreams } from '../data/workstream-ops.js';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { TaskStatus, DecisionMetadata, PromptMetadata, ProjectMetadata } from '../types.js';
+import type { AgentDispatchContext } from '../../agents/dispatch-context.js';
+import type { TemplateVariables } from '../../agents/template-renderer.js';
 
 /** Resolve workstream by number, display ID, or name (case-insensitive substring). */
 export function resolveWorkstreamByName(
@@ -272,9 +274,40 @@ export function createOrchestrationCommands(): Command[] {
     .description('Assemble and output enriched context bundle for a task')
     .argument('<id>', 'Task display ID')
     .option('--json', 'Output JSON')
+    .option('--spawn-prompt', 'Output agent-ready spawn prompt with routing metadata')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
+
+        if (opts.spawnPrompt) {
+          const { buildSpawnPrompt } = await import('../../agents/prompt-builder.js');
+          const { buildAgentDispatchContext } = await import('../../agents/dispatch-context.js');
+          const dispatch = buildAgentDispatchContext(svc.db, displayId);
+          if (!dispatch) {
+            const msg = `Error: Cannot build dispatch context for ${displayId}\n`;
+            process.stderr.write(msg);
+            process.exitCode = 1;
+            return;
+          }
+          const prompt = buildSpawnPrompt(svc.db, displayId, {
+            projectDir: process.cwd(),
+          });
+          const output = {
+            taskId: displayId,
+            prompt: prompt ?? dispatch.context.body,
+            routing: {
+              model: dispatch.routing.model,
+              agentType: dispatch.routing.agentType,
+              isolation: dispatch.routing.isolation,
+              verify: dispatch.routing.verify,
+            },
+            dispatchable: dispatch.agentDispatchable,
+            description: `Implement ${displayId}`,
+          };
+          process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+          return;
+        }
+
         const result = await assembleDispatch(svc.db, svc.embedder, svc.config, displayId);
 
         if (!result.ok) {
@@ -737,7 +770,110 @@ export function createOrchestrationCommands(): Command[] {
       });
     });
 
-  return [nextCmd, wavesCmd, dispatchCmd, completeCmd, briefingCmd] as Command[];
+  const renderPromptCmd = new Command('render-prompt')
+    .description('Render an agent prompt template with task context variables')
+    .argument('<id>', 'Task display ID')
+    .requiredOption('--template <name>', 'Template name (file in templates/agents/<name>.md)')
+    .option('--project-dir <dir>', 'Project directory (defaults to cwd)')
+    .option('--team-name <name>', 'Team name for coordinator/worker communication')
+    .option('--claim-token <token>', 'Claim token for the task')
+    .action(async (id, opts) => {
+      await withBrain(async (svc) => {
+        const displayId = id.toUpperCase();
+        const { buildAgentDispatchContext } = await import('../../agents/dispatch-context.js');
+        const dispatch = buildAgentDispatchContext(svc.db, displayId, {
+          projectDir: opts.projectDir ?? process.cwd(),
+        });
+        if (!dispatch) {
+          process.stderr.write(`Error: Cannot build dispatch context for ${displayId}\n`);
+          process.exitCode = 1;
+          return;
+        }
+
+        const { renderTemplateFile } = await import('../../agents/template-renderer.js');
+        const variables = buildTemplateVariables(dispatch, opts.projectDir ?? process.cwd(), {
+          teamName: opts.teamName,
+          claimToken: opts.claimToken,
+        });
+
+        try {
+          const rendered = renderTemplateFile(
+            opts.projectDir ?? process.cwd(),
+            opts.template,
+            variables
+          );
+          process.stdout.write(rendered);
+        } catch (err) {
+          process.stderr.write(`Error: ${(err as Error).message}\n`);
+          process.exitCode = 1;
+        }
+      });
+    });
+
+  return [nextCmd, wavesCmd, dispatchCmd, renderPromptCmd, completeCmd, briefingCmd] as Command[];
+}
+
+export interface TemplateVariableOptions {
+  teamName?: string;
+  claimToken?: string;
+}
+
+export function buildTemplateVariables(
+  dispatch: AgentDispatchContext,
+  projectDir: string,
+  options?: TemplateVariableOptions
+): TemplateVariables {
+  const deps = dispatch.context.dependencies
+    .map((d) => `${d.displayId} [${d.status}] ${d.name}`)
+    .join('\n');
+
+  const waveInfo = dispatch.waveInfo
+    ? `Wave ${dispatch.waveInfo.waveNumber} of ${dispatch.waveInfo.totalWaves}` +
+      (dispatch.waveInfo.waveTasks.length > 0
+        ? `. Parallel: ${dispatch.waveInfo.waveTasks.join(', ')}`
+        : '')
+    : 'No wave context';
+
+  const fileOwnership = dispatch.fileOwnership
+    ? dispatch.fileOwnership.rules
+        .filter((r) => r.agentId === dispatch.taskId)
+        .flatMap((r) => r.patterns)
+        .join(', ')
+    : 'No file ownership assigned';
+
+  const readOnlyPatterns = dispatch.fileOwnership
+    ? dispatch.fileOwnership.rules
+        .filter((r) => r.agentId !== dispatch.taskId)
+        .flatMap((r) => r.patterns)
+        .join(', ')
+    : '';
+
+  const verifyCommands = ['npx tsc --noEmit', 'npm test', 'npx eslint'].join('\n');
+
+  const decisions = dispatch.context.decisions
+    .map((d) => `${d.displayId} [${d.status}] ${d.content}`)
+    .join('\n');
+
+  return {
+    TASK_ID: dispatch.taskId,
+    TITLE: dispatch.context.title,
+    DESCRIPTION: dispatch.context.body || '(no description)',
+    DEPENDENCIES: deps || 'None',
+    FILE_OWNERSHIP: fileOwnership,
+    READ_ONLY_FILES: readOnlyPatterns || 'None',
+    WAVE_INFO: waveInfo,
+    CWD: projectDir,
+    PROJECT_DIR: projectDir,
+    CLAIM_TOKEN: options?.claimToken ?? '',
+    TEAM_NAME: options?.teamName ?? '',
+    MODEL: dispatch.routing.model,
+    AGENT_TYPE: dispatch.routing.agentType,
+    ISOLATION: dispatch.routing.isolation,
+    VERIFY: String(dispatch.routing.verify),
+    VERIFY_COMMANDS: verifyCommands,
+    DECISIONS: decisions || 'None',
+    BRAIN_CLI: `npx tsx src/cli.ts`,
+  };
 }
 
 export interface BriefingData {

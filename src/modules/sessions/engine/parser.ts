@@ -11,16 +11,23 @@ export async function parseSessionFile(filePath: string): Promise<SessionAnalyti
     crlfDelay: Infinity,
   });
 
+  let byteOffset = 0;
   for await (const line of rl) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    const lineBytes = Buffer.byteLength(line, 'utf-8') + 1; // +1 for \n
+    if (!trimmed) {
+      byteOffset += lineBytes;
+      continue;
+    }
     let event: unknown;
     try {
       event = JSON.parse(trimmed);
     } catch {
+      byteOffset += lineBytes;
       continue;
     }
-    acc.ingest(event);
+    acc.ingest(event, byteOffset);
+    byteOffset += lineBytes;
   }
 
   return acc.finalize();

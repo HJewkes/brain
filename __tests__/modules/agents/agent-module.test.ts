@@ -56,10 +56,11 @@ describe('agents module', () => {
       expect(strategy!.shouldExtract({ id: 'x' } as never)).toBe(false);
     });
 
-    it('registers exactly 1 migration', () => {
+    it('registers 2 migrations', () => {
       const migrations = registry.getMigrations('agents');
-      expect(migrations).toHaveLength(1);
+      expect(migrations).toHaveLength(2);
       expect(migrations[0].migration.version).toBe(1);
+      expect(migrations[1].migration.version).toBe(2);
     });
 
     it('registers hook handlers for pre-tool-use and agent-done', () => {
@@ -116,11 +117,13 @@ describe('agents module', () => {
     it('works with runModuleMigrations', () => {
       const db = new Database(':memory:');
       const applied = runModuleMigrations(registry, db, new Map());
-      expect(applied).toHaveLength(1);
+      expect(applied).toHaveLength(2);
       expect(applied[0].module).toBe('agents');
       expect(applied[0].version).toBe(1);
+      expect(applied[1].module).toBe('agents');
+      expect(applied[1].version).toBe(2);
 
-      const reapplied = runModuleMigrations(registry, db, new Map([['agents', 1]]));
+      const reapplied = runModuleMigrations(registry, db, new Map([['agents', 2]]));
       expect(reapplied).toHaveLength(0);
 
       db.close();
@@ -135,7 +138,7 @@ describe('agents module', () => {
     beforeEach(() => {
       db = new Database(':memory:');
       const migrations = registry.getMigrations('agents');
-      migrations[0].migration.up(db);
+      for (const m of migrations) m.migration.up(db);
     });
 
     afterEach(() => {
@@ -242,7 +245,7 @@ describe('agents module', () => {
     beforeEach(() => {
       db = new Database(':memory:');
       const migrations = registry.getMigrations('agents');
-      migrations[0].migration.up(db);
+      for (const m of migrations) m.migration.up(db);
     });
 
     afterEach(() => {
@@ -326,7 +329,7 @@ describe('agents module', () => {
     beforeEach(() => {
       db = new Database(':memory:');
       const migrations = registry.getMigrations('agents');
-      migrations[0].migration.up(db);
+      for (const m of migrations) m.migration.up(db);
     });
 
     afterEach(() => {

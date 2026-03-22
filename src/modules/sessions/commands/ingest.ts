@@ -11,7 +11,9 @@ export function createSessionIngestCommand(): Command {
     .option('--project-dir <dir>', 'Filter by project directory')
     .option('--since <date>', 'Only sessions modified after date (ISO or relative: 7d, 30d)')
     .option('--dry-run', 'Preview without making changes')
+    .option('--force', 'Re-ingest already-processed sessions, overwriting existing notes')
     .option('--skip-summaries', 'Skip LLM summary generation')
+    .option('--batch-size <n>', 'Sessions per batch (default: 50)', '50')
     .option('--verbose', 'Show detailed progress')
     .option('--json', 'Output JSON report')
     .action(
@@ -20,7 +22,9 @@ export function createSessionIngestCommand(): Command {
         projectDir?: string;
         since?: string;
         dryRun?: boolean;
+        force?: boolean;
         skipSummaries?: boolean;
+        batchSize?: string;
         verbose?: boolean;
         json?: boolean;
       }) => {
@@ -31,7 +35,9 @@ export function createSessionIngestCommand(): Command {
             projectDir: opts.projectDir,
             since: opts.since ? parseSinceDate(opts.since) : undefined,
             dryRun: opts.dryRun,
+            force: opts.force,
             skipSummaries: opts.skipSummaries,
+            batchSize: opts.batchSize ? parseInt(opts.batchSize, 10) : 50,
             verbose: opts.verbose,
           });
         });

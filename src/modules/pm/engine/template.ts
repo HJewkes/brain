@@ -1,3 +1,7 @@
+// NOTE: This module uses imperative string concatenation with complex conditional sections.
+// It intentionally does not implement the shared PromptRenderer interface (src/utils/template.ts)
+// because the rendering logic here depends on runtime bundle structure, not static templates.
+// Future unification is possible once conditional section support is added to PromptRenderer.
 import type { ContextBundle, DependencySummary, DecisionSummary } from './dispatch.js';
 
 export interface RenderOptions {

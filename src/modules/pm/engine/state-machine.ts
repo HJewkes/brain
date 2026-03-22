@@ -6,7 +6,7 @@ const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending: ['claimed', 'blocked', 'cancelled', 'pruned'],
   claimed: ['in-progress', 'pending', 'cancelled'],
   'in-progress': ['done', 'blocked', 'cancelled', 'pending'],
-  done: [],
+  done: ['pending'],
   blocked: ['pending', 'cancelled', 'pruned'],
   cancelled: [],
   pruned: [],
@@ -31,6 +31,9 @@ function buildTransitionHint(from: TaskStatus, to: TaskStatus): string {
   }
   if (from === 'pending' && to === 'in-progress') {
     return " Hint: run 'brain pm task claim <id>' first.";
+  }
+  if (from === 'done' && to !== 'pending') {
+    return " Hint: use 'brain pm task reset <id>' to return a completed task to pending.";
   }
   return '';
 }
@@ -94,6 +97,9 @@ export function canClaim(currentWip: number, wipLimit: number | undefined): Resu
 }
 
 export function isTerminalStatus(status: TaskStatus): boolean {
+  // done allows reset→pending but is still considered terminal for workflow purposes
+  // (tasks don't auto-transition out of done, cancelled, or pruned)
+  if (status === 'done' || status === 'cancelled' || status === 'pruned') return true;
   return TRANSITIONS[status].length === 0;
 }
 

@@ -53,7 +53,8 @@ export type ActivityType =
   | 'start'
   | 'block'
   | 'unblock'
-  | 'cancel';
+  | 'cancel'
+  | 'reset';
 
 export interface ProjectCommands {
   build?: string | null;

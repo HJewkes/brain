@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { agentsMigration } from '../../../src/modules/agents/schema.js';
+import { agentsMigrationV1, agentsMigrationV2 } from '../../../src/modules/agents/schema.js';
 
 // We use a raw better-sqlite3 Database that has the agents migration applied.
 // The data.ts toRaw() helper handles both BrainDB and raw Database instances.
@@ -38,7 +38,8 @@ async function run(...args: string[]): Promise<void> {
 
 beforeEach(() => {
   db = new Database(':memory:');
-  agentsMigration.up(db);
+  agentsMigrationV1.up(db);
+  agentsMigrationV2.up(db);
 
   stdoutData = '';
   stderrData = '';

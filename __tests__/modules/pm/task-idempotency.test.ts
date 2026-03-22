@@ -22,7 +22,7 @@ describe('task completion idempotency', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('INVALID_TRANSITION');
-      expect(result.error.message).toContain('terminal state');
+      expect(result.error.message).toContain('reset');
     }
   });
 
@@ -42,14 +42,13 @@ describe('task completion idempotency', () => {
     }
   });
 
-  test('done -> pending transition is rejected', () => {
+  test('done -> pending transition is allowed (reset)', () => {
     const result = validateTransition('done', 'pending');
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
-  test('no transitions are allowed from done', () => {
-    const statuses: TaskStatus[] = [
-      'pending',
+  test('only reset (done -> pending) is allowed from done', () => {
+    const rejected: TaskStatus[] = [
       'claimed',
       'in-progress',
       'done',
@@ -57,10 +56,12 @@ describe('task completion idempotency', () => {
       'cancelled',
       'pruned',
     ];
-    for (const target of statuses) {
+    for (const target of rejected) {
       const result = validateTransition('done', target);
       expect(result.ok).toBe(false);
     }
+    const reset = validateTransition('done', 'pending');
+    expect(reset.ok).toBe(true);
   });
 });
 
@@ -100,7 +101,7 @@ describe('re-claiming completed tasks', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('INVALID_TRANSITION');
-      expect(result.error.message).toContain('terminal state');
+      expect(result.error.message).toContain('reset');
     }
   });
 

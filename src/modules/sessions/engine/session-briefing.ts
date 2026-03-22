@@ -115,6 +115,11 @@ export function generateSessionBriefing(
 
 export function renderBriefingXml(briefing: SessionBriefing): string {
   const lines: string[] = [];
+
+  lines.push(
+    'This project uses brain PM for project tracking. Use `brain pm status`, `brain pm next`, `brain session list`, and `brain dashboard` instead of git log for project context.'
+  );
+  lines.push('');
   lines.push(`<session-briefing project="${briefing.project ?? 'none'}">`);
 
   for (const section of briefing.sections) {

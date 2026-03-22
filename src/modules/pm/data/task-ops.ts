@@ -554,9 +554,15 @@ export async function updateTaskStatus(
     cancelled: 'cancel',
   };
 
-  // Unblock is: blocked -> pending
-  const activityType =
-    currentStatus === 'blocked' && newStatus === 'pending' ? 'unblock' : activityTypeMap[newStatus];
+  // Special cases: blocked->pending = unblock, done->pending = reset
+  let activityType: ActivityType | undefined;
+  if (currentStatus === 'blocked' && newStatus === 'pending') {
+    activityType = 'unblock';
+  } else if (currentStatus === 'done' && newStatus === 'pending') {
+    activityType = 'reset';
+  } else {
+    activityType = activityTypeMap[newStatus];
+  }
 
   if (activityType) {
     const newlyEligible =

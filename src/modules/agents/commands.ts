@@ -5,6 +5,7 @@ import type { AgentRecord } from './types.js';
 import { createWorktreeCommand } from './worktree-commands.js';
 import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
 import { updateTaskStatus } from '../pm/data/task-ops.js';
+import { migrateAoAgents } from './migrate-ao.js';
 
 function padRight(s: string, len: number): string {
   return s.length >= len ? s.substring(0, len) : s + ' '.repeat(len - s.length);
@@ -276,6 +277,34 @@ export function createAgentCommands(): Command {
         } else {
           process.stdout.write(formatDispatchBrief(ctx) + '\n');
         }
+      });
+    });
+
+  // brain agent migrate-ao
+  cmd
+    .command('migrate-ao')
+    .description('Import agent state from ao YAML files into brain SQLite')
+    .option('--cwd <path>', 'Project directory to read ao state from', process.cwd())
+    .option('--dry-run', 'Show what would be imported without writing')
+    .option('--json', 'Output results as JSON')
+    .action(async (opts) => {
+      await withDb((svc) => {
+        return migrateAoAgents(svc.db, opts.cwd, !!opts.dryRun).then((result) => {
+          if (opts.json) {
+            process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+            return;
+          }
+
+          const prefix = opts.dryRun ? '[dry-run] ' : '';
+          process.stdout.write(`${prefix}Imported: ${result.imported}\n`);
+          process.stdout.write(`${prefix}Skipped:  ${result.skipped}\n`);
+          if (result.errors.length > 0) {
+            process.stdout.write(`${prefix}Errors:   ${result.errors.length}\n`);
+            for (const err of result.errors) {
+              process.stderr.write(`  ${err}\n`);
+            }
+          }
+        });
       });
     });
 

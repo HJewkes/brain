@@ -5,6 +5,14 @@ import { countActiveAgentsFromDb } from './agent-count.js';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit', 'Bash']);
 
+/**
+ * Ensures agents have worktree isolation when concurrent agents exist.
+ * Blocks if agent lacks AGENT_WORKTREE_PATH while other agents are active.
+ *
+ * This is one half of a complementary pair:
+ * - worktreeIsolationCheck (here, priority 5): requires isolation when multiple agents exist
+ * - worktreeBoundaryCheck (modules/agents, priority 20): constrains writes to the allocated worktree
+ */
 export const worktreeIsolationCheck: HookHandler = {
   name: 'worktree-isolation',
   event: 'pre-tool-use',

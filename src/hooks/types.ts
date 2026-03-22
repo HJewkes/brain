@@ -1,4 +1,11 @@
-export type HookEvent = 'pre-tool-use' | 'prompt-submit' | 'task-completed' | 'agent-done';
+export type HookEvent =
+  | 'pre-tool-use'
+  | 'post-tool-use'
+  | 'prompt-submit'
+  | 'notification'
+  | 'task-completed'
+  | 'agent-done'
+  | 'session-start';
 
 export interface HookInput {
   event: HookEvent;

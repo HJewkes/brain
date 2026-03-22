@@ -1,9 +1,18 @@
 import type { BrainModule } from '../types.js';
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../../hooks/types.js';
 import { hookAllow, hookBlock, hookAllowJson } from '../../hooks/types.js';
-import { agentsMigration } from './schema.js';
+import { agentsMigrationV1, agentsMigrationV2 } from './schema.js';
 import { createAgentCommands } from './commands.js';
+import { runAgentDoneHook } from './agent-done-handler.js';
 
+/**
+ * Ensures agent writes stay within their allocated worktree path.
+ * Only runs when agent HAS a worktree (complements worktreeIsolationCheck).
+ *
+ * This is one half of a complementary pair:
+ * - worktreeIsolationCheck (hooks/checks, priority 5): requires isolation when multiple agents exist
+ * - worktreeBoundaryCheck (here, priority 20): constrains writes to the allocated worktree
+ */
 const worktreeBoundaryCheck: HookHandler = {
   name: 'agents:worktree-boundary',
   event: 'pre-tool-use',
@@ -46,20 +55,18 @@ const agentDoneHandler: HookHandler = {
   },
 
   run(input: HookInput, _config: HookConfig): HookResult {
-    const agentId = process.env.BRAIN_AGENT_ID;
-    if (!agentId) return hookAllow();
+    const parsed = input.parsed as { agent_id?: string; exit_code?: number; summary?: string };
 
-    // Provide context about agent completion for the orchestrator.
-    // Actual DB update is done via `brain agent complete <id>` by the caller.
-    const parsed = input.parsed as { exit_code?: number; summary?: string };
-    const exitCode = parsed.exit_code ?? 0;
-    const status = exitCode === 0 ? 'completed' : 'failed';
-
-    return hookAllowJson(
-      `<agent-done agent_id="${agentId}" status="${status}">\n` +
-        `Run "brain agent ${status === 'completed' ? 'complete' : 'abandon'} ${agentId}" to update status.\n` +
-        `</agent-done>`
-    );
+    try {
+      const result = runAgentDoneHook(parsed, input.cwd);
+      return hookAllowJson(
+        `<agent-done agent_id="${result.agentId ?? 'unknown'}" status="${result.status}">` +
+          `${result.message}</agent-done>`
+      );
+    } catch {
+      // Never block on agent-done
+      return hookAllow();
+    }
   },
 };
 
@@ -112,7 +119,8 @@ export const agentsModule: BrainModule = {
 
     ctx.registerFilter({ visibility: 'private' });
 
-    ctx.registerMigration(agentsMigration);
+    ctx.registerMigration(agentsMigrationV1);
+    ctx.registerMigration(agentsMigrationV2);
 
     ctx.registerHookHandler(worktreeBoundaryCheck);
     ctx.registerHookHandler(agentDoneHandler);

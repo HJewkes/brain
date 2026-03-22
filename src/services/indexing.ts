@@ -78,14 +78,17 @@ export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): N
   };
 }
 
-export function chunkId(noteId: string, content: string): string {
-  const hash = createHash('sha256').update(`${noteId}:${content}`).digest('hex').slice(0, 16);
+export function chunkId(noteId: string, content: string, position: number): string {
+  const hash = createHash('sha256')
+    .update(`${noteId}:${position}:${content}`)
+    .digest('hex')
+    .slice(0, 16);
   return `${noteId}::${hash}`;
 }
 
 export function rawChunksToChunks(noteId: string, rawChunks: RawChunk[]): Chunk[] {
   return rawChunks.map((rc) => ({
-    id: chunkId(noteId, rc.text),
+    id: chunkId(noteId, rc.text, rc.position),
     noteId,
     heading: rc.heading,
     headingAncestry: rc.headingAncestry,

@@ -5,6 +5,17 @@ import { hookAllow, hookBlock } from '../types.js';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
 
+/**
+ * Shape of the persisted ownership manifest (`.claude/ownership.json`).
+ *
+ * This is the **authoritative** source for file ownership enforcement.
+ * The hook reads this manifest at tool-use time and blocks writes that fall
+ * outside an agent's declared paths.
+ *
+ * Note: a separate system (`file-ownership-ext.ts`) dynamically *computes*
+ * ownership from task descriptions for dispatch context. That extension
+ * provides recommendations only — this hook is the enforcement point.
+ */
 interface OwnershipManifest {
   agents: Record<string, { paths: string[] }>;
 }

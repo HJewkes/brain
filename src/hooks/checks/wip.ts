@@ -3,6 +3,13 @@ import type { HookHandler, HookInput, HookConfig, HookResult } from '../types.js
 import { hookAllow, hookAllowJson } from '../types.js';
 import { countActiveAgentsFromDb } from './agent-count.js';
 
+/**
+ * Informational only — warns when WIP limit is reached but does not block.
+ * Returns hookAllowJson (allow with message) rather than hookBlock.
+ *
+ * Actual WIP enforcement happens in pm/engine/state-machine.ts:canClaim()
+ * which prevents task claiming when the limit is exceeded.
+ */
 export const wipCheck: HookHandler = {
   name: 'wip',
   event: 'prompt-submit',

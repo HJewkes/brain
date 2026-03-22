@@ -152,3 +152,34 @@ export function countActiveAgents(db: unknown): number {
   };
   return row.n;
 }
+
+/** Retrieve full context object or a specific key for an agent. */
+export function getAgentContext(
+  db: unknown,
+  agentId: string,
+  key?: string
+): Record<string, unknown> | unknown {
+  const raw = toRaw(db);
+  const row = raw.prepare('SELECT context FROM agents WHERE id = ?').get(agentId) as
+    | { context: string }
+    | undefined;
+  if (!row) return undefined;
+
+  const ctx = JSON.parse(row.context) as Record<string, unknown>;
+  if (key !== undefined) return ctx[key];
+  return ctx;
+}
+
+/** Merge a key/value pair into an agent's context JSON. */
+export function setAgentContext(db: unknown, agentId: string, key: string, value: unknown): void {
+  const raw = toRaw(db);
+  const row = raw.prepare('SELECT context FROM agents WHERE id = ?').get(agentId) as
+    | { context: string }
+    | undefined;
+  if (!row) return;
+
+  const ctx = JSON.parse(row.context) as Record<string, unknown>;
+  ctx[key] = value;
+
+  raw.prepare('UPDATE agents SET context = ? WHERE id = ?').run(JSON.stringify(ctx), agentId);
+}

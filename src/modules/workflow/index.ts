@@ -4,6 +4,10 @@ import { createWorkflowCommand } from './commands/workflow.js';
 import { createResourceCommand } from './commands/resource.js';
 import { createLifecycleCommands } from './commands/lifecycle.js';
 import { createCollapseCommand } from './commands/collapse.js';
+import { createObserveCommand } from './commands/observe.js';
+import { createImproveCommand } from './commands/improve.js';
+import { createReportCommand } from './commands/report.js';
+import { frictionHook } from './hooks/friction-hook.js';
 
 export {
   resolveTemplate,
@@ -61,6 +65,38 @@ export const workflowModule: BrainModule = {
       },
     });
 
+    ctx.registerNoteType({
+      name: 'observation',
+      description: 'Workflow observation recording friction, patterns, or improvements',
+      tier: 'fast',
+      schema: {
+        type: 'object',
+        properties: {
+          observation_type: {
+            type: 'string',
+            enum: ['friction', 'pattern', 'improvement', 'anomaly'],
+            description: 'Type of observation',
+          },
+          impact: {
+            type: 'string',
+            enum: ['low', 'medium', 'high', 'critical'],
+            description: 'Impact severity',
+          },
+          category: {
+            type: 'string',
+            description: 'Observation category (e.g., tool-failure, permission, retry)',
+          },
+          session_id: { type: 'string', description: 'Source session ID' },
+          status: {
+            type: 'string',
+            enum: ['new', 'acknowledged', 'resolved', 'dismissed'],
+            description: 'Observation status',
+          },
+        },
+        required: ['observation_type', 'impact', 'status'],
+      },
+    });
+
     ctx.registerRelationType({
       name: 'instance-of',
       description: 'Workflow instance is an instance of a workflow definition',
@@ -76,6 +112,11 @@ export const workflowModule: BrainModule = {
       description: 'Workflow instance is an iteration of a previous instance',
     });
 
+    ctx.registerRelationType({
+      name: 'observed-in',
+      description: 'Observation was detected in a session',
+    });
+
     ctx.registerExtractionStrategy({ shouldExtract: () => false });
 
     ctx.registerFilter({ visibility: 'private' });
@@ -86,7 +127,12 @@ export const workflowModule: BrainModule = {
       wfCmd.addCommand(cmd);
     }
     wfCmd.addCommand(createCollapseCommand());
+    wfCmd.addCommand(createObserveCommand());
+    wfCmd.addCommand(createImproveCommand());
+    wfCmd.addCommand(createReportCommand());
 
     ctx.registerCommand(wfCmd);
+
+    ctx.registerHookHandler(frictionHook);
   },
 };

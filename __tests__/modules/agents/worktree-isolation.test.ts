@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { agentsMigration } from '../../../src/modules/agents/schema.js';
+import { agentsMigrationV1, agentsMigrationV2 } from '../../../src/modules/agents/schema.js';
 import { requireWorktreeIsolation } from '../../../src/modules/agents/worktree.js';
 import { allocateWorktree as dbAllocate } from '../../../src/modules/agents/data.js';
 
@@ -19,7 +19,8 @@ vi.mock('node:fs', async (importOriginal) => {
 
 function makeDb(): ReturnType<typeof Database> {
   const db = new Database(':memory:');
-  agentsMigration.up(db);
+  agentsMigrationV1.up(db);
+  agentsMigrationV2.up(db);
   return db;
 }
 

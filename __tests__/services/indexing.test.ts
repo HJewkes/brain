@@ -32,20 +32,26 @@ describe('slugify', () => {
 });
 
 describe('chunkId', () => {
-  it('produces deterministic id from noteId + content', () => {
-    const id1 = chunkId('note-1', 'some content');
-    const id2 = chunkId('note-1', 'some content');
+  it('produces deterministic id from noteId + content + position', () => {
+    const id1 = chunkId('note-1', 'some content', 0);
+    const id2 = chunkId('note-1', 'some content', 0);
     expect(id1).toBe(id2);
   });
 
   it('produces different ids for different content', () => {
-    const id1 = chunkId('note-1', 'content a');
-    const id2 = chunkId('note-1', 'content b');
+    const id1 = chunkId('note-1', 'content a', 0);
+    const id2 = chunkId('note-1', 'content b', 0);
+    expect(id1).not.toBe(id2);
+  });
+
+  it('produces different ids for same content at different positions', () => {
+    const id1 = chunkId('note-1', 'same content', 0);
+    const id2 = chunkId('note-1', 'same content', 1);
     expect(id1).not.toBe(id2);
   });
 
   it('includes noteId prefix', () => {
-    const id = chunkId('my-note', 'data');
+    const id = chunkId('my-note', 'data', 0);
     expect(id).toMatch(/^my-note::/);
   });
 });

@@ -1,6 +1,6 @@
 import type { ModuleMigration } from '../types.js';
 
-export const agentsMigration: ModuleMigration = {
+export const agentsMigrationV1: ModuleMigration = {
   version: 1,
   description: 'Create agents and worktree_allocations tables',
   up: (db) => {
@@ -39,5 +39,14 @@ export const agentsMigration: ModuleMigration = {
       CREATE INDEX IF NOT EXISTS idx_worktree_allocations_task_id
         ON worktree_allocations(task_id);
     `);
+  },
+};
+
+export const agentsMigrationV2: ModuleMigration = {
+  version: 2,
+  description: 'Add extensible context JSON column to agents table',
+  up: (db) => {
+    const rawDb = db as { exec(sql: string): void };
+    rawDb.exec(`ALTER TABLE agents ADD COLUMN context TEXT NOT NULL DEFAULT '{}'`);
   },
 };

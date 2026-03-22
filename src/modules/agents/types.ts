@@ -18,6 +18,8 @@ export interface AgentRecord {
   completed_at: string | null;
   summary: string | null;
   exit_reason: string | null;
+  /** JSON-serialized Record<string, unknown> */
+  context: string;
 }
 
 export interface WorktreeAllocation {
