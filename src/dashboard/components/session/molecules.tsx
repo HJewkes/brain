@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { C, palette, semantic, component } from '../shared/colors.js';
+import { Card } from '../shared/index.js';
 import {
   TimelineDot,
   ToolBadge,
@@ -170,7 +171,7 @@ export function TurnSummaryCard({
   expanded,
 }: TurnSummaryCardProps) {
   return (
-    <View style={[s.summaryCard, hasErrors === true && s.summaryCardErrors]}>
+    <Card variant="subtle" borderColor={hasErrors === true ? component.summaryCard.errorBorder : 'rgba(255,121,0,0.15)'} bg="rgba(255,255,255,0.03)">
       <View style={s.summaryTop}>
         <Text style={s.summaryStats}>
           <Text style={s.statCalls}>{callCount}</Text>
@@ -198,7 +199,7 @@ export function TurnSummaryCard({
           <ToolPill key={i} label={p.label} type={p.type} />
         ))}
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -395,17 +396,6 @@ const s = StyleSheet.create({
   },
 
   /* M4 — TurnSummaryCard */
-  summaryCard: {
-    backgroundColor: component.summaryCard.bg,
-    borderWidth: 1,
-    borderColor: component.summaryCard.border,
-    borderRadius: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  summaryCardErrors: {
-    borderColor: component.summaryCard.errorBorder,
-  },
   summaryTop: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { C, palette, semantic, component } from '../shared/colors.js';
+import { Card, UserAvatar, ClaudeAvatar } from '../shared/index.js';
 import { TurnSummaryCard } from './molecules.js';
 import type { TurnSummaryCardProps } from './molecules.js';
 
@@ -117,13 +118,15 @@ export interface UserMessageCardProps {
 
 export function UserMessageCard({ text, timestamp }: UserMessageCardProps) {
   return (
-    <View style={s.userCard}>
-      <View style={s.userHeader}>
-        <Text style={s.userIcon}>{'\uD83D\uDCAC'}</Text>
-        <Text style={s.userLabel}>USER</Text>
-        <Text style={s.userTime}>{timestamp}</Text>
-      </View>
-      <ExpandableText text={text} style={s.userText} />
+    <View style={s.userCardWrap}>
+      <Card variant="accent" accentColor={palette.userBlue.base} borderColor={palette.userBlue.border50} bg={palette.userBlue.bgDark}>
+        <View style={s.userHeader}>
+          <UserAvatar size={16} />
+          <Text style={s.userLabel}>USER</Text>
+          <Text style={s.userTime}>{timestamp}</Text>
+        </View>
+        <ExpandableText text={text} style={s.userText} />
+      </Card>
     </View>
   );
 }
@@ -148,9 +151,9 @@ export function ClaudeResponseCard({
   children,
 }: ClaudeResponseCardProps) {
   return (
-    <View style={[s.claudeCard, hasErrors === true && s.claudeCardError]}>
+    <Card variant="accent" accentColor={hasErrors === true ? palette.red.base : C.brand} borderColor={hasErrors === true ? palette.red.dim25 : palette.brand.dim25} bg={palette.brand.dim06}>
       <View style={s.claudeHeader}>
-        <Text style={s.claudeIcon}>{'\uD83E\uDD16'}</Text>
+        <ClaudeAvatar size={16} />
         <Text style={s.claudeLabel}>CLAUDE</Text>
         <Text style={s.claudeTime}>{timestamp}</Text>
       </View>
@@ -168,7 +171,7 @@ export function ClaudeResponseCard({
           {children}
         </View>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
@@ -219,24 +222,13 @@ export function ConversationTurn({
 
 const s = StyleSheet.create({
   /* User message card */
-  userCard: {
-    backgroundColor: component.userCard.bg,
-    borderWidth: 1,
-    borderColor: component.userCard.border,
-    borderLeftWidth: 4,
-    borderLeftColor: component.userCard.accent,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 6,
-  },
+  userCardWrap: { marginBottom: 6 },
   userHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 7,
   },
-  userIcon: { fontSize: 13, flexShrink: 0 },
   userLabel: {
     fontFamily: 'Space Grotesk',
     fontSize: 10,
@@ -255,24 +247,12 @@ const s = StyleSheet.create({
   userShowMore: { fontSize: 11, color: semantic.role.user.text, marginTop: 5, opacity: 0.8 },
 
   /* Claude response card */
-  claudeCard: {
-    backgroundColor: component.claudeCard.bg,
-    borderWidth: 1,
-    borderColor: component.claudeCard.border,
-    borderLeftWidth: 3,
-    borderLeftColor: component.claudeCard.accent,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  claudeCardError: { borderLeftColor: component.claudeCard.errorAccent },
   claudeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 8,
   },
-  claudeIcon: { fontSize: 13, flexShrink: 0 },
   claudeLabel: {
     fontFamily: 'Space Grotesk',
     fontSize: 10,
