@@ -1,5 +1,6 @@
 node_modules/
 dist/
+!dist/dashboard/index.html
 docs/
 !docs/plans/
 *.db

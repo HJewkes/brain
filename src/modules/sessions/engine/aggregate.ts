@@ -179,6 +179,29 @@ export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionA
     hookPreventionCount,
     capturedViaHooks: true,
     capturedViaJsonl: false,
+
+    // Extended signals — defaults for hook-captured sessions
+    slug: null,
+    prLinks: [],
+    filesTouched: new Map(),
+    filesWritten: [],
+    modelCounts: new Map(),
+    taskRefs: [],
+    compactionTimestamps: [],
+    compactionSummaries: [],
+    compactionByteOffsets: [],
+    tokenSnapshots: [],
+    assistantTexts: [],
+    userTexts: [],
+    logicalParentUuid: null,
+    thinkingBlockCount: 0,
+    skillUsage: new Map(),
+    planPresent: false,
+    permissionMode: null,
+    serviceTier: null,
+    gitCommandCount: 0,
+    commitCount: 0,
+    subagentCount: 0,
   };
 }
 

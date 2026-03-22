@@ -2,6 +2,10 @@
 
 Personal knowledge base and memory engine with hybrid RAG search (BM25 + vector embeddings), LLM-powered memory extraction, and temporal intelligence.
 
+## Project Status & Session Context
+
+Project status and session briefings are handled automatically by the session-start hook. See the brain skill definition for PM command reference.
+
 ## Quick Start
 
 ```bash

@@ -83,7 +83,22 @@ function buildSessionMarkdown(input: CreateSessionInput, displayId: string): str
     lines.push('commits:');
     for (const c of input.commits) lines.push(`  - ${c}`);
   }
+  if (input.pr_links?.length) {
+    lines.push('pr_links:');
+    for (const p of input.pr_links) lines.push(`  - "${p}"`);
+  }
+  if (input.files_written?.length) {
+    lines.push('files_written:');
+    for (const f of input.files_written) lines.push(`  - "${f}"`);
+  }
   if (input.plan_id) lines.push(`plan_id: ${input.plan_id}`);
+  if (input.session_type) lines.push(`session_type: ${input.session_type}`);
+  if (input.outcome) lines.push(`outcome: ${input.outcome}`);
+  if (input.cost_usd != null) lines.push(`cost_usd: ${input.cost_usd}`);
+  if (input.jsonl_path) lines.push(`jsonl_path: "${input.jsonl_path}"`);
+  if (input.jsonl_size_bytes != null) lines.push(`jsonl_size_bytes: ${input.jsonl_size_bytes}`);
+  if (input.segment_count != null) lines.push(`segment_count: ${input.segment_count}`);
+  if (input.instance_id) lines.push(`instance_id: ${input.instance_id}`);
 
   if (input.l1Content || input.l2Content || input.observationsContent) {
     lines.push(`content-dir: modules/sessions/${displayId}`);
@@ -328,6 +343,15 @@ function noteToSessionMetadata(meta: Record<string, unknown>): SessionMetadata {
     commits: meta.commits as string[] | undefined,
     memories_extracted: meta.memories_extracted as number | undefined,
     plan_id: meta.plan_id as string | undefined,
+    session_type: meta.session_type as string | undefined,
+    outcome: meta.outcome as string | undefined,
+    cost_usd: meta.cost_usd as number | undefined,
+    jsonl_path: meta.jsonl_path as string | undefined,
+    jsonl_size_bytes: meta.jsonl_size_bytes as number | undefined,
+    pr_links: meta.pr_links as string[] | undefined,
+    files_written: meta.files_written as string[] | undefined,
+    segment_count: meta.segment_count as number | undefined,
+    instance_id: meta.instance_id as string | undefined,
   };
 }
 
@@ -413,4 +437,33 @@ export function getSessionNotes(db: BrainDB, filters?: Record<string, unknown>):
     if (matches) results.push(note);
   }
   return results;
+}
+
+/**
+ * Populate the session_files table with file touch data from a session.
+ */
+export function populateSessionFiles(
+  db: BrainDB,
+  sessionId: string,
+  filesTouched: Map<string, Set<string>>,
+  projectDir?: string
+): void {
+  const rawDb = (
+    db as unknown as { db: { prepare: (sql: string) => { run: (...a: unknown[]) => void } } }
+  ).db;
+  try {
+    const stmt = rawDb.prepare(
+      `INSERT OR REPLACE INTO session_files (session_id, file_path, operations, last_touched_at) VALUES (?, ?, ?, ?)`
+    );
+    const now = new Date().toISOString();
+    for (const [filePath, tools] of filesTouched) {
+      let normalizedPath = filePath;
+      if (projectDir && filePath.startsWith(projectDir)) {
+        normalizedPath = filePath.slice(projectDir.length).replace(/^\//, '');
+      }
+      stmt.run(sessionId, normalizedPath, JSON.stringify([...tools]), now);
+    }
+  } catch {
+    // Table may not exist if migrations haven't run — non-fatal
+  }
 }

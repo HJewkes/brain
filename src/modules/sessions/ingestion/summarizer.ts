@@ -105,15 +105,9 @@ export function generateL2Timeline(analytics: SessionAnalytics): string {
     lines.push('');
   }
 
-  // Tool Call Log
+  // Tool Call Log with enriched entries and interleaved markers
   lines.push('## Tool Call Log', '');
-  for (const tc of analytics.toolCalls) {
-    const time = tc.timestamp.slice(11, 19);
-    const status = tc.outcome === 'error' ? ' ERROR' : tc.outcome === 'pending' ? ' PENDING' : '';
-    const duration = tc.durationMs != null ? ` (${tc.durationMs}ms)` : '';
-    const sidechain = tc.isSidechain ? ' [sidechain]' : '';
-    lines.push(`- ${time} ${tc.toolName}${status}${duration}${sidechain}`);
-  }
+  appendEnrichedToolLog(lines, analytics);
   lines.push('');
 
   // Error Summary
@@ -149,6 +143,119 @@ export function generateL2Timeline(analytics: SessionAnalytics): string {
   lines.push('');
 
   return lines.join('\n');
+}
+
+export function summarizeInput(toolName: string, input: Record<string, unknown>): string | null {
+  const str = (v: unknown, max: number): string | null =>
+    typeof v === 'string' ? v.slice(0, max) : null;
+  const field = (label: string, v: unknown, max: number): string | null => {
+    const s = str(v, max);
+    return s !== null ? `${label}: ${s}` : null;
+  };
+
+  switch (toolName) {
+    case 'Read':
+    case 'Write':
+    case 'Edit':
+      return field('file_path', input.file_path, 200);
+    case 'Grep':
+    case 'Glob':
+      return field('pattern', input.pattern, 200);
+    case 'Bash':
+      return field('command', input.command, 100);
+    case 'Agent':
+    case 'Task':
+    case 'TaskCreate':
+      if (input.prompt !== undefined) return field('prompt', input.prompt, 80);
+      return field('description', input.description, 80);
+    case 'WebSearch':
+      return field('query', input.query, 200);
+    case 'WebFetch':
+      return field('url', input.url, 200);
+    case 'Skill':
+      return field('skill', input.skill, 200);
+    case 'SendMessage':
+      return field('to', input.to, 200);
+    default:
+      return null;
+  }
+}
+
+const TASK_CLAIM_RE = /brain\s+pm\s+claim\s+(\S+)/;
+const TASK_COMPLETE_RE = /brain\s+pm\s+complete\s+(\S+)/;
+
+interface CompactionEntry {
+  timestamp: string;
+  offset?: number;
+  summary?: string;
+}
+
+function buildCompactionEntries(analytics: SessionAnalytics): CompactionEntry[] {
+  const timestamps = analytics.compactionTimestamps ?? [];
+  return timestamps.map((ts, i) => ({
+    timestamp: ts,
+    summary: (analytics.compactionSummaries ?? [])[i],
+  }));
+}
+
+function appendEnrichedToolLog(lines: string[], analytics: SessionAnalytics): void {
+  const compactions = buildCompactionEntries(analytics);
+  let compactionIdx = 0;
+
+  for (const tc of analytics.toolCalls) {
+    // Insert any compaction markers that chronologically precede this tool call
+    while (
+      compactionIdx < compactions.length &&
+      compactions[compactionIdx].timestamp <= tc.timestamp
+    ) {
+      const c = compactions[compactionIdx++];
+      const offsetTag = c.offset != null ? ` [offset:${c.offset}]` : '';
+      lines.push(`--- COMPACTION${offsetTag} ---`);
+      if (c.summary) lines.push(c.summary);
+    }
+
+    // Build the main tool call line
+    const time = tc.timestamp.slice(11, 19);
+    const status = tc.outcome === 'error' ? ' ERROR' : tc.outcome === 'pending' ? ' PENDING' : '';
+    const duration = tc.durationMs != null ? ` (${tc.durationMs}ms)` : '';
+    const sidechain = tc.isSidechain ? ' [sidechain]' : '';
+    const offsetTag = tc.byteOffset != null ? ` [offset:${tc.byteOffset}]` : '';
+    lines.push(`- ${time} ${tc.toolName}${status}${duration}${sidechain}${offsetTag}`);
+
+    // Input summary line
+    const summary = summarizeInput(tc.toolName, tc.input);
+    if (summary) lines.push(`  > ${summary}`);
+
+    // Error detail line
+    if (tc.outcome === 'error' && tc.errorMessage) {
+      lines.push(`  > error: ${tc.errorMessage.slice(0, 200)}`);
+    }
+
+    // Task boundary markers from Bash commands
+    if (tc.toolName === 'Bash' && typeof tc.input.command === 'string') {
+      const claimMatch = TASK_CLAIM_RE.exec(tc.input.command);
+      if (claimMatch) lines.push(`--- TASK BOUNDARY: ${claimMatch[1]} claimed ---`);
+      const completeMatch = TASK_COMPLETE_RE.exec(tc.input.command);
+      if (completeMatch) lines.push(`--- TASK BOUNDARY: ${completeMatch[1]} completed ---`);
+    }
+
+    // Agent spawn marker
+    if (tc.toolName === 'Agent' || tc.toolName === 'Task' || tc.toolName === 'TaskCreate') {
+      const prompt = typeof tc.input.prompt === 'string' ? tc.input.prompt.slice(0, 40) : '';
+      const desc =
+        typeof tc.input.description === 'string' ? tc.input.description.slice(0, 40) : prompt;
+      const label = desc || prompt;
+      if (label) lines.push(`--- AGENT SPAWN: ${label} ---`);
+    }
+  }
+
+  // Flush any remaining compaction markers
+  while (compactionIdx < compactions.length) {
+    const c = compactions[compactionIdx++];
+    const offsetTag = c.offset != null ? ` [offset:${c.offset}]` : '';
+    lines.push(`--- COMPACTION${offsetTag} ---`);
+    if (c.summary) lines.push(c.summary);
+  }
 }
 
 function extractActiveFilesFromToolCalls(

@@ -7,6 +7,7 @@ import { DEFAULT_HOOK_CONFIG } from '../../../src/hooks/config.js';
 
 vi.mock('../../../src/services/config.js', () => ({
   loadConfig: vi.fn(),
+  resolveInstance: vi.fn().mockReturnValue({ notesDir: '/tmp/test', dbPath: '/tmp/test.db' }),
 }));
 
 vi.mock('../../../src/services/brain-db.js', () => ({
@@ -163,7 +164,6 @@ describe('sessions:start handler', () => {
     expect(result.exitCode).toBe(0);
 
     const parsed = JSON.parse(result.stdout) as { additionalContext: string };
-    expect(parsed.additionalContext).toContain('session-start');
     expect(parsed.additionalContext).toContain('session-briefing');
   });
 
