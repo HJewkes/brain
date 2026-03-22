@@ -7,9 +7,24 @@
  * The backward-compat `colors` export preserves the exact shape of the v1 API.
  */
 
+import { generateShades } from './utils/color-utils.js';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Layer 1: Primitive Palette
 // ═══════════════════════════════════════════════════════════════════════════
+
+// Pre-compute shade scales so the palette object can be `as const`.
+const _brand = generateShades('#FF7900');
+const _teal = generateShades('#14B8A6');
+const _red = generateShades('#F83030');
+const _amber = generateShades('#F4A736');
+const _gold = generateShades('#D4A520');
+const _userBlue = generateShades('#5B9BD5');
+const _accentBlue = generateShades('#2563EB');
+const _steel = generateShades('#406D87');
+const _purple = generateShades('#823CA0'); // dim-base intentionally differs from display base
+const _green = generateShades('#22c55e');
+const _gray = generateShades('#6B7280'); // dim-base; display variants use brighter tones
 
 export const palette = {
   // -- Neutrals / Surfaces --
@@ -22,37 +37,30 @@ export const palette = {
 
   // -- Brand --
   brand: {
-    base: '#FF7900',
-    dim06: 'rgba(255,121,0,0.06)',
-    dim08: 'rgba(255,121,0,0.08)',
-    dim12: 'rgba(255,121,0,0.12)',
-    dim15: 'rgba(255,121,0,0.15)',
-    dim20: 'rgba(255,121,0,0.20)',
-    dim25: 'rgba(255,121,0,0.25)',
-    dim30: 'rgba(255,121,0,0.30)',
+    ..._brand,
+    // Extra shades beyond the standard scale
+    dim06: `rgba(255,121,0,0.06)`,
+    dim20: `rgba(255,121,0,0.20)`,
+    dim30: `rgba(255,121,0,0.30)`,
   },
 
   // -- Teal (success/done/write) --
   teal: {
-    base: '#14B8A6',
-    dim10: 'rgba(20,184,166,0.10)',
-    dim12: 'rgba(20,184,166,0.12)',
-    dim15: 'rgba(20,184,166,0.15)',
-    dim20: 'rgba(20,184,166,0.20)',
-    dim25: 'rgba(20,184,166,0.25)',
+    ..._teal,
+    // Extra shades beyond the standard scale
+    dim10: `rgba(20,184,166,0.10)`,
+    dim20: `rgba(20,184,166,0.20)`,
   },
 
   // -- Red (error/blocked) --
   red: {
-    base: '#F83030', // was #DC050C — brightened for WCAG AA (3.4→4.6:1 on surface2 #191919)
+    ..._red,
     light: '#F87171',
-    dim05: 'rgba(248,48,48,0.05)',
-    dim08: 'rgba(248,48,48,0.08)',
-    dim10: 'rgba(248,48,48,0.10)',
-    dim12: 'rgba(248,48,48,0.12)',
-    dim20: 'rgba(248,48,48,0.20)',
-    dim25: 'rgba(248,48,48,0.25)',
-    dim30: 'rgba(248,48,48,0.30)',
+    // was #DC050C — brightened for WCAG AA (3.4→4.6:1 on surface2 #191919)
+    // Extra shades beyond the standard scale
+    dim10: `rgba(248,48,48,0.10)`,
+    dim20: `rgba(248,48,48,0.20)`,
+    dim30: `rgba(248,48,48,0.30)`,
   },
 
   // -- Critical (iOS system red -- priority only) --
@@ -62,17 +70,15 @@ export const palette = {
 
   // -- Amber (edit/idle/warning) --
   amber: {
-    base: '#F4A736',
-    dim15: 'rgba(244,167,54,0.15)',
-    dim20: 'rgba(244,167,54,0.20)',
-    dim40: 'rgba(244,167,54,0.40)',
+    ..._amber,
+    // Extra shades beyond the standard scale
+    dim20: `rgba(244,167,54,0.20)`,
+    dim40: `rgba(244,167,54,0.40)`,
   },
 
   // -- Gold (ready/queued) --
   gold: {
-    base: '#D4A520',
-    dim12: 'rgba(212,165,32,0.12)',
-    dim15: 'rgba(212,165,32,0.15)',
+    ..._gold,
   },
 
   // -- Blue (info/read) --
@@ -84,37 +90,40 @@ export const palette = {
 
   // -- User blue (message cards) --
   userBlue: {
-    base: '#5B9BD5',
+    ..._userBlue,
+    // Special named aliases kept for semantic clarity
     bgDark: 'rgba(20,50,90,0.35)',
-    border50: 'rgba(91,155,213,0.50)',
-    dim35: 'rgba(91,155,213,0.35)',
+    border50: `rgba(91,155,213,0.50)`,
+    // Extra shades beyond the standard scale
+    dim35: `rgba(91,155,213,0.35)`,
   },
 
   // -- SubagentDrawer blue (different base from info blue) --
   accentBlue: {
-    dim06: 'rgba(37,99,235,0.06)',
-    dim15: 'rgba(37,99,235,0.15)',
-    dim40: 'rgba(37,99,235,0.40)',
+    ..._accentBlue,
+    // Extra shades beyond the standard scale
+    dim06: `rgba(37,99,235,0.06)`,
+    dim40: `rgba(37,99,235,0.40)`,
   },
 
   // -- Steel (secondary accent) --
   steel: {
-    base: '#406D87',
-    dim15: 'rgba(64,109,135,0.15)',
-    dim30: 'rgba(64,109,135,0.30)',
+    ..._steel,
+    // Extra shades beyond the standard scale
+    dim30: `rgba(64,109,135,0.30)`,
   },
 
   // -- Purple (review/grep/glob) --
   purple: {
     base: '#A855F7',
     light: '#C084FC',
-    dim20: 'rgba(130,60,160,0.20)',
+    // dim uses #823CA0 (muted purple) intentionally for subtle backgrounds
+    dim20: `rgba(130,60,160,0.20)`,
   },
 
   // -- Green (live/active dot) --
   green: {
-    base: '#22c55e',
-    dim50: 'rgba(34,197,94,0.50)',
+    ..._green,
   },
 
   // -- Gray (bash/inactive) --
@@ -122,8 +131,9 @@ export const palette = {
     base: '#9CA3AF',
     dark: '#848B98', // was #6B7280 — brightened for WCAG AA (3.9→5.6:1 on #101010)
     darker: '#4B5563',
-    dim15: 'rgba(107,114,128,0.15)',
-    dim20: 'rgba(107,114,128,0.20)',
+    // dim variants use #6B7280 (mid-gray) as base for subtle backgrounds
+    dim15: _gray.dim15,
+    dim20: `rgba(107,114,128,0.20)`,
   },
 
   // -- Overlay --
