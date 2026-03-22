@@ -37,7 +37,7 @@ test.describe('Specimen page loads', () => {
 
   test('all 3 tiers present', async ({ page }) => {
     await page.goto(BASE);
-    await expect(page.getByText('Atoms (14)')).toBeVisible();
+    await expect(page.getByText('Atoms (15)')).toBeVisible();
     // Scroll to find molecules and organisms
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
     await page.waitForTimeout(200);
@@ -52,7 +52,9 @@ test.describe('Atom visual snapshots', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
     // Wait for fonts to load
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
@@ -130,7 +132,9 @@ test.describe('Atom visual snapshots', () => {
 test.describe('Molecule visual snapshots', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
@@ -168,7 +172,9 @@ test.describe('Molecule visual snapshots', () => {
 test.describe('Organism visual snapshots', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
@@ -191,13 +197,17 @@ test.describe('Organism visual snapshots', () => {
 test.describe('Prototype comparison — computed styles', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
   test('fonts are loaded (Space Grotesk + Inter)', async ({ page }) => {
     const fonts = await page.evaluate(() => {
-      const loaded = Array.from(document.fonts).filter(f => f.status === 'loaded').map(f => f.family);
+      const loaded = Array.from(document.fonts)
+        .filter((f) => f.status === 'loaded')
+        .map((f) => f.family);
       return [...new Set(loaded)];
     });
     expect(fonts).toContain('Space Grotesk');
@@ -213,7 +223,7 @@ test.describe('Prototype comparison — computed styles', () => {
 
     // Check the last one (React version)
     const reactLabel = progressLabels.last();
-    const fontFamily = await reactLabel.evaluate(el => getComputedStyle(el).fontFamily);
+    const fontFamily = await reactLabel.evaluate((el) => getComputedStyle(el).fontFamily);
     expect(fontFamily).toMatch(/Space Grotesk/);
   });
 
@@ -221,7 +231,7 @@ test.describe('Prototype comparison — computed styles', () => {
     await scrollToSection(page, 'O1. UserMessageCard');
     // Find user message text
     const userText = page.getByText("Let's fix the session ingestion pipeline");
-    const fontFamily = await userText.evaluate(el => getComputedStyle(el).fontFamily);
+    const fontFamily = await userText.evaluate((el) => getComputedStyle(el).fontFamily);
     // User text in organisms.tsx doesn't set fontFamily explicitly,
     // so it should inherit Inter from body or fall back to sans-serif
     // This test documents the current state
@@ -231,7 +241,7 @@ test.describe('Prototype comparison — computed styles', () => {
   test('brand color consistency', async ({ page }) => {
     await scrollToSection(page, 'A14. StatusBadge');
     const activeBadge = page.getByText('active').last();
-    const color = await activeBadge.evaluate(el => getComputedStyle(el).color);
+    const color = await activeBadge.evaluate((el) => getComputedStyle(el).color);
     // Should be #FF7900 → rgb(255, 121, 0)
     expect(color).toBe('rgb(255, 121, 0)');
   });

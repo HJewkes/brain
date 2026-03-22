@@ -263,12 +263,12 @@ test.describe('Global specimen — computed style checks', () => {
         return el ? getComputedStyle(el).color : null;
       });
     });
-    // critical: #FF3B30 → rgb(255, 59, 48)
+    // critical: tokenized critical color → rgb(255, 59, 48)
     expect(result[0]).toBe('rgb(255, 59, 48)');
-    // high: #D14343 (C.error) → rgb(209, 67, 67)
-    expect(result[1]).toBe('rgb(209, 67, 67)');
-    // medium: #FFB020 (C.warning) → rgb(255, 176, 32)
-    expect(result[2]).toBe('rgb(255, 176, 32)');
+    // high: tokenized error color → rgb(248, 48, 48)
+    expect(result[1]).toBe('rgb(248, 48, 48)');
+    // medium: tokenized warning color → rgb(244, 167, 54)
+    expect(result[2]).toBe('rgb(244, 167, 54)');
     // low: #2196F3 (C.info) → rgb(33, 150, 243)
     expect(result[3]).toBe('rgb(33, 150, 243)');
   });
@@ -299,14 +299,14 @@ test.describe('Global specimen — computed style checks', () => {
         return null;
       });
     });
-    // blocked → C.error (#D14343)
-    expect(result[0]).toBe('rgb(209, 67, 67)');
-    // ready → C.warning (#FFB020)
-    expect(result[1]).toBe('rgb(255, 176, 32)');
-    // inprogress → C.brand (#FF7900)
-    expect(result[2]).toBe('rgb(255, 121, 0)');
-    // review → C.info (#2196F3)
-    expect(result[3]).toBe('rgb(33, 150, 243)');
+    // blocked → tokenized error color
+    expect(result[0]).toBe('rgb(248, 48, 48)');
+    // ready → tokenized warning color
+    expect(result[1]).toBe('rgb(212, 165, 32)');
+    // inprogress → C.info (#2196F3) — remapped in color tokenization
+    expect(result[2]).toBe('rgb(33, 150, 243)');
+    // review → purple (#A855F7)
+    expect(result[3]).toBe('rgb(168, 85, 247)');
     // done → C.success (#14B8A6)
     expect(result[4]).toBe('rgb(20, 184, 166)');
   });

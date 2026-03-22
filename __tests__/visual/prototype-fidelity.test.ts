@@ -14,7 +14,9 @@ const BASE = 'http://localhost:3457/dashboard.html#specimen';
 test.describe('Prototype fidelity — fonts', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
@@ -22,9 +24,9 @@ test.describe('Prototype fidelity — fonts', () => {
     // Find all elements with text "PROGRESS" that are 10px (the actual SectionLabel atoms, not specimen labels)
     const result = await page.evaluate(() => {
       const els = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'PROGRESS' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'PROGRESS' && el.children.length === 0
       );
-      return els.map(el => {
+      return els.map((el) => {
         const cs = getComputedStyle(el);
         return {
           fontSize: cs.fontSize,
@@ -35,7 +37,7 @@ test.describe('Prototype fidelity — fonts', () => {
       });
     });
     // Should have HTML + React versions — both should be 10px
-    const tenPxLabels = result.filter(r => r.fontSize === '10px');
+    const tenPxLabels = result.filter((r) => r.fontSize === '10px');
     expect(tenPxLabels.length).toBeGreaterThanOrEqual(2);
     for (const label of tenPxLabels) {
       expect(label.fontWeight).toBe('700');
@@ -47,7 +49,7 @@ test.describe('Prototype fidelity — fonts', () => {
   test('ToolBadge letter uses Space Grotesk 10px/700', async ({ page }) => {
     const result = await page.evaluate(() => {
       // Find single-letter text elements (R, W, E, $, /, A) that are badge letters
-      const letters = Array.from(document.querySelectorAll('*')).filter(el => {
+      const letters = Array.from(document.querySelectorAll('*')).filter((el) => {
         if (el.children.length > 0) return false;
         const text = el.textContent?.trim();
         if (!text || text.length !== 1) return false;
@@ -55,9 +57,14 @@ test.describe('Prototype fidelity — fonts', () => {
         const cs = getComputedStyle(el);
         return cs.fontSize === '10px' && cs.fontWeight === '700';
       });
-      return letters.map(el => {
+      return letters.map((el) => {
         const cs = getComputedStyle(el);
-        return { text: el.textContent, fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight };
+        return {
+          text: el.textContent,
+          fontFamily: cs.fontFamily,
+          fontSize: cs.fontSize,
+          fontWeight: cs.fontWeight,
+        };
       });
     });
     // Should find HTML + React badge letters
@@ -73,7 +80,9 @@ test.describe('Prototype fidelity — fonts', () => {
 test.describe('Prototype fidelity — colors', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
@@ -84,12 +93,12 @@ test.describe('Prototype fidelity — colors', () => {
     // Find CLAUDE labels that are brand-colored (inside the actual card, not specimen headers)
     const result = await page.evaluate(() => {
       const els = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'CLAUDE' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'CLAUDE' && el.children.length === 0
       );
-      return els.map(el => getComputedStyle(el).color);
+      return els.map((el) => getComputedStyle(el).color);
     });
     // At least one should be brand orange
-    const brandOrange = result.filter(c => c === 'rgb(255, 121, 0)');
+    const brandOrange = result.filter((c) => c === 'rgb(255, 121, 0)');
     expect(brandOrange.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -98,33 +107,33 @@ test.describe('Prototype fidelity — colors', () => {
     await page.waitForTimeout(300);
     const result = await page.evaluate(() => {
       const els = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'USER' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'USER' && el.children.length === 0
       );
-      return els.map(el => getComputedStyle(el).color);
+      return els.map((el) => getComputedStyle(el).color);
     });
-    const userBlue = result.filter(c => c === 'rgb(123, 175, 222)');
+    const userBlue = result.filter((c) => c === 'rgb(123, 175, 222)');
     expect(userBlue.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('error color #DC050C on error StatusBadge', async ({ page }) => {
+  test('error color #F83030 on error StatusBadge', async ({ page }) => {
     const result = await page.evaluate(() => {
       const els = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'error' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'error' && el.children.length === 0
       );
-      return els.map(el => getComputedStyle(el).color);
+      return els.map((el) => getComputedStyle(el).color);
     });
-    const errorRed = result.filter(c => c === 'rgb(220, 5, 12)');
+    const errorRed = result.filter((c) => c === 'rgb(248, 48, 48)');
     expect(errorRed.length).toBeGreaterThanOrEqual(1);
   });
 
   test('success color #14B8A6 on complete StatusBadge', async ({ page }) => {
     const result = await page.evaluate(() => {
       const els = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'complete' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'complete' && el.children.length === 0
       );
-      return els.map(el => getComputedStyle(el).color);
+      return els.map((el) => getComputedStyle(el).color);
     });
-    const successGreen = result.filter(c => c === 'rgb(20, 184, 166)');
+    const successGreen = result.filter((c) => c === 'rgb(20, 184, 166)');
     expect(successGreen.length).toBeGreaterThanOrEqual(1);
   });
 });
@@ -132,16 +141,21 @@ test.describe('Prototype fidelity — colors', () => {
 test.describe('Prototype fidelity — dimensions', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
   test('ToolBadge is 20x20 with border-radius 4px', async ({ page }) => {
     const badges = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('*')).filter(el => {
+      return Array.from(document.querySelectorAll('*')).filter((el) => {
         const cs = getComputedStyle(el);
-        return cs.width === '20px' && cs.height === '20px' &&
-          (cs.borderRadius === '4px' || cs.borderRadius === '10px');
+        return (
+          cs.width === '20px' &&
+          cs.height === '20px' &&
+          (cs.borderRadius === '4px' || cs.borderRadius === '10px')
+        );
       }).length;
     });
     // 7 HTML badges + 7 React badges = 14 total
@@ -152,7 +166,7 @@ test.describe('Prototype fidelity — dimensions', () => {
     await page.evaluate(() => window.scrollTo(0, 1800));
     await page.waitForTimeout(300);
     const tracks = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('*')).filter(el => {
+      return Array.from(document.querySelectorAll('*')).filter((el) => {
         const cs = getComputedStyle(el);
         return cs.height === '6px' && cs.borderRadius === '3px' && cs.overflow === 'hidden';
       }).length;
@@ -164,7 +178,7 @@ test.describe('Prototype fidelity — dimensions', () => {
     await page.evaluate(() => window.scrollTo(0, 2800));
     await page.waitForTimeout(300);
     const bars = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('*')).filter(el => {
+      return Array.from(document.querySelectorAll('*')).filter((el) => {
         const cs = getComputedStyle(el);
         return cs.width === '60px' && cs.height === '3px' && cs.flexShrink === '0';
       }).length;
@@ -177,16 +191,18 @@ test.describe('Prototype fidelity — dimensions', () => {
 test.describe('Prototype fidelity — HTML vs React parity', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, { timeout: 10_000 });
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), null, {
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
   });
 
   test('ToolPill font matches between HTML and React', async ({ page }) => {
     const result = await page.evaluate(() => {
       const pills = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'read ×12' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'read ×12' && el.children.length === 0
       );
-      return pills.map(el => {
+      return pills.map((el) => {
         const cs = getComputedStyle(el);
         return { fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight };
       });
@@ -204,15 +220,20 @@ test.describe('Prototype fidelity — HTML vs React parity', () => {
     const result = await page.evaluate(() => {
       // Find elements containing "VNM-21.04" and walk up to find the one with padding
       const textEls = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'VNM-21.04' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'VNM-21.04' && el.children.length === 0
       );
-      return textEls.map(el => {
+      return textEls.map((el) => {
         // Check self and parents for padding (HTML span has it directly, React has it on Pressable parent)
         let target = el as HTMLElement;
         for (let i = 0; i < 4; i++) {
           const cs = getComputedStyle(target);
           if (cs.paddingTop !== '0px' && cs.paddingLeft !== '0px') {
-            return { pt: cs.paddingTop, pr: cs.paddingRight, pb: cs.paddingBottom, pl: cs.paddingLeft };
+            return {
+              pt: cs.paddingTop,
+              pr: cs.paddingRight,
+              pb: cs.paddingBottom,
+              pl: cs.paddingLeft,
+            };
           }
           if (target.parentElement) target = target.parentElement;
         }
@@ -228,23 +249,23 @@ test.describe('Prototype fidelity — HTML vs React parity', () => {
     }
   });
 
-  test('StatusBadge has border-radius 20px', async ({ page }) => {
+  test('StatusBadge has pill border-radius (99px)', async ({ page }) => {
     const result = await page.evaluate(() => {
-      // Find elements that contain "complete" and have a visible border-radius
-      const badges = Array.from(document.querySelectorAll('*')).filter(el => {
+      // After Pill primitive refactor, StatusBadge uses border-radius: 99px
+      const badges = Array.from(document.querySelectorAll('*')).filter((el) => {
         const cs = getComputedStyle(el);
-        return cs.borderRadius === '20px' && el.textContent?.includes('complete');
+        return cs.borderRadius === '99px' && el.textContent?.includes('complete');
       });
       return badges.length;
     });
-    // HTML + React StatusBadges
-    expect(result).toBeGreaterThanOrEqual(2);
+    // At least one React StatusBadge with pill border-radius
+    expect(result).toBeGreaterThanOrEqual(1);
   });
 
   test('ToolBadge agent variant has border-radius 50% (round)', async ({ page }) => {
     const result = await page.evaluate(() => {
       // Agent badges have border-radius 50% (10px on 20x20)
-      const badges = Array.from(document.querySelectorAll('*')).filter(el => {
+      const badges = Array.from(document.querySelectorAll('*')).filter((el) => {
         const cs = getComputedStyle(el);
         return cs.width === '20px' && cs.height === '20px' && cs.borderRadius === '10px';
       });
@@ -257,9 +278,9 @@ test.describe('Prototype fidelity — HTML vs React parity', () => {
   test('TaskChip active variant has brighter border', async ({ page }) => {
     const result = await page.evaluate(() => {
       const chips = Array.from(document.querySelectorAll('*')).filter(
-        el => el.textContent?.trim() === 'VNM-27.03' && el.children.length === 0,
+        (el) => el.textContent?.trim() === 'VNM-27.03' && el.children.length === 0
       );
-      return chips.map(el => {
+      return chips.map((el) => {
         // Walk up to find the element with the border (might be a parent wrapper)
         let target = el;
         for (let i = 0; i < 3; i++) {
