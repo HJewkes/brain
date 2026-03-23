@@ -1,7 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { generateDashboardHtml } from '../../src/commands/dashboard.js';
 import type { AuditReport } from '../../src/commands/audit.js';
 import type { StatusCache } from '../../src/commands/dashboard.js';
+
+const MOCK_TEMPLATE =
+  '<!DOCTYPE html><html><head><title>Brain Dashboard</title></head><body><div id="root"></div></body></html>';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    existsSync: (p: string) => {
+      if (typeof p === 'string' && p.endsWith('index.html')) return true;
+      return actual.existsSync(p);
+    },
+    readFileSync: (p: unknown, enc?: unknown) => {
+      if (typeof p === 'string' && p.endsWith('index.html')) return MOCK_TEMPLATE;
+      return actual.readFileSync(p as string, enc as string);
+    },
+  };
+});
 
 function makeAudit(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
