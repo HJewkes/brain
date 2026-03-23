@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { C, palette, semantic } from './colors.js';
+import { sp } from '../../tokens.js';
 
 export const hoverStyles = StyleSheet.create({
   card: {
@@ -9,29 +10,29 @@ export const hoverStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 10,
-    padding: 14,
+    padding: sp[7],
     zIndex: 9999,
     shadowColor: palette.black,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: sp[4] },
     shadowOpacity: 0.5,
     shadowRadius: 16,
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: sp[5], marginBottom: sp[5] },
   avatar: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: sp[4],
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: { fontSize: 13, fontWeight: '700', color: semantic.text.inverse },
-  name: { fontSize: 13, fontWeight: '600', color: C.textPrimary, marginBottom: 2 },
+  name: { fontSize: 13, fontWeight: '600', color: C.textPrimary, marginBottom: sp[1] },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: sp[2],
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: sp[1],
     borderRadius: 10,
     alignSelf: 'flex-start',
   },
@@ -40,17 +41,17 @@ export const hoverStyles = StyleSheet.create({
   taskRow: {
     backgroundColor: C.surface3,
     borderRadius: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    marginBottom: 10,
+    paddingHorizontal: sp[4],
+    paddingVertical: sp[3],
+    marginBottom: sp[5],
   },
   taskText: { fontFamily: 'monospace', fontSize: 11, color: C.steel },
-  metricsRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
+  metricsRow: { flexDirection: 'row', gap: sp[3], marginBottom: sp[5] },
   metric: {
     flex: 1,
     backgroundColor: C.surface3,
     borderRadius: 5,
-    padding: 6,
+    padding: sp[3],
     alignItems: 'center',
   },
   metricValue: { fontSize: 14, fontWeight: '600', color: C.textPrimary },
@@ -61,6 +62,6 @@ export const hoverStyles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     color: C.textTertiary,
-    marginBottom: 4,
+    marginBottom: sp[2],
   },
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { C, TOOL_COLORS } from './colors.js';
+import { sp } from '../../tokens.js';
 
 export interface SparkEvent {
   type: string;
@@ -40,12 +41,12 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 2,
-    height: 20,
+    gap: sp[1],
+    height: sp[10],
   },
   bar: {
     flex: 1,
-    borderRadius: 2,
-    minHeight: 2,
+    borderRadius: sp[1],
+    minHeight: sp[1],
   },
 });

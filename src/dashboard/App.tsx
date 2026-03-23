@@ -14,7 +14,7 @@ import { SpecimenView } from './views/SpecimenView.js';
 import { SpecimenGlobalView } from './views/SpecimenGlobalView.js';
 import { SpecimenUnifiedView } from './views/SpecimenUnifiedView.js';
 import { CommandPalette } from './components/shared/CommandPalette.js';
-import { palette, semantic, component } from './tokens.js';
+import { palette, semantic, component, sp } from './tokens.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -295,8 +295,8 @@ const styles = {
     minHeight: '100vh' as unknown as number,
   },
   sidebarHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: sp[10],
+    paddingVertical: sp[10],
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
@@ -304,22 +304,22 @@ const styles = {
     fontSize: 20,
     fontWeight: '700' as const,
     color: TEXT_PRIMARY,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
     letterSpacing: -0.3,
   },
   paletteBtn: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 8,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 4,
-    paddingHorizontal: 10,
+    gap: sp[4],
+    marginHorizontal: sp[6],
+    marginTop: sp[6],
+    marginBottom: sp[2],
+    paddingHorizontal: sp[5],
     paddingVertical: 7,
     backgroundColor: SURFACE2,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 8,
+    borderRadius: sp[4],
     cursor: 'pointer' as unknown as undefined,
   },
   paletteBtnIcon: {
@@ -330,7 +330,7 @@ const styles = {
     flex: 1,
     fontSize: 12,
     color: TEXT_TERTIARY,
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: "'Inter', sans-serif",
   },
   paletteBtnKbd: {
     backgroundColor: SURFACE3,
@@ -347,14 +347,14 @@ const styles = {
   },
   navList: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: sp[4],
   },
   navItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: sp[8],
+    paddingVertical: sp[5],
+    gap: sp[5],
     position: 'relative' as const,
     cursor: 'pointer' as unknown as undefined,
   },
@@ -392,11 +392,11 @@ const styles = {
     borderRadius: 2,
   },
   sidebarFooter: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: sp[8],
+    paddingVertical: sp[8],
     borderTopWidth: 1,
     borderTopColor: BORDER,
-    gap: 2,
+    gap: sp[1],
   },
   footerProject: {
     fontSize: 12,
@@ -410,8 +410,8 @@ const styles = {
   liveIndicator: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 5,
-    marginTop: 6,
+    gap: sp[3],
+    marginTop: sp[3],
   },
   liveDot: {
     width: 7,
@@ -442,7 +442,7 @@ const styles = {
   },
   content: {
     maxWidth: 1200,
-    padding: 24,
+    padding: sp[12],
   },
   contentFullBleed: {
     flex: 1,
