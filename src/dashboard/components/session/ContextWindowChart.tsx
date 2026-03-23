@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   legendItem: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     color: C.textTertiary,
   },

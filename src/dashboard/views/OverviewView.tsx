@@ -9,7 +9,6 @@ import { SessionActivity } from '../components/SessionActivity.js';
 import { SearchHealth } from '../components/SearchHealth.js';
 import { StorageInfo } from '../components/StorageInfo.js';
 import { RelationsSummary } from '../components/RelationsSummary.js';
-import { Row } from '../titan-shim.js';
 
 interface OverviewViewProps {
   audit: AuditReport;
@@ -43,25 +42,25 @@ export function OverviewView({ audit, status, dashboard }: OverviewViewProps) {
     <View style={{ gap: 16 }}>
       <MetricsRow audit={audit} />
 
-      <Row>
+      <View style={{ flexDirection: 'row', gap: 16 }}>
         <View style={{ flex: 1 }}>
           <NotesBreakdown title="Notes by Module" data={audit.notes?.byModule ?? {}} />
         </View>
         <View style={{ flex: 1 }}>
           <NotesBreakdown title="Notes by Type" data={audit.notes?.byType ?? {}} />
         </View>
-      </Row>
+      </View>
 
-      <Row>
+      <View style={{ flexDirection: 'row', gap: 16 }}>
         <View style={{ flex: 1 }}>
           <TaskBurndown pm={pm} />
         </View>
         <View style={{ flex: 1 }}>
           <AgentStatus agents={status.agents} />
         </View>
-      </Row>
+      </View>
 
-      <Row>
+      <View style={{ flexDirection: 'row', gap: 16 }}>
         <View style={{ flex: 1 }}>
           <SessionActivity
             sessions={status.sessions}
@@ -75,16 +74,16 @@ export function OverviewView({ audit, status, dashboard }: OverviewViewProps) {
         <View style={{ flex: 1 }}>
           <SearchHealth search={search} />
         </View>
-      </Row>
+      </View>
 
-      <Row>
+      <View style={{ flexDirection: 'row', gap: 16 }}>
         <View style={{ flex: 1 }}>
           <StorageInfo database={database} chunks={chunks} inbox={inbox} />
         </View>
         <View style={{ flex: 1 }}>
           <RelationsSummary relations={audit.relations} />
         </View>
-      </Row>
+      </View>
     </View>
   );
 }

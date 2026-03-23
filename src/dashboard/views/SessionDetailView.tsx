@@ -449,9 +449,9 @@ const s = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerDivider: { width: 1, height: 16, backgroundColor: C.border },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   headerMeta: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  metaItem: { fontSize: 12, color: C.textTertiary, fontFamily: 'Space Grotesk, sans-serif' },
+  metaItem: { fontSize: 12, color: C.textTertiary, fontFamily: "'Space Grotesk', sans-serif" },
   searchWrap: { marginLeft: 'auto' as unknown as number },
   searchInput: {
     backgroundColor: C.surface2,
@@ -477,7 +477,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   statusDot: { width: 5, height: 5, borderRadius: 3 },
-  statusText: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', fontFamily: 'Space Grotesk, sans-serif' },
+  statusText: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', fontFamily: "'Space Grotesk', sans-serif" },
 
   // Back buttons
   backBtn: { paddingHorizontal: 8, paddingVertical: 4 },
@@ -515,7 +515,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  drawerTitle: { fontSize: 14, fontWeight: '700', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  drawerTitle: { fontSize: 14, fontWeight: '700', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   drawerClose: { padding: 4 },
   drawerCloseText: { fontSize: 14, color: C.textTertiary, fontWeight: '700' },
   drawerBody: { flex: 1, padding: 14 },
@@ -529,7 +529,7 @@ const s = StyleSheet.create({
     gap: 4,
   },
   subagentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  subagentId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  subagentId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   subagentMeta: { fontSize: 11, color: C.textTertiary },
 
   // Cross-view navigation links

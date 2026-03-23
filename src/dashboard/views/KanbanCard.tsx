@@ -61,7 +61,7 @@ export function KanbanCard({ task, allTasks, highlighted, onAgentHover, onAgentL
     >
       {/* Top row: ID + optional age badge */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-        <Text style={{ fontSize: 11, fontWeight: '600', color: C.brand, fontFamily: 'Space Grotesk, monospace' }}>
+        <Text style={{ fontSize: 11, fontWeight: '600', color: C.brand, fontFamily: "'Space Grotesk', monospace" }}>
           {task.id}
         </Text>
         {task.col === 'ready' && task.queueAge != null && task.queueAge > 0 && (

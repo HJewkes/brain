@@ -153,7 +153,7 @@ const rowStyles = {
     fontSize: 13,
     fontWeight: '500' as const,
     color: C.textPrimary,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
   },
   sub: {
     fontSize: 11,
@@ -293,7 +293,7 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   fontSize: 16,
   color: C.textPrimary,
-  fontFamily: 'Space Grotesk, sans-serif',
+  fontFamily: "'Space Grotesk', sans-serif",
   padding: 0,
 };
 

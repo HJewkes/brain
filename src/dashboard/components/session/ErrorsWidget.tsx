@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   count: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     color: palette.red.light,
     width: 42,

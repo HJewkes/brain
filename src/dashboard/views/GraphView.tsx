@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Card, CardHeader, CardTitle, CardContent, Badge } from '@titan-design/react-ui';
+import { Card } from '../components/shared/Card.js';
+import { Badge } from '../components/shared/Badge.js';
 import type { AuditReport, DashboardData } from '../types.js';
 import { palette, semantic } from '../tokens.js';
 
@@ -17,10 +18,10 @@ function BarChart({ title, data }: { title: string; data: Record<string, number>
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
+      <View style={s.cardHeader}>
+        <Text style={s.cardTitle}>{title}</Text>
+      </View>
+      <View style={s.cardContent}>
         {entries.length === 0 ? (
           <Text style={s.muted}>No data</Text>
         ) : (
@@ -45,7 +46,7 @@ function BarChart({ title, data }: { title: string; data: Record<string, number>
             ))}
           </View>
         )}
-      </CardContent>
+      </View>
     </Card>
   );
 }
@@ -63,14 +64,14 @@ export function GraphView({ audit }: GraphViewProps) {
         <Text style={s.title}>Knowledge Graph</Text>
         <View style={s.badges}>
           {VIEW_MODES.map((mode) => (
-            <Badge key={mode} color="neutral">{mode}</Badge>
+            <Badge key={mode} label={mode} color={semantic.text.tertiary} />
           ))}
         </View>
       </View>
 
       {/* Coming soon */}
       <Card>
-        <CardContent>
+        <View style={s.cardContent}>
           <View style={{ gap: 8 }}>
             <Text style={s.sectionTitle}>Graph visualization coming soon</Text>
             <Text style={s.body}>
@@ -86,7 +87,7 @@ export function GraphView({ audit }: GraphViewProps) {
               Requires graph data in the dashboard payload — tracked in VNM-15.28
             </Text>
           </View>
-        </CardContent>
+        </View>
       </Card>
 
       {/* Row 1: Notes by Module + Notes by Type */}
@@ -106,10 +107,10 @@ export function GraphView({ audit }: GraphViewProps) {
         </View>
         <View style={{ flex: 1 }}>
           <Card>
-            <CardHeader>
-              <CardTitle>Graph Stats</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <View style={s.cardHeader}>
+              <Text style={s.cardTitle}>Graph Stats</Text>
+            </View>
+            <View style={s.cardContent}>
               <View style={{ gap: 12 }}>
                 {[
                   { label: 'Total notes (nodes)', value: noteCount.toLocaleString() },
@@ -123,7 +124,7 @@ export function GraphView({ audit }: GraphViewProps) {
                   </View>
                 ))}
               </View>
-            </CardContent>
+            </View>
           </Card>
         </View>
       </View>
@@ -141,11 +142,27 @@ const s = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: semantic.text.primary,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
   },
   badges: {
     flexDirection: 'row',
     gap: 6,
+  },
+  cardHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: semantic.border,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: semantic.text.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cardContent: {
+    padding: 16,
   },
   sectionTitle: {
     fontSize: 15,

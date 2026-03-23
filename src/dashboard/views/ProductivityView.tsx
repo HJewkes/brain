@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   agentStatus: { fontSize: 11, color: C.textTertiary },
   agentStat: { alignItems: 'center', minWidth: 52 },
   agentStatWide: { flex: 1, minWidth: 140 },
-  agentStatVal: { fontSize: 16, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  agentStatVal: { fontSize: 16, fontWeight: '600', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   agentStatLabel: { fontSize: 10, color: C.textTertiary, textTransform: 'uppercase' },
 
   // Avatar wrapper (holds Avatar + status dot)
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  errorCount: { fontSize: 14, fontWeight: '700', color: C.error, minWidth: 32, fontFamily: 'Space Grotesk, sans-serif' },
+  errorCount: { fontSize: 14, fontWeight: '700', color: C.error, minWidth: 32, fontFamily: "'Space Grotesk', sans-serif" },
   errorName: { flex: 1, fontSize: 13, color: C.textPrimary },
   errorRateBadge: {
     backgroundColor: C.surface3,
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '700',
     color: C.textPrimary,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
   },
   resumptionSub: { fontSize: 12, color: C.textTertiary, marginTop: 4 },
 

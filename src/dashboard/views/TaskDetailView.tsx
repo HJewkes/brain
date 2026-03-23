@@ -309,7 +309,7 @@ const s = StyleSheet.create({
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  taskId: { fontSize: 22, fontWeight: '700', color: C.brand, fontFamily: 'Space Grotesk, monospace' },
+  taskId: { fontSize: 22, fontWeight: '700', color: C.brand, fontFamily: "'Space Grotesk', monospace" },
 
   title: { fontSize: 20, fontWeight: '600', color: C.textPrimary, lineHeight: 28 },
 
@@ -344,7 +344,7 @@ const s = StyleSheet.create({
   expandBtnText: { fontSize: 12, color: C.textTertiary, fontWeight: '600' },
 
   depIcon: { fontSize: 13, textAlign: 'center' },
-  depId: { fontSize: 13, fontWeight: '600', fontFamily: 'Space Grotesk, monospace' },
+  depId: { fontSize: 13, fontWeight: '600', fontFamily: "'Space Grotesk', monospace" },
   depTitle: { flex: 1, fontSize: 13, color: C.textSecondary },
 
   // Note text

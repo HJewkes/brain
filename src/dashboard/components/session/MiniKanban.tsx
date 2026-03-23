@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     borderBottomColor: C.border,
   },
   colHeadText: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 8,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     lineHeight: 8,
   },
   colCount: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     fontWeight: '700',
     opacity: 0.85,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   pill: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     fontWeight: '600',
     paddingHorizontal: 4,
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     lineHeight: 13.5,
   },
   morePill: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     fontStyle: 'italic',
     color: C.textTertiary,

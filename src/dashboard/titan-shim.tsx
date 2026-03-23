@@ -1,38 +1,74 @@
 /**
- * Local shim for @titan-design/react-ui components.
- * Uses react-native-web primitives + Titan CSS variables.
- * Replaced by the real package when ../titan-design is available.
+ * Titan shim — re-exports shared components for backward compat.
+ *
+ * Consumers that still import from @titan-design/react-ui (via vite alias)
+ * or from this file directly are served these implementations.
+ * Migrate each consumer to the shared components barrel when convenient.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import type { ViewStyle, TextStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import { palette, colors } from './tokens.js';
 
-// Re-export shared colors so consumers can import from this module.
+// Re-export shared components directly.
+export { Card } from './components/shared/Card.js';
+export { Section } from './components/shared/Section.js';
 export { C } from './components/shared/colors.js';
 
 // ---------------------------------------------------------------------------
-// Card
+// Badge
+// The shared Badge component has a different API (label + hex color).
+// This shim Badge preserves the original API (children + semantic color name)
+// for components not yet migrated.
 // ---------------------------------------------------------------------------
-export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+export type BadgeColor = 'success' | 'warning' | 'error' | 'info' | 'neutral';
+
+const BADGE_COLORS: Record<BadgeColor, { bg: string; text: string }> = {
+  success: { bg: palette.teal.dim10,   text: palette.teal.base },
+  warning: { bg: palette.amber.dim20,  text: palette.amber.base },
+  error:   { bg: palette.red.dim10,    text: palette.red.base },
+  info:    { bg: 'rgba(33,150,243,0.15)', text: palette.blue.base },
+  neutral: { bg: palette.gray.dim15,   text: colors.textSecondary },
+};
+
+export function Badge({
+  children,
+  color = 'neutral',
+}: {
+  children: React.ReactNode;
+  color?: BadgeColor;
+  variant?: string;
+  size?: string;
+}) {
+  const c = BADGE_COLORS[color] ?? BADGE_COLORS.neutral;
+  return (
+    <View style={{ backgroundColor: c.bg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' }}>
+      <Text style={{ color: c.text, fontSize: 11, fontWeight: '600' }}>{children}</Text>
+    </View>
+  );
 }
 
+// ---------------------------------------------------------------------------
+// CardHeader / CardTitle / CardContent
+// Thin wrappers kept for components that still use the shim API.
+// ---------------------------------------------------------------------------
 export function CardHeader({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.cardHeader, style]}>{children}</View>;
+  return <View style={[shimStyles.cardHeader, style]}>{children}</View>;
 }
 
 export function CardTitle({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.cardTitle}>{children}</Text>;
+  return <Text style={shimStyles.cardTitle}>{children}</Text>;
 }
 
 export function CardContent({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.cardContent, style]}>{children}</View>;
+  return <View style={[shimStyles.cardContent, style]}>{children}</View>;
 }
 
 // ---------------------------------------------------------------------------
 // Typography
 // ---------------------------------------------------------------------------
+import type { TextStyle } from 'react-native';
+
 interface TypographyProps {
   children: React.ReactNode;
   variant?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'body' | 'caption' | 'label';
@@ -67,42 +103,20 @@ export function Typography({ children, variant = 'body', color = 'primary', styl
 }
 
 // ---------------------------------------------------------------------------
-// Badge
-// ---------------------------------------------------------------------------
-export type BadgeColor = 'success' | 'warning' | 'error' | 'info' | 'neutral';
-
-const BADGE_COLORS: Record<BadgeColor, { bg: string; text: string }> = {
-  success: { bg: palette.teal.dim15,   text: palette.teal.base },
-  warning: { bg: palette.amber.dim15,  text: palette.amber.base },
-  error:   { bg: palette.red.dim12,    text: palette.red.base },
-  info:    { bg: 'rgba(33,150,243,0.15)', text: palette.blue.base },
-  neutral: { bg: palette.gray.dim15,   text: colors.textSecondary },
-};
-
-export function Badge({ children, color = 'neutral' }: { children: React.ReactNode; color?: BadgeColor }) {
-  const c = BADGE_COLORS[color] ?? BADGE_COLORS.neutral;
-  return (
-    <View style={{ backgroundColor: c.bg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' }}>
-      <Text style={{ color: c.text, fontSize: 11, fontWeight: '600' }}>{children}</Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Metric
+// Metric / MetricGroup
 // ---------------------------------------------------------------------------
 export function Metric({ label, value, delta }: { label: string; value: string | number; delta?: string }) {
   return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-      {delta && <Text style={styles.metricDelta}>{delta}</Text>}
+    <View style={shimStyles.metric}>
+      <Text style={shimStyles.metricLabel}>{label}</Text>
+      <Text style={shimStyles.metricValue}>{value}</Text>
+      {delta && <Text style={shimStyles.metricDelta}>{delta}</Text>}
     </View>
   );
 }
 
 export function MetricGroup({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.metricGroup, style]}>{children}</View>;
+  return <View style={[shimStyles.metricGroup, style]}>{children}</View>;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,9 +136,9 @@ export function Progress({ value, max = 100, color = colors.brand }: { value: nu
 // ---------------------------------------------------------------------------
 export function DataRow({ label, value, style }: { label: string; value: string | number; style?: ViewStyle }) {
   return (
-    <View style={[styles.dataRow, style]}>
-      <Text style={styles.dataRowLabel}>{label}</Text>
-      <Text style={styles.dataRowValue}>{String(value)}</Text>
+    <View style={[shimStyles.dataRow, style]}>
+      <Text style={shimStyles.dataRowLabel}>{label}</Text>
+      <Text style={shimStyles.dataRowValue}>{String(value)}</Text>
     </View>
   );
 }
@@ -133,11 +147,11 @@ export function DataRow({ label, value, style }: { label: string; value: string 
 // Table
 // ---------------------------------------------------------------------------
 export function Table({ children }: { children: React.ReactNode }) {
-  return <View style={styles.table}>{children}</View>;
+  return <View style={shimStyles.table}>{children}</View>;
 }
 
 export function TableHeader({ children }: { children: React.ReactNode }) {
-  return <View style={styles.tableHeader}>{children}</View>;
+  return <View style={shimStyles.tableHeader}>{children}</View>;
 }
 
 export function TableBody({ children }: { children: React.ReactNode }) {
@@ -145,22 +159,22 @@ export function TableBody({ children }: { children: React.ReactNode }) {
 }
 
 export function TableRow({ children }: { children: React.ReactNode }) {
-  return <View style={styles.tableRow}>{children}</View>;
+  return <View style={shimStyles.tableRow}>{children}</View>;
 }
 
 export function TableHeaderCell({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   return (
-    <View style={[styles.tableCell, style]}>
-      <Text style={styles.tableHeaderText}>{children}</Text>
+    <View style={[shimStyles.tableCell, style]}>
+      <Text style={shimStyles.tableHeaderText}>{children}</Text>
     </View>
   );
 }
 
 export function TableCell({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   return (
-    <View style={[styles.tableCell, style]}>
+    <View style={[shimStyles.tableCell, style]}>
       {typeof children === 'string' || typeof children === 'number' ? (
-        <Text style={styles.tableCellText}>{children}</Text>
+        <Text style={shimStyles.tableCellText}>{children}</Text>
       ) : (
         children
       )}
@@ -192,30 +206,6 @@ export function Grid({ children, columns = 2, gap = 16, style }: { children: Rea
 }
 
 // ---------------------------------------------------------------------------
-// Section with title
-// ---------------------------------------------------------------------------
-export function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={sectionStyles.section}>
-      <Text style={sectionStyles.title}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-const sectionStyles = StyleSheet.create({
-  section: { marginBottom: 8 },
-  title: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-});
-
-// ---------------------------------------------------------------------------
 // Typography shortcuts
 // ---------------------------------------------------------------------------
 export function Label({ children }: { children: React.ReactNode }) {
@@ -244,14 +234,7 @@ export function EmptyState({ message }: { message: string }) {
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
+const shimStyles = StyleSheet.create({
   cardHeader: {
     paddingHorizontal: 16,
     paddingVertical: 12,

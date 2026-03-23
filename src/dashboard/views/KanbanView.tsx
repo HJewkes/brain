@@ -269,5 +269,5 @@ const nativeInputStyle: React.CSSProperties = {
   fontSize: 13,
   width: 200,
   outline: 'none',
-  fontFamily: 'Inter, -apple-system, sans-serif',
+  fontFamily: "'Inter', -apple-system, sans-serif",
 };

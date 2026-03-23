@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   container: {},
   label: widgetLabel,
   summary: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 12,
     fontWeight: '700',
     color: C.textPrimary,
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   barLabel: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     fontWeight: '700',
     width: 10,
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   barCount: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     color: C.textTertiary,
     width: 32,
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   latest: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     color: C.textTertiary,
     marginTop: 4,
