@@ -3,8 +3,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardData, AuditReport, DashboardAgent } from '../types.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
-import { C, palette, component } from '../components/shared/colors.js';
+import { C, palette } from '../components/shared/colors.js';
 import { Section } from '../components/shared/Section.js';
+import { DataTable } from '../components/shared/DataTable.js';
+import { RankedList } from '../components/shared/RankedList.js';
 import {
   computeThroughput, computeLeadTimeP85, computeFlowEfficiency,
   computeWIPAge, computeAgentPerf, computeBurndown, computeResumptionStats,
@@ -65,51 +67,72 @@ function AgentAvatar({ agent }: { agent: DashboardAgent }) {
 
 // ── Agent Performance Grid ─────────────────────────────────────────────────────
 
+const AGENT_PERF_COLUMNS = [
+  { key: 'identity', label: 'Agent', flex: 0, width: 160, align: 'left' as const },
+  { key: 'done', label: 'Done', width: 52, align: 'right' as const },
+  { key: 'tokens', label: 'Tokens', flex: 1, align: 'left' as const },
+  { key: 'tools', label: 'Tools', width: 52, align: 'right' as const },
+  { key: 'errors', label: 'Errors', width: 52, align: 'right' as const },
+  { key: 'errRate', label: 'Err Rate', width: 64, align: 'right' as const },
+];
+
 function AgentPerfGrid({ perf, highlightedAgent }: { perf: AgentPerf[]; highlightedAgent?: string }) {
-  if (perf.length === 0) {
-    return <Text style={styles.emptyText}>No agents</Text>;
-  }
   return (
-    <View>
-      {perf.map(({ agent, tasksDone, errorRate }) => (
-        <View
-          key={agent.id}
-          style={[
-            styles.agentRow,
-            agent.name === highlightedAgent && styles.agentRowHighlighted,
-          ]}
-        >
-          <View style={styles.agentIdentity}>
-            <AgentAvatar agent={agent} />
-            <View style={styles.agentMeta}>
-              <Pressable onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(agent.name)}`; }}>
-                <Text style={[styles.agentName, styles.agentNameLink]}>{agent.name}</Text>
-              </Pressable>
-              <Text style={styles.agentStatus}>{agent.status}</Text>
-            </View>
-          </View>
-          <View style={styles.agentStat}>
-            <Text style={styles.agentStatVal}>{tasksDone}</Text>
-            <Text style={styles.agentStatLabel}>Done</Text>
-          </View>
-          <View style={styles.agentStatWide}>
-            <TokenGauge tokensIn={agent.tokensIn} tokensOut={agent.tokensOut} />
-          </View>
-          <View style={styles.agentStat}>
-            <Text style={styles.agentStatVal}>{agent.toolCalls}</Text>
-            <Text style={styles.agentStatLabel}>Tools</Text>
-          </View>
-          <View style={styles.agentStat}>
-            <Text style={[styles.agentStatVal, agent.errors > 0 && styles.errorVal]}>{agent.errors}</Text>
-            <Text style={styles.agentStatLabel}>Errors</Text>
-          </View>
-          <View style={styles.agentStat}>
-            <Text style={[styles.agentStatVal, errorRate > 5 && styles.errorVal]}>{errorRate}%</Text>
-            <Text style={styles.agentStatLabel}>Err Rate</Text>
-          </View>
-        </View>
-      ))}
-    </View>
+    <DataTable
+      columns={AGENT_PERF_COLUMNS}
+      data={perf}
+      getKey={p => p.agent.id}
+      highlightRow={p => p.agent.name === highlightedAgent}
+      emptyText="No agents"
+      renderCell={(p, key) => {
+        switch (key) {
+          case 'identity':
+            return (
+              <View style={styles.agentIdentity}>
+                <AgentAvatar agent={p.agent} />
+                <View style={styles.agentMeta}>
+                  <Pressable onPress={() => { window.location.hash = `#agents?agent=${encodeURIComponent(p.agent.name)}`; }}>
+                    <Text style={[styles.agentName, styles.agentNameLink]}>{p.agent.name}</Text>
+                  </Pressable>
+                  <Text style={styles.agentStatus}>{p.agent.status}</Text>
+                </View>
+              </View>
+            );
+          case 'done':
+            return (
+              <View style={styles.agentStat}>
+                <Text style={styles.agentStatVal}>{p.tasksDone}</Text>
+                <Text style={styles.agentStatLabel}>Done</Text>
+              </View>
+            );
+          case 'tokens':
+            return <TokenGauge tokensIn={p.agent.tokensIn} tokensOut={p.agent.tokensOut} />;
+          case 'tools':
+            return (
+              <View style={styles.agentStat}>
+                <Text style={styles.agentStatVal}>{p.agent.toolCalls}</Text>
+                <Text style={styles.agentStatLabel}>Tools</Text>
+              </View>
+            );
+          case 'errors':
+            return (
+              <View style={styles.agentStat}>
+                <Text style={[styles.agentStatVal, p.agent.errors > 0 && styles.errorVal]}>{p.agent.errors}</Text>
+                <Text style={styles.agentStatLabel}>Errors</Text>
+              </View>
+            );
+          case 'errRate':
+            return (
+              <View style={styles.agentStat}>
+                <Text style={[styles.agentStatVal, p.errorRate > 5 && styles.errorVal]}>{p.errorRate}%</Text>
+                <Text style={styles.agentStatLabel}>Err Rate</Text>
+              </View>
+            );
+          default:
+            return null;
+        }
+      }}
+    />
   );
 }
 
@@ -165,28 +188,21 @@ function BurndownChart({ points }: { points: BurndownPoint[] }) {
 // ── Error Hotspots ─────────────────────────────────────────────────────────────
 
 function ErrorHotspots({ perf }: { perf: AgentPerf[] }) {
-  const sorted = perf
+  const items = perf
     .filter(p => p.agent.errors > 0)
-    .sort((a, b) => b.agent.errors - a.agent.errors);
-
-  if (sorted.length === 0) {
-    return <Text style={styles.emptyText}>No errors recorded</Text>;
-  }
+    .sort((a, b) => b.agent.errors - a.agent.errors)
+    .map(({ agent, errorRate }) => ({
+      label: agent.name,
+      value: agent.errors,
+      badge: `${errorRate}% err`,
+      badgeHighlight: errorRate > 5,
+    }));
 
   return (
-    <View>
-      {sorted.map(({ agent, errorRate }) => (
-        <View key={agent.id} style={styles.errorRow}>
-          <Text style={styles.errorCount}>{agent.errors}x</Text>
-          <Text style={styles.errorName}>{agent.name}</Text>
-          <View style={[styles.errorRateBadge, errorRate > 5 && styles.errorRateBadgeHigh]}>
-            <Text style={[styles.errorRateText, errorRate > 5 && styles.errorRateTextHigh]}>
-              {errorRate}% err
-            </Text>
-          </View>
-        </View>
-      ))}
-    </View>
+    <RankedList
+      items={items}
+      emptyText="No errors recorded"
+    />
   );
 }
 
@@ -225,7 +241,7 @@ function ResumptionSection({ stats }: { stats: ResumptionStats }) {
         ))}
       </View>
 
-      {/* Top tasks table */}
+      {/* High-resumption tasks */}
       <View style={[styles.resumptionCard, styles.resumptionCardWide]}>
         <Text style={styles.resumptionCardTitle}>High-Resumption Tasks</Text>
         {stats.topTasks.map(row => (
@@ -301,26 +317,12 @@ const styles = StyleSheet.create({
   colRight: { flex: 1, minWidth: 220 },
 
   // Agent grid rows
-  agentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
-  agentRowHighlighted: {
-    backgroundColor: palette.brand.dim06,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-  },
   agentIdentity: { flexDirection: 'row', alignItems: 'center', gap: 10, width: 160 },
   agentMeta: { flex: 1 },
   agentName: { fontSize: 13, fontWeight: '600', color: C.textPrimary },
   agentNameLink: { color: C.brand, textDecorationLine: 'underline', textDecorationColor: C.brand + '66' },
   agentStatus: { fontSize: 11, color: C.textTertiary },
   agentStat: { alignItems: 'center', minWidth: 52 },
-  agentStatWide: { flex: 1, minWidth: 140 },
   agentStatVal: { fontSize: 16, fontWeight: '600', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   agentStatLabel: { fontSize: 10, color: C.textTertiary, textTransform: 'uppercase' },
 
@@ -344,26 +346,7 @@ const styles = StyleSheet.create({
   // Chart
   chartWrap: { width: '100%' },
 
-  // Error hotspots
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
-  errorCount: { fontSize: 14, fontWeight: '700', color: C.error, minWidth: 32, fontFamily: "'Space Grotesk', sans-serif" },
-  errorName: { flex: 1, fontSize: 13, color: C.textPrimary },
-  errorRateBadge: {
-    backgroundColor: C.surface3,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  errorRateBadgeHigh: { backgroundColor: component.statCard.negativeDeltaBg },
-  errorRateText: { fontSize: 11, color: C.textSecondary },
-  errorRateTextHigh: { color: C.error, fontWeight: '600' },
+  // Error value highlight
   errorVal: { color: C.error },
 
   // Resumption analytics
@@ -416,7 +399,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  resumptionBadgeHigh: { backgroundColor: component.statCard.negativeDeltaBg },
+  resumptionBadgeHigh: { backgroundColor: 'rgba(239,68,68,0.12)' },
   resumptionBadgeText: { fontSize: 11, color: C.textSecondary, fontWeight: '600' },
   resumptionBadgeTextHigh: { color: C.error },
 });

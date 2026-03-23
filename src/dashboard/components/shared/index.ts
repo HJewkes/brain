@@ -1,3 +1,5 @@
+export { AppSidebar } from './AppSidebar.js';
+export type { AppSidebarProps } from './AppSidebar.js';
 export { Avatar } from './Avatar.js';
 export { DetailTopbar } from './DetailTopbar.js';
 export type {
