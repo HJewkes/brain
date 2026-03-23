@@ -2,6 +2,9 @@
   "enforcement": {
     "ownership": true,
     "dod": true,
+    "gitSafety": true,
+    "worktreeIsolation": true,
+    "brainResources": true,
     "wipLimit": 4,
     "workspaceClean": true,
     "complexityLimit": 30
@@ -10,5 +13,8 @@
     "global": "~/.brain",
     "local": ".brain"
   },
-  "ownershipManifest": ".claude/ownership.json"
+  "ownershipManifest": ".claude/ownership.json",
+  "browserGate": {
+    "agent": "deploy-agent"
+  }
 }

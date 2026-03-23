@@ -99,6 +99,27 @@ describe('activity notes on state transitions', () => {
     expect(meta.newly_eligible).toContain('TST-01.02');
   });
 
+  it('activity note captures agent_id from env', async () => {
+    process.env.BRAIN_AGENT_ID = 'test-agent-123';
+    try {
+      await createTestTask(db, config, embedder, {
+        project: 'TST',
+        workstream: 1,
+        name: 'Agent task',
+      });
+      await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');
+
+      const activities = db.getAllNotes().filter((n) => {
+        const meta = JSON.parse(n.metadata ?? '{}');
+        return meta.activity_type === 'claim';
+      });
+      const meta = JSON.parse(activities[0].metadata!);
+      expect(meta.agent_id).toBe('test-agent-123');
+    } finally {
+      delete process.env.BRAIN_AGENT_ID;
+    }
+  });
+
   it('activity note has embed_status: queued', async () => {
     await createTestTask(db, config, embedder, { project: 'TST', workstream: 1, name: 'Test' });
     await updateTaskStatus(db, config, embedder, 'TST-01.01', 'claimed');

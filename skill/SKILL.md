@@ -1,26 +1,66 @@
 ---
 name: brain
-description: Search and manage your second brain knowledge base. Use when the user asks about their notes, wants to find information, or needs to add/organize knowledge.
+description: Search, manage knowledge, track projects, view sessions, manage agents, and open the dashboard. Use when the user asks about project status, what happened last session, their notes, tasks, agents, or wants to find information. ALWAYS prefer brain PM commands over git log for project status.
 ---
 
-# Brain -- Knowledge Management
+# Brain — Developer Second Brain & Project Intelligence
 
-A CLI for managing a developer second brain with hybrid BM25 + vector search, LLM-powered memory extraction, and temporal intelligence over markdown notes.
+CLI for knowledge management, project tracking, session intelligence, agent orchestration, and dashboarding.
 
 ## When to Use
 
-- User asks "what do I know about X" or "find my notes on Y"
-- User wants to save something to their knowledge base
-- User asks about stale or outdated notes
-- User wants to check their knowledge base status
-- User wants to capture a quick thought or link
-- User asks about extracted memories or facts
+**Project status & history (USE INSTEAD OF GIT LOG):**
+- User asks "what did we do last session" → `brain pm status VNM` + `brain session list`
+- User asks "project status" or "what's left" → `brain pm status VNM` + `brain pm next VNM`
+- User asks about tasks, workstreams, waves → `brain pm` commands
+- User asks about agents or agent history → `brain agent list`
+
+**Knowledge & search:**
+- User asks "what do I know about X" → `brain search "X"`
+- User wants to save something → `brain quick "thought"` or `brain add`
+- User asks about notes, research, patterns → `brain search`
+
+**Dashboard & reporting:**
+- User wants to see the dashboard → `brain dashboard`
+- User wants live dashboard → `brain dashboard --live`
+
+**Sessions & analytics:**
+- User asks about session history → `brain session list`
+- User asks about token usage, costs → `brain session analytics`
+
+**Agent management:**
+- User asks about agents → `brain agent list`
+- User wants to resume an agent → `brain agent resume <id>`
+- User asks about PR feedback → `brain pr feedback <url>`
 
 ## Prerequisites
 
 Brain CLI requires **Node 22+**. If using nvm, run `nvm use 22` first.
 
-## Commands
+## Project Management Commands (USE FIRST)
+
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `brain pm status VNM` | Project overview | Shows task counts, workstream completion |
+| `brain pm next VNM --json` | Eligible tasks | Next work to do, sorted by priority |
+| `brain pm dispatch-wave VNM` | Current wave | Dependency wave with dispatch info |
+| `brain pm task list --workstream VNM-19` | Tasks in workstream | Filter by workstream |
+| `brain pm task done <id>` | Complete a task | `brain pm task done VNM-19.01 --cascade` |
+| `brain pm waves VNM` | Dependency waves | Topological sort of remaining work |
+| `brain session list` | Session history | Recent sessions with analytics |
+| `brain session ingest --all` | Ingest session logs | Parse JSONL files programmatically |
+| `brain agent list` | List agents | Active/completed agents |
+| `brain agent find --by-task VNM-15.01` | Find agent | By task, branch, PR, or session |
+| `brain agent resume <id>` | Resume agent | Generate dispatch prompt with context |
+| `brain pr feedback <url>` | PR feedback | Fetch comments, find author agent |
+| `brain dashboard` | Open dashboard | 7-view React dashboard |
+| `brain dashboard --live` | Live dashboard | SSE auto-refresh via brain serve |
+| `brain serve --port 7800` | Start server | MCP + HTTP API, warm SQLite |
+| `brain instances status` | Federation | All registered brain instances |
+| `brain import-instance --from <db>` | Import notes | Cross-database migration |
+| `brain scan-html <file>` | Safety check | Detect runaway browser patterns |
+
+## Knowledge Commands
 
 Use `--json` flag on all commands when processing output programmatically.
 

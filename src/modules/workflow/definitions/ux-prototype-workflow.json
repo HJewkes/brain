@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "name": "ux-prototype",
+  "description": "UX-first HTML prototyping: ideate → prototype → review → iterate → extract → implement",
+  "steps": [
+    {
+      "id": "ideate",
+      "name": "Ideation",
+      "category": "planning",
+      "mode": "human",
+      "gates": [
+        { "type": "human-approval", "description": "Requirements defined and approved before prototype work begins" }
+      ],
+      "metadata": {
+        "artifacts": ["requirements.md"],
+        "description": "Define the UX problem, gather requirements, sketch concepts"
+      }
+    },
+    {
+      "id": "prototype",
+      "name": "Prototype",
+      "category": "implementation",
+      "template": "ux-prototype-builder",
+      "mode": "agent",
+      "gates": [
+        { "type": "check", "description": "Prototype renders in browser without errors" },
+        { "type": "check", "description": "Mock data is realistic and representative" }
+      ],
+      "metadata": {
+        "artifacts": ["prototype.html"],
+        "description": "Build standalone HTML prototype with design system aesthetics and mock data"
+      }
+    },
+    {
+      "id": "review",
+      "name": "Review",
+      "category": "review",
+      "template": "ux-prototype-reviewer",
+      "mode": "agent",
+      "gates": [
+        { "type": "human-approval", "description": "UX quality approved before implementation begins" }
+      ],
+      "metadata": {
+        "artifacts": ["review-notes.md", "screenshots/*.png"],
+        "description": "Review prototype via Playwright screenshots, evaluate UX quality"
+      }
+    },
+    {
+      "id": "iterate",
+      "name": "Iterate",
+      "category": "implementation",
+      "template": "ux-prototype-builder",
+      "mode": "agent",
+      "gates": [
+        { "type": "iteration", "maxIterations": 3, "description": "Max 3 iteration rounds before escalation" },
+        { "type": "check", "description": "All review feedback addressed" }
+      ],
+      "metadata": {
+        "description": "Apply review feedback, refine prototype"
+      }
+    },
+    {
+      "id": "extract",
+      "name": "Extract Requirements",
+      "category": "planning",
+      "mode": "agent",
+      "gates": [
+        { "type": "check", "description": "Implementation spec is complete with data model, API endpoints, and component structure" }
+      ],
+      "metadata": {
+        "artifacts": ["implementation-spec.md"],
+        "description": "From approved prototype, extract data model needs, API endpoints, and component structure"
+      }
+    },
+    {
+      "id": "implement",
+      "name": "Implement",
+      "category": "implementation",
+      "template": "implementation-compact",
+      "mode": "agent",
+      "gates": [
+        { "type": "check", "description": "Tests pass" },
+        { "type": "check", "description": "Implementation matches approved prototype visually" }
+      ],
+      "metadata": {
+        "description": "Build the real React components targeting the validated design"
+      }
+    }
+  ],
+  "edges": [
+    { "from": "ideate", "to": "prototype" },
+    { "from": "prototype", "to": "review" },
+    { "from": "review", "to": "extract", "condition": "approved" },
+    { "from": "review", "to": "iterate", "condition": "needs_changes" },
+    { "from": "iterate", "to": "review" },
+    { "from": "extract", "to": "implement" }
+  ],
+  "parameters": [
+    { "name": "featureName", "description": "Name of the feature being prototyped", "required": true },
+    { "name": "designSystem", "description": "Design system reference (e.g. path to design tokens or reference URL)", "required": false, "default": "brain-dashboard" },
+    { "name": "mockDataSpec", "description": "Description of what mock data to generate for the prototype", "required": false },
+    { "name": "reviewCriteria", "description": "Specific UX criteria to evaluate during review", "required": false },
+    { "name": "prototypePath", "description": "Output path for the generated HTML prototype file", "required": false },
+    { "name": "iterationNumber", "description": "Current iteration count (tracked automatically)", "required": false, "default": "0" }
+  ]
+}

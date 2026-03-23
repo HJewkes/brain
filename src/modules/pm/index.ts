@@ -21,6 +21,7 @@ import { createReviewCommands } from './commands/review.js';
 import { createPullCommand } from './commands/pull.js';
 import { createRenamePrefixCommand } from './commands/rename-prefix.js';
 import { createBurndownCommand } from './commands/burndown.js';
+import { createDispatchWaveCommand } from './commands/dispatch-wave.js';
 import { PmContentHandler } from './content-handler.js';
 
 export type EntityType = 'task' | 'workstream' | 'project';
@@ -292,6 +293,22 @@ export const pmModule: BrainModule = {
       },
     });
 
+    ctx.registerMigration({
+      version: 2,
+      description: 'Add activity note indexes for dashboard flow metrics',
+      up: (db) => {
+        const rawDb = db as { exec(sql: string): void };
+        rawDb.exec(`
+          CREATE INDEX IF NOT EXISTS idx_pm_activity_task
+            ON notes(json_extract(metadata, '$.task_id'))
+            WHERE module = 'pm' AND json_extract(metadata, '$.activity_type') IS NOT NULL;
+          CREATE INDEX IF NOT EXISTS idx_pm_activity_type
+            ON notes(json_extract(metadata, '$.activity_type'))
+            WHERE module = 'pm' AND type = 'activity';
+        `);
+      },
+    });
+
     const pmCmd = createPmCommand();
     pmCmd.addCommand(createWorkstreamCommands());
     pmCmd.addCommand(createTaskCommands());
@@ -317,6 +334,7 @@ export const pmModule: BrainModule = {
     pmCmd.addCommand(createPullCommand());
     pmCmd.addCommand(createRenamePrefixCommand());
     pmCmd.addCommand(createBurndownCommand());
+    pmCmd.addCommand(createDispatchWaveCommand());
 
     // Catch unknown commands with intelligent resolution
     pmCmd.on('command:*', async (operands: string[]) => {

@@ -30,6 +30,7 @@ import { generateClaim, validateClaimToken } from '../engine/claims.js';
 import { validateTransition } from '../engine/state-machine.js';
 import { readTaskBody } from '../engine/dispatch.js';
 import { checkNamespaceMismatch } from '../engine/routing.js';
+import { computeDispatchWave } from './dispatch-wave.js';
 
 function outputResult(data: unknown, json: boolean, filters?: Record<string, string>): void {
   if (json) {
@@ -443,6 +444,7 @@ export function createTaskCommands(): Command {
     .description('Mark task as done (low-level — use "brain pm complete" for full impact tracking)')
     .argument('<id>', 'Task display ID')
     .option('--token <token>', 'Claim token for verification')
+    .option('--cascade', 'Show newly eligible tasks after completion')
     .option('--json', 'Output JSON')
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
@@ -546,6 +548,22 @@ export function createTaskCommands(): Command {
           return;
         }
         outputResult(result.data, !!opts.json);
+
+        if (opts.cascade) {
+          const taskProject = result.data.project;
+          const wave = computeDispatchWave(svc.db, taskProject);
+          const eligible = wave.eligible;
+          if (eligible.length > 0) {
+            process.stdout.write(
+              `\nPost-merge cascade: ${eligible.length} task${eligible.length !== 1 ? 's' : ''} now eligible\n`
+            );
+            for (const t of eligible) {
+              process.stdout.write(`  ${t.displayId} [${t.priority}] ${t.title}\n`);
+            }
+          } else {
+            process.stdout.write('\nPost-merge cascade: no new tasks unblocked\n');
+          }
+        }
       });
     });
 

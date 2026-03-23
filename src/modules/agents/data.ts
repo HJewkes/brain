@@ -170,6 +170,58 @@ export function getAgentContext(
   return ctx;
 }
 
+/** Find an agent by PM task display_id. */
+export function findAgentByTask(db: unknown, taskDisplayId: string): AgentRecord | null {
+  try {
+    const raw = toRaw(db);
+    const row = raw.prepare('SELECT * FROM agents WHERE brain_task = ?').get(taskDisplayId);
+    return row ? (row as AgentRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Find the most recent agent on a given branch. */
+export function findAgentByBranch(db: unknown, branch: string): AgentRecord | null {
+  try {
+    const raw = toRaw(db);
+    const row = raw
+      .prepare('SELECT * FROM agents WHERE branch = ? ORDER BY rowid DESC LIMIT 1')
+      .get(branch);
+    return row ? (row as AgentRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Find an agent whose context contains the given PR URL. */
+export function findAgentByPR(db: unknown, prUrl: string): AgentRecord | null {
+  try {
+    const raw = toRaw(db);
+    const row = raw
+      .prepare("SELECT * FROM agents WHERE json_extract(context, '$.pr_url') = ?")
+      .get(prUrl);
+    return row ? (row as AgentRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Find an agent whose context contains the given session_id. */
+export function findAgentBySession(db: unknown, sessionId: string): AgentRecord | null {
+  try {
+    const raw = toRaw(db);
+    const row = raw
+      .prepare(
+        "SELECT * FROM agents WHERE json_extract(context, '$.session_id') = ? ORDER BY rowid DESC LIMIT 1"
+      )
+      .get(sessionId);
+    return row ? (row as AgentRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Merge a key/value pair into an agent's context JSON. */
 export function setAgentContext(db: unknown, agentId: string, key: string, value: unknown): void {
   const raw = toRaw(db);

@@ -13,6 +13,7 @@ interface ActivityInput {
   taskNoteId: string;
   fromState: string;
   toState: string;
+  agentId?: string;
   newlyEligible?: string[];
   summary?: string;
 }
@@ -46,6 +47,10 @@ export async function createActivityNote(
     `created: ${now}`,
     `modified: ${now}`,
   ];
+
+  if (input.agentId) {
+    fmLines.splice(fmLines.length, 0, `agent_id: ${input.agentId}`);
+  }
 
   if (input.newlyEligible && input.newlyEligible.length > 0) {
     fmLines.push('newly_eligible:');

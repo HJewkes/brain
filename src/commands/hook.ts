@@ -1,31 +1,14 @@
 import { Command } from '@commander-js/extra-typings';
 import { isJsonFormat } from './format.js';
-import { HookRegistry, resolveHookConfig } from '../hooks/index.js';
-import { ownershipCheck } from '../hooks/checks/ownership.js';
-import { gitSafetyCheck } from '../hooks/checks/git-safety.js';
-import { workspaceCheck } from '../hooks/checks/workspace.js';
-import { dodCheck } from '../hooks/checks/dod.js';
-import { wipCheck } from '../hooks/checks/wip.js';
-import { worktreeIsolationCheck } from '../hooks/checks/worktree-isolation.js';
-import { workflowResourceCheck } from '../hooks/checks/workflow-resource.js';
-import { loadModules } from '../modules/loader.js';
-import { pmModule } from '../modules/pm/index.js';
-import { workflowModule } from '../modules/workflow/index.js';
-import { sessionsModule } from '../modules/sessions/index.js';
-import { agentsModule } from '../modules/agents/index.js';
-import { codebaseModule } from '../modules/codebase/index.js';
+import { resolveHookConfig } from '../hooks/index.js';
+import {
+  VALID_HOOK_EVENTS,
+  buildRegistry,
+  registerModuleHandlers,
+  dispatchHookEvent,
+} from '../hooks/dispatch.js';
 import { hookInstallCommand } from './hook-install.js';
-import type { HookEvent, HookInput, HookResult } from '../hooks/types.js';
-
-const VALID_EVENTS = new Set<HookEvent>([
-  'pre-tool-use',
-  'post-tool-use',
-  'prompt-submit',
-  'notification',
-  'task-completed',
-  'agent-done',
-  'session-start',
-]);
+import type { HookEvent, HookResult } from '../hooks/types.js';
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -46,59 +29,20 @@ function outputResult(result: HookResult): void {
   process.exitCode = result.exitCode;
 }
 
-function createRegistry(): HookRegistry {
-  const registry = new HookRegistry();
-  registry.register(gitSafetyCheck);
-  registry.register(ownershipCheck);
-  registry.register(workspaceCheck);
-  registry.register(dodCheck);
-  registry.register(wipCheck);
-  registry.register(worktreeIsolationCheck);
-  registry.register(workflowResourceCheck);
-  return registry;
-}
-
-async function registerModuleHandlers(registry: HookRegistry): Promise<void> {
-  const { registry: moduleRegistry } = await loadModules({
-    modules: [pmModule, workflowModule, sessionsModule, agentsModule, codebaseModule],
-  });
-  for (const { handler } of moduleRegistry.getHookHandlers()) {
-    registry.register(handler);
-  }
-}
-
 const dispatchSubcommand = new Command('dispatch')
   .description('Run all enabled checks for a hook event')
   .argument('<event>', 'Hook event (pre-tool-use, prompt-submit, task-completed, agent-done)')
   .action(async (event: string) => {
-    if (!VALID_EVENTS.has(event as HookEvent)) {
+    if (!VALID_HOOK_EVENTS.has(event as HookEvent)) {
       process.stderr.write(
-        `Unknown hook event: ${event}. Valid: ${[...VALID_EVENTS].join(', ')}\n`
+        `Unknown hook event: ${event}. Valid: ${[...VALID_HOOK_EVENTS].join(', ')}\n`
       );
       process.exitCode = 1;
       return;
     }
 
     const raw = await readStdin();
-    let parsed: Record<string, unknown> = {};
-    try {
-      parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    } catch {
-      // non-JSON stdin is fine
-    }
-
-    const config = resolveHookConfig(process.cwd());
-    const registry = createRegistry();
-    await registerModuleHandlers(registry);
-
-    const input: HookInput = {
-      event: event as HookEvent,
-      raw,
-      parsed,
-      cwd: process.cwd(),
-    };
-
-    outputResult(registry.dispatch(event as HookEvent, input, config));
+    outputResult(await dispatchHookEvent(event as HookEvent, raw, process.cwd()));
   });
 
 const statusSubcommand = new Command('status')
@@ -106,7 +50,7 @@ const statusSubcommand = new Command('status')
   .option('--json', 'Output as JSON')
   .action(async (opts, cmd) => {
     const config = resolveHookConfig(process.cwd());
-    const registry = createRegistry();
+    const registry = buildRegistry();
     await registerModuleHandlers(registry);
 
     const handlers = registry.getHandlers();
