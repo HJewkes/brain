@@ -1,14 +1,38 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  Badge,
-} from '@titan-design/react-ui';
-import type { BadgeColor } from '@titan-design/react-ui';
-import { C } from './shared/colors.js';
+import { Card } from './shared/Card.js';
+import { C, palette } from './shared/colors.js';
+
+type BadgeColor = 'success' | 'warning' | 'error' | 'info' | 'neutral';
+
+const BADGE_COLORS: Record<BadgeColor, { bg: string; text: string }> = {
+  success: { bg: palette.teal.dim10,   text: palette.teal.base },
+  warning: { bg: palette.amber.dim20,  text: palette.amber.base },
+  error:   { bg: palette.red.dim10,    text: palette.red.base },
+  info:    { bg: 'rgba(33,150,243,0.15)', text: palette.blue.base },
+  neutral: { bg: palette.gray.dim15,   text: C.textSecondary },
+};
+
+function CardHeader({ children }: { children: React.ReactNode }) {
+  return <View style={s.cardHeader}>{children}</View>;
+}
+
+function CardTitle({ children }: { children: React.ReactNode }) {
+  return <Text style={s.cardTitle}>{children}</Text>;
+}
+
+function CardContent({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <View style={[s.cardContent, style]}>{children}</View>;
+}
+
+function Badge({ children, color = 'neutral' }: { children: React.ReactNode; color?: BadgeColor }) {
+  const c = BADGE_COLORS[color] ?? BADGE_COLORS.neutral;
+  return (
+    <View style={{ backgroundColor: c.bg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' }}>
+      <Text style={{ color: c.text, fontSize: 11, fontWeight: '600' }}>{children}</Text>
+    </View>
+  );
+}
 
 interface Agent {
   name?: string;
@@ -38,7 +62,7 @@ function statusColor(status?: string): BadgeColor {
 
 export function AgentStatus({ agents = [], auditAgents: _auditAgents }: AgentStatusProps) {
   return (
-    <Card variant="elevated" elevation={2}>
+    <Card>
       <CardHeader>
         <CardTitle>Agent Status</CardTitle>
       </CardHeader>
@@ -50,7 +74,7 @@ export function AgentStatus({ agents = [], auditAgents: _auditAgents }: AgentSta
             <View key={i} style={s.agentRow}>
               <View style={s.rowTop}>
                 <Text style={s.agentName}>{agent.name ?? 'unnamed'}</Text>
-                <Badge variant="subtle" color={statusColor(agent.status)} size="sm">
+                <Badge color={statusColor(agent.status)}>
                   {agent.status ?? 'unknown'}
                 </Badge>
               </View>
@@ -69,6 +93,9 @@ export function AgentStatus({ agents = [], auditAgents: _auditAgents }: AgentSta
 }
 
 const s = StyleSheet.create({
+  cardHeader: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  cardTitle: { fontSize: 14, fontWeight: '600', color: C.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardContent: { padding: 16 },
   emptyText: { fontSize: 14, color: C.textTertiary },
   agentRow: {
     backgroundColor: C.surface2,
