@@ -9,7 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       'react-native': 'react-native-web',
-      '@titan-design/react-ui': path.resolve(__dirname, 'titan-shim.tsx'),
     },
     extensions: ['.web.tsx', '.web.ts', '.tsx', '.ts', '.web.js', '.js'],
   },

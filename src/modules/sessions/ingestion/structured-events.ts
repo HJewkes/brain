@@ -81,11 +81,7 @@ function buildTurns(analytics: SessionAnalytics): ConversationTurn[] {
   // Pair user and assistant texts into conversation turns
   const userTexts = analytics.userTexts ?? [];
   const assistantTexts = analytics.assistantTexts ?? [];
-  const maxTurns = Math.max(
-    userTexts.length,
-    assistantTexts.length,
-    analytics.assistantTurns,
-  );
+  const maxTurns = Math.max(userTexts.length, assistantTexts.length, analytics.assistantTurns);
 
   for (let i = 0; i < maxTurns; i++) {
     const userText = userTexts[i];
@@ -206,9 +202,8 @@ function extractAgentEvents(analytics: SessionAnalytics): AgentEvent[] {
 
     for (const pattern of AGENT_COMMANDS) {
       if (!cmd.includes(pattern)) continue;
-      const type = cmd.includes('dispatch') || cmd.includes('spawn')
-        ? 'agent_spawn'
-        : 'agent_complete';
+      const type =
+        cmd.includes('dispatch') || cmd.includes('spawn') ? 'agent_spawn' : 'agent_complete';
       events.push({
         type,
         detail: cmd.slice(0, 200),

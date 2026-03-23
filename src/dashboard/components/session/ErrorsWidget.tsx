@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C, palette } from '../shared/colors.js';
+import { palette } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import { sectionH3 } from './shared-styles.js';
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   count: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     color: palette.red.light,
     width: 42,

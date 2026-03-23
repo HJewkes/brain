@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, SessionDetailData, SessionTurn, SessionToolCall, SubagentSummary } from '../types.js';
 import { C, palette, semantic, component } from '../components/shared/colors.js';
+import { DetailTopbar } from '../components/shared/DetailTopbar.js';
 import { statusColor } from '../utils/semantic-colors.js';
 import { fmtTime, fmtTimestamp, fmtDuration, fmtGap } from '../utils/formatting.js';
 import {
@@ -140,7 +141,7 @@ function buildSummaryProps(
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components: Header
+// Sub-components: Header — built with the shared DetailTopbar molecule
 // ---------------------------------------------------------------------------
 
 function SessionHeader({ data, searchQuery, onSearchChange }: {
@@ -151,38 +152,22 @@ function SessionHeader({ data, searchQuery, onSearchChange }: {
   const { session } = data;
   const sessionStatusColor = statusColor(session.status);
 
+  const metadata = [
+    ...(session.project ? [{ label: 'project', value: session.project }] : []),
+    { label: 'started', value: fmtTimestamp(session.startedAt) },
+    ...(session.agentModel ? [{ label: 'model', value: session.agentModel }] : []),
+  ];
+
   return (
-    <View style={s.header}>
-      <View style={s.headerLeft}>
-        <Pressable onPress={() => { window.location.hash = '#sessions'; }} style={s.backBtn}>
-          <Text style={s.backBtnText}>← Sessions</Text>
-        </Pressable>
-        <View style={s.headerDivider} />
-        <Text style={s.headerTitle}>{session.displayId}</Text>
-        <View style={[s.statusBadge, { backgroundColor: `${sessionStatusColor}1A`, borderColor: `${sessionStatusColor}40` }]}>
-          <View style={[s.statusDot, { backgroundColor: sessionStatusColor }]} />
-          <Text style={[s.statusText, { color: sessionStatusColor }]}>{session.status}</Text>
-        </View>
-      </View>
-      <View style={s.headerMeta}>
-        {session.project && (
-          <Text style={s.metaItem}>{session.project}</Text>
-        )}
-        <Text style={s.metaItem}>{fmtTimestamp(session.startedAt)}</Text>
-        {session.agentModel && (
-          <Text style={s.metaItem}>{session.agentModel}</Text>
-        )}
-      </View>
-      <View style={s.searchWrap}>
-        <TextInput
-          style={s.searchInput}
-          value={searchQuery}
-          onChangeText={onSearchChange}
-          placeholder="Search turns..."
-          placeholderTextColor={C.textTertiary}
-        />
-      </View>
-    </View>
+    <DetailTopbar
+      title={session.displayId}
+      backLabel="Sessions"
+      onBack={() => { window.location.hash = '#sessions'; }}
+      badge={{ label: session.status, color: sessionStatusColor }}
+      metadata={metadata}
+      searchQuery={searchQuery}
+      onSearchChange={onSearchChange}
+    />
   );
 }
 
@@ -275,7 +260,7 @@ function SubagentPanel({ subagents, onClose }: {
 // Main view
 // ---------------------------------------------------------------------------
 
-export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewProps) {
+export function SessionDetailView({ sessionId, dashboard: _dashboard }: SessionDetailViewProps) {
   const [data, setData] = useState<SessionDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -435,38 +420,11 @@ const s = StyleSheet.create({
   errorDetail: { fontSize: 13, color: C.textTertiary },
   emptyText: { fontSize: 13, color: C.textTertiary, fontStyle: 'italic' },
 
-  // Header
-  header: {
-    backgroundColor: C.surface1,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerDivider: { width: 1, height: 16, backgroundColor: C.border },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
-  headerMeta: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  metaItem: { fontSize: 12, color: C.textTertiary, fontFamily: 'Space Grotesk, sans-serif' },
-  searchWrap: { marginLeft: 'auto' as unknown as number },
-  searchInput: {
-    backgroundColor: C.surface2,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 6,
-    color: C.textPrimary,
-    fontSize: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    width: 200,
-    outlineStyle: 'none' as never,
-  },
+  // Back button (error state only — header back button lives in DetailTopbar)
+  backBtnLarge: { backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, marginTop: 8 },
+  backBtnText: { fontSize: 12, color: C.textTertiary, fontWeight: '500' },
 
-  // Status badge (header)
+  // Status badge — used by SubagentPanel drawer
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -476,13 +434,7 @@ const s = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  statusDot: { width: 5, height: 5, borderRadius: 3 },
-  statusText: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', fontFamily: 'Space Grotesk, sans-serif' },
-
-  // Back buttons
-  backBtn: { paddingHorizontal: 8, paddingVertical: 4 },
-  backBtnLarge: { backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, marginTop: 8 },
-  backBtnText: { fontSize: 12, color: C.textTertiary, fontWeight: '500' },
+  statusText: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', fontFamily: "'Space Grotesk', sans-serif" },
 
   // Timeline
   timeline: { flex: 1 },
@@ -515,7 +467,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  drawerTitle: { fontSize: 14, fontWeight: '700', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  drawerTitle: { fontSize: 14, fontWeight: '700', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   drawerClose: { padding: 4 },
   drawerCloseText: { fontSize: 14, color: C.textTertiary, fontWeight: '700' },
   drawerBody: { flex: 1, padding: 14 },
@@ -529,7 +481,7 @@ const s = StyleSheet.create({
     gap: 4,
   },
   subagentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  subagentId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  subagentId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   subagentMeta: { fontSize: 11, color: C.textTertiary },
 
   // Cross-view navigation links

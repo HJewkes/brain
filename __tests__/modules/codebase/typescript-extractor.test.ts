@@ -75,7 +75,8 @@ describe('extractExports', () => {
     expect(exports[0]).toEqual({
       name: 'ExportKind',
       kind: 'type',
-      signature: "export type ExportKind = 'function' | 'class' | 'interface' | 'type' | 'const' | 'enum'",
+      signature:
+        "export type ExportKind = 'function' | 'class' | 'interface' | 'type' | 'const' | 'enum'",
     });
   });
 
@@ -447,10 +448,7 @@ describe('computeExportsHash', () => {
     const v1 = [
       { name: 'foo', kind: 'function' as const, signature: 'export function foo(): void' },
     ];
-    const v2 = [
-      ...v1,
-      { name: 'bar', kind: 'const' as const, signature: 'export const bar = 42' },
-    ];
+    const v2 = [...v1, { name: 'bar', kind: 'const' as const, signature: 'export const bar = 42' }];
     expect(computeExportsHash(v1)).not.toBe(computeExportsHash(v2));
   });
 });
@@ -475,11 +473,7 @@ export function hashContent(content: string): string {
 
 export const VERSION = '1.0.0';`;
 
-    const result = extractFileInfo(
-      '/project/src/services/file-scanner.ts',
-      content,
-      '/project'
-    );
+    const result = extractFileInfo('/project/src/services/file-scanner.ts', content, '/project');
 
     expect(result.modulePath).toBe('src/services/file-scanner.ts');
     expect(result.language).toBe('typescript');

@@ -82,7 +82,7 @@ function SpecimenPriorityStripe({ priority, color }: { priority: string; color: 
         backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
         borderRadius: 8, padding: 10, paddingLeft: 14, width: 140,
       }}>
-        <Text style={{ fontSize: 11, fontWeight: '600', color: C.brand, fontFamily: 'Space Grotesk, monospace' }}>
+        <Text style={{ fontSize: 11, fontWeight: '600', color: C.brand, fontFamily: "'Space Grotesk', monospace" }}>
           VNM-21.04
         </Text>
         <Text style={{ fontSize: 10, color: C.textSecondary, marginTop: 2 }}>
@@ -151,7 +151,7 @@ function SpecimenAvatar({ name, color, size }: { name: string; color: string; si
       width: size, height: size, borderRadius: size > 30 ? 10 : size / 2,
       backgroundColor: color, alignItems: 'center', justifyContent: 'center',
     }}>
-      <Text style={{ fontSize: size * 0.3, fontWeight: '700', color: '#fff', fontFamily: 'Space Grotesk, sans-serif' }}>
+      <Text style={{ fontSize: size * 0.3, fontWeight: '700', color: '#fff', fontFamily: "'Space Grotesk', sans-serif" }}>
         {ini}
       </Text>
     </View>
@@ -209,7 +209,7 @@ function SpecimenSessionRow({ displayId, status, selected }: { displayId: string
       backgroundColor: selected ? 'rgba(255,121,0,0.04)' : 'transparent',
     }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" }}>
           {displayId}
         </Text>
         <View style={{ borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: `${sColor}26` }}>
@@ -262,7 +262,7 @@ function SpecimenDepNode({ icon, iconColor, id, title, col }: { icon: string; ic
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
       <View style={{ width: 12, height: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: C.border }} />
       <Text style={{ fontSize: 13, color: iconColor, width: 14, textAlign: 'center' }}>{icon}</Text>
-      <Text style={{ fontSize: 13, fontWeight: '600', color: C.brand, fontFamily: 'Space Grotesk, monospace' }}>{id}</Text>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: C.brand, fontFamily: "'Space Grotesk', monospace" }}>{id}</Text>
       <Text style={{ flex: 1, fontSize: 13, color: C.textSecondary }}>{title}</Text>
       <SpecimenBadgeWithDot
         label={COL_LABEL[col] ?? col}
@@ -324,7 +324,7 @@ function SpecimenBurndownChart() {
 
   return (
     <View style={{ width: '100%' }}>
-      {/* @ts-ignore — svg is valid in react-native-web */}
+      {/* @ts-expect-error — svg is valid in react-native-web */}
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
         {[0, 10, 20].map(v => (
           <g key={v}>
@@ -374,7 +374,7 @@ function SpecimenVelocityChart() {
 
   return (
     <View style={{ width: '100%' }}>
-      {/* @ts-ignore — svg is valid in react-native-web */}
+      {/* @ts-expect-error — svg is valid in react-native-web */}
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
         {[0, 4, 7].map(v => (
           <g key={v}>
@@ -425,7 +425,7 @@ function SpecimenBarChart() {
   );
 }
 
-function SpecimenSparklineVariants() {
+function _SpecimenSparklineVariants() {
   const sparkSets: Array<{ label: string; data: number[]; positive: boolean }> = [
     { label: 'uptrend', data: [2, 3, 4, 3, 6, 7, 5, 9, 11, 8, 12], positive: true },
     { label: 'downtrend', data: [12, 10, 9, 11, 7, 5, 6, 3, 4, 2, 1], positive: false },
@@ -833,20 +833,20 @@ const s = StyleSheet.create({
     paddingBottom: 80,
   },
   pageTitle: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 22,
     fontWeight: '700',
     color: C.textPrimary,
     marginBottom: 4,
   },
   pageSubtitle: {
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
     fontSize: 13,
     color: C.textTertiary,
     marginBottom: 28,
   },
   tier: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 14,
     fontWeight: '700',
     color: C.brand,
@@ -867,7 +867,7 @@ const s = StyleSheet.create({
     borderBottomColor: C.border,
   },
   sectionTitle: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 13,
     fontWeight: '600',
     color: C.textSecondary,
@@ -879,7 +879,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   componentLabel: {
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
     fontSize: 11,
     color: C.textTertiary,
     marginBottom: 10,
@@ -907,7 +907,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   variantLabel: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 8,
     color: C.textTertiary,
     textAlign: 'center',

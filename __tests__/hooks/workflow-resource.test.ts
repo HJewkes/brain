@@ -202,6 +202,8 @@ describe('workflow-resource check', () => {
       // Initialize a git repo with a commit so getCurrentBranch works
       const { execSync: exec } = await import('node:child_process');
       exec('git init', { cwd: gitDir });
+      exec('git config user.email "test@test.com"', { cwd: gitDir });
+      exec('git config user.name "Test"', { cwd: gitDir });
       exec('git commit --allow-empty -m "init"', { cwd: gitDir });
       exec('git checkout -b test-branch', { cwd: gitDir });
     });

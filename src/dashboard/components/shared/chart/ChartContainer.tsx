@@ -19,7 +19,7 @@ export function ChartContainer({ width, height, padding = DEFAULT_PADDING, child
   void padding;
   return (
     <View style={{ width: '100%' }}>
-      {/* @ts-ignore — svg is valid in react-native-web */}
+      {/* @ts-expect-error — svg is valid in react-native-web */}
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
         {children}
       </svg>

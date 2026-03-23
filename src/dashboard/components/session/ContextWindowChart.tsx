@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C, component, palette } from '../shared/colors.js';
+import { C, component } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { TokenSnapshot, CompactionEvent } from '../../types.js';
 import { widgetLabel } from './shared-styles.js';
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   legendItem: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     color: C.textTertiary,
   },

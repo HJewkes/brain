@@ -966,20 +966,20 @@ const s = StyleSheet.create({
     paddingBottom: 80,
   },
   pageTitle: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 22,
     fontWeight: '700',
     color: C.textPrimary,
     marginBottom: 4,
   },
   pageSubtitle: {
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
     fontSize: 13,
     color: C.textTertiary,
     marginBottom: 28,
   },
   tier: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 14,
     fontWeight: '700',
     color: C.brand,
@@ -1000,7 +1000,7 @@ const s = StyleSheet.create({
     borderBottomColor: C.border,
   },
   sectionTitle: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 13,
     fontWeight: '600',
     color: C.textSecondary,
@@ -1012,7 +1012,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   compareLabel: {
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
     fontSize: 11,
     color: C.textTertiary,
     marginBottom: 8,
@@ -1028,7 +1028,7 @@ const s = StyleSheet.create({
     padding: 12,
   },
   compareColLabel: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     fontWeight: '700',
     color: C.textTertiary,
@@ -1060,7 +1060,7 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
   magnifiedLabel: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     fontWeight: '600',
     color: C.textTertiary,
@@ -1090,7 +1090,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   variantLabel: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 8,
     color: C.textTertiary,
     textAlign: 'center',

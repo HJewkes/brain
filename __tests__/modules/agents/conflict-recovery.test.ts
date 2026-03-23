@@ -48,9 +48,7 @@ describe('conflict-recovery', () => {
     });
 
     it('aborts rebase on conflict', () => {
-      let callCount = 0;
       mockExecFileSync.mockImplementation((_cmd: string, args: string[]) => {
-        callCount++;
         // checkout succeeds, rebase fails
         if (args[0] === 'rebase' && args[1] === 'main') {
           throw new Error('CONFLICT');

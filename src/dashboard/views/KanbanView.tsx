@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardTask, DashboardAgent } from '../types.js';
 import { AgentHoverCard } from '../components/shared/AgentHoverCard.js';
 import { C, palette } from '../components/shared/colors.js';
@@ -108,7 +108,7 @@ export function KanbanView({ dashboard, initialTask }: KanbanViewProps) {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View style={styles.root}>
       {/* Filter bar */}
       <View style={styles.filterBar}>
         <View style={styles.searchWrapper}>
@@ -148,7 +148,7 @@ export function KanbanView({ dashboard, initialTask }: KanbanViewProps) {
       {/* Board */}
       <ScrollView
         horizontal
-        style={{ flex: 1 }}
+        style={styles.board}
         contentContainerStyle={styles.boardContainer}
         showsHorizontalScrollIndicator={false}
       >
@@ -186,18 +186,22 @@ export function KanbanView({ dashboard, initialTask }: KanbanViewProps) {
 function StatItem({ label, value, warn, over }: { label: string; value: number; warn?: boolean; over?: boolean }) {
   const valueColor = over ? C.error : warn ? C.warning : C.textPrimary;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <Text style={{ fontSize: 12, fontWeight: '700', color: valueColor }}>{value}</Text>
-      <Text style={{ fontSize: 12, color: C.textSecondary }}>{label}</Text>
+    <View style={styles.statItem}>
+      <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
   filterBar: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'flex-end' as const,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 12,
     paddingHorizontal: 24,
     paddingVertical: 12,
@@ -206,12 +210,12 @@ const styles = {
     borderBottomColor: C.border,
   },
   searchWrapper: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    position: 'relative' as const,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
   },
   searchIcon: {
-    position: 'absolute' as const,
+    position: 'absolute',
     left: 10,
     fontSize: 14,
     color: C.textSecondary,
@@ -219,7 +223,7 @@ const styles = {
     pointerEvents: 'none' as const,
   },
   filterBtns: {
-    flexDirection: 'row' as const,
+    flexDirection: 'row',
     gap: 8,
   },
   filterBtn: {
@@ -243,21 +247,37 @@ const styles = {
     color: C.brand,
   },
   statsBar: {
-    flexDirection: 'row' as const,
+    flexDirection: 'row',
     gap: 24,
     paddingHorizontal: 24,
     paddingVertical: 10,
     backgroundColor: C.surface1,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
-    flexWrap: 'wrap' as const,
+    flexWrap: 'wrap',
+  },
+  board: {
+    flex: 1,
   },
   boardContainer: {
     padding: 20,
     gap: 14,
-    alignItems: 'flex-start' as const,
+    alignItems: 'flex-start',
   },
-};
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: C.textSecondary,
+  },
+});
 
 // Native <input> element styles for web
 const nativeInputStyle: React.CSSProperties = {
@@ -269,5 +289,5 @@ const nativeInputStyle: React.CSSProperties = {
   fontSize: 13,
   width: 200,
   outline: 'none',
-  fontFamily: 'Inter, -apple-system, sans-serif',
+  fontFamily: "'Inter', -apple-system, sans-serif",
 };

@@ -41,17 +41,13 @@ function computeThroughput(
   doneTasks: number,
   allTasks: Array<{ status: string; modified?: string }>
 ): { completedPerHour: number; estimatedRemainingMinutes: number | null } {
-  const doneWithTime = allTasks.filter(
-    (t) => t.status === 'done' && t.modified
-  );
+  const doneWithTime = allTasks.filter((t) => t.status === 'done' && t.modified);
 
   if (doneWithTime.length < 2) {
     return { completedPerHour: 0, estimatedRemainingMinutes: null };
   }
 
-  const timestamps = doneWithTime
-    .map((t) => new Date(t.modified!).getTime())
-    .sort((a, b) => a - b);
+  const timestamps = doneWithTime.map((t) => new Date(t.modified!).getTime()).sort((a, b) => a - b);
 
   const spanMs = timestamps[timestamps.length - 1] - timestamps[0];
   const spanHours = spanMs / (1000 * 60 * 60);
@@ -118,9 +114,7 @@ export function buildDashboard(
 }
 
 export function formatDashboard(data: DashboardData): string {
-  const pct = data.tasks.total > 0
-    ? Math.round((data.tasks.done / data.tasks.total) * 100)
-    : 0;
+  const pct = data.tasks.total > 0 ? Math.round((data.tasks.done / data.tasks.total) * 100) : 0;
 
   const bar = renderProgressBar(pct, 30);
 

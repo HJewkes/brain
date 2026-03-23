@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { colors, palette, component } from '../../tokens.js';
+import { colors, component } from '../../tokens.js';
 
 export interface CardProps {
   children: React.ReactNode;

@@ -2,7 +2,7 @@ import type { TextStyle } from 'react-native';
 import { C } from '../shared/colors.js';
 
 export const widgetLabel: TextStyle = {
-  fontFamily: 'Space Grotesk',
+  fontFamily: "'Space Grotesk', sans-serif",
   fontSize: 9,
   fontWeight: '700',
   color: C.textTertiary,
@@ -13,7 +13,7 @@ export const widgetLabel: TextStyle = {
 
 /** Section header used by .sb-section h3 (Tool Breakdown, Errors) */
 export const sectionH3: TextStyle = {
-  fontFamily: 'Space Grotesk',
+  fontFamily: "'Space Grotesk', sans-serif",
   fontSize: 10,
   fontWeight: '700',
   color: C.textTertiary,

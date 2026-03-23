@@ -1,12 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from '@titan-design/react-ui';
+import { Card } from './shared/Card.js';
 import { C, palette } from './shared/colors.js';
+
+function CardHeader({ children }: { children: React.ReactNode }) {
+  return <View style={s.cardHeader}>{children}</View>;
+}
+
+function CardTitle({ children }: { children: React.ReactNode }) {
+  return <Text style={s.cardTitle}>{children}</Text>;
+}
+
+function CardContent({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <View style={[s.cardContent, style]}>{children}</View>;
+}
 
 const DATA_COLORS = palette.dataColors;
 
@@ -20,7 +27,7 @@ export function NotesBreakdown({ title, data }: NotesBreakdownProps) {
   const total = entries.reduce((s, [, v]) => s + v, 0);
 
   return (
-    <Card variant="elevated" elevation={2}>
+    <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
@@ -50,6 +57,9 @@ export function NotesBreakdown({ title, data }: NotesBreakdownProps) {
 }
 
 const s = StyleSheet.create({
+  cardHeader: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  cardTitle: { fontSize: 14, fontWeight: '600', color: C.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardContent: { padding: 16 },
   bars: { gap: 6 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   barLabel: { fontSize: 12, color: C.textSecondary, width: 90, textAlign: 'right' as const },

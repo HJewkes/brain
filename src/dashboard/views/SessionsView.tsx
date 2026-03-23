@@ -198,7 +198,6 @@ export function SessionsView({ dashboard, initialSession }: SessionsViewProps) {
       const match = sessions.find(s => s.displayId === initialSession || s.id === initialSession);
       if (match) setSelected(match.id);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSession]);
 
   const filtered = sessions
@@ -261,13 +260,13 @@ export function SessionsView({ dashboard, initialSession }: SessionsViewProps) {
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: C.bg },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: C.textSecondary, fontFamily: 'Space Grotesk, sans-serif' },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: C.textSecondary, fontFamily: "'Space Grotesk', sans-serif" },
   emptyHint: { fontSize: 13, color: C.textTertiary },
 
   // Sidebar
   sidebar: { width: 280, backgroundColor: C.surface1, borderRightWidth: 1, borderRightColor: C.border, flexDirection: 'column' },
   sidebarHeader: { padding: 16, borderBottomWidth: 1, borderBottomColor: C.border },
-  sidebarTitle: { fontSize: 16, fontWeight: '700', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif', marginBottom: 10 },
+  sidebarTitle: { fontSize: 16, fontWeight: '700', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 10 },
   filters: { flexDirection: 'row', gap: 4 },
   filterBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface2 },
   filterBtnActive: { backgroundColor: C.brand, borderColor: C.brand },
@@ -279,7 +278,7 @@ const styles = StyleSheet.create({
   sessionRow: { padding: 12, borderBottomWidth: 1, borderBottomColor: C.border },
   sessionRowSelected: { borderLeftWidth: 3, borderLeftColor: C.brand, paddingLeft: 9 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
-  displayId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  displayId: { fontSize: 13, fontWeight: '600', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   rowTime: { fontSize: 11, color: C.textTertiary, marginBottom: 4 },
   rowMeta: { flexDirection: 'row', justifyContent: 'space-between' },
   metaText: { fontSize: 11, color: C.textSecondary },
@@ -289,14 +288,14 @@ const styles = StyleSheet.create({
   detail: { flex: 1 },
   detailContent: { padding: 24 },
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  detailId: { fontSize: 20, fontWeight: '700', color: C.textPrimary, fontFamily: 'Space Grotesk, sans-serif' },
+  detailId: { fontSize: 20, fontWeight: '700', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
   timestamps: { backgroundColor: C.surface1, borderRadius: 8, borderWidth: 1, borderColor: C.border, padding: 14, marginBottom: 16, gap: 6 },
   tsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   tsLabel: { fontSize: 12, color: C.textTertiary },
   tsValue: { fontSize: 12, color: C.textSecondary },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   statBox: { flex: 1, backgroundColor: C.surface1, borderRadius: 8, borderWidth: 1, borderColor: C.border, padding: 14, alignItems: 'center' },
-  statValue: { fontSize: 22, fontWeight: '700', fontFamily: 'Space Grotesk, sans-serif', marginBottom: 2 },
+  statValue: { fontSize: 22, fontWeight: '700', fontFamily: "'Space Grotesk', sans-serif", marginBottom: 2 },
   statLabel: { fontSize: 10, color: C.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
   gaugeSection: { backgroundColor: C.surface1, borderRadius: 8, borderWidth: 1, borderColor: C.border, padding: 16, marginBottom: 16 },
   timelineSection: { backgroundColor: C.surface1, borderRadius: 8, borderWidth: 1, borderColor: C.border, padding: 16 },

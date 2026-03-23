@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: C.textPrimary,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
     marginBottom: 16,
   },
   cardSubtitle: {
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     flexShrink: 0,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
   },
   inlineSubtitle: {
     fontSize: 12,

@@ -101,9 +101,7 @@ export class BackpressureController {
     this.state.recentMergeResults = this.state.recentMergeResults.filter(
       (r) => r.timestamp > cutoff
     );
-    this.state.recentStalls = this.state.recentStalls.filter(
-      (r) => r.timestamp > cutoff
-    );
+    this.state.recentStalls = this.state.recentStalls.filter((r) => r.timestamp > cutoff);
   }
 
   private recalculateRates(): void {
