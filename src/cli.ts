@@ -34,6 +34,12 @@ import { codebaseModule } from './modules/codebase/index.js';
 import { instancesCommand } from './commands/instances.js';
 import { hookCommand } from './commands/hook.js';
 import { mcpCommand } from './commands/mcp.js';
+import { dashboardCommand } from './commands/dashboard.js';
+import { prFeedbackCommand } from './commands/pr-feedback.js';
+import { importInstanceCommand } from './commands/import-instance.js';
+import { serveCommand } from './commands/serve.js';
+import { scanHtmlCommand } from './commands/scan-html.js';
+import { launchCommand } from './commands/launch.js';
 
 const program = new Command()
   .name('brain')
@@ -70,6 +76,12 @@ program.addCommand(notesCommand);
 program.addCommand(instancesCommand);
 program.addCommand(hookCommand);
 program.addCommand(mcpCommand);
+program.addCommand(dashboardCommand);
+program.addCommand(prFeedbackCommand);
+program.addCommand(importInstanceCommand);
+program.addCommand(serveCommand);
+program.addCommand(scanHtmlCommand);
+program.addCommand(launchCommand);
 
 async function main(): Promise<void> {
   const { registry } = await loadModules({

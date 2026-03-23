@@ -84,8 +84,7 @@ export function generateDashboardHtml(
 ): string {
   const builtPath = resolveBuiltDashboard();
   if (!builtPath) {
-    process.stderr.write("Dashboard not built. Run 'npm run build:dashboard' first.\n");
-    process.exit(1);
+    throw new Error("Dashboard not built. Run 'npm run build:dashboard' first.");
   }
   const template = readFileSync(builtPath, 'utf-8');
   return injectData(template, audit, status, dashboard, apiBase);

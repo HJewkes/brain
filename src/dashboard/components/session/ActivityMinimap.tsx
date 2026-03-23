@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import type { ScrollView } from 'react-native';
-import { C, component } from '../shared/colors.js';
+import { component } from '../shared/colors.js';
 import type { SessionDetailData } from '../../types.js';
 
 export interface ActivityMinimapProps {

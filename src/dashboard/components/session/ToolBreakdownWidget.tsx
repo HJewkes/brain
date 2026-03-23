@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   rowLabel: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 11,
     fontWeight: '500',
     color: C.textSecondary,
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   count: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     color: C.textTertiary,
     width: 42,

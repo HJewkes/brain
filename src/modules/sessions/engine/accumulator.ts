@@ -67,7 +67,11 @@ export class AnalyticsAccumulator {
   private compactionTimestamps: string[] = [];
   private compactionSummaries: string[] = [];
   private compactionByteOffsets: number[] = [];
-  private tokenSnapshots: Array<{ timestamp: string; cumulativeInput: number; cumulativeOutput: number }> = [];
+  private tokenSnapshots: Array<{
+    timestamp: string;
+    cumulativeInput: number;
+    cumulativeOutput: number;
+  }> = [];
   private assistantTexts: string[] = [];
   private userTexts: string[] = [];
   private logicalParentUuid: string | null = null;

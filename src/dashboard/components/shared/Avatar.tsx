@@ -29,7 +29,7 @@ export function Avatar({ name, size = 32, rounded = true, icon, bg }: AvatarProp
       }}
     >
       {icon ?? (
-        <Text style={{ fontSize, fontWeight: '700', color: semantic.text.inverse, fontFamily: 'Space Grotesk, sans-serif' }}>
+        <Text style={{ fontSize, fontWeight: '700', color: semantic.text.inverse, fontFamily: "'Space Grotesk', sans-serif" }}>
           {letters}
         </Text>
       )}

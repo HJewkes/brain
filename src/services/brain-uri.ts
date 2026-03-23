@@ -13,13 +13,7 @@ export interface BrainUri {
 
 export type BrainUriType = 'notes' | 'memories' | 'search' | 'tasks' | 'workstreams';
 
-const VALID_TYPES: Set<string> = new Set([
-  'notes',
-  'memories',
-  'search',
-  'tasks',
-  'workstreams',
-]);
+const VALID_TYPES: Set<string> = new Set(['notes', 'memories', 'search', 'tasks', 'workstreams']);
 
 export interface ResolvedNote {
   type: 'note';
@@ -116,11 +110,7 @@ export interface BuildUriOptions {
   query?: Record<string, string>;
 }
 
-export function buildBrainUri(
-  type: BrainUriType,
-  id: string,
-  options?: BuildUriOptions
-): string {
+export function buildBrainUri(type: BrainUriType, id: string, options?: BuildUriOptions): string {
   let uri = `brain://${type}`;
   if (id) {
     uri += `/${id}`;

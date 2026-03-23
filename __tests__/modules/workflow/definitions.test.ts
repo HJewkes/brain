@@ -193,4 +193,112 @@ describe('workflow definitions', () => {
       expect(repo?.required).toBe(false);
     });
   });
+
+  describe('pr-lifecycle workflow', () => {
+    const def = loadDefinition('pr-lifecycle-workflow');
+
+    it('has version 1', () => {
+      expect(def.version).toBe(1);
+    });
+
+    it('has 5 steps in implement→create-pr→review→fixup→merge order', () => {
+      expect(def.steps.map((s) => s.id)).toEqual([
+        'implement',
+        'create-pr',
+        'review',
+        'fixup',
+        'merge',
+      ]);
+    });
+
+    it('every agent step has a template', () => {
+      for (const step of def.steps) {
+        if (step.mode === 'human') continue;
+        expect(step.template, `step ${step.id} missing template`).toBeTruthy();
+      }
+    });
+
+    it('every step has a mode', () => {
+      for (const step of def.steps) {
+        expect(step.mode, `step ${step.id} missing mode`).toBeTruthy();
+      }
+    });
+
+    it('fixup step has iteration gate with max 3 rounds', () => {
+      const fixup = def.steps.find((s) => s.id === 'fixup');
+      expect(fixup?.gates).toBeDefined();
+      const iterGate = fixup?.gates?.find((g) => g.type === 'iteration');
+      expect(iterGate?.maxIterations).toBe(3);
+    });
+
+    it('merge step is human mode', () => {
+      const merge = def.steps.find((s) => s.id === 'merge');
+      expect(merge?.mode).toBe('human');
+    });
+
+    it('fixup loops back to review', () => {
+      const fixupEdge = def.edges.find((e) => e.from === 'fixup');
+      expect(fixupEdge?.to).toBe('review');
+    });
+
+    it('review has two outgoing conditional edges', () => {
+      const reviewEdges = def.edges.filter((e) => e.from === 'review');
+      expect(reviewEdges).toHaveLength(2);
+      const conditions = reviewEdges.map((e) => e.condition);
+      expect(conditions).toContain('approved');
+      expect(conditions).toContain('changes_requested');
+    });
+
+    it('review→merge edge has approved condition', () => {
+      const approvedEdge = def.edges.find((e) => e.from === 'review' && e.to === 'merge');
+      expect(approvedEdge?.condition).toBe('approved');
+    });
+
+    it('review→fixup edge has changes_requested condition', () => {
+      const changesEdge = def.edges.find((e) => e.from === 'review' && e.to === 'fixup');
+      expect(changesEdge?.condition).toBe('changes_requested');
+    });
+
+    it('requires taskId and branch parameters', () => {
+      const required = def.parameters?.filter((p) => p.required);
+      expect(required?.map((p) => p.name)).toContain('taskId');
+      expect(required?.map((p) => p.name)).toContain('branch');
+    });
+
+    it('prUrl parameter is optional', () => {
+      const prUrl = def.parameters?.find((p) => p.name === 'prUrl');
+      expect(prUrl?.required).toBeFalsy();
+    });
+
+    it('baseBranch defaults to main', () => {
+      const base = def.parameters?.find((p) => p.name === 'baseBranch');
+      expect(base?.default).toBe('main');
+    });
+
+    it('has no unconditional cycles (DAG is valid)', () => {
+      const unconditional = def.edges.filter((e) => !e.condition);
+      const adj = new Map<string, string[]>();
+      for (const step of def.steps) adj.set(step.id, []);
+      for (const edge of unconditional) adj.get(edge.from)?.push(edge.to);
+
+      const visited = new Set<string>();
+      const inStack = new Set<string>();
+
+      function hasCycle(node: string): boolean {
+        if (inStack.has(node)) return true;
+        if (visited.has(node)) return false;
+        visited.add(node);
+        inStack.add(node);
+        for (const neighbor of adj.get(node) ?? []) {
+          if (hasCycle(neighbor)) return true;
+        }
+        inStack.delete(node);
+        return false;
+      }
+
+      for (const step of def.steps) {
+        expect(hasCycle(step.id)).toBe(false);
+      }
+    });
+  });
 });

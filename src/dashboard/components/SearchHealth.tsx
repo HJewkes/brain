@@ -1,12 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from '@titan-design/react-ui';
+import { Card } from './shared/Card.js';
 import { C } from './shared/colors.js';
+
+function CardHeader({ children }: { children: React.ReactNode }) {
+  return <View style={s.cardHeader}>{children}</View>;
+}
+
+function CardTitle({ children }: { children: React.ReactNode }) {
+  return <Text style={s.cardTitle}>{children}</Text>;
+}
+
+function CardContent({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <View style={[s.cardContent, style]}>{children}</View>;
+}
 
 interface SearchHealthProps {
   search?: {
@@ -37,7 +44,7 @@ function HealthRow({ label, count }: { label: string; count: number }) {
 
 export function SearchHealth({ search }: SearchHealthProps) {
   return (
-    <Card variant="elevated" elevation={2}>
+    <Card>
       <CardHeader>
         <CardTitle>Search Health</CardTitle>
       </CardHeader>
@@ -54,6 +61,9 @@ export function SearchHealth({ search }: SearchHealthProps) {
 }
 
 const s = StyleSheet.create({
+  cardHeader: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  cardTitle: { fontSize: 14, fontWeight: '600', color: C.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardContent: { padding: 16 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -538,6 +538,9 @@ export const spacing = {
   12: 24,
 } as const;
 
+/** Short alias for spacing scale. sp[4] → 8, sp[8] → 16, sp[10] → 20 */
+export const sp = spacing;
+
 // ---------------------------------------------------------------------------
 // Border radius scale (px values)
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { C, palette, semantic, component } from '../shared/colors.js';
-import type { SessionDetailData, SubagentSummary, SessionToolCall } from '../../types.js';
+import type { SessionDetailData, SubagentSummary } from '../../types.js';
 
 export interface SubagentDrawerProps {
   agentId: string;
@@ -348,17 +348,17 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   backArrow: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 14,
     color: C.textTertiary,
   },
   backText: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 12,
     color: C.textTertiary,
   },
   title: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 14,
     fontWeight: '700',
     color: C.brand,
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   badgeText: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     fontWeight: '600',
     color: C.textSecondary,
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     fontWeight: '700',
     color: C.textTertiary,
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   promptText: {
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
     fontSize: 12,
     lineHeight: 19,
     color: C.textPrimary,
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   breakdownLabel: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     fontWeight: '600',
     color: C.textSecondary,
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   breakdownCount: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     color: C.textTertiary,
     width: 28,
@@ -480,33 +480,33 @@ const styles = StyleSheet.create({
     backgroundColor: palette.red.dim05,
   },
   tcTime: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     color: C.textTertiary,
     width: 36,
   },
   tcName: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 11,
     fontWeight: '600',
     width: 48,
   },
   tcDetail: {
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
     fontSize: 11,
     color: C.textTertiary,
     flex: 1,
     minWidth: 0,
   },
   tcDur: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 11,
     color: C.textTertiary,
     textAlign: 'right',
     width: 48,
   },
   truncNote: {
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
     fontSize: 10,
     color: C.textTertiary,
     marginTop: 6,
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 13,
     color: C.textTertiary,
     fontStyle: 'italic',

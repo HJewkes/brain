@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   container: {},
   label: widgetLabel,
   pct: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 11,
     fontWeight: '700',
     color: C.brand,
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   stat: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 9,
     color: C.textTertiary,
   },

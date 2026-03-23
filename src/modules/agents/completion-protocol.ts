@@ -82,13 +82,7 @@ async function handleDone(
   message: CompletionMessage,
   project: string
 ): Promise<CompletionResult> {
-  const result = await updateTaskStatus(
-    db,
-    config,
-    embedder,
-    message.taskId,
-    'done' as TaskStatus
-  );
+  const result = await updateTaskStatus(db, config, embedder, message.taskId, 'done' as TaskStatus);
 
   if (!result.ok) {
     return {
@@ -115,13 +109,7 @@ async function handleFailed(
   embedder: Embedder,
   message: CompletionMessage
 ): Promise<CompletionResult> {
-  await updateTaskStatus(
-    db,
-    config,
-    embedder,
-    message.taskId,
-    'blocked' as TaskStatus
-  );
+  await updateTaskStatus(db, config, embedder, message.taskId, 'blocked' as TaskStatus);
 
   return {
     taskId: message.taskId,

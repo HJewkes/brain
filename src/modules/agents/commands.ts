@@ -1,11 +1,12 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../services/brain-service.js';
-import { createAgent, getAgent, listAgents, updateAgentStatus } from './data.js';
+import { createAgent, getAgent, listAgents, updateAgentStatus, getAgentContext } from './data.js';
 import type { AgentRecord } from './types.js';
 import { createWorktreeCommand } from './worktree-commands.js';
 import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
 import { updateTaskStatus } from '../pm/data/task-ops.js';
 import { migrateAoAgents } from './migrate-ao.js';
+import type { AgentArtifacts } from './agent-done-handler.js';
 
 function padRight(s: string, len: number): string {
   return s.length >= len ? s.substring(0, len) : s + ' '.repeat(len - s.length);
@@ -34,7 +35,24 @@ function formatAgentLine(agent: AgentRecord): string {
   );
 }
 
-function formatDetailView(agent: AgentRecord): string {
+function formatArtifacts(artifacts: AgentArtifacts): string {
+  const lines: string[] = ['Artifacts:'];
+  lines.push(
+    `  Files created:  ${artifacts.filesCreated.length}${artifacts.filesCreated.length > 0 ? ` (${artifacts.filesCreated.join(', ')})` : ''}`
+  );
+  lines.push(
+    `  Files modified: ${artifacts.filesModified.length}${artifacts.filesModified.length > 0 ? ` (${artifacts.filesModified.join(', ')})` : ''}`
+  );
+  lines.push(
+    `  Tests added:    ${artifacts.testsAdded.length}${artifacts.testsAdded.length > 0 ? ` (${artifacts.testsAdded.join(', ')})` : ''}`
+  );
+  lines.push(
+    `  PRs created:    ${artifacts.prsCreated.length}${artifacts.prsCreated.length > 0 ? ` (${artifacts.prsCreated.join(', ')})` : ''}`
+  );
+  return lines.join('\n');
+}
+
+function formatDetailView(agent: AgentRecord, db?: unknown): string {
   const lines: string[] = [];
   lines.push(`Agent:    ${agent.name} (${agent.id})`);
   lines.push(`Status:   ${agent.status}`);
@@ -54,6 +72,10 @@ function formatDetailView(agent: AgentRecord): string {
   if (agent.pid) lines.push(`PID:      ${agent.pid}`);
   if (agent.summary) lines.push(`Summary:  ${agent.summary}`);
   if (agent.exit_reason) lines.push(`Exit:     ${agent.exit_reason}`);
+  if (db) {
+    const artifacts = getAgentContext(db, agent.id, 'artifacts') as AgentArtifacts | undefined;
+    if (artifacts) lines.push(formatArtifacts(artifacts));
+  }
   return lines.join('\n');
 }
 
@@ -119,7 +141,7 @@ export function createAgentCommands(): Command {
         if (agent.claim_token) process.env.BRAIN_PM_CLAIM_TOKEN = agent.claim_token;
 
         const updated = getAgent(svc.db, id)!;
-        process.stdout.write(formatDetailView(updated) + '\n');
+        process.stdout.write(formatDetailView(updated, svc.db) + '\n');
       });
     });
 
@@ -228,7 +250,7 @@ export function createAgentCommands(): Command {
           if (opts.json) {
             process.stdout.write(JSON.stringify(agent, null, 2) + '\n');
           } else {
-            process.stdout.write(formatDetailView(agent) + '\n');
+            process.stdout.write(formatDetailView(agent, svc.db) + '\n');
           }
           return;
         }

@@ -34,19 +34,28 @@ describe('createServeServer — tool catalog', () => {
     const service = makeService();
     const server = createServeServer(service);
     // McpServer exposes registered tools through internal _registeredTools
-    const tools = (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools;
+    const tools = (server as unknown as { _registeredTools: Record<string, unknown> })
+      ._registeredTools;
     expect(Object.keys(tools).length).toBeGreaterThanOrEqual(10);
   });
 
   it('includes all expected tool names', async () => {
     const service = makeService();
     const server = createServeServer(service);
-    const tools = (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools;
+    const tools = (server as unknown as { _registeredTools: Record<string, unknown> })
+      ._registeredTools;
     const names = Object.keys(tools);
     const expected = [
-      'brain_search', 'brain_dashboard', 'brain_pm_status', 'brain_pm_next',
-      'brain_pm_tasks', 'brain_sessions', 'brain_agents', 'brain_agent_find',
-      'brain_quick', 'brain_status',
+      'brain_search',
+      'brain_dashboard',
+      'brain_pm_status',
+      'brain_pm_next',
+      'brain_pm_tasks',
+      'brain_sessions',
+      'brain_agents',
+      'brain_agent_find',
+      'brain_quick',
+      'brain_status',
     ];
     for (const name of expected) {
       expect(names).toContain(name);
@@ -61,8 +70,16 @@ describe('createServeServer — tool dispatch', () => {
     service = makeService();
   });
 
-  function callTool(server: ReturnType<typeof createServeServer>, name: string, args: Record<string, unknown>) {
-    const tools = (server as unknown as { _registeredTools: Record<string, { handler: (args: unknown) => unknown }> })._registeredTools;
+  function callTool(
+    server: ReturnType<typeof createServeServer>,
+    name: string,
+    args: Record<string, unknown>
+  ) {
+    const tools = (
+      server as unknown as {
+        _registeredTools: Record<string, { handler: (args: unknown) => unknown }>;
+      }
+    )._registeredTools;
     const tool = tools[name];
     if (!tool) throw new Error(`Tool ${name} not found`);
     return tool.handler(args);
@@ -92,7 +109,10 @@ describe('createServeServer — tool dispatch', () => {
 
   it('brain_pm_status returns not-found error when project missing', async () => {
     const server = createServeServer(service);
-    const result = await callTool(server, 'brain_pm_status', { prefix: 'XYZ' }) as { isError?: boolean; content: Array<{ text: string }> };
+    const result = (await callTool(server, 'brain_pm_status', { prefix: 'XYZ' })) as {
+      isError?: boolean;
+      content: Array<{ text: string }>;
+    };
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('XYZ');
   });
@@ -102,7 +122,9 @@ describe('createServeServer — tool dispatch', () => {
     (service.pmStatus as ReturnType<typeof vi.fn>).mockReturnValue(project);
     const server = createServeServer(service);
 
-    const result = await callTool(server, 'brain_pm_status', { prefix: 'VNM' }) as { content: Array<{ text: string }> };
+    const result = (await callTool(server, 'brain_pm_status', { prefix: 'VNM' })) as {
+      content: Array<{ text: string }>;
+    };
     expect(JSON.parse(result.content[0].text)).toEqual(project);
   });
 
@@ -118,7 +140,10 @@ describe('createServeServer — tool dispatch', () => {
   it('brain_pm_tasks calls service.pmTaskList with filters', async () => {
     const server = createServeServer(service);
     await callTool(server, 'brain_pm_tasks', { workstream: 'VNM-07', status: 'in-progress' });
-    expect(service.pmTaskList).toHaveBeenCalledWith({ workstream: 'VNM-07', status: 'in-progress' });
+    expect(service.pmTaskList).toHaveBeenCalledWith({
+      workstream: 'VNM-07',
+      status: 'in-progress',
+    });
   });
 
   it('brain_sessions calls service.sessionList with limit and status', async () => {
@@ -150,19 +175,25 @@ describe('createServeServer — tool dispatch', () => {
     (service.agentFind as ReturnType<typeof vi.fn>).mockReturnValue(agent);
     const server = createServeServer(service);
 
-    const result = await callTool(server, 'brain_agent_find', { identifier: 'abc' }) as { content: Array<{ text: string }> };
+    const result = (await callTool(server, 'brain_agent_find', { identifier: 'abc' })) as {
+      content: Array<{ text: string }>;
+    };
     expect(JSON.parse(result.content[0].text)).toMatchObject({ id: 'abc' });
   });
 
   it('brain_agent_find returns error when agent not found', async () => {
     const server = createServeServer(service);
-    const result = await callTool(server, 'brain_agent_find', { identifier: 'missing' }) as { isError?: boolean };
+    const result = (await callTool(server, 'brain_agent_find', { identifier: 'missing' })) as {
+      isError?: boolean;
+    };
     expect(result.isError).toBe(true);
   });
 
   it('brain_quick adds item to inbox', async () => {
     const server = createServeServer(service);
-    const result = await callTool(server, 'brain_quick', { text: 'remember this' }) as { content: Array<{ text: string }> };
+    const result = (await callTool(server, 'brain_quick', { text: 'remember this' })) as {
+      content: Array<{ text: string }>;
+    };
 
     expect(service.db.addInboxItem).toHaveBeenCalledOnce();
     const call = (service.db.addInboxItem as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -173,7 +204,9 @@ describe('createServeServer — tool dispatch', () => {
 
   it('brain_status returns config info', async () => {
     const server = createServeServer(service);
-    const result = await callTool(server, 'brain_status', {}) as { content: Array<{ text: string }> };
+    const result = (await callTool(server, 'brain_status', {})) as {
+      content: Array<{ text: string }>;
+    };
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.dbPath).toBe('/tmp/test.db');
     expect(parsed.isOpen).toBe(true);
@@ -194,13 +227,25 @@ function makeMockRes() {
       statusCode = code;
       if (hdrs) Object.assign(headers, hdrs);
     }),
-    setHeader: vi.fn((k: string, v: string) => { headers[k] = v; }),
-    write: vi.fn((chunk: string) => { chunks.push(chunk); }),
-    end: vi.fn((chunk?: string) => { if (chunk) chunks.push(chunk); }),
+    setHeader: vi.fn((k: string, v: string) => {
+      headers[k] = v;
+    }),
+    write: vi.fn((chunk: string) => {
+      chunks.push(chunk);
+    }),
+    end: vi.fn((chunk?: string) => {
+      if (chunk) chunks.push(chunk);
+    }),
     on: vi.fn(),
-    get statusCode() { return statusCode; },
-    get headers() { return headers; },
-    get body() { return chunks.join(''); },
+    get statusCode() {
+      return statusCode;
+    },
+    get headers() {
+      return headers;
+    },
+    get body() {
+      return chunks.join('');
+    },
   };
 }
 
@@ -237,7 +282,10 @@ describe('createHttpHandler — route matching', () => {
     const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
     const res = makeMockRes();
     await handler(makeReq('GET', '/api/dashboard'), res as unknown as ServerResponse);
-    expect(res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ 'Content-Type': 'application/json' }));
+    expect(res.writeHead).toHaveBeenCalledWith(
+      200,
+      expect.objectContaining({ 'Content-Type': 'application/json' })
+    );
     expect(JSON.parse(res.body)).toEqual(dashData);
   });
 
@@ -251,7 +299,20 @@ describe('createHttpHandler — route matching', () => {
   });
 
   it('/api/sessions returns session list', async () => {
-    const sessions: DashboardSession[] = [{ id: 's1', display_id: 'S-1', status: 'active', startedAt: '', endedAt: null, durationMinutes: null, toolCalls: 0, filesModified: 0, tasksCompleted: 0, taskRefs: [] }];
+    const sessions: DashboardSession[] = [
+      {
+        id: 's1',
+        display_id: 'S-1',
+        status: 'active',
+        startedAt: '',
+        endedAt: null,
+        durationMinutes: null,
+        toolCalls: 0,
+        filesModified: 0,
+        tasksCompleted: 0,
+        taskRefs: [],
+      },
+    ];
     (service.sessionList as ReturnType<typeof vi.fn>).mockReturnValue(sessions);
     const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
     const res = makeMockRes();
@@ -278,8 +339,14 @@ describe('createHttpHandler — route matching', () => {
   it('/api/pm/tasks passes workstream and status params', async () => {
     const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
     const res = makeMockRes();
-    await handler(makeReq('GET', '/api/pm/tasks?workstream=VNM-07&status=in-progress'), res as unknown as ServerResponse);
-    expect(service.pmTaskList).toHaveBeenCalledWith({ workstream: 'VNM-07', status: 'in-progress' });
+    await handler(
+      makeReq('GET', '/api/pm/tasks?workstream=VNM-07&status=in-progress'),
+      res as unknown as ServerResponse
+    );
+    expect(service.pmTaskList).toHaveBeenCalledWith({
+      workstream: 'VNM-07',
+      status: 'in-progress',
+    });
   });
 
   it('/api/pm/tasks/:id returns single task', async () => {
@@ -320,7 +387,16 @@ describe('createHttpHandler — route matching', () => {
   it('/api/sessions/:id/detail returns composite session detail', async () => {
     const detail = {
       session: { sessionId: 's1', displayId: 'SNS-001', status: 'completed' },
-      turns: [{ index: 0, userMessage: 'hi', assistantResponse: 'hello', toolCalls: [], timestamp: '2026-01-01T00:00:00Z', tokenUsage: null }],
+      turns: [
+        {
+          index: 0,
+          userMessage: 'hi',
+          assistantResponse: 'hello',
+          toolCalls: [],
+          timestamp: '2026-01-01T00:00:00Z',
+          tokenUsage: null,
+        },
+      ],
       tokenTimeline: [],
       compactions: [],
       taskEvents: [],
@@ -336,7 +412,10 @@ describe('createHttpHandler — route matching', () => {
     const res = makeMockRes();
     await handler(makeReq('GET', '/api/sessions/SNS-001/detail'), res as unknown as ServerResponse);
     expect(service.sessionDetail).toHaveBeenCalledWith('SNS-001');
-    expect(res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ 'Content-Type': 'application/json' }));
+    expect(res.writeHead).toHaveBeenCalledWith(
+      200,
+      expect.objectContaining({ 'Content-Type': 'application/json' })
+    );
     const body = JSON.parse(res.body);
     expect(body.session.displayId).toBe('SNS-001');
     expect(body.turns).toHaveLength(1);
@@ -354,7 +433,10 @@ describe('createHttpHandler — route matching', () => {
     const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
     const res = makeMockRes();
     await handler(makeReq('GET', '/api/events'), res as unknown as ServerResponse);
-    expect(res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ 'Content-Type': 'text/event-stream' }));
+    expect(res.writeHead).toHaveBeenCalledWith(
+      200,
+      expect.objectContaining({ 'Content-Type': 'text/event-stream' })
+    );
     expect(sseClients.size).toBe(1);
   });
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { C, palette, semantic, component } from '../components/shared/colors.js';
-import { colors, spacing, radii, typography, elevation } from '../tokens.js';
+import { C, palette, semantic } from '../components/shared/colors.js';
+import { spacing, radii, elevation } from '../tokens.js';
 import { AVATAR_COLORS } from '../utils/avatar.js';
 import { columnColor, priorityColor, statusColor, priorityStripeColor } from '../utils/semantic-colors.js';
 
@@ -20,7 +20,11 @@ import {
   ChartContainer,
   GridLines,
   DEFAULT_PADDING,
+  DetailTopbar,
+  DataTable,
+  RankedList,
 } from '../components/shared/index.js';
+import type { DataTableColumn } from '../components/shared/index.js';
 
 // Lucide icons for iconography section
 import { User, Bot, GitBranch, Terminal, FileText, Search, Folder } from 'lucide-react';
@@ -37,7 +41,6 @@ import {
   TaskChip,
   TaskPill,
   StatusBadge,
-  TOOL_BADGE_STYLES,
 } from '../components/session/index.js';
 import type { ToolBadgeType, TaskPillState } from '../components/session/index.js';
 
@@ -96,7 +99,7 @@ function Variants({ items }: { items: Array<{ label: string; node: React.ReactNo
 }
 
 /** Color swatch */
-function Swatch({ color, label }: { color: string; label: string }) {
+function _Swatch({ color, label }: { color: string; label: string }) {
   return (
     <View style={s.swatchCell}>
       <View style={[s.swatch, { backgroundColor: color }]} />
@@ -839,7 +842,7 @@ export function SpecimenUnifiedView() {
 
       <Spec title="Avatar — all 7 AVATAR_COLORS">
         <Variants
-          items={AVATAR_NAMES.map((name, i) => ({
+          items={AVATAR_NAMES.map((name, _i) => ({
             label: name.split(' ')[0],
             node: <Avatar name={name} size={32} />,
           }))}
@@ -1153,6 +1156,65 @@ export function SpecimenUnifiedView() {
                 { label: 'Read ×1', type: 'read' },
               ],
             }}
+          />
+        </View>
+      </Spec>
+
+      {/* ═══════════════════════ 9. SHARED MOLECULES ═══════════════════════ */}
+      <TierHeader title="9. Shared Molecules" />
+
+      <Spec title="DetailTopbar">
+        <View style={{ maxWidth: 720 }}>
+          <DetailTopbar
+            title="SNS-030"
+            backLabel="Sessions"
+            badge={{ label: 'Complete', color: palette.teal.base }}
+            metadata={[{ label: 'Started', value: 'Mar 17, 2:30 PM' }, { label: 'Duration', value: '1h 14m' }]}
+            searchQuery=""
+            onSearchChange={() => {}}
+          />
+        </View>
+      </Spec>
+
+      <Spec title="DataTable">
+        <View style={{ maxWidth: 560 }}>
+          <DataTable<{ id: string; name: string; tasks: number; errors: number; rate: string }>
+            columns={[
+              { key: 'name', label: 'Name', flex: 2 },
+              { key: 'tasks', label: 'Tasks', width: 70, align: 'right' },
+              { key: 'errors', label: 'Errors', width: 70, align: 'right' },
+              { key: 'rate', label: 'Rate', width: 80, align: 'right' },
+            ] satisfies DataTableColumn[]}
+            data={[
+              { id: 'a1', name: 'agent-impl-001', tasks: 12, errors: 0, rate: '100%' },
+              { id: 'a2', name: 'agent-review-002', tasks: 8, errors: 1, rate: '88%' },
+              { id: 'a3', name: 'agent-test-003', tasks: 5, errors: 2, rate: '60%' },
+              { id: 'a4', name: 'agent-coord-004', tasks: 3, errors: 0, rate: '100%' },
+            ]}
+            renderCell={(item, key) => {
+              if (key === 'name') return <Text style={{ fontSize: 13, color: C.textPrimary }}>{item.name}</Text>;
+              if (key === 'tasks') return <Text style={{ fontSize: 13, color: C.textSecondary, textAlign: 'right' }}>{item.tasks}</Text>;
+              if (key === 'errors') return <Text style={{ fontSize: 13, color: item.errors > 0 ? C.error : C.textTertiary, textAlign: 'right' }}>{item.errors}</Text>;
+              if (key === 'rate') return <Text style={{ fontSize: 13, color: C.textSecondary, textAlign: 'right' }}>{item.rate}</Text>;
+              return null;
+            }}
+            highlightRow={item => item.errors === 0}
+            getKey={item => item.id}
+          />
+        </View>
+      </Spec>
+
+      <Spec title="RankedList — errors with bars">
+        <View style={{ maxWidth: 420 }}>
+          <RankedList
+            showBars
+            items={[
+              { label: 'Tool not found', value: 7, sublabel: 'Bash', color: palette.red.base, badge: 'critical', badgeHighlight: true },
+              { label: 'File not found', value: 5, sublabel: 'Read', color: palette.amber.base, badge: 'warning' },
+              { label: 'Type mismatch', value: 4, sublabel: 'TypeScript', color: palette.gold.base },
+              { label: 'Network timeout', value: 2, sublabel: 'WebFetch', color: palette.teal.base },
+              { label: 'Permission denied', value: 1, sublabel: 'Bash', color: palette.purple.base },
+            ]}
           />
         </View>
       </Spec>

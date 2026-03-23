@@ -221,8 +221,12 @@ describe('Wave 1: Module registration', () => {
     const { registry } = await loadModules({ modules: [pmModule] });
 
     const migrations = registry.getMigrations('pm');
-    expect(migrations).toHaveLength(1);
+    expect(migrations).toHaveLength(2);
     expect(migrations[0].migration.version).toBe(1);
     expect(migrations[0].migration.description).toBe('Create PM metadata indexes');
+    expect(migrations[1].migration.version).toBe(2);
+    expect(migrations[1].migration.description).toBe(
+      'Add activity note indexes for dashboard flow metrics'
+    );
   });
 });

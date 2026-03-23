@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C } from './colors.js';
 import { fmtK } from '../../utils/formatting.js';
+import { sp } from '../../tokens.js';
 
 interface Props {
   tokensIn: number;
@@ -33,18 +34,18 @@ export function TokenGauge({ tokensIn, tokensOut, maxTokens = 200000 }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 14 },
+  container: { marginBottom: sp[7] },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: sp[3],
   },
   headerLabel: { fontSize: 11, color: C.textTertiary },
   headerValue: { fontSize: 11, color: C.textTertiary },
   bar: {
-    height: 8,
+    height: sp[4],
     backgroundColor: C.surface3,
-    borderRadius: 4,
+    borderRadius: sp[2],
     overflow: 'hidden',
     flexDirection: 'row',
   },
@@ -60,7 +61,7 @@ const styles = StyleSheet.create({
   labels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: sp[2],
   },
   labelIn: { fontSize: 10, color: C.info },
   labelOut: { fontSize: 10, color: C.brand },

@@ -105,7 +105,7 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: C.textPrimary,
     marginBottom: 3,
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: "'Inter', sans-serif",
   },
   statusBadge: {
     flexDirection: 'row',
@@ -151,7 +151,7 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: C.textPrimary,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
   },
   metricLabel: { fontSize: 10, color: C.textTertiary, marginTop: 2 },
   errorText: { color: C.error },

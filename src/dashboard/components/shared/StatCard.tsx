@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C, component } from './colors.js';
+import { sp } from '../../tokens.js';
 
 interface Props {
   label: string;
@@ -56,40 +57,40 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 10,
-    padding: 20,
+    padding: sp[10],
   },
   label: {
     fontSize: 12,
     color: C.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
-    fontFamily: 'Inter',
+    marginBottom: sp[4],
+    fontFamily: "'Inter', sans-serif",
   },
   valueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: sp[4],
   },
   value: {
     fontSize: 32,
     fontWeight: '700',
     color: C.textPrimary,
     lineHeight: 32,
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
   },
   deltaBadge: {
     borderRadius: 6,
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: sp[1],
   },
   deltaText: {
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'Inter',
+    fontFamily: "'Inter', sans-serif",
   },
   sparkContainer: {
-    marginTop: 12,
+    marginTop: sp[6],
     height: 32,
   },
 });

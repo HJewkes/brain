@@ -264,7 +264,7 @@ const s = StyleSheet.create({
     borderRadius: 6,
   },
   toggleBtnActive: { backgroundColor: C.surface3 },
-  toggleBtnText: { fontSize: 13, color: C.textSecondary, fontFamily: 'Inter, sans-serif' },
+  toggleBtnText: { fontSize: 13, color: C.textSecondary, fontFamily: "'Inter', sans-serif" },
   toggleBtnTextActive: { color: C.textPrimary, fontWeight: '600' },
 
   // Historical toggle pill
@@ -280,7 +280,7 @@ const s = StyleSheet.create({
     borderColor: C.brand,
     backgroundColor: `${C.brand}18` as unknown as object,
   },
-  historicalPillText: { fontSize: 12, color: C.textTertiary, fontFamily: 'Inter, sans-serif' },
+  historicalPillText: { fontSize: 12, color: C.textTertiary, fontFamily: "'Inter', sans-serif" },
   historicalPillTextActive: { color: C.brand, fontWeight: '500' },
 
   // Hidden count hint
@@ -317,7 +317,7 @@ const s = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: '700',
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
   },
 
   // Cards grid — 3-col with wrapping
@@ -352,7 +352,7 @@ const s = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: C.textSecondary,
-    fontFamily: 'Space Grotesk, sans-serif',
+    fontFamily: "'Space Grotesk', sans-serif",
   },
   emptySubtitle: {
     fontSize: 13,
@@ -403,7 +403,7 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: C.textPrimary,
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: "'Inter', sans-serif",
   },
   topoRole: {
     fontSize: 10,

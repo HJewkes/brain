@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   container: {},
   label: widgetLabel,
   time: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 22,
     fontWeight: '700',
     color: C.textPrimary,
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   offset: {
-    fontFamily: 'Space Grotesk',
+    fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     color: C.textTertiary,
   },

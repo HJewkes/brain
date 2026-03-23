@@ -1,11 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { handleAgentDone } from '../../../src/modules/agents/agent-done-handler.js';
+import {
+  handleAgentDone,
+  tryExtractArtifacts,
+  type AgentArtifacts,
+} from '../../../src/modules/agents/agent-done-handler.js';
 import {
   createAgent,
   getAgent,
   updateAgentStatus,
   allocateWorktree,
+  getAgentContext,
+  setAgentContext,
 } from '../../../src/modules/agents/data.js';
 import { agentsMigrationV1, agentsMigrationV2 } from '../../../src/modules/agents/schema.js';
 
@@ -19,6 +25,56 @@ function setupDb(): Database.Database {
   agentsMigrationV1.up(db);
   agentsMigrationV2.up(db);
   return db;
+}
+
+function setupDbWithNotes(): Database.Database {
+  const db = setupDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notes (
+      id TEXT PRIMARY KEY,
+      file_path TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL,
+      tier TEXT NOT NULL,
+      category TEXT,
+      tags TEXT,
+      summary TEXT,
+      confidence TEXT,
+      status TEXT DEFAULT 'current',
+      sources TEXT,
+      created_at TEXT,
+      modified_at TEXT,
+      last_reviewed TEXT,
+      review_interval TEXT,
+      expires TEXT,
+      metadata TEXT,
+      module TEXT,
+      module_instance TEXT,
+      content_dir TEXT,
+      l0_abstract TEXT,
+      l1_overview TEXT
+    )
+  `);
+  return db;
+}
+
+function insertSessionNote(
+  db: Database.Database,
+  sessionId: string,
+  tool: string,
+  extra: Record<string, unknown> = {}
+): void {
+  const id = Math.random().toString(36).slice(2);
+  const metadata = JSON.stringify({
+    event_type: 'tool_call',
+    session_id: sessionId,
+    tool_name: tool,
+    ...extra,
+  });
+  db.prepare(
+    `INSERT INTO notes (id, file_path, title, type, tier, module, metadata, created_at)
+     VALUES (?, ?, ?, 'note', 'fast', 'sessions', ?, datetime('now'))`
+  ).run(id, `/fake/${id}.md`, `Event ${id}`, metadata);
 }
 
 describe('handleAgentDone', () => {
@@ -170,5 +226,111 @@ describe('handleAgentDone', () => {
     const result = handleAgentDone(db, id, { exit_code: 0 }, '/tmp');
 
     expect(result.updated).toBe(false);
+  });
+});
+
+describe('tryExtractArtifacts', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = setupDbWithNotes();
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('stores empty artifacts when agent has no sessions', () => {
+    const id = createAgent(db, { name: 'worker', parent: 'orch' });
+
+    tryExtractArtifacts(db, id);
+
+    // No sessions → no artifacts stored
+    const stored = getAgentContext(db, id, 'artifacts');
+    expect(stored).toBeUndefined();
+  });
+
+  it('classifies Write tool calls as filesCreated', () => {
+    const id = createAgent(db, { name: 'worker', parent: 'orch' });
+    setAgentContext(db, id, 'sessions', ['sess-1']);
+
+    insertSessionNote(db, 'sess-1', 'Write', { file_path: 'src/commands/foo.ts' });
+
+    tryExtractArtifacts(db, id);
+
+    const artifacts = getAgentContext(db, id, 'artifacts') as AgentArtifacts;
+    expect(artifacts.filesCreated).toEqual(['src/commands/foo.ts']);
+    expect(artifacts.filesModified).toEqual([]);
+    expect(artifacts.testsAdded).toEqual([]);
+  });
+
+  it('classifies Edit tool calls as filesModified', () => {
+    const id = createAgent(db, { name: 'worker', parent: 'orch' });
+    setAgentContext(db, id, 'sessions', ['sess-2']);
+
+    insertSessionNote(db, 'sess-2', 'Edit', { file_path: 'src/cli.ts' });
+
+    tryExtractArtifacts(db, id);
+
+    const artifacts = getAgentContext(db, id, 'artifacts') as AgentArtifacts;
+    expect(artifacts.filesModified).toEqual(['src/cli.ts']);
+    expect(artifacts.filesCreated).toEqual([]);
+  });
+
+  it('classifies test files into testsAdded regardless of tool', () => {
+    const id = createAgent(db, { name: 'worker', parent: 'orch' });
+    setAgentContext(db, id, 'sessions', ['sess-3']);
+
+    insertSessionNote(db, 'sess-3', 'Write', { file_path: '__tests__/modules/foo.test.ts' });
+    insertSessionNote(db, 'sess-3', 'Edit', { file_path: 'src/foo.test.ts' });
+
+    tryExtractArtifacts(db, id);
+
+    const artifacts = getAgentContext(db, id, 'artifacts') as AgentArtifacts;
+    expect(artifacts.testsAdded).toContain('__tests__/modules/foo.test.ts');
+    expect(artifacts.testsAdded).toContain('src/foo.test.ts');
+    expect(artifacts.filesCreated).toEqual([]);
+    expect(artifacts.filesModified).toEqual([]);
+  });
+
+  it('deduplicates repeated file paths', () => {
+    const id = createAgent(db, { name: 'worker', parent: 'orch' });
+    setAgentContext(db, id, 'sessions', ['sess-4']);
+
+    insertSessionNote(db, 'sess-4', 'Edit', { file_path: 'src/cli.ts' });
+    insertSessionNote(db, 'sess-4', 'Edit', { file_path: 'src/cli.ts' });
+
+    tryExtractArtifacts(db, id);
+
+    const artifacts = getAgentContext(db, id, 'artifacts') as AgentArtifacts;
+    expect(artifacts.filesModified).toEqual(['src/cli.ts']);
+  });
+
+  it('captures PR URLs from pr_url metadata', () => {
+    const id = createAgent(db, { name: 'worker', parent: 'orch' });
+    setAgentContext(db, id, 'sessions', ['sess-5']);
+
+    insertSessionNote(db, 'sess-5', 'Bash', { pr_url: 'https://github.com/org/repo/pull/42' });
+
+    tryExtractArtifacts(db, id);
+
+    const artifacts = getAgentContext(db, id, 'artifacts') as AgentArtifacts;
+    expect(artifacts.prsCreated).toEqual(['https://github.com/org/repo/pull/42']);
+  });
+
+  it('collects unique tool names into commandsUsed', () => {
+    const id = createAgent(db, { name: 'worker', parent: 'orch' });
+    setAgentContext(db, id, 'sessions', ['sess-6']);
+
+    insertSessionNote(db, 'sess-6', 'Read');
+    insertSessionNote(db, 'sess-6', 'Write', { file_path: 'src/a.ts' });
+    insertSessionNote(db, 'sess-6', 'Read');
+
+    tryExtractArtifacts(db, id);
+
+    const artifacts = getAgentContext(db, id, 'artifacts') as AgentArtifacts;
+    expect(artifacts.commandsUsed).toContain('Read');
+    expect(artifacts.commandsUsed).toContain('Write');
+    expect(new Set(artifacts.commandsUsed).size).toBe(artifacts.commandsUsed.length);
   });
 });

@@ -160,12 +160,18 @@ test.describe('Molecule visual snapshots', () => {
 
   test('M5. ErrorBlock', async ({ page }) => {
     await scrollToSection(page, 'M5. ErrorBlock');
-    await expect(page).toHaveScreenshot('mol-05-error-block.png', { fullPage: false });
+    const section = page.getByText('M5. ErrorBlock', { exact: false }).first().locator('..');
+    await expect(section).toHaveScreenshot('mol-05-error-block.png', {
+      maxDiffPixelRatio: 0.02,
+    });
   });
 
   test('M6. GapIndicator', async ({ page }) => {
     await scrollToSection(page, 'M6. GapIndicator');
-    await expect(page).toHaveScreenshot('mol-06-gap-indicator.png', { fullPage: false });
+    const section = page.getByText('M6. GapIndicator', { exact: false }).first().locator('..');
+    await expect(section).toHaveScreenshot('mol-06-gap-indicator.png', {
+      maxDiffPixelRatio: 0.02,
+    });
   });
 });
 

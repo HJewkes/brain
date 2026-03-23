@@ -29,10 +29,7 @@ const DEFAULT_OPTIONS: AutoMergeOptions = {
   pullAfterMerge: true,
 };
 
-export function getPrForBranch(
-  branch: string,
-  projectDir: string
-): PrStatus | null {
+export function getPrForBranch(branch: string, projectDir: string): PrStatus | null {
   try {
     const json = execFileSync(
       'gh',
@@ -48,12 +45,14 @@ export function getPrForBranch(
     };
 
     const checks = data.statusCheckRollup ?? [];
-    const checksPass = checks.length === 0 || checks.every((c) => {
-      if (c.conclusion) {
-        return c.conclusion === 'SUCCESS' || c.conclusion === 'NEUTRAL';
-      }
-      return c.state !== 'FAILURE' && c.state !== 'ERROR';
-    });
+    const checksPass =
+      checks.length === 0 ||
+      checks.every((c) => {
+        if (c.conclusion) {
+          return c.conclusion === 'SUCCESS' || c.conclusion === 'NEUTRAL';
+        }
+        return c.state !== 'FAILURE' && c.state !== 'ERROR';
+      });
 
     return {
       number: data.number,
@@ -75,11 +74,11 @@ export function mergePr(
   const result: MergeResult = { taskId: '', prNumber, merged: false };
 
   try {
-    execFileSync(
-      'gh',
-      ['pr', 'merge', String(prNumber), `--${opts.strategy}`, '--delete-branch'],
-      { cwd: opts.projectDir, encoding: 'utf-8', stdio: 'pipe' }
-    );
+    execFileSync('gh', ['pr', 'merge', String(prNumber), `--${opts.strategy}`, '--delete-branch'], {
+      cwd: opts.projectDir,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
     result.merged = true;
 
     if (opts.pullAfterMerge) {

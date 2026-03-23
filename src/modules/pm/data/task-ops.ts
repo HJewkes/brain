@@ -568,6 +568,9 @@ export async function updateTaskStatus(
     const newlyEligible =
       activityType === 'complete' ? computeNewlyEligible(db, noteId) : undefined;
 
+    const agentId =
+      process.env.BRAIN_AGENT_ID ?? (refreshedMeta.claimed_by as string | undefined) ?? undefined;
+
     await createActivityNote(db, config, embedder, {
       project: refreshedMeta.project as string,
       activityType,
@@ -575,8 +578,13 @@ export async function updateTaskStatus(
       taskNoteId: noteId,
       fromState: currentStatus,
       toState: newStatus,
+      agentId,
       newlyEligible,
     });
+
+    if (newlyEligible && newlyEligible.length > 0) {
+      process.stderr.write(`Newly eligible: ${newlyEligible.join(', ')}\n`);
+    }
   }
 
   return ok(taskMetaFromRecord(refreshedMeta));
