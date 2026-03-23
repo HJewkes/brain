@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C, palette, component } from '../shared/colors.js';
+import { C, component } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { TaskEvent } from '../../types.js';
 import { widgetLabel, formatTimeShort } from './shared-styles.js';

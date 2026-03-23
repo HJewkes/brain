@@ -200,7 +200,8 @@ export async function setupEvalEnvironment(
   }
 
   const searchHelper = async (query: string, k = 5): Promise<SearchResult[]> => {
-    return search(db, embedder, query, { limit: k });
+    const { results } = await search(db, embedder, query, { limit: k });
+    return results;
   };
 
   const cleanup = (): void => {

@@ -198,7 +198,6 @@ export function SessionsView({ dashboard, initialSession }: SessionsViewProps) {
       const match = sessions.find(s => s.displayId === initialSession || s.id === initialSession);
       if (match) setSelected(match.id);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSession]);
 
   const filtered = sessions

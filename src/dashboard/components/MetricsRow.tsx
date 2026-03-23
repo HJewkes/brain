@@ -1,5 +1,4 @@
 import React from 'react';
-import { View } from 'react-native';
 import { Card, CardContent, Metric, MetricGroup } from '@titan-design/react-ui';
 import type { AuditReport } from '../types';
 
@@ -11,17 +10,10 @@ function fmtN(n: number | undefined): string {
   return (n ?? 0).toLocaleString('en-US');
 }
 
-function tierSummary(byTier: Record<string, number>): string {
-  return Object.entries(byTier)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(' | ');
-}
-
 export function MetricsRow({ audit }: MetricsRowProps) {
   const memActive = audit.memories?.active ?? 0;
   const memTotal = audit.memories?.total ?? 0;
   const taskTotal = audit.tasks?.total ?? 0;
-  const taskDone = Object.values(audit.tasks?.byStatus ?? {}).reduce((s, v) => s + v, 0) - taskTotal;
 
   return (
     <Card variant="elevated" elevation={1}>

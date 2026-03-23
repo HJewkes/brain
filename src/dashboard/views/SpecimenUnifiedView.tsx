@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { C, palette, semantic, component } from '../components/shared/colors.js';
-import { colors, spacing, radii, typography, elevation } from '../tokens.js';
+import { C, palette, semantic } from '../components/shared/colors.js';
+import { spacing, radii, elevation } from '../tokens.js';
 import { AVATAR_COLORS } from '../utils/avatar.js';
 import { columnColor, priorityColor, statusColor, priorityStripeColor } from '../utils/semantic-colors.js';
 
@@ -41,7 +41,6 @@ import {
   TaskChip,
   TaskPill,
   StatusBadge,
-  TOOL_BADGE_STYLES,
 } from '../components/session/index.js';
 import type { ToolBadgeType, TaskPillState } from '../components/session/index.js';
 
@@ -100,7 +99,7 @@ function Variants({ items }: { items: Array<{ label: string; node: React.ReactNo
 }
 
 /** Color swatch */
-function Swatch({ color, label }: { color: string; label: string }) {
+function _Swatch({ color, label }: { color: string; label: string }) {
   return (
     <View style={s.swatchCell}>
       <View style={[s.swatch, { backgroundColor: color }]} />
@@ -843,7 +842,7 @@ export function SpecimenUnifiedView() {
 
       <Spec title="Avatar — all 7 AVATAR_COLORS">
         <Variants
-          items={AVATAR_NAMES.map((name, i) => ({
+          items={AVATAR_NAMES.map((name, _i) => ({
             label: name.split(' ')[0],
             node: <Avatar name={name} size={32} />,
           }))}

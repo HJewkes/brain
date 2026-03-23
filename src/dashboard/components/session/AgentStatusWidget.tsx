@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { C, component, palette } from '../shared/colors.js';
+import { C, component } from '../shared/colors.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import { bisect } from './bisect.js';
 import type { AgentEntry } from './precompute.js';

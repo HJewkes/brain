@@ -260,7 +260,7 @@ function SubagentPanel({ subagents, onClose }: {
 // Main view
 // ---------------------------------------------------------------------------
 
-export function SessionDetailView({ sessionId, dashboard }: SessionDetailViewProps) {
+export function SessionDetailView({ sessionId, dashboard: _dashboard }: SessionDetailViewProps) {
   const [data, setData] = useState<SessionDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

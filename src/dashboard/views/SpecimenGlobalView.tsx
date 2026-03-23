@@ -324,7 +324,7 @@ function SpecimenBurndownChart() {
 
   return (
     <View style={{ width: '100%' }}>
-      {/* @ts-ignore — svg is valid in react-native-web */}
+      {/* @ts-expect-error — svg is valid in react-native-web */}
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
         {[0, 10, 20].map(v => (
           <g key={v}>
@@ -374,7 +374,7 @@ function SpecimenVelocityChart() {
 
   return (
     <View style={{ width: '100%' }}>
-      {/* @ts-ignore — svg is valid in react-native-web */}
+      {/* @ts-expect-error — svg is valid in react-native-web */}
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
         {[0, 4, 7].map(v => (
           <g key={v}>
@@ -425,7 +425,7 @@ function SpecimenBarChart() {
   );
 }
 
-function SpecimenSparklineVariants() {
+function _SpecimenSparklineVariants() {
   const sparkSets: Array<{ label: string; data: number[]; positive: boolean }> = [
     { label: 'uptrend', data: [2, 3, 4, 3, 6, 7, 5, 9, 11, 8, 12], positive: true },
     { label: 'downtrend', data: [12, 10, 9, 11, 7, 5, 6, 3, 4, 2, 1], positive: false },

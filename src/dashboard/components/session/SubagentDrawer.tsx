@@ -7,7 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { C, palette, semantic, component } from '../shared/colors.js';
-import type { SessionDetailData, SubagentSummary, SessionToolCall } from '../../types.js';
+import type { SessionDetailData, SubagentSummary } from '../../types.js';
 
 export interface SubagentDrawerProps {
   agentId: string;

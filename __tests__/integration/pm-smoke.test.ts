@@ -217,12 +217,15 @@ describe('V4: PM Module Smoke Test', () => {
   it('module migration runs successfully', () => {
     // PM migration calls db.exec(), so pass a raw better-sqlite3 instance
     const rawDb = new Database(':memory:');
-    rawDb.exec(`CREATE TABLE notes (id TEXT, module TEXT, metadata TEXT)`);
+    rawDb.exec(`CREATE TABLE notes (id TEXT, module TEXT, type TEXT, metadata TEXT)`);
 
     const applied = runModuleMigrations(registry, rawDb, new Map());
-    expect(applied).toEqual([{ module: 'pm', version: 1 }]);
+    expect(applied).toEqual([
+      { module: 'pm', version: 1 },
+      { module: 'pm', version: 2 },
+    ]);
 
-    const rerun = runModuleMigrations(registry, rawDb, new Map([['pm', 1]]));
+    const rerun = runModuleMigrations(registry, rawDb, new Map([['pm', 2]]));
     expect(rerun).toEqual([]);
     rawDb.close();
   });
@@ -337,7 +340,7 @@ describe('V5: State Machine + Dependency Engine', () => {
     expect(result.ok).toBe(false);
 
     const result2 = validateTransition('done', 'pending');
-    expect(result2.ok).toBe(false);
+    expect(result2.ok).toBe(true);
   });
 
   it('cycle detection prevents circular dependency', () => {

@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardData, AuditReport, DashboardAgent } from '../types.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
-import { C, palette } from '../components/shared/colors.js';
+import { C } from '../components/shared/colors.js';
 import { Section } from '../components/shared/Section.js';
 import { DataTable } from '../components/shared/DataTable.js';
 import { RankedList } from '../components/shared/RankedList.js';
@@ -234,7 +234,7 @@ function ResumptionSection({ stats }: { stats: ResumptionStats }) {
           <View key={workstream} style={styles.wsBarRow}>
             <Text style={styles.wsBarLabel} numberOfLines={1}>{workstream}</Text>
             <View style={styles.wsBarTrack}>
-              <View style={[styles.wsBarFill, { width: `${Math.round((count / maxWsCount) * 100)}%` as any }]} />
+              <View style={[styles.wsBarFill, { width: `${Math.round((count / maxWsCount) * 100)}%` as `${number}%` }]} />
             </View>
             <Text style={styles.wsBarCount}>{count}</Text>
           </View>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C } from './colors.js';
-import { sp, radii } from '../../tokens.js';
+import { sp } from '../../tokens.js';
 
 export interface HorizBarRow {
   label: string;

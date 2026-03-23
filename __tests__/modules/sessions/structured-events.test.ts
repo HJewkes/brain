@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { buildStructuredEvents } from '../../../src/modules/sessions/ingestion/structured-events.js';
-import type { SessionAnalytics, ToolCall, TokenSnapshot } from '../../../src/modules/sessions/types.js';
+import type {
+  SessionAnalytics,
+  ToolCall,
+  TokenSnapshot,
+} from '../../../src/modules/sessions/types.js';
 
 function makeAnalytics(overrides: Partial<SessionAnalytics> = {}): SessionAnalytics {
   return {
@@ -599,10 +603,30 @@ describe('buildStructuredEvents', () => {
   describe('files touched deduplication', () => {
     it('deduplicates across Read and Edit for the same file', () => {
       const toolCalls: ToolCall[] = [
-        makeToolCall({ toolUseId: 'tu-1', toolName: 'Read', input: { file_path: '/src/main.ts' }, timestamp: '2026-03-15T10:01:00Z' }),
-        makeToolCall({ toolUseId: 'tu-2', toolName: 'Edit', input: { file_path: '/src/main.ts' }, timestamp: '2026-03-15T10:02:00Z' }),
-        makeToolCall({ toolUseId: 'tu-3', toolName: 'Read', input: { file_path: '/src/main.ts' }, timestamp: '2026-03-15T10:03:00Z' }),
-        makeToolCall({ toolUseId: 'tu-4', toolName: 'Write', input: { file_path: '/src/utils.ts' }, timestamp: '2026-03-15T10:04:00Z' }),
+        makeToolCall({
+          toolUseId: 'tu-1',
+          toolName: 'Read',
+          input: { file_path: '/src/main.ts' },
+          timestamp: '2026-03-15T10:01:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-2',
+          toolName: 'Edit',
+          input: { file_path: '/src/main.ts' },
+          timestamp: '2026-03-15T10:02:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-3',
+          toolName: 'Read',
+          input: { file_path: '/src/main.ts' },
+          timestamp: '2026-03-15T10:03:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-4',
+          toolName: 'Write',
+          input: { file_path: '/src/utils.ts' },
+          timestamp: '2026-03-15T10:04:00Z',
+        }),
       ];
 
       const result = buildStructuredEvents(makeAnalytics({ toolCalls }));
@@ -612,9 +636,24 @@ describe('buildStructuredEvents', () => {
 
     it('deduplicates files from Read, Edit, Write, and Bash tool calls', () => {
       const toolCalls: ToolCall[] = [
-        makeToolCall({ toolUseId: 'tu-1', toolName: 'Read', input: { file_path: '/src/app.ts' }, timestamp: '2026-03-15T10:01:00Z' }),
-        makeToolCall({ toolUseId: 'tu-2', toolName: 'Bash', input: { command: 'cat /src/app.ts' }, timestamp: '2026-03-15T10:02:00Z' }),
-        makeToolCall({ toolUseId: 'tu-3', toolName: 'Edit', input: { file_path: '/src/app.ts' }, timestamp: '2026-03-15T10:03:00Z' }),
+        makeToolCall({
+          toolUseId: 'tu-1',
+          toolName: 'Read',
+          input: { file_path: '/src/app.ts' },
+          timestamp: '2026-03-15T10:01:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-2',
+          toolName: 'Bash',
+          input: { command: 'cat /src/app.ts' },
+          timestamp: '2026-03-15T10:02:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-3',
+          toolName: 'Edit',
+          input: { file_path: '/src/app.ts' },
+          timestamp: '2026-03-15T10:03:00Z',
+        }),
       ];
 
       const result = buildStructuredEvents(makeAnalytics({ toolCalls }));
@@ -640,9 +679,24 @@ describe('buildStructuredEvents', () => {
 
     it('returns sorted file list', () => {
       const toolCalls: ToolCall[] = [
-        makeToolCall({ toolUseId: 'tu-1', toolName: 'Read', input: { file_path: '/z/last.ts' }, timestamp: '2026-03-15T10:01:00Z' }),
-        makeToolCall({ toolUseId: 'tu-2', toolName: 'Read', input: { file_path: '/a/first.ts' }, timestamp: '2026-03-15T10:02:00Z' }),
-        makeToolCall({ toolUseId: 'tu-3', toolName: 'Read', input: { file_path: '/m/middle.ts' }, timestamp: '2026-03-15T10:03:00Z' }),
+        makeToolCall({
+          toolUseId: 'tu-1',
+          toolName: 'Read',
+          input: { file_path: '/z/last.ts' },
+          timestamp: '2026-03-15T10:01:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-2',
+          toolName: 'Read',
+          input: { file_path: '/a/first.ts' },
+          timestamp: '2026-03-15T10:02:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-3',
+          toolName: 'Read',
+          input: { file_path: '/m/middle.ts' },
+          timestamp: '2026-03-15T10:03:00Z',
+        }),
       ];
 
       const result = buildStructuredEvents(makeAnalytics({ toolCalls }));
@@ -652,7 +706,12 @@ describe('buildStructuredEvents', () => {
 
     it('handles path input field as alternative to file_path', () => {
       const toolCalls: ToolCall[] = [
-        makeToolCall({ toolUseId: 'tu-1', toolName: 'Read', input: { path: '/alt/path.ts' }, timestamp: '2026-03-15T10:01:00Z' }),
+        makeToolCall({
+          toolUseId: 'tu-1',
+          toolName: 'Read',
+          input: { path: '/alt/path.ts' },
+          timestamp: '2026-03-15T10:01:00Z',
+        }),
       ];
 
       const result = buildStructuredEvents(makeAnalytics({ toolCalls }));
@@ -676,8 +735,16 @@ describe('buildStructuredEvents', () => {
       const analytics = makeAnalytics({
         compactionCount: 2,
         frictionSignals: [
-          { kind: 'user_correction', timestamp: '2026-03-15T10:20:00Z', detail: 'compaction detected at turn 15' },
-          { kind: 'user_correction', timestamp: '2026-03-15T10:40:00Z', detail: 'compaction detected at turn 30' },
+          {
+            kind: 'user_correction',
+            timestamp: '2026-03-15T10:20:00Z',
+            detail: 'compaction detected at turn 15',
+          },
+          {
+            kind: 'user_correction',
+            timestamp: '2026-03-15T10:40:00Z',
+            detail: 'compaction detected at turn 30',
+          },
         ],
       });
 
@@ -692,7 +759,11 @@ describe('buildStructuredEvents', () => {
       const analytics = makeAnalytics({
         compactionCount: 3,
         frictionSignals: [
-          { kind: 'user_correction', timestamp: '2026-03-15T10:20:00Z', detail: 'compaction detected' },
+          {
+            kind: 'user_correction',
+            timestamp: '2026-03-15T10:20:00Z',
+            detail: 'compaction detected',
+          },
         ],
       });
 
@@ -711,7 +782,11 @@ describe('buildStructuredEvents', () => {
         compactionCount: 1,
         frictionSignals: [
           { kind: 'error_loop', timestamp: '2026-03-15T10:10:00Z', detail: 'error loop detected' },
-          { kind: 'user_correction', timestamp: '2026-03-15T10:15:00Z', detail: 'user said try again' },
+          {
+            kind: 'user_correction',
+            timestamp: '2026-03-15T10:15:00Z',
+            detail: 'user said try again',
+          },
         ],
       });
 
@@ -736,16 +811,17 @@ describe('buildStructuredEvents', () => {
 
       for (let i = 0; i < 120; i++) {
         const minute = String(i).padStart(2, '0');
-        const ts = `2026-03-15T10:${minute.slice(0, 2)}:${minute.slice(0, 2)}Z`;
+        const _ts = `2026-03-15T10:${minute.slice(0, 2)}:${minute.slice(0, 2)}Z`;
         const timestamp = `2026-03-15T${String(10 + Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00Z`;
 
         toolCalls.push(
           makeToolCall({
             toolUseId: `tu-${i}`,
             toolName: i % 3 === 0 ? 'Read' : i % 3 === 1 ? 'Edit' : 'Bash',
-            input: i % 3 === 2
-              ? { command: `echo "step ${i}"` }
-              : { file_path: `/src/file-${i % 10}.ts` },
+            input:
+              i % 3 === 2
+                ? { command: `echo "step ${i}"` }
+                : { file_path: `/src/file-${i % 10}.ts` },
             timestamp,
             outcome: i % 15 === 0 ? 'error' : 'success',
           })
@@ -795,9 +871,10 @@ describe('buildStructuredEvents', () => {
         const timestamp = `2026-03-15T${String(10 + Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00Z`;
         const tools = ['Read', 'Edit', 'Write', 'Bash', 'Grep'];
         const toolName = tools[i % tools.length];
-        const input = toolName === 'Bash' || toolName === 'Grep'
-          ? { command: `action-${i}` }
-          : { file_path: `/project/src/module-${i % 20}.ts` };
+        const input =
+          toolName === 'Bash' || toolName === 'Grep'
+            ? { command: `action-${i}` }
+            : { file_path: `/project/src/module-${i % 20}.ts` };
 
         toolCalls.push(makeToolCall({ toolUseId: `tu-${i}`, toolName, input, timestamp }));
       }
@@ -848,8 +925,18 @@ describe('buildStructuredEvents', () => {
 
     it('handles session with only tool calls and no user messages', () => {
       const toolCalls: ToolCall[] = [
-        makeToolCall({ toolUseId: 'tu-1', toolName: 'Read', input: { file_path: '/src/a.ts' }, timestamp: '2026-03-15T10:01:00Z' }),
-        makeToolCall({ toolUseId: 'tu-2', toolName: 'Edit', input: { file_path: '/src/b.ts' }, timestamp: '2026-03-15T10:02:00Z' }),
+        makeToolCall({
+          toolUseId: 'tu-1',
+          toolName: 'Read',
+          input: { file_path: '/src/a.ts' },
+          timestamp: '2026-03-15T10:01:00Z',
+        }),
+        makeToolCall({
+          toolUseId: 'tu-2',
+          toolName: 'Edit',
+          input: { file_path: '/src/b.ts' },
+          timestamp: '2026-03-15T10:02:00Z',
+        }),
       ];
 
       const analytics = makeAnalytics({
@@ -870,7 +957,11 @@ describe('buildStructuredEvents', () => {
 
     it('handles tool calls with empty command string', () => {
       const toolCalls: ToolCall[] = [
-        makeToolCall({ toolName: 'Bash', input: { command: '' }, timestamp: '2026-03-15T10:01:00Z' }),
+        makeToolCall({
+          toolName: 'Bash',
+          input: { command: '' },
+          timestamp: '2026-03-15T10:01:00Z',
+        }),
         makeToolCall({ toolName: 'Bash', input: {}, timestamp: '2026-03-15T10:02:00Z' }),
       ];
 
@@ -882,7 +973,11 @@ describe('buildStructuredEvents', () => {
 
     it('handles tool calls with empty file_path', () => {
       const toolCalls: ToolCall[] = [
-        makeToolCall({ toolName: 'Read', input: { file_path: '' }, timestamp: '2026-03-15T10:01:00Z' }),
+        makeToolCall({
+          toolName: 'Read',
+          input: { file_path: '' },
+          timestamp: '2026-03-15T10:01:00Z',
+        }),
         makeToolCall({ toolName: 'Edit', input: {}, timestamp: '2026-03-15T10:02:00Z' }),
       ];
 

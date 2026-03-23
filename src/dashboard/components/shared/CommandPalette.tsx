@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import type { DashboardData } from '../../types.js';
-import { C, component, palette } from './colors.js';
+import { C, component } from './colors.js';
 
 // ---------------------------------------------------------------------------
 // Types

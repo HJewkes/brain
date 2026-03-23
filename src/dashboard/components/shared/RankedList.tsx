@@ -49,7 +49,7 @@ export function RankedList({
                   style={[
                     styles.barFill,
                     item.color != null ? { backgroundColor: item.color } : null,
-                    { width: `${Math.round((item.value / max) * 100)}%` as any },
+                    { width: `${Math.round((item.value / max) * 100)}%` as `${number}%` },
                   ]}
                 />
               </View>

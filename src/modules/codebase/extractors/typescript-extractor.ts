@@ -56,7 +56,7 @@ function countChar(s: string, ch: string): number {
 function extractNameFromSignature(sig: string, kind: ExportKind): string {
   const afterKind = sig.replace(
     /^export\s+(?:declare\s+)?(?:async\s+)?(?:function|class|interface|type|const|let|enum)\s+/,
-    '',
+    ''
   );
   const match = afterKind.match(/^(\w+)/);
   return match ? match[1] : kind;
@@ -133,7 +133,8 @@ export function extractExports(content: string): ExportSignature[] {
 // Dependency extraction
 // ---------------------------------------------------------------------------
 
-const IMPORT_RE = /^import\s+(?:type\s+)?(?:\{([^}]*)\}|(\w+)(?:\s*,\s*\{([^}]*)\})?)\s+from\s+['"]([^'"]+)['"]/;
+const IMPORT_RE =
+  /^import\s+(?:type\s+)?(?:\{([^}]*)\}|(\w+)(?:\s*,\s*\{([^}]*)\})?)\s+from\s+['"]([^'"]+)['"]/;
 const SIDE_EFFECT_IMPORT_RE = /^import\s+['"]([^'"]+)['"]/;
 
 function parseImportSymbols(braceContent: string | undefined): string[] {
@@ -151,10 +152,7 @@ function isInternalSpecifier(specifier: string): boolean {
   return specifier.startsWith('.') || specifier.startsWith('/');
 }
 
-export function extractDependencies(
-  content: string,
-  filePath: string
-): ModuleDependencies {
+export function extractDependencies(content: string, _filePath: string): ModuleDependencies {
   const internal: InternalDependency[] = [];
   const external: ExternalDependency[] = [];
 
