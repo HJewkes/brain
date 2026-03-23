@@ -154,7 +154,13 @@ async function ingestOne(
         const { getSessionBySessionId } = await import('../data/session-ops.js');
         const existing = getSessionBySessionId(db, analytics.sessionId);
         if (existing?.display_id) {
-          const seFile = join(config.notesDir, 'modules', 'sessions', existing.display_id, 'structured-events.json');
+          const seFile = join(
+            config.notesDir,
+            'modules',
+            'sessions',
+            existing.display_id,
+            'structured-events.json'
+          );
           const { existsSync } = await import('node:fs');
           if (!existsSync(seFile)) {
             const structuredEvents = buildStructuredEvents(analytics);

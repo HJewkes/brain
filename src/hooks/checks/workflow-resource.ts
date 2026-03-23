@@ -75,9 +75,7 @@ export const workflowResourceCheck: HookHandler = {
       const resourceAgent = resource.data.agentId as string | undefined;
 
       if (resourceBranch === currentBranch && resourceAgent && resourceAgent !== agentId) {
-        return hookBlock(
-          `Blocked: branch ${currentBranch} is owned by agent ${resourceAgent}`
-        );
+        return hookBlock(`Blocked: branch ${currentBranch} is owned by agent ${resourceAgent}`);
       }
     }
 

@@ -8,16 +8,13 @@ export interface ConflictResult {
   error?: string;
 }
 
-export function detectConflicts(
-  branch: string,
-  projectDir: string
-): boolean {
+export function detectConflicts(branch: string, projectDir: string): boolean {
   try {
-    const json = execFileSync(
-      'gh',
-      ['pr', 'view', branch, '--json', 'mergeable'],
-      { cwd: projectDir, encoding: 'utf-8', stdio: 'pipe' }
-    );
+    const json = execFileSync('gh', ['pr', 'view', branch, '--json', 'mergeable'], {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
     const data = JSON.parse(json) as { mergeable: string };
     return data.mergeable === 'CONFLICTING';
   } catch {

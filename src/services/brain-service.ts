@@ -22,7 +22,10 @@ import {
   getSessionsForTask,
 } from '../modules/sessions/data/session-ops.js';
 import type { SessionMetadata, SegmentMetadata, TokenSnapshot } from '../modules/sessions/types.js';
-import type { ConversationTurn, StructuredEventsOutput } from '../modules/sessions/ingestion/structured-events.js';
+import type {
+  ConversationTurn,
+  StructuredEventsOutput,
+} from '../modules/sessions/ingestion/structured-events.js';
 import type { SessionDetailData } from '../dashboard/types.js';
 import { loadRegistry } from './instance-registry.js';
 
@@ -296,11 +299,7 @@ export class BrainServiceClass {
     }
   }
 
-  sessionTurns(
-    displayId: string,
-    from?: number,
-    limit?: number
-  ): ConversationTurn[] {
+  sessionTurns(displayId: string, from?: number, limit?: number): ConversationTurn[] {
     try {
       const filePath = join(
         this.config.notesDir,
@@ -399,17 +398,11 @@ export class BrainServiceClass {
         };
       }
 
-      const events = JSON.parse(
-        readFileSync(eventsPath, 'utf-8')
-      ) as StructuredEventsOutput;
+      const events = JSON.parse(readFileSync(eventsPath, 'utf-8')) as StructuredEventsOutput;
 
-      const totalToolCalls = events.turns.reduce(
-        (sum, t) => sum + t.toolCalls.length,
-        0
-      );
+      const totalToolCalls = events.turns.reduce((sum, t) => sum + t.toolCalls.length, 0);
       const totalErrors = events.turns.reduce(
-        (sum, t) =>
-          sum + t.toolCalls.filter((tc) => tc.outcome === 'error').length,
+        (sum, t) => sum + t.toolCalls.filter((tc) => tc.outcome === 'error').length,
         0
       );
 
@@ -461,10 +454,7 @@ export class BrainServiceClass {
         })),
         agentEvents: events.agentEvents.map((ae) => ({
           agentId: ae.detail,
-          action:
-            ae.type === 'agent_spawn'
-              ? ('spawned' as const)
-              : ('completed' as const),
+          action: ae.type === 'agent_spawn' ? ('spawned' as const) : ('completed' as const),
           timestamp: ae.timestamp,
           taskId: null,
           model: null,
