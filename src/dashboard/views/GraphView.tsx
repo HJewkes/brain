@@ -25,21 +25,19 @@ function BarChart({ title, data }: { title: string; data: Record<string, number>
         {entries.length === 0 ? (
           <Text style={s.muted}>No data</Text>
         ) : (
-          <View style={{ gap: 8 }}>
+          <View style={s.barList}>
             {entries.map(([key, val], i) => (
-              <View key={key} style={{ gap: 3 }}>
+              <View key={key} style={s.barItem}>
                 <View style={s.barLabel}>
                   <Text style={s.barKey}>{key}</Text>
                   <Text style={s.barVal}>{val.toLocaleString()}</Text>
                 </View>
                 <View style={s.barTrack}>
                   <View
-                    style={{
-                      height: '100%',
-                      width: `${(val / max) * 100}%`,
+                    style={[s.barFill, {
+                      width: `${(val / max) * 100}%` as unknown as number,
                       backgroundColor: BAR_COLORS[i % BAR_COLORS.length],
-                      borderRadius: 3,
-                    }}
+                    }]}
                   />
                 </View>
               </View>
@@ -58,7 +56,7 @@ export function GraphView({ audit }: GraphViewProps) {
   const relationCount = audit.relations?.total ?? 0;
 
   return (
-    <View style={{ gap: 16 }}>
+    <View style={s.root}>
       {/* Header */}
       <View style={s.header}>
         <Text style={s.title}>Knowledge Graph</Text>
@@ -72,7 +70,7 @@ export function GraphView({ audit }: GraphViewProps) {
       {/* Coming soon */}
       <Card>
         <View style={s.cardContent}>
-          <View style={{ gap: 8 }}>
+          <View style={s.comingSoon}>
             <Text style={s.sectionTitle}>Graph visualization coming soon</Text>
             <Text style={s.body}>
               Will display {noteCount.toLocaleString()} notes and{' '}
@@ -83,7 +81,7 @@ export function GraphView({ audit }: GraphViewProps) {
               View modes: Force-directed (physics simulation), Clustered (grouped
               by module), Ego-network (explore from a single node)
             </Text>
-            <Text style={[s.muted, { fontSize: 11, marginTop: 4 }]}>
+            <Text style={[s.muted, s.mutedSmall]}>
               Requires graph data in the dashboard payload — tracked in VNM-15.28
             </Text>
           </View>
@@ -92,26 +90,26 @@ export function GraphView({ audit }: GraphViewProps) {
 
       {/* Row 1: Notes by Module + Notes by Type */}
       <View style={s.row}>
-        <View style={{ flex: 1 }}>
+        <View style={s.col}>
           <BarChart title="Notes by Module" data={audit.notes?.byModule ?? {}} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={s.col}>
           <BarChart title="Notes by Type" data={audit.notes?.byType ?? {}} />
         </View>
       </View>
 
       {/* Row 2: Relations by Type + Graph Stats */}
       <View style={s.row}>
-        <View style={{ flex: 1 }}>
+        <View style={s.col}>
           <BarChart title="Relations by Type" data={audit.relations?.byType ?? {}} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={s.col}>
           <Card>
             <View style={s.cardHeader}>
               <Text style={s.cardTitle}>Graph Stats</Text>
             </View>
             <View style={s.cardContent}>
-              <View style={{ gap: 12 }}>
+              <View style={s.statList}>
                 {[
                   { label: 'Total notes (nodes)', value: noteCount.toLocaleString() },
                   { label: 'Total relations (edges)', value: relationCount.toLocaleString() },
@@ -133,6 +131,32 @@ export function GraphView({ audit }: GraphViewProps) {
 }
 
 const s = StyleSheet.create({
+  root: {
+    gap: 16,
+  },
+  col: {
+    flex: 1,
+  },
+  mutedSmall: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  comingSoon: {
+    gap: 8,
+  },
+  barList: {
+    gap: 8,
+  },
+  barItem: {
+    gap: 3,
+  },
+  barFill: {
+    height: '100%' as unknown as number,
+    borderRadius: 3,
+  },
+  statList: {
+    gap: 12,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
