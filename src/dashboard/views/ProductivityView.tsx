@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { type as T } from '../tokens.js';
 import type { DashboardData, AuditReport, DashboardAgent } from '../types.js';
 import { StatCard } from '../components/shared/StatCard.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
   agentNameLink: { color: C.brand, textDecorationLine: 'underline', textDecorationColor: C.brand + '66' },
   agentStatus: { fontSize: 11, color: C.textTertiary },
   agentStat: { alignItems: 'center', minWidth: 52 },
-  agentStatVal: { fontSize: 16, fontWeight: '600', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
+  agentStatVal: { ...T.headingLg, color: C.textPrimary },
   agentStatLabel: { fontSize: 10, color: C.textTertiary, textTransform: 'uppercase' },
 
   // Avatar wrapper (holds Avatar + status dot)

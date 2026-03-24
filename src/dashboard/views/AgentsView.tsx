@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardAgent } from '../types.js';
 import { C } from '../components/shared/colors.js';
+import { type as T } from '../tokens.js';
 import { Badge } from '../components/shared/Badge.js';
 import { fmtK } from '../utils/formatting.js';
 import { AgentCard } from '../components/AgentCard.js';
@@ -280,7 +281,7 @@ const s = StyleSheet.create({
     borderColor: C.brand,
     backgroundColor: `${C.brand}18` as unknown as object,
   },
-  historicalPillText: { fontSize: 12, color: C.textTertiary, fontFamily: "'Inter', sans-serif" },
+  historicalPillText: { ...T.bodySm, color: C.textTertiary },
   historicalPillTextActive: { color: C.brand, fontWeight: '500' },
 
   // Hidden count hint
@@ -315,9 +316,7 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    fontFamily: "'Space Grotesk', sans-serif",
+    ...T.heading2xl,
   },
 
   // Cards grid — 3-col with wrapping

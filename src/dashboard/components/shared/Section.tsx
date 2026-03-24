@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C } from './colors.js';
+import { type as T } from '../../tokens.js';
 
 interface SectionProps {
   title: string;
@@ -44,10 +45,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   cardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...T.headingMd,
     color: C.textPrimary,
-    fontFamily: "'Space Grotesk', sans-serif",
     marginBottom: 16,
   },
   cardSubtitle: {

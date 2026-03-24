@@ -7,6 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { C, palette, semantic, component } from '../shared/colors.js';
+import { type as T } from '../../tokens.js';
 import type { SessionDetailData, SubagentSummary } from '../../types.js';
 
 export interface SubagentDrawerProps {
@@ -383,9 +384,7 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   badgeText: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 10,
-    fontWeight: '600',
+    ...T.labelSm,
     color: C.textSecondary,
   },
   badgeAgent: {
@@ -443,9 +442,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   breakdownLabel: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 10,
-    fontWeight: '600',
+    ...T.labelSm,
     color: C.textSecondary,
     width: 38,
   },
@@ -486,9 +483,7 @@ const styles = StyleSheet.create({
     width: 36,
   },
   tcName: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 11,
-    fontWeight: '600',
+    ...T.labelMd,
     width: 48,
   },
   tcDetail: {
