@@ -132,9 +132,126 @@ export const autoloopModule: BrainModule = {
     autoloopCmd
       .command('status')
       .description('Show autoloop status and last run times')
-      .action(() => {
-        // Placeholder — will be implemented in VNM-45.16
-        process.stdout.write('Autoloop status: not yet implemented\n');
+      .option('--json', 'Output as JSON')
+      .action(async (cmdOpts) => {
+        const { withDb } = await import('../../services/brain-service.js');
+        await withDb(async (svc) => {
+          const { getLastRunTime, isOnCooldown } = await import('./engine/run-tracker.js');
+          const { loadBounds } = await import('./engine/bounds.js');
+          const bounds = loadBounds();
+
+          const sessionReviewLast = getLastRunTime(svc.db, 'session-review');
+          const consolidationLast = getLastRunTime(svc.db, 'task-consolidation');
+          const sessionReviewCooldown = isOnCooldown(
+            svc.db,
+            'session-review',
+            bounds.cooldownMs
+          );
+          const consolidationCooldown = isOnCooldown(
+            svc.db,
+            'task-consolidation',
+            bounds.cooldownMs
+          );
+
+          if (cmdOpts.json) {
+            process.stdout.write(
+              JSON.stringify(
+                {
+                  sessionReview: {
+                    lastRun: sessionReviewLast?.toISOString() ?? null,
+                    onCooldown: sessionReviewCooldown,
+                  },
+                  taskConsolidation: {
+                    lastRun: consolidationLast?.toISOString() ?? null,
+                    onCooldown: consolidationCooldown,
+                  },
+                  bounds,
+                },
+                null,
+                2
+              ) + '\n'
+            );
+          } else {
+            process.stdout.write('Autoloop Status\n');
+            process.stdout.write(
+              `  Session Review:      last=${sessionReviewLast?.toISOString() ?? 'never'}  cooldown=${sessionReviewCooldown ? 'yes' : 'no'}\n`
+            );
+            process.stdout.write(
+              `  Task Consolidation:  last=${consolidationLast?.toISOString() ?? 'never'}  cooldown=${consolidationCooldown ? 'yes' : 'no'}\n`
+            );
+            process.stdout.write(
+              `  Bounds: max_time=${bounds.maxDurationMs / 60000}m  max_notes=${bounds.maxNotesCreated}  cooldown=${bounds.cooldownMs / 60000}m\n`
+            );
+          }
+        });
+      });
+
+    autoloopCmd
+      .command('review')
+      .description('Run session review loop (requires Ollama)')
+      .option('--max-sessions <n>', 'Maximum sessions to review', '10')
+      .option('--min-age <hours>', 'Minimum session age in hours', '1')
+      .option('--json', 'Output as JSON')
+      .action(async (cmdOpts) => {
+        const { withBrain } = await import('../../services/brain-service.js');
+        const { requireOllama } = await import('../../services/ollama.js');
+        await withBrain(async (svc) => {
+          const ollama = await requireOllama();
+          if (!ollama) return;
+
+          const { runSessionReviewLoop } = await import('./engine/review-loop.js');
+          const report = await runSessionReviewLoop(svc.db, svc.config, svc.embedder, ollama, {
+            maxSessions: parseInt(cmdOpts.maxSessions),
+            minAgeHours: parseInt(cmdOpts.minAge),
+          });
+
+          if (cmdOpts.json) {
+            process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+          } else {
+            process.stdout.write(
+              `Session Review: ${report.status} (${Math.round(report.durationMs / 1000)}s)\n`
+            );
+            process.stdout.write(`  Sessions reviewed: ${report.sessionsReviewed}\n`);
+            process.stdout.write(`  Insights extracted: ${report.insightsExtracted}\n`);
+            process.stdout.write(`  Notes created: ${report.notesCreated}\n`);
+            if (report.errors.length > 0) {
+              process.stdout.write(`  Errors: ${report.errors.length}\n`);
+            }
+            if (report.terminationReason) {
+              process.stdout.write(`  Terminated: ${report.terminationReason}\n`);
+            }
+          }
+        });
+      });
+
+    autoloopCmd
+      .command('consolidate')
+      .description('Run task consolidation loop')
+      .option('--project <prefix>', 'Project prefix')
+      .option('--workstream <n>', 'Workstream number')
+      .option('--json', 'Output as JSON')
+      .action(async (cmdOpts) => {
+        const { withBrain } = await import('../../services/brain-service.js');
+        await withBrain(async (svc) => {
+          const { runTaskConsolidationLoop } = await import('./engine/consolidation-loop.js');
+          const report = await runTaskConsolidationLoop(svc.db, svc.config, svc.embedder, {
+            project: cmdOpts.project,
+            workstream: cmdOpts.workstream ? parseInt(cmdOpts.workstream) : undefined,
+          });
+
+          if (cmdOpts.json) {
+            process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+          } else {
+            process.stdout.write(
+              `Task Consolidation: ${report.status} (${Math.round(report.durationMs / 1000)}s)\n`
+            );
+            process.stdout.write(`  Tasks scanned: ${report.sessionsReviewed}\n`);
+            process.stdout.write(`  Tasks enriched: ${report.tasksUpdated}\n`);
+            if (report.errors.length > 0) {
+              process.stdout.write(`  Errors: ${report.errors.length}\n`);
+            }
+          }
+        });
       });
 
     ctx.registerCommand(autoloopCmd);
