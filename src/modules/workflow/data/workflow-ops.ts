@@ -5,6 +5,7 @@ import type {
   WorkflowDefinition,
   WorkflowNoteMetadata,
   WorkflowInstanceMetadata,
+  WorkflowEdge,
 } from '../types.js';
 import type { TaskStatus } from '../../pm/types.js';
 import { validateDag, topologicalSort } from '../engine/dag.js';
@@ -12,6 +13,60 @@ import { ok, fail, type Result } from '../../../errors.js';
 import { getWorkflowDefinition, getInstanceByDisplayId, getInstanceStepStates } from './queries.js';
 import { createTask } from '../../pm/data/task-ops.js';
 import { getPmNotes } from '../../pm/data/queries.js';
+
+const COMPLEXITY_EXCLUSIONS: Record<string, Set<string>> = {
+  low: new Set(['research', 'interview', 'design', 'critic', 'spec-tests', 'decompose']),
+  medium: new Set(['interview']),
+  high: new Set(),
+};
+
+/**
+ * For each included step, traces backwards through excluded predecessors to find
+ * the nearest included predecessor, returning bridge edges to close the gap.
+ * Only generates edges for paths that traverse at least one excluded step.
+ */
+function computeTransitiveBridges(
+  edges: WorkflowEdge[],
+  includedSteps: Set<string>,
+  excludedSteps: Set<string>
+): WorkflowEdge[] {
+  if (excludedSteps.size === 0) return [];
+
+  const bridges: WorkflowEdge[] = [];
+
+  // Build predecessor map using only unconditional edges (matches topological sort logic)
+  const predecessors = new Map<string, Set<string>>();
+  for (const e of edges) {
+    if (e.condition) continue;
+    if (!predecessors.has(e.to)) predecessors.set(e.to, new Set());
+    predecessors.get(e.to)!.add(e.from);
+  }
+
+  // For each included step that has at least one excluded direct predecessor,
+  // walk back through excluded nodes to find the nearest included predecessor
+  for (const step of includedSteps) {
+    const directPreds = predecessors.get(step) ?? new Set<string>();
+    const excludedPreds = [...directPreds].filter((p) => excludedSteps.has(p));
+    if (excludedPreds.length === 0) continue;
+
+    const visited = new Set<string>();
+    const queue = [...excludedPreds];
+    while (queue.length > 0) {
+      const pred = queue.shift()!;
+      if (visited.has(pred)) continue;
+      visited.add(pred);
+      for (const pp of predecessors.get(pred) ?? []) {
+        if (includedSteps.has(pp)) {
+          bridges.push({ from: pp, to: step });
+        } else if (excludedSteps.has(pp)) {
+          queue.push(pp);
+        }
+      }
+    }
+  }
+
+  return bridges;
+}
 
 type RegisterErrorCode =
   | 'NOT_FOUND'
@@ -255,7 +310,26 @@ export async function expandWorkflow(
     return fail('DEFINITION_NOT_FOUND', `Failed to parse workflow definition`);
   }
 
-  const sortResult = topologicalSort(definition.steps, definition.edges);
+  const instanceParsedMeta = JSON.parse(instanceNote.metadata!) as Record<string, unknown>;
+  const instanceContext = (instanceParsedMeta.context as Record<string, string>) ?? {};
+  const complexity = instanceContext.complexity ?? 'high';
+  const exclusions = COMPLEXITY_EXCLUSIONS[complexity] ?? COMPLEXITY_EXCLUSIONS['high'];
+
+  const includedSteps = new Set(
+    definition.steps.map((s) => s.id).filter((id) => !exclusions.has(id))
+  );
+  const excludedSteps = new Set(
+    definition.steps.map((s) => s.id).filter((id) => exclusions.has(id))
+  );
+
+  const directEdges = definition.edges.filter(
+    (e) => includedSteps.has(e.from) && includedSteps.has(e.to)
+  );
+  const bridgeEdges = computeTransitiveBridges(definition.edges, includedSteps, excludedSteps);
+  const filteredEdges = [...directEdges, ...bridgeEdges];
+
+  const filteredSteps = definition.steps.filter((s) => includedSteps.has(s.id));
+  const sortResult = topologicalSort(filteredSteps, filteredEdges);
   if (!sortResult.ok) {
     return fail('DEFINITION_NOT_FOUND', `Failed to sort workflow steps`);
   }
@@ -263,7 +337,6 @@ export async function expandWorkflow(
   const topoOrder = sortResult.data;
   const stepToTaskNoteId = new Map<string, string>();
   const stepToDisplayId = new Map<string, string>();
-  const instanceParsedMeta = JSON.parse(instanceNote.metadata!) as Record<string, unknown>;
   const instanceProject = (instanceParsedMeta.project as string) ?? 'TST';
   const instanceWorkstream = instanceParsedMeta.workstream as number;
   if (!instanceWorkstream) {
@@ -314,7 +387,7 @@ export async function expandWorkflow(
 
   // Only unconditional edges create structural dependencies;
   // conditional edges are optional paths that don't block execution
-  const unconditionalEdges = definition.edges.filter((e) => !e.condition);
+  const unconditionalEdges = filteredEdges.filter((e) => !e.condition);
 
   // Build edge relations, grouping by source note to avoid overwriting
   const edgesBySource = new Map<

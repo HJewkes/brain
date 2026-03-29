@@ -42,7 +42,15 @@ export function getWorkflowDefinition(
     return ok({
       note,
       definition,
-      metadata: meta as unknown as WorkflowNoteMetadata,
+      metadata: {
+        display_id: (meta.display_id as string) ?? '',
+        name: (meta.name as string) ?? (meta.title as string) ?? definition.name ?? '',
+        version: (meta.version as number) ?? definition.version ?? 0,
+        registration_status:
+          (meta.registration_status as WorkflowNoteMetadata['registration_status']) ?? 'draft',
+        step_count: (meta.step_count as number) ?? definition.steps.length,
+        edge_count: (meta.edge_count as number) ?? definition.edges.length,
+      },
     });
   }
 
@@ -68,7 +76,15 @@ export function listWorkflows(
     if (filters?.project && meta.project !== filters.project) continue;
     if (filters?.status && meta.registration_status !== filters.status) continue;
 
-    results.push(meta as unknown as WorkflowNoteMetadata);
+    results.push({
+      display_id: (meta.display_id as string) ?? '',
+      name: (meta.name as string) ?? (meta.title as string) ?? '',
+      version: (meta.version as number) ?? 0,
+      registration_status:
+        (meta.registration_status as WorkflowNoteMetadata['registration_status']) ?? 'draft',
+      step_count: (meta.step_count as number) ?? 0,
+      edge_count: (meta.edge_count as number) ?? 0,
+    });
   }
 
   return ok(results);
