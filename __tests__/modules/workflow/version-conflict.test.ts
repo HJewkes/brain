@@ -60,7 +60,9 @@ describe('version conflict queries', () => {
     expect(reg1.ok).toBe(true);
     if (!reg1.ok) return;
 
-    const inst1 = await instantiateWorkflow(db, config, embedder, reg1.data.display_id, 'TST', {});
+    const inst1 = await instantiateWorkflow(db, config, embedder, reg1.data.display_id, 'TST', {
+      workstream: '1',
+    });
     expect(inst1.ok).toBe(true);
 
     const reg2 = await registerWorkflow(db, config, embedder, noteId!);
@@ -68,7 +70,9 @@ describe('version conflict queries', () => {
     if (!reg2.ok) return;
     expect(reg2.data.version).toBe(2);
 
-    const inst2 = await instantiateWorkflow(db, config, embedder, reg2.data.display_id, 'TST', {});
+    const inst2 = await instantiateWorkflow(db, config, embedder, reg2.data.display_id, 'TST', {
+      workstream: '1',
+    });
     expect(inst2.ok).toBe(true);
 
     if (inst1.ok) {

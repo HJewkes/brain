@@ -113,7 +113,7 @@ export async function instantiateWorkflow(
   workflowId: string,
   project: string,
   context: Record<string, string>,
-  options?: { iterationOf?: string }
+  options?: { iterationOf?: string; workstream?: number }
 ): Promise<Result<InstantiateResult, InstantiateErrorCode>> {
   const defResult = getWorkflowDefinition(db, workflowId);
   if (!defResult.ok) {
@@ -130,9 +130,18 @@ export async function instantiateWorkflow(
     }
   }
 
+  const workstream =
+    options?.workstream ?? (context.workstream ? parseInt(context.workstream, 10) : undefined);
+  if (!workstream) {
+    return fail(
+      'MISSING_PARAMETER',
+      'Workstream is required — pass --context "workstream=N" or options.workstream'
+    );
+  }
+
   const taskResult = await createTask(db, config, embedder, {
     project,
-    workstream: 1,
+    workstream,
     name: `[${definition.name}] instance`,
     description: `Workflow instance of ${workflowId}`,
     category: 'implementation',
@@ -256,7 +265,10 @@ export async function expandWorkflow(
   const stepToDisplayId = new Map<string, string>();
   const instanceParsedMeta = JSON.parse(instanceNote.metadata!) as Record<string, unknown>;
   const instanceProject = (instanceParsedMeta.project as string) ?? 'TST';
-  const instanceWorkstream = (instanceParsedMeta.workstream as number) ?? 1;
+  const instanceWorkstream = instanceParsedMeta.workstream as number;
+  if (!instanceWorkstream) {
+    return fail('DEFINITION_NOT_FOUND', 'Instance missing workstream metadata');
+  }
 
   for (const stepId of topoOrder) {
     const stepDef = definition.steps.find((s) => s.id === stepId);

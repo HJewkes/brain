@@ -88,7 +88,9 @@ describe('expandWorkflow bug fixes', () => {
       [edge('research', 'implement'), edge('implement', 'review')]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -121,7 +123,9 @@ describe('expandWorkflow bug fixes', () => {
       ]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 

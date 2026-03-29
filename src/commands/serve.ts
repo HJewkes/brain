@@ -10,6 +10,7 @@ import type { AgentStatus } from '../modules/agents/types.js';
 import type { InboxItem } from '../types.js';
 import { createHttpHandler, broadcast } from './serve-http.js';
 import type { SseClients } from './serve-http.js';
+import { startMcpServer } from '../server/index.js';
 
 export function createServeServer(service: BrainServiceClass): McpServer {
   const server = new McpServer(
@@ -192,6 +193,7 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
 export const serveCommand = new Command('serve')
   .description('Start a persistent MCP server over stdio with full tool catalog')
   .option('--port <n>', 'HTTP port for REST/SSE API (default: 7800)', '7800')
+  .option('--mcp', 'Start standalone MCP server over stdio (no HTTP)')
   .action(async (opts, cmd) => {
     const root = cmd.parent?.parent;
     const globalFlag = (root?.opts() as Record<string, unknown>)?.global;
@@ -199,6 +201,12 @@ export const serveCommand = new Command('serve')
     const resolveOpts: ResolveOptions = {};
     if (globalFlag) resolveOpts.forceGlobal = true;
     if (typeof instancePath === 'string') resolveOpts.instancePath = instancePath;
+
+    if ((opts as { mcp?: boolean }).mcp) {
+      await startMcpServer(resolveOpts);
+      return;
+    }
+
     const port = parseInt((opts as { port?: string }).port ?? '7800', 10);
     await startServeServer(resolveOpts, port);
   });
