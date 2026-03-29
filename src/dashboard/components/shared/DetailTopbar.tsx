@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
 import { C } from './colors.js';
-import { sp, typography } from '../../tokens.js';
+import { sp, typography, type as T } from '../../tokens.js';
 
 export interface DetailTopbarChip {
   label: string;
@@ -152,10 +152,8 @@ const s = StyleSheet.create({
   },
   badgeDot: { width: 5, height: 5, borderRadius: 3 },
   badgeText: {
-    fontSize: 10,
-    fontWeight: '600',
+    ...T.labelSm,
     textTransform: 'uppercase',
-    fontFamily: typography.fonts.heading,
   },
 
   meta: { flexDirection: 'row', gap: 14, alignItems: 'center' },

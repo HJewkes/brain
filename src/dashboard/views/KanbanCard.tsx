@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { type as T } from '../tokens.js';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { DashboardTask } from '../types.js';
 import { C, palette } from '../components/shared/colors.js';
@@ -155,10 +156,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   taskId: {
-    fontSize: 11,
-    fontWeight: '600',
+    ...T.headingXs,
     color: C.brand,
-    fontFamily: "'Space Grotesk', monospace",
   },
   title: {
     fontSize: 13,

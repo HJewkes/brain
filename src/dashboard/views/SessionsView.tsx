@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { type as T } from '../tokens.js';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardSession, SessionTimelineEvent } from '../types.js';
 import { TokenGauge } from '../components/shared/TokenGauge.js';
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
   detail: { flex: 1 },
   detailContent: { padding: 24 },
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  detailId: { fontSize: 20, fontWeight: '700', color: C.textPrimary, fontFamily: "'Space Grotesk', sans-serif" },
+  detailId: { ...T.headingXl, color: C.textPrimary },
   timestamps: { backgroundColor: C.surface1, borderRadius: 8, borderWidth: 1, borderColor: C.border, padding: 14, marginBottom: 16, gap: 6 },
   tsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   tsLabel: { fontSize: 12, color: C.textTertiary },

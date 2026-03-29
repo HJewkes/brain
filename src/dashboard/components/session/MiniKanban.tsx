@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C, component } from '../shared/colors.js';
+import { type as T } from '../../tokens.js';
 import { useCurrentTimestamp } from './TimeSyncContext.js';
 import type { TaskEvent } from '../../types.js';
 import { widgetLabel, formatTimeShort } from './shared-styles.js';
@@ -195,9 +196,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   pill: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 9,
-    fontWeight: '600',
+    ...T.labelXs,
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 3,

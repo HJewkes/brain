@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { type as T } from '../tokens.js';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, DashboardTask, DashboardStageTransition } from '../types.js';
 import { C, component, semantic } from '../components/shared/colors.js';
@@ -331,7 +332,7 @@ const s = StyleSheet.create({
   agentAvatarText: { fontSize: 10, fontWeight: '700', color: semantic.text.inverse },
 
   monoBadge: { backgroundColor: C.surface3, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
-  monoText: { fontSize: 12, color: C.textSecondary, fontFamily: 'monospace' },
+  monoText: { ...T.monoSm, color: C.textSecondary },
 
   // Dep tree
   depTreeContainer: { gap: 12 },

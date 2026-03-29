@@ -549,6 +549,25 @@ export class BrainServiceClass {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Singleton / keep-alive factory for long-running processes (MCP server, etc.)
+// ---------------------------------------------------------------------------
+
+let _instance: BrainServiceClass | null = null;
+
+export async function getSharedInstance(opts?: ResolveOptions): Promise<BrainServiceClass> {
+  if (_instance && _instance.isOpen) return _instance;
+  _instance = await BrainServiceClass.create(opts);
+  return _instance;
+}
+
+export function closeSharedInstance(): void {
+  if (_instance) {
+    _instance.close();
+    _instance = null;
+  }
+}
+
 export async function withBrain<T>(
   fn: (svc: BrainService) => T | Promise<T>,
   resolveOpts?: ResolveOptions

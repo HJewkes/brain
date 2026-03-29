@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { type as T } from '../tokens.js';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { DashboardData, SessionDetailData, SessionTurn, SessionToolCall, SubagentSummary } from '../types.js';
 import { C, palette, semantic, component } from '../components/shared/colors.js';
@@ -434,7 +435,7 @@ const s = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  statusText: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', fontFamily: "'Space Grotesk', sans-serif" },
+  statusText: { ...T.labelSm, textTransform: 'uppercase' },
 
   // Timeline
   timeline: { flex: 1 },

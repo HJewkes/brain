@@ -586,6 +586,121 @@ export const typography = {
   },
 } as const;
 
+/**
+ * Typography presets — compose font, size, weight, and lineHeight into
+ * StyleSheet-compatible TextStyle objects. Use via `type.headingSm` etc.
+ */
+export const type = {
+  // Headings (Space Grotesk)
+  headingXs: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 11,
+    fontWeight: '600' as const,
+    lineHeight: 11 * 1.2,
+  },
+  headingSm: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 12,
+    fontWeight: '600' as const,
+    lineHeight: 12 * 1.2,
+  },
+  headingMd: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 14,
+    fontWeight: '600' as const,
+    lineHeight: 14 * 1.2,
+  },
+  headingLg: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 16,
+    fontWeight: '600' as const,
+    lineHeight: 16 * 1.2,
+  },
+  headingXl: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 20,
+    fontWeight: '700' as const,
+    lineHeight: 20 * 1.2,
+  },
+  heading2xl: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 24,
+    fontWeight: '700' as const,
+    lineHeight: 24 * 1.2,
+  },
+  heading3xl: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 32,
+    fontWeight: '700' as const,
+    lineHeight: 32 * 1.2,
+  },
+
+  // Body (Inter)
+  bodyXs: {
+    fontFamily: typography.fonts.body,
+    fontSize: 11,
+    fontWeight: '400' as const,
+    lineHeight: 11 * 1.5,
+  },
+  bodySm: {
+    fontFamily: typography.fonts.body,
+    fontSize: 12,
+    fontWeight: '400' as const,
+    lineHeight: 12 * 1.5,
+  },
+  bodyMd: {
+    fontFamily: typography.fonts.body,
+    fontSize: 14,
+    fontWeight: '400' as const,
+    lineHeight: 14 * 1.5,
+  },
+  bodyLg: {
+    fontFamily: typography.fonts.body,
+    fontSize: 16,
+    fontWeight: '400' as const,
+    lineHeight: 16 * 1.5,
+  },
+
+  // Labels (Space Grotesk, uppercase-ready)
+  labelXs: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 9,
+    fontWeight: '600' as const,
+    letterSpacing: 0.5,
+  },
+  labelSm: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 10,
+    fontWeight: '600' as const,
+    letterSpacing: 0.5,
+  },
+  labelMd: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 11,
+    fontWeight: '600' as const,
+    letterSpacing: 0.5,
+  },
+
+  // Mono
+  monoXs: { fontFamily: typography.fonts.mono, fontSize: 11, fontWeight: '400' as const },
+  monoSm: { fontFamily: typography.fonts.mono, fontSize: 12, fontWeight: '400' as const },
+  monoMd: { fontFamily: typography.fonts.mono, fontSize: 14, fontWeight: '400' as const },
+
+  // Metric / stat values
+  metricLg: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 28,
+    fontWeight: '700' as const,
+    lineHeight: 28 * 1.2,
+  },
+  metricXl: {
+    fontFamily: typography.fonts.heading,
+    fontSize: 32,
+    fontWeight: '700' as const,
+    lineHeight: 32 * 1.2,
+  },
+} as const;
+
 // ---------------------------------------------------------------------------
 // Elevation / surface colors
 // Layers ordered from deepest (base) to highest (overlay)

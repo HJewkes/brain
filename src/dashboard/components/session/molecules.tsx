@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { C, palette, semantic, component } from '../shared/colors.js';
+import { type as T } from '../../tokens.js';
 import { Card } from '../shared/index.js';
 import {
   TimelineDot,
@@ -305,9 +306,7 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
   toolName: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 12,
-    fontWeight: '600',
+    ...T.headingSm,
     flexShrink: 0,
     color: C.textPrimary,
   },
@@ -416,9 +415,7 @@ const s = StyleSheet.create({
     fontWeight: '600',
   },
   expandBtn: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: 10,
-    fontWeight: '600',
+    ...T.labelSm,
     color: C.textTertiary,
     paddingVertical: 2,
     paddingHorizontal: 6,

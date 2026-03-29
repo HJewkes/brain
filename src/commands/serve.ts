@@ -10,6 +10,8 @@ import type { AgentStatus } from '../modules/agents/types.js';
 import type { InboxItem } from '../types.js';
 import { createHttpHandler, broadcast } from './serve-http.js';
 import type { SseClients } from './serve-http.js';
+import { startMcpServer } from '../server/index.js';
+import { installLaunchd, uninstallLaunchd } from './serve-launchd.js';
 
 export function createServeServer(service: BrainServiceClass): McpServer {
   const server = new McpServer(
@@ -169,7 +171,10 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
   const sseClients: SseClients = new Set();
 
   const httpServer = createServer(createHttpHandler(service, sseClients));
-  httpServer.listen(port);
+  httpServer.listen(port, () => {
+    process.stderr.write(`Dashboard: http://localhost:${port}\n`);
+    process.stderr.write(`API: http://localhost:${port}/api/dashboard\n`);
+  });
 
   const heartbeat = setInterval(() => {
     broadcast(sseClients, 'heartbeat', { ts: Date.now() });
@@ -190,8 +195,11 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
 }
 
 export const serveCommand = new Command('serve')
-  .description('Start a persistent MCP server over stdio with full tool catalog')
-  .option('--port <n>', 'HTTP port for REST/SSE API (default: 7800)', '7800')
+  .description('Start brain daemon (HTTP dashboard + MCP over stdio)')
+  .option('--port <n>', 'HTTP port for dashboard and API (default: 7800)', '7800')
+  .option('--mcp', 'Start standalone MCP server over stdio (no HTTP)')
+  .option('--install', 'Install as launchd agent (macOS)')
+  .option('--uninstall', 'Remove launchd agent')
   .action(async (opts, cmd) => {
     const root = cmd.parent?.parent;
     const globalFlag = (root?.opts() as Record<string, unknown>)?.global;
@@ -199,6 +207,23 @@ export const serveCommand = new Command('serve')
     const resolveOpts: ResolveOptions = {};
     if (globalFlag) resolveOpts.forceGlobal = true;
     if (typeof instancePath === 'string') resolveOpts.instancePath = instancePath;
+
     const port = parseInt((opts as { port?: string }).port ?? '7800', 10);
+
+    if ((opts as { uninstall?: boolean }).uninstall) {
+      uninstallLaunchd();
+      return;
+    }
+
+    if ((opts as { install?: boolean }).install) {
+      installLaunchd(port);
+      return;
+    }
+
+    if ((opts as { mcp?: boolean }).mcp) {
+      await startMcpServer(resolveOpts);
+      return;
+    }
+
     await startServeServer(resolveOpts, port);
   });

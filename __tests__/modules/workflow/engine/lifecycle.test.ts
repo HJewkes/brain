@@ -98,13 +98,14 @@ describe('instantiateWorkflow', () => {
 
     const result = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
       planId: 'CO-04.08',
+      workstream: '1',
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.workflow_id).toBe(workflowId);
     expect(result.data.instance_status).toBe('placeholder');
-    expect(result.data.context).toEqual({ planId: 'CO-04.08' });
+    expect(result.data.context).toEqual({ planId: 'CO-04.08', workstream: '1' });
   });
 
   test('AC-04: fails with MISSING_PARAMETER when required parameter is not provided', async () => {
@@ -112,7 +113,9 @@ describe('instantiateWorkflow', () => {
       parameters: [{ name: 'planId', description: 'Plan ID', required: true }],
     });
 
-    const result = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const result = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -121,7 +124,9 @@ describe('instantiateWorkflow', () => {
   });
 
   test('AC-04: fails with NOT_FOUND for non-existent workflow ID', async () => {
-    const result = await instantiateWorkflow(db, config, embedder, 'NONEXISTENT', 'TST', {});
+    const result = await instantiateWorkflow(db, config, embedder, 'NONEXISTENT', 'TST', {
+      workstream: '1',
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -145,7 +150,9 @@ describe('expandWorkflow', () => {
       [edge('a', 'b'), edge('b', 'c'), edge('c', 'd'), edge('d', 'e')]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -162,7 +169,9 @@ describe('expandWorkflow', () => {
       [edge('entry', 'mid'), edge('mid', 'end')]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -184,6 +193,7 @@ describe('expandWorkflow', () => {
 
     const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
       planId: 'CO-04.08',
+      workstream: '1',
     });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
@@ -201,7 +211,9 @@ describe('expandWorkflow', () => {
   test('AC-E1/AC-05: fails with ALREADY_EXPANDED when instance is already expanded', async () => {
     const workflowId = await createAndRegisterWorkflow([step('a'), step('b')], [edge('a', 'b')]);
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -217,7 +229,9 @@ describe('expandWorkflow', () => {
   test('AC-E4: fails with DEFINITION_NOT_FOUND when workflow definition note is deleted', async () => {
     const workflowId = await createAndRegisterWorkflow([step('a')], []);
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -244,7 +258,9 @@ describe('advanceWorkflow', () => {
       [edge('a', 'b'), edge('b', 'c')]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
@@ -269,7 +285,9 @@ describe('advanceWorkflow', () => {
       [edge('a', 'b'), edge('a', 'c', 'condition-met')]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
@@ -294,7 +312,9 @@ describe('advanceWorkflow', () => {
       [edge('a', 'b'), edge('a', 'c', 'condition-met')]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
@@ -316,7 +336,9 @@ describe('advanceWorkflow', () => {
   test('AC-07: all non-pruned steps done marks instance as completed', async () => {
     const workflowId = await createAndRegisterWorkflow([step('only')], []);
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
@@ -342,7 +364,9 @@ describe('collapseWorkflow', () => {
   test('AC-09: creates summary note and archives child tasks for completed workflow', async () => {
     const workflowId = await createAndRegisterWorkflow([step('a'), step('b')], [edge('a', 'b')]);
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
@@ -373,7 +397,9 @@ describe('collapseWorkflow', () => {
       [edge('a', 'b'), edge('b', 'c'), edge('c', 'd'), edge('d', 'e')]
     );
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
@@ -388,7 +414,9 @@ describe('collapseWorkflow', () => {
   test('AC-09: fails with NOT_EXPANDED when instance is still placeholder', async () => {
     const workflowId = await createAndRegisterWorkflow([step('a')], []);
 
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -417,7 +445,9 @@ describe('expansion performance', () => {
     }
 
     const workflowId = await createAndRegisterWorkflow(steps, edges);
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 

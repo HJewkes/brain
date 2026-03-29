@@ -429,6 +429,19 @@ describe('createHttpHandler — route matching', () => {
     expect(res.writeHead).toHaveBeenCalledWith(404, expect.any(Object));
   });
 
+  it('/ serves HTML or falls back to 404 based on dashboard build', async () => {
+    const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
+    const res = makeMockRes();
+    await handler(makeReq('GET', '/'), res as unknown as ServerResponse);
+    const code = res.writeHead.mock.calls[0]?.[0] as number;
+    if (code === 200) {
+      expect(res.headers['Content-Type']).toBe('text/html');
+      expect(res.body.length).toBeGreaterThan(0);
+    } else {
+      expect(code).toBe(404);
+    }
+  });
+
   it('/api/events sets SSE headers and adds client', async () => {
     const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
     const res = makeMockRes();

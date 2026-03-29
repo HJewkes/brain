@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { C, palette, semantic } from './colors.js';
-import { sp } from '../../tokens.js';
+import { sp, type as T } from '../../tokens.js';
 
 export const hoverStyles = StyleSheet.create({
   card: {
@@ -45,7 +45,7 @@ export const hoverStyles = StyleSheet.create({
     paddingVertical: sp[3],
     marginBottom: sp[5],
   },
-  taskText: { fontFamily: 'monospace', fontSize: 11, color: C.steel },
+  taskText: { ...T.monoXs, color: C.steel },
   metricsRow: { flexDirection: 'row', gap: sp[3], marginBottom: sp[5] },
   metric: {
     flex: 1,

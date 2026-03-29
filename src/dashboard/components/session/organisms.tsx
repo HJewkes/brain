@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { C, palette, semantic, component } from '../shared/colors.js';
+import { type as T } from '../../tokens.js';
 import { Card, UserAvatar, ClaudeAvatar } from '../shared/index.js';
 import { TurnSummaryCard } from './molecules.js';
 import type { TurnSummaryCardProps } from './molecules.js';
@@ -230,9 +231,7 @@ const s = StyleSheet.create({
     marginBottom: 7,
   },
   userLabel: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 10,
-    fontWeight: '600',
+    ...T.labelSm,
     color: component.userCard.labelColor,
     letterSpacing: 0.04 * 10,
     textTransform: 'uppercase',
@@ -254,9 +253,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   claudeLabel: {
-    fontFamily: 'Space Grotesk',
-    fontSize: 10,
-    fontWeight: '600',
+    ...T.labelSm,
     color: component.claudeCard.labelColor,
     letterSpacing: 0.04 * 10,
     textTransform: 'uppercase',
@@ -270,9 +267,8 @@ const s = StyleSheet.create({
   claudeParaText: { fontSize: 13, lineHeight: 21, color: semantic.text.primary },
   claudeBoldText: { fontSize: 13, lineHeight: 21, color: semantic.text.primary, fontWeight: '700' },
   claudeCodeText: {
-    fontSize: 11,
+    ...T.monoXs,
     color: C.textSecondary,
-    fontFamily: 'monospace',
     backgroundColor: component.claudeCard.codeInlineBg,
     borderRadius: 3,
   },

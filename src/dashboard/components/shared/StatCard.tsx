@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C, component } from './colors.js';
-import { sp } from '../../tokens.js';
+import { sp, type as T } from '../../tokens.js';
 
 interface Props {
   label: string;
@@ -60,12 +60,11 @@ const styles = StyleSheet.create({
     padding: sp[10],
   },
   label: {
-    fontSize: 12,
+    ...T.bodySm,
     color: C.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: sp[4],
-    fontFamily: "'Inter', sans-serif",
   },
   valueRow: {
     flexDirection: 'row',
