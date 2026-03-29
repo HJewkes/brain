@@ -1,12 +1,21 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { registerWorkflow, getWorkflowStatus } from '../data/workflow-ops.js';
-import { getWorkflowDefinition, listWorkflows, getInstanceStepStates } from '../data/queries.js';
+import {
+  getWorkflowDefinition,
+  listWorkflows,
+  getInstanceStepStates,
+  getInstanceByDisplayId,
+} from '../data/queries.js';
 import type { WorkflowNoteMetadata } from '../types.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
+import { signalCondition } from '../engine/condition.js';
 
-function formatWorkflowLine(wf: WorkflowNoteMetadata): string {
-  return `${wf.display_id} - ${wf.name} v${wf.version} [${wf.registration_status}]`;
+function formatWorkflowLine(wf: Partial<WorkflowNoteMetadata> & { display_id: string }): string {
+  const name = wf.name ?? '(unnamed)';
+  const version = wf.version ?? '?';
+  const status = wf.registration_status ?? 'unknown';
+  return `${wf.display_id} - ${name} v${version} [${status}]`;
 }
 
 function formatError(error: { code: string; message: string }, json: boolean): string {
@@ -267,6 +276,93 @@ export function createWorkflowCommand(): Command {
           );
         } else {
           process.stdout.write(`Gate passed for step "${stepId}" (${step.taskDisplayId})\n`);
+        }
+      });
+    });
+
+  cmd
+    .command('route')
+    .description('Signal which conditional edge to take from a completed step')
+    .argument('<instance-display-id>', 'Instance display ID (e.g. VNM-41.07)')
+    .argument('<step-id>', 'Step ID within the workflow')
+    .argument('<condition>', 'Condition name matching a conditional edge from that step')
+    .option('--json', 'Output JSON')
+    .action(async (instanceDisplayId, stepId, condition, opts) => {
+      await withBrain(async (svc) => {
+        // 1. Validate instance exists and is executing
+        const instanceResult = getInstanceByDisplayId(svc.db, instanceDisplayId);
+        if (!instanceResult.ok) {
+          process.stderr.write(formatError(instanceResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        if (instanceResult.data.metadata.instance_status !== 'executing') {
+          const msg = `Instance "${instanceDisplayId}" is not in executing status (current: ${instanceResult.data.metadata.instance_status})`;
+          process.stderr.write(
+            formatError({ code: 'INVALID_STATE', message: msg }, !!opts.json) + '\n'
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        // 2. Validate step exists in the workflow definition
+        const workflowId = instanceResult.data.metadata.workflow_id;
+        const defResult = getWorkflowDefinition(svc.db, workflowId);
+        if (!defResult.ok) {
+          process.stderr.write(formatError(defResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        const { definition } = defResult.data;
+        const stepExists = definition.steps.some((s) => s.id === stepId);
+        if (!stepExists) {
+          const available = definition.steps.map((s) => s.id).join(', ');
+          const msg = `Step "${stepId}" not found in workflow "${workflowId}". Available: ${available}`;
+          process.stderr.write(
+            formatError({ code: 'NOT_FOUND', message: msg }, !!opts.json) + '\n'
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        // 3. Validate condition matches a conditional edge from this step
+        const conditionalEdges = definition.edges.filter(
+          (e) => e.from === stepId && e.condition !== undefined
+        );
+        const matchingEdge = conditionalEdges.find((e) => e.condition === condition);
+        if (!matchingEdge) {
+          const available = conditionalEdges.map((e) => e.condition).join(', ');
+          const msg =
+            available.length > 0
+              ? `Condition "${condition}" not found on step "${stepId}". Available conditions: ${available}`
+              : `Step "${stepId}" has no conditional edges`;
+          process.stderr.write(
+            formatError({ code: 'NOT_FOUND', message: msg }, !!opts.json) + '\n'
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        // 4. Signal the condition
+        const result = signalCondition(svc.db, instanceDisplayId, stepId, condition);
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        if (opts.json) {
+          process.stdout.write(
+            JSON.stringify(
+              { instance_id: instanceDisplayId, step_id: stepId, condition },
+              null,
+              2
+            ) + '\n'
+          );
+        } else {
+          process.stdout.write(
+            `Signaled condition "${condition}" on step "${stepId}" of ${instanceDisplayId}\n`
+          );
         }
       });
     });

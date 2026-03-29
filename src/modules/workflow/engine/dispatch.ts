@@ -44,6 +44,13 @@ const CATEGORY_TO_PREFIX: Record<string, keyof ProjectBranchPrefix> = {
   review: 'feature',
 };
 
+function camelToUpperSnake(key: string): string {
+  return key
+    .replace(/([A-Z])/g, '_$1')
+    .toUpperCase()
+    .replace(/^_/, '');
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -142,14 +149,14 @@ function injectWorkflowContext(db: BrainDB, taskId: string, vars: Record<string,
     }
   }
 
-  // Inject instance context params (e.g. topic, repo) into template variables.
-  // Provide both original case and UPPER_CASE for template flexibility.
+  // Inject instance context params (e.g. planId, researchFocus) into template variables.
+  // Provide both original case and UPPER_SNAKE_CASE for template flexibility (e.g. {{PLAN_ID}}).
   if (context) {
     for (const [key, value] of Object.entries(context)) {
       vars[key] = value;
-      const upperKey = key.toUpperCase();
-      if (!(upperKey in vars)) {
-        vars[upperKey] = value;
+      const snakeKey = camelToUpperSnake(key);
+      if (!(snakeKey in vars)) {
+        vars[snakeKey] = value;
       }
     }
   }
