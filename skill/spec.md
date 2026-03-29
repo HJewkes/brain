@@ -1,21 +1,21 @@
 ---
-name: plan
-description: Create a structured planning workflow for a feature or task. Use when the user says "/plan <description>", wants to plan something, or needs a planning workflow instantiated. Generates a plan directory and kicks off the research phase.
+name: spec
+description: Create a structured planning workflow for a feature or task. Use when the user says "/spec <description>", wants to plan something, or needs a planning workflow instantiated. Generates a plan directory and kicks off the research phase.
 triggers:
-  - /plan
-  - plan this
-  - create a plan for
-  - start planning
+  - /spec
+  - spec this
+  - create a spec for
+  - start spec
 ---
 
-# /plan — Instantiate a Planning Workflow
+# /spec — Instantiate a Planning Workflow
 
 Create a planning workflow for a feature, refactor, or investigation. Instantiates the brain `planning` workflow and prepares the first research step.
 
 ## Usage
 
 ```
-/plan <description> [--complexity low|medium|high] [--workstream <ws>]
+/spec <description> [--complexity low|medium|high] [--workstream <ws>]
 ```
 
 - `description` — what to plan (required)
