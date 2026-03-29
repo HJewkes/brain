@@ -40,6 +40,7 @@ describe('autoloop module', () => {
     expect(registry.getRelationType('enriched-by')).toBeDefined();
     expect(registry.getRelationType('enriched-task')).toBeDefined();
     expect(registry.getRelationType('insight-from')).toBeDefined();
+    expect(registry.getRelationType('has-insight')).toBeDefined();
   });
 
   it('registers commands', () => {

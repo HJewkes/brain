@@ -23,10 +23,7 @@ const VAGUE_PATTERNS = [
 
 const MIN_DESCRIPTION_LENGTH = 30;
 
-export function scanTaskQuality(
-  db: BrainDB,
-  opts: QualityScanOptions
-): QualityScanReport {
+export function scanTaskQuality(db: BrainDB, opts: QualityScanOptions): QualityScanReport {
   const result = listTasks(
     db,
     opts.project,
@@ -66,7 +63,7 @@ export function scanTaskQuality(
   };
 }
 
-function scoreTask(task: {
+export function scoreTask(task: {
   display_id: string;
   title?: string;
   description?: string;
@@ -108,15 +105,15 @@ function scoreTask(task: {
     hasDescription,
     hasDependencies,
     hasRelatedResearch,
-    hasEstimate: false, // No estimate field in current schema
+    hasDoneWhen,
     isSpecific,
   };
 
   const weights = {
-    hasDescription: 0.3,
+    hasDescription: 0.25,
     hasDependencies: 0.1,
     hasRelatedResearch: 0.15,
-    hasEstimate: 0.05,
+    hasDoneWhen: 0.1,
     isSpecific: 0.4,
   };
 
@@ -124,7 +121,7 @@ function scoreTask(task: {
     (dimensions.hasDescription ? weights.hasDescription : 0) +
     (dimensions.hasDependencies ? weights.hasDependencies : 0) +
     (dimensions.hasRelatedResearch ? weights.hasRelatedResearch : 0) +
-    (dimensions.hasEstimate ? weights.hasEstimate : 0) +
+    (dimensions.hasDoneWhen ? weights.hasDoneWhen : 0) +
     (dimensions.isSpecific ? weights.isSpecific : 0);
 
   return {
@@ -136,23 +133,21 @@ function scoreTask(task: {
 }
 
 function isTaskSpecific(title: string, description: string): boolean {
-  if (VAGUE_PATTERNS.some((p) => p.test(title)) && description.length < MIN_DESCRIPTION_LENGTH) {
-    return false;
-  }
-
-  if (title.length < 10 && description.length < MIN_DESCRIPTION_LENGTH) {
-    return false;
-  }
-
-  // Check for actionable content: file paths, function names, component names
   const combined = `${title} ${description}`;
-  const hasFileRef = /\.[jt]sx?|\.ts|\.py|\.rs|\.go|\.md/.test(combined);
+
+  // Check for actionable content first — these override vague pattern detection
+  const hasFileRef = /\.[jt]sx?|\.py|\.rs|\.go|\.md/.test(combined);
   const hasComponentRef = /[A-Z][a-z]+[A-Z]/.test(combined); // PascalCase
   const hasCodeRef = /`[^`]+`/.test(combined); // inline code
-  const hasStructuredContent = combined.includes(':') || combined.includes('→') || combined.includes('--');
+  const hasStructuredContent =
+    combined.includes(':') || combined.includes('→') || combined.includes('--');
 
-  if (description.length >= MIN_DESCRIPTION_LENGTH) return true;
   if (hasFileRef || hasComponentRef || hasCodeRef || hasStructuredContent) return true;
+  if (description.length >= MIN_DESCRIPTION_LENGTH) return true;
 
-  return false;
+  // Vague patterns with insufficient detail
+  if (VAGUE_PATTERNS.some((p) => p.test(title))) return false;
+  if (title.length < 10) return false;
+
+  return true;
 }

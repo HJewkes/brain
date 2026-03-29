@@ -25,7 +25,10 @@ const AUTOLOOP_REPORT_NOTE_TYPE: ModuleNoteType = {
       insights_extracted: { type: 'number', description: 'Insights generated' },
       tasks_updated: { type: 'number', description: 'Tasks modified (enriched, deduped, etc.)' },
       notes_created: { type: 'number', description: 'Brain notes created' },
-      termination_reason: { type: 'string', description: 'Why the loop stopped (if not completed)' },
+      termination_reason: {
+        type: 'string',
+        description: 'Why the loop stopped (if not completed)',
+      },
     },
     required: ['loop_type', 'status', 'started_at'],
   },
@@ -44,7 +47,10 @@ const AUTOLOOP_INSIGHT_NOTE_TYPE: ModuleNoteType = {
         description: 'Insight category',
       },
       confidence: { type: 'number', description: 'Confidence score 0.0–1.0' },
-      source_sessions: { type: 'array', description: 'Session display_ids that sourced this insight' },
+      source_sessions: {
+        type: 'array',
+        description: 'Session display_ids that sourced this insight',
+      },
       source_session_count: { type: 'number', description: 'Number of sessions corroborating' },
       reviewed_in: { type: 'string', description: 'Autoloop report display_id' },
     },
@@ -83,6 +89,12 @@ export const autoloopModule: BrainModule = {
     ctx.registerRelationType({
       name: 'insight-from',
       description: 'Insight was extracted from this session',
+      inverse: 'has-insight',
+    });
+    ctx.registerRelationType({
+      name: 'has-insight',
+      description: 'Session produced this insight',
+      inverse: 'insight-from',
     });
 
     ctx.registerExtractionStrategy({ shouldExtract: () => false });

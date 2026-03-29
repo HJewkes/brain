@@ -65,7 +65,7 @@ export interface TaskReadinessScore {
     hasDescription: boolean;
     hasDependencies: boolean;
     hasRelatedResearch: boolean;
-    hasEstimate: boolean;
+    hasDoneWhen: boolean;
     isSpecific: boolean;
   };
   suggestions: string[];
