@@ -6,6 +6,9 @@ triggers:
   - spec this
   - create a spec for
   - start spec
+  - plan this
+  - create a plan for
+  - start planning
 ---
 
 # /spec — Instantiate a Planning Workflow
