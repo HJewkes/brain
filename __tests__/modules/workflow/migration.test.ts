@@ -83,6 +83,7 @@ describe('planning workflow migration', () => {
   test('AC-14: planning workflow registers, instantiates, and expands with correct structure', async () => {
     const workflowId = await registerDefinition(planningDef);
     const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'CO', {
+      workstream: '1',
       planId: 'CO-04.08',
     });
     expect(instResult.ok).toBe(true);
@@ -134,7 +135,9 @@ describe('implementation workflow migration', () => {
 
   test('AC-14/AC-15: implementation workflow expands with correct dependency structure', async () => {
     const workflowId = await registerDefinition(implDef);
-    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'CO', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'CO', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -165,6 +168,7 @@ describe('implementation workflow migration', () => {
     const implWorkflowId = await registerDefinition(implDef);
 
     const result = await instantiateWorkflow(db, config, embedder, implWorkflowId, 'CO', {
+      workstream: '1',
       parentStep: 'implement',
     });
     expect(result.ok).toBe(true);

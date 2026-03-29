@@ -158,7 +158,9 @@ describe('workflow versioning', () => {
     await createProject(db, config, embedder, { name: 'Test', prefix: 'TST' });
     await createWorkstream(db, config, embedder, { project: 'TST', name: 'Main' });
 
-    const instResult = await instantiateWorkflow(db, config, embedder, noteId, 'TST', {});
+    const instResult = await instantiateWorkflow(db, config, embedder, noteId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 

@@ -63,7 +63,9 @@ describe('workflow iteration', () => {
   test('AC-08: new instance has iteration-of relation to previous instance', async () => {
     const workflowId = await registerTestWorkflow();
 
-    const inst1 = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const inst1 = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(inst1.ok).toBe(true);
     if (!inst1.ok) return;
 
@@ -74,7 +76,7 @@ describe('workflow iteration', () => {
       embedder,
       workflowId,
       'TST',
-      {},
+      { workstream: '1' },
       {
         iterationOf: inst1.data.display_id,
       }
@@ -88,7 +90,9 @@ describe('workflow iteration', () => {
   test('AC-08: iteration chain is queryable via status --history', async () => {
     const workflowId = await registerTestWorkflow();
 
-    const inst1 = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {});
+    const inst1 = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(inst1.ok).toBe(true);
     if (!inst1.ok) return;
 
@@ -98,7 +102,7 @@ describe('workflow iteration', () => {
       embedder,
       workflowId,
       'TST',
-      {},
+      { workstream: '1' },
       {
         iterationOf: inst1.data.display_id,
       }
@@ -112,7 +116,7 @@ describe('workflow iteration', () => {
       embedder,
       workflowId,
       'TST',
-      {},
+      { workstream: '1' },
       {
         iterationOf: inst2.data.display_id,
       }
