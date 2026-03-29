@@ -6,6 +6,7 @@ import type { WorkflowDefinition } from '../types.js';
 import { getInstanceByDisplayId, getInstanceStepStates } from '../data/queries.js';
 import { getPredecessors, getUnreachableSteps } from './dag.js';
 import { evaluateGates } from './gates.js';
+import { getConditionSignals } from './condition.js';
 
 interface AdvanceResult {
   advanced: string[];
@@ -49,10 +50,12 @@ export async function advanceWorkflow(
     definition,
     readySteps,
     db,
-    config
+    config,
+    instanceDisplayId
   );
   const { pruned, warnings } = pruneUnreachableSteps(
     db,
+    instanceDisplayId,
     allStepIds,
     statusMap,
     taskDisplayIdMap,
@@ -108,7 +111,8 @@ async function findAdvancedSteps(
   definition: WorkflowDefinition,
   readySteps: Set<string>,
   db: BrainDB,
-  config: BrainConfig
+  config: BrainConfig,
+  instanceDisplayId: string
 ): Promise<string[]> {
   const advanced: string[] = [];
 
@@ -120,10 +124,31 @@ async function findAdvancedSteps(
     if (status === 'done' || status === 'pruned' || status === 'cancelled') continue;
 
     const preds = getPredecessors(stepId, unconditional);
-    if (preds.length === 0) continue;
 
-    const allPredsReady = preds.every((p) => readySteps.has(p));
-    if (!allPredsReady) continue;
+    // Conditional-only targets: advance when their source step's condition is signaled
+    if (preds.length === 0) {
+      const condEdges = definition.edges.filter((e) => e.to === stepId && e.condition);
+      if (condEdges.length > 0 && condEdges.every((e) => readySteps.has(e.from))) {
+        const matched = condEdges.some((e) => {
+          const srcSignals = getConditionSignals(db, instanceDisplayId, e.from);
+          return srcSignals.includes(e.condition!);
+        });
+        if (matched) {
+          advanced.push(stepId);
+        }
+      }
+      continue;
+    }
+
+    // All unconditional predecessors must be ready (completed or entry).
+    // Additionally, at least one predecessor must have no condition signals
+    // (exclusive routing: predecessors with signals routed explicitly elsewhere).
+    const allReady = preds.every((p) => readySteps.has(p));
+    if (!allReady) continue;
+    const hasUnsignaledPred = preds.some((p) => {
+      return getConditionSignals(db, instanceDisplayId, p).length === 0;
+    });
+    if (!hasUnsignaledPred) continue;
 
     const stepDef = definition.steps.find((s) => s.id === stepId);
     const gates = stepDef?.gates ?? [];
@@ -141,6 +166,7 @@ async function findAdvancedSteps(
 
 function pruneUnreachableSteps(
   db: BrainDB,
+  instanceDisplayId: string,
   allStepIds: string[],
   statusMap: Map<string, string>,
   taskDisplayIdMap: Map<string, string>,
@@ -167,9 +193,18 @@ function pruneUnreachableSteps(
     if (!allConditional) continue;
 
     const allSourcesReady = incoming.every((e) => readySteps.has(e.from));
-    if (allSourcesReady && !advanced.includes(stepId)) {
-      unreachable.push(stepId);
-    }
+    if (!allSourcesReady || advanced.includes(stepId)) continue;
+
+    // Before pruning, check if any incoming conditional edge's source step has signaled.
+    // If a signal matches, the condition was triggered — don't prune this step.
+    const hasActiveSignal = incoming.some((e) => {
+      if (!e.condition) return false;
+      const srcSignals = getConditionSignals(db, instanceDisplayId, e.from);
+      return srcSignals.includes(e.condition);
+    });
+    if (hasActiveSignal) continue;
+
+    unreachable.push(stepId);
   }
 
   for (const stepId of unreachable) {

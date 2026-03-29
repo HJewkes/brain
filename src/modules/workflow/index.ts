@@ -8,6 +8,7 @@ import { createObserveCommand } from './commands/observe.js';
 import { createImproveCommand } from './commands/improve.js';
 import { createReportCommand } from './commands/report.js';
 import { frictionHook } from './hooks/friction-hook.js';
+import { advanceHook } from './hooks/advance-hook.js';
 
 export {
   resolveTemplate,
@@ -134,5 +135,6 @@ export const workflowModule: BrainModule = {
     ctx.registerCommand(wfCmd);
 
     ctx.registerHookHandler(frictionHook);
+    ctx.registerHookHandler(advanceHook);
   },
 };

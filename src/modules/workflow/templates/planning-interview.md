@@ -13,7 +13,7 @@ Before starting the interview:
 
 ## Interview Flow
 
-Ask these questions **one at a time**. Wait for the answer before proceeding. Adapt follow-ups based on responses.
+Use the `AskUserQuestion` tool to ask each question **one at a time**. Wait for the answer before proceeding. Adapt follow-ups based on responses. Do not batch questions — each `AskUserQuestion` call should contain a single focused question.
 
 ### Core Questions
 
