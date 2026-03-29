@@ -138,9 +138,9 @@ describe('generateSessionBriefing', () => {
     ]);
 
     const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
-    const sessionSection = briefing.sections.find((s) => s.heading === 'Recent Sessions');
+    const sessionSection = briefing.sections.find((s) => s.heading.includes('Last Session'));
     expect(sessionSection).toBeDefined();
-    expect(sessionSection!.items[0]).toContain('SNS-001');
+    expect(sessionSection!.heading).toContain('SNS-001');
     expect(sessionSection!.items[0]).toContain('Worked on auth');
   });
 
