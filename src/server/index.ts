@@ -9,8 +9,10 @@ export async function startMcpServer(resolveOpts?: ResolveOptions): Promise<void
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  process.on('SIGINT', () => {
+  const shutdown = () => {
     closeSharedInstance();
     process.exit(0);
-  });
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }

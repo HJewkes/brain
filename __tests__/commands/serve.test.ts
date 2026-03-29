@@ -429,16 +429,16 @@ describe('createHttpHandler — route matching', () => {
     expect(res.writeHead).toHaveBeenCalledWith(404, expect.any(Object));
   });
 
-  it('/ serves dashboard index.html when build exists', async () => {
+  it('/ serves HTML or falls back to 404 based on dashboard build', async () => {
     const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
     const res = makeMockRes();
     await handler(makeReq('GET', '/'), res as unknown as ServerResponse);
-    // If dist/dashboard/index.html exists, it should return 200 with HTML
-    // If not built, falls through to 404
-    const code = res.writeHead.mock.calls[0]?.[0];
-    expect([200, 404]).toContain(code);
+    const code = res.writeHead.mock.calls[0]?.[0] as number;
     if (code === 200) {
       expect(res.headers['Content-Type']).toBe('text/html');
+      expect(res.body.length).toBeGreaterThan(0);
+    } else {
+      expect(code).toBe(404);
     }
   });
 
