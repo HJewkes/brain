@@ -1,8 +1,14 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { BrainServiceClass } from '../services/brain-service.js';
 import { VALID_HOOK_EVENTS, dispatchHookEvent } from '../hooks/dispatch.js';
 import type { HookEvent } from '../hooks/types.js';
 import { seekJsonlFile } from '../utils/jsonl-seek.js';
+
+const __dirname_esm = dirname(fileURLToPath(import.meta.url));
+const DASHBOARD_DIR = join(__dirname_esm, '..', '..', 'dist', 'dashboard');
 
 export type SseClients = Set<ServerResponse>;
 
@@ -280,6 +286,17 @@ export function createHttpHandler(
       res.end(JSON.stringify(result));
       broadcast(sseClients, 'hook', { event, result });
       return;
+    }
+
+    // Serve dashboard static files (single-file build → index.html)
+    if (!path.startsWith('/api/')) {
+      const indexPath = join(DASHBOARD_DIR, 'index.html');
+      if (existsSync(indexPath)) {
+        const html = readFileSync(indexPath, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(html);
+        return;
+      }
     }
 
     notFound(res);

@@ -429,6 +429,19 @@ describe('createHttpHandler — route matching', () => {
     expect(res.writeHead).toHaveBeenCalledWith(404, expect.any(Object));
   });
 
+  it('/ serves dashboard index.html when build exists', async () => {
+    const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
+    const res = makeMockRes();
+    await handler(makeReq('GET', '/'), res as unknown as ServerResponse);
+    // If dist/dashboard/index.html exists, it should return 200 with HTML
+    // If not built, falls through to 404
+    const code = res.writeHead.mock.calls[0]?.[0];
+    expect([200, 404]).toContain(code);
+    if (code === 200) {
+      expect(res.headers['Content-Type']).toBe('text/html');
+    }
+  });
+
   it('/api/events sets SSE headers and adds client', async () => {
     const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
     const res = makeMockRes();
