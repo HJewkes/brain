@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { BrainServiceClass } from '../services/brain-service.js';
+import type { BrainDB } from '../services/brain-db.js';
 import type { InboxItem } from '../types.js';
 import { searchMemories } from '../services/search.js';
 import { getTask, listTasks } from '../modules/pm/data/task-ops.js';
@@ -15,11 +16,8 @@ import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents } from '../modules/agents/data.js';
 import { dispatchTask } from './dispatch.js';
 import { getWorkflowStatus } from '../modules/workflow/data/workflow-ops.js';
-import { getInstanceStepStates } from '../modules/workflow/data/queries.js';
-import {
-  startWorkflow,
-  advanceAndDispatch,
-} from '../modules/workflow/engine/executor.js';
+import { getInstanceByDisplayId, getInstanceStepStates } from '../modules/workflow/data/queries.js';
+import { startWorkflow, advanceAndDispatch } from '../modules/workflow/engine/executor.js';
 import { signalCondition } from '../modules/workflow/engine/condition.js';
 import { updateTaskStatus as updateTaskStatusDirect } from '../modules/pm/data/task-ops.js';
 
@@ -334,6 +332,16 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
   );
 }
 
+function resetInstanceToExecuting(db: BrainDB, instanceId: string): void {
+  const result = getInstanceByDisplayId(db, instanceId);
+  if (!result.ok) return;
+  const { note } = result.data;
+  const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+  if (meta.instance_status === 'stalled' || meta.instance_status === 'paused') {
+    db.upsertNote({ ...note, metadata: JSON.stringify({ ...meta, instance_status: 'executing' }) });
+  }
+}
+
 function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void {
   server.tool(
     'brain_workflow_start',
@@ -378,11 +386,11 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
 
       const { instance, steps, progress } = statusResult.data;
 
+      const allActiveAgents = svc.agentList({ status: 'active' as AgentStatus });
       const activeAgents = steps
         .filter((s) => s.status === 'claimed' || s.status === 'in-progress')
         .map((s) => {
-          const agents = svc.agentList({ status: 'active' as AgentStatus });
-          const agent = agents.find((a) => a.brain_task === s.taskDisplayId);
+          const agent = allActiveAgents.find((a) => a.brain_task === s.taskDisplayId);
           return {
             stepId: s.stepId,
             taskId: s.taskDisplayId,
@@ -408,7 +416,9 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
       stepId: z.string().describe('Step ID to signal'),
       action: z
         .enum(['complete', 'retry', 'skip', 'signal'])
-        .describe('Action: complete (assisted done), retry (re-dispatch), skip (mark done), signal (condition)'),
+        .describe(
+          'Action: complete (assisted done), retry (re-dispatch), skip (mark done), signal (condition)'
+        ),
       condition: z
         .string()
         .optional()
@@ -432,9 +442,24 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
           );
         }
 
+        if (action === 'retry') {
+          await updateTaskStatusDirect(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            step.taskDisplayId,
+            'pending' as TaskStatus
+          );
+        }
+
         if (action === 'signal' && condition) {
           const sigResult = signalCondition(svc.db, instanceId, stepId, condition);
           if (!sigResult.ok) return errorResult(sigResult.error.message);
+        }
+
+        // Clear stalled/paused status before advancing
+        if (action === 'complete' || action === 'retry' || action === 'skip') {
+          resetInstanceToExecuting(svc.db, instanceId);
         }
 
         const advResult = await advanceAndDispatch(svc, instanceId, stepId);

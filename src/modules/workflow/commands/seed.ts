@@ -21,7 +21,11 @@ function findDefinitionsDir(): string {
   return sourceDir;
 }
 
-function loadDefinitions(): Array<{ name: string; filename: string; definition: WorkflowDefinition }> {
+function loadDefinitions(): Array<{
+  name: string;
+  filename: string;
+  definition: WorkflowDefinition;
+}> {
   const dir = findDefinitionsDir();
   if (!existsSync(dir)) return [];
 
@@ -91,9 +95,8 @@ export function createSeedCommand(): Command {
             continue;
           }
           if (existingDisplayId && opts.force) {
+            // Fix display_id before re-registering with updated definition
             fixDisplayId(svc.db, existingDisplayId, name);
-            skipped.push(name);
-            continue;
           }
 
           const slug = basename(filename, '.json');
@@ -151,7 +154,9 @@ export function createSeedCommand(): Command {
             }
           }
           if (skipped.length > 0) {
-            process.stdout.write(`Skipped ${skipped.length} (already registered): ${skipped.join(', ')}\n`);
+            process.stdout.write(
+              `Skipped ${skipped.length} (already registered): ${skipped.join(', ')}\n`
+            );
           }
           if (seeded.length === 0 && skipped.length === 0) {
             process.stdout.write('Nothing to do\n');

@@ -178,14 +178,10 @@ async function handleAssistedStep(
   taskId: string,
   templateName: string
 ): Promise<Result<StepExecutionResult, ExecutorErrorCode>> {
-  const rendered = await dispatchTemplate(
-    svc.db,
-    svc.config,
-    svc.embedder,
-    taskId,
-    templateName,
-    { claim: false, dryRun: true }
-  );
+  const rendered = await dispatchTemplate(svc.db, svc.config, svc.embedder, taskId, templateName, {
+    claim: false,
+    dryRun: true,
+  });
 
   if (!rendered.ok) return fail('DISPATCH_FAILED', rendered.error.message);
 
@@ -207,14 +203,10 @@ async function handleAgentStep(
   templateName: string,
   options?: { model?: string; maxBudgetUsd?: number; resumePrefix?: string }
 ): Promise<Result<StepExecutionResult, ExecutorErrorCode>> {
-  const rendered = await dispatchTemplate(
-    svc.db,
-    svc.config,
-    svc.embedder,
-    taskId,
-    templateName,
-    { claim: false, dryRun: true }
-  );
+  const rendered = await dispatchTemplate(svc.db, svc.config, svc.embedder, taskId, templateName, {
+    claim: false,
+    dryRun: true,
+  });
 
   if (!rendered.ok) return fail('DISPATCH_FAILED', rendered.error.message);
 
@@ -303,20 +295,14 @@ export async function startWorkflow(
     { workstream: options?.workstream }
   );
   if (!instResult.ok) {
-    return fail(
-      instResult.error.code as ExecutorErrorCode,
-      instResult.error.message
-    );
+    return fail(instResult.error.code as ExecutorErrorCode, instResult.error.message);
   }
 
   const instanceId = instResult.data.display_id;
 
   const expandResult = await expandWorkflow(svc.db, svc.config, svc.embedder, instanceId);
   if (!expandResult.ok) {
-    return fail(
-      expandResult.error.code as ExecutorErrorCode,
-      expandResult.error.message
-    );
+    return fail(expandResult.error.code as ExecutorErrorCode, expandResult.error.message);
   }
 
   setInstanceStatus(svc, instanceId, 'executing');
@@ -376,6 +362,8 @@ async function tryRetryStep(
 
   const updated = { ...meta, retry_count: retryCount + 1, status: 'pending' };
   svc.db.upsertNote({ ...taskNotes[0], metadata: JSON.stringify(updated) });
+
+  setInstanceStatus(svc, instanceDisplayId, 'executing');
 
   const resumePrefix = buildStepResumptionPrefix(svc, stepState.taskDisplayId);
   const result = await executeWorkflowStep(svc, instanceDisplayId, stepId, { resumePrefix });

@@ -21,7 +21,12 @@ import { replaceFrontmatterField } from '../utils.js';
 import { indexSingleFile } from '../services/indexing.js';
 import { allocateWorktree } from '../modules/agents/worktree.js';
 import type { AllocateWorktreeResult } from '../modules/agents/worktree.js';
-import { createAgent, getAgent, updateAgentStatus, setAgentContext } from '../modules/agents/data.js';
+import {
+  createAgent,
+  getAgent,
+  updateAgentStatus,
+  setAgentContext,
+} from '../modules/agents/data.js';
 import { parseCompletionMessage, handleCompletion } from '../modules/agents/completion-protocol.js';
 
 // --- Types ---
@@ -378,7 +383,10 @@ async function handleProcessExit(
   if (agentTaskId) {
     if (completedTaskId) {
       await tryAdvanceWorkflow(svc, completedTaskId, result?.result ?? '');
-    } else if (code !== 0) {
+    } else if (code === 0) {
+      // Exit 0 without protocol message — still advance using the agent's task
+      await tryAdvanceWorkflow(svc, agentTaskId, result?.result ?? '');
+    } else {
       const exitReason = code === 143 ? 'rate_limited' : `exit_code_${code}`;
       await tryHandleStepFailure(svc, agentTaskId, exitReason);
     }
@@ -440,19 +448,13 @@ async function tryAdvanceWorkflow(
     if (!wf) return;
 
     const projectDir = resolveProjectDir(svc);
-    const { captureStepOutput } = await import(
-      '../modules/workflow/engine/output-capture.js'
-    );
+    const { captureStepOutput } = await import('../modules/workflow/engine/output-capture.js');
     captureStepOutput(projectDir, wf.instanceDisplayId, wf.stepId, agentOutput);
 
-    const { advanceAndDispatch } = await import(
-      '../modules/workflow/engine/executor.js'
-    );
+    const { advanceAndDispatch } = await import('../modules/workflow/engine/executor.js');
     await advanceAndDispatch(svc, wf.instanceDisplayId, wf.stepId, agentOutput);
   } catch (err) {
-    process.stderr.write(
-      `[workflow:advance] ${err instanceof Error ? err.message : err}\n`
-    );
+    process.stderr.write(`[workflow:advance] ${err instanceof Error ? err.message : err}\n`);
   }
 }
 
@@ -465,13 +467,9 @@ async function tryHandleStepFailure(
     const wf = resolveWorkflowInstance(svc, taskId);
     if (!wf) return;
 
-    const { handleStepFailure } = await import(
-      '../modules/workflow/engine/executor.js'
-    );
+    const { handleStepFailure } = await import('../modules/workflow/engine/executor.js');
     await handleStepFailure(svc, wf.instanceDisplayId, wf.stepId, exitReason);
   } catch (err) {
-    process.stderr.write(
-      `[workflow:failure] ${err instanceof Error ? err.message : err}\n`
-    );
+    process.stderr.write(`[workflow:failure] ${err instanceof Error ? err.message : err}\n`);
   }
 }
