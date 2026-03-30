@@ -22,6 +22,7 @@ export const VALID_HOOK_EVENTS = new Set<HookEvent>([
   'task-completed',
   'agent-done',
   'session-start',
+  'pre-compact',
 ]);
 
 export function buildRegistry(): HookRegistry {

@@ -5,6 +5,10 @@ vi.mock('../../../src/modules/sessions/data/session-ops.js', () => ({
   getSessionBySessionId: vi.fn(),
 }));
 
+vi.mock('../../../src/modules/sessions/engine/aggregate.js', () => ({
+  getSessionChunkContents: vi.fn().mockReturnValue([]),
+}));
+
 import { getSessionBySessionId } from '../../../src/modules/sessions/data/session-ops.js';
 import {
   generateResumeContext,

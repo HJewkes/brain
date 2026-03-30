@@ -28,6 +28,7 @@ const HOOK_EVENTS: Array<{ claudeEvent: string; brainEvent: string }> = [
   { claudeEvent: 'Notification', brainEvent: 'notification' },
   { claudeEvent: 'SessionStart', brainEvent: 'session-start' },
   { claudeEvent: 'Stop', brainEvent: 'agent-done' },
+  { claudeEvent: 'PreCompact', brainEvent: 'pre-compact' },
 ];
 
 function buildBrainHooksConfig(): HooksConfig {

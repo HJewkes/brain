@@ -467,3 +467,40 @@ export function populateSessionFiles(
     // Table may not exist if migrations haven't run — non-fatal
   }
 }
+
+export function updateSessionNoteMeta(
+  db: BrainDB,
+  sessionId: string,
+  updater: (meta: Record<string, unknown>) => void
+): void {
+  const rawDb = (
+    db as unknown as {
+      db: {
+        prepare: (sql: string) => {
+          get: (...args: unknown[]) => unknown;
+          run: (...args: unknown[]) => void;
+        };
+      };
+    }
+  ).db;
+
+  try {
+    const row = rawDb
+      .prepare(
+        `SELECT id, metadata FROM notes
+         WHERE module = 'sessions'
+           AND json_extract(metadata, '$.session_id') = ?
+         LIMIT 1`
+      )
+      .get(sessionId) as { id: string; metadata: string } | undefined;
+
+    if (!row?.metadata) return;
+
+    const meta = JSON.parse(row.metadata) as Record<string, unknown>;
+    updater(meta);
+
+    rawDb.prepare('UPDATE notes SET metadata = ? WHERE id = ?').run(JSON.stringify(meta), row.id);
+  } catch {
+    // Best-effort — hook metadata updates should never block
+  }
+}

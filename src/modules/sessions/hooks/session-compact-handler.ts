@@ -1,12 +1,13 @@
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../../../hooks/types.js';
 import { hookAllow, hookAllowJson } from '../../../hooks/types.js';
-import { loadConfig } from '../../../services/config.js';
+import { loadConfig, resolveInstance } from '../../../services/config.js';
 import { BrainDB } from '../../../services/brain-db.js';
 import {
   generateResumeContext,
   renderResumeXml,
   renderResumePlain,
 } from '../engine/session-resume.js';
+import { updateSessionNoteMeta } from '../data/session-ops.js';
 
 // Compaction notification markers from Claude Code
 const COMPACTION_PHRASES = [
@@ -33,10 +34,13 @@ export const sessionCompactHandler: HookHandler = {
 
     let db: BrainDB | null = null;
     try {
-      const config = loadConfig();
+      const instance = resolveInstance({ cwd: input.cwd });
+      const config = loadConfig(instance);
       db = new BrainDB(config.dbPath);
 
-      incrementCompactCount(db, sessionId);
+      updateSessionNoteMeta(db, sessionId, (meta) => {
+        meta.compact_count = ((meta.compact_count as number) ?? 0) + 1;
+      });
 
       const ctx = generateResumeContext(db, sessionId);
       if (!ctx) return hookAllow();
@@ -69,38 +73,4 @@ function isCompactionNotification(parsed: Record<string, unknown>): boolean {
   if (subtype === 'compact_boundary' || subtype === 'compaction') return true;
 
   return false;
-}
-
-function incrementCompactCount(db: BrainDB, sessionId: string): void {
-  const rawDb = (
-    db as unknown as {
-      db: {
-        prepare: (sql: string) => {
-          get: (...args: unknown[]) => unknown;
-          run: (...args: unknown[]) => void;
-        };
-      };
-    }
-  ).db;
-
-  try {
-    // Find the session note and update compact_count in metadata
-    const row = rawDb
-      .prepare(
-        `SELECT id, metadata FROM notes
-         WHERE module = 'sessions'
-           AND json_extract(metadata, '$.session_id') = ?
-         LIMIT 1`
-      )
-      .get(sessionId) as { id: string; metadata: string } | undefined;
-
-    if (!row?.metadata) return;
-
-    const meta = JSON.parse(row.metadata) as Record<string, unknown>;
-    meta.compact_count = ((meta.compact_count as number) ?? 0) + 1;
-
-    rawDb.prepare('UPDATE notes SET metadata = ? WHERE id = ?').run(JSON.stringify(meta), row.id);
-  } catch {
-    // Best-effort — do not block resume context injection
-  }
 }

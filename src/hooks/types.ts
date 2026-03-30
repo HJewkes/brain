@@ -5,7 +5,8 @@ export type HookEvent =
   | 'notification'
   | 'task-completed'
   | 'agent-done'
-  | 'session-start';
+  | 'session-start'
+  | 'pre-compact';
 
 export interface HookInput {
   event: HookEvent;
