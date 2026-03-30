@@ -206,6 +206,17 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
 
       const pendingTasks = allTasks.filter((t) => t.status === 'pending');
 
+      const recentCompletions = allTasks
+        .filter((t) => t.status === 'done' && t.modified)
+        .sort((a, b) => (b.modified ?? '').localeCompare(a.modified ?? ''))
+        .slice(0, 10)
+        .map((t) => ({
+          displayId: t.display_id,
+          title: t.title ?? t.display_id,
+          workstream: t.workstream_display_id ?? `WS-${t.workstream}`,
+          modified: t.modified,
+        }));
+
       return textResult({
         summary: {
           totalTasks: allTasks.length,
@@ -222,6 +233,7 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
           low: pendingTasks.filter((t) => t.priority === 'low').length,
         },
         workstreams: wsOverviews,
+        recentCompletions,
       });
     }
   );

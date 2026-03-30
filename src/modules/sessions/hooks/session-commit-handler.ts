@@ -5,6 +5,7 @@ import { loadConfig, resolveInstance } from '../../../services/config.js';
 import { BrainDB } from '../../../services/brain-db.js';
 import { getSessionBySessionId } from '../data/session-ops.js';
 import { aggregateSessionEvents } from '../engine/aggregate.js';
+import { findBrainBinary } from '../../../hooks/utils.js';
 
 export const sessionCommitHandler: HookHandler = {
   name: 'sessions:commit',
@@ -36,12 +37,15 @@ export const sessionCommitHandler: HookHandler = {
       }
 
       // Spawn commit in background — async work (git log, embedding, LLM) shouldn't block the hook
-      const child = spawn('npx', ['tsx', 'src/cli.ts', 'session', 'commit', sessionId], {
-        cwd: input.cwd,
-        stdio: 'ignore',
-        detached: true,
-      });
-      child.unref();
+      const brainPath = findBrainBinary();
+      if (brainPath) {
+        const child = spawn(brainPath, ['session', 'commit', sessionId], {
+          cwd: input.cwd,
+          stdio: 'ignore',
+          detached: true,
+        });
+        child.unref();
+      }
 
       return hookAllow();
     } catch {

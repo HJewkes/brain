@@ -196,7 +196,10 @@ export function renderBriefingMarkdown(briefing: SessionBriefing): string {
 }
 
 function toTag(heading: string): string {
-  return heading.toLowerCase().replace(/\s+/g, '_');
+  return heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
 }
 
 function daysAgo(n: number): string {
