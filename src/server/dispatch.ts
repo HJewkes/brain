@@ -21,7 +21,12 @@ import { replaceFrontmatterField } from '../utils.js';
 import { indexSingleFile } from '../services/indexing.js';
 import { allocateWorktree } from '../modules/agents/worktree.js';
 import type { AllocateWorktreeResult } from '../modules/agents/worktree.js';
-import { createAgent, updateAgentStatus, setAgentContext } from '../modules/agents/data.js';
+import {
+  createAgent,
+  getAgent,
+  updateAgentStatus,
+  setAgentContext,
+} from '../modules/agents/data.js';
 import { parseCompletionMessage, handleCompletion } from '../modules/agents/completion-protocol.js';
 
 // --- Types ---
@@ -31,6 +36,7 @@ export interface DispatchOptions {
   model?: string;
   maxBudgetUsd?: number;
   dryRun?: boolean;
+  promptOverride?: string;
 }
 
 export interface DispatchResult {
@@ -81,7 +87,7 @@ export async function dispatchTask(
     templateName: 'worker',
   });
 
-  const prompt = workerDispatch?.prompt ?? pullResult.brief;
+  const prompt = opts.promptOverride ?? workerDispatch?.prompt ?? pullResult.brief;
   const routing = workerDispatch?.routing ?? pullResult.dispatchContext.routing;
   const taskId = workerDispatch?.taskId ?? pullResult.taskId;
   const model = opts.model ?? routing.model;
@@ -350,11 +356,14 @@ async function handleProcessExit(
     /* non-JSON output */
   }
 
+  let completedTaskId: string | undefined;
+
   if (code === 0 && result) {
     const completion = parseCompletionMessage(result.result ?? '');
     if (completion) {
       await handleCompletion(svc.db, svc.config, svc.embedder, completion);
       updateAgentStatus(svc.db, agentId, 'completed', { summary: completion.summary });
+      completedTaskId = completion.taskId;
     } else {
       updateAgentStatus(svc.db, agentId, 'completed', {
         summary: 'Completed without protocol message',
@@ -369,6 +378,20 @@ async function handleProcessExit(
     });
   }
 
+  // Workflow advancement: if this task is a workflow step, advance the DAG
+  const agentTaskId = resolveAgentTaskId(svc, agentId);
+  if (agentTaskId) {
+    if (completedTaskId) {
+      await tryAdvanceWorkflow(svc, completedTaskId, result?.result ?? '');
+    } else if (code === 0) {
+      // Exit 0 without protocol message — still advance using the agent's task
+      await tryAdvanceWorkflow(svc, agentTaskId, result?.result ?? '');
+    } else {
+      const exitReason = code === 143 ? 'rate_limited' : `exit_code_${code}`;
+      await tryHandleStepFailure(svc, agentTaskId, exitReason);
+    }
+  }
+
   if (result) {
     setAgentContext(svc.db, agentId, 'claude_result', {
       duration_ms: result.duration_ms,
@@ -377,5 +400,76 @@ async function handleProcessExit(
       subtype: result.subtype,
       session_id: result.session_id,
     });
+  }
+}
+
+// --- Workflow Advancement ---
+
+function resolveAgentTaskId(svc: BrainServiceClass, agentId: string): string | undefined {
+  const agent = getAgent(svc.db, agentId);
+  return agent?.brain_task ?? undefined;
+}
+
+function resolveWorkflowInstance(
+  svc: BrainServiceClass,
+  taskId: string
+): { instanceDisplayId: string; stepId: string } | undefined {
+  const taskNotes = getPmNotes(svc.db, 'task', { display_id: taskId });
+  if (taskNotes.length === 0) return undefined;
+
+  const meta = JSON.parse(taskNotes[0].metadata ?? '{}') as Record<string, unknown>;
+  const stepId = meta.step_id as string | undefined;
+  if (!stepId) return undefined;
+
+  const incomingRelations = svc.db.getRelationsTo(taskNotes[0].id);
+  const expandsToRel = incomingRelations.find((r) => r.type === 'expands-to');
+  if (!expandsToRel) return undefined;
+
+  const instanceNote = svc.db.getNoteById(expandsToRel.sourceId);
+  if (!instanceNote?.metadata) return undefined;
+
+  const instanceMeta = JSON.parse(instanceNote.metadata) as Record<string, unknown>;
+  const instanceDisplayId = instanceMeta.display_id as string;
+  if (!instanceDisplayId) return undefined;
+
+  const status = instanceMeta.instance_status as string;
+  if (status === 'completed' || status === 'collapsed') return undefined;
+
+  return { instanceDisplayId, stepId };
+}
+
+async function tryAdvanceWorkflow(
+  svc: BrainServiceClass,
+  taskId: string,
+  agentOutput: string
+): Promise<void> {
+  try {
+    const wf = resolveWorkflowInstance(svc, taskId);
+    if (!wf) return;
+
+    const projectDir = resolveProjectDir(svc);
+    const { captureStepOutput } = await import('../modules/workflow/engine/output-capture.js');
+    captureStepOutput(projectDir, wf.instanceDisplayId, wf.stepId, agentOutput);
+
+    const { advanceAndDispatch } = await import('../modules/workflow/engine/executor.js');
+    await advanceAndDispatch(svc, wf.instanceDisplayId, wf.stepId, agentOutput);
+  } catch (err) {
+    process.stderr.write(`[workflow:advance] ${err instanceof Error ? err.message : err}\n`);
+  }
+}
+
+async function tryHandleStepFailure(
+  svc: BrainServiceClass,
+  taskId: string,
+  exitReason: string
+): Promise<void> {
+  try {
+    const wf = resolveWorkflowInstance(svc, taskId);
+    if (!wf) return;
+
+    const { handleStepFailure } = await import('../modules/workflow/engine/executor.js');
+    await handleStepFailure(svc, wf.instanceDisplayId, wf.stepId, exitReason);
+  } catch (err) {
+    process.stderr.write(`[workflow:failure] ${err instanceof Error ? err.message : err}\n`);
   }
 }

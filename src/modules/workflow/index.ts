@@ -7,6 +7,7 @@ import { createCollapseCommand } from './commands/collapse.js';
 import { createObserveCommand } from './commands/observe.js';
 import { createImproveCommand } from './commands/improve.js';
 import { createReportCommand } from './commands/report.js';
+import { createSeedCommand } from './commands/seed.js';
 import { frictionHook } from './hooks/friction-hook.js';
 import { advanceHook } from './hooks/advance-hook.js';
 
@@ -131,6 +132,7 @@ export const workflowModule: BrainModule = {
     wfCmd.addCommand(createObserveCommand());
     wfCmd.addCommand(createImproveCommand());
     wfCmd.addCommand(createReportCommand());
+    wfCmd.addCommand(createSeedCommand());
 
     ctx.registerCommand(wfCmd);
 

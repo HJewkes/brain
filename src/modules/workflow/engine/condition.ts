@@ -44,8 +44,10 @@ export function signalCondition(
   }
 
   const { id, meta } = found;
-  if (meta.status === 'done' || meta.status === 'pruned' || meta.status === 'cancelled') {
-    return fail('INVALID_STATE', `Cannot signal condition on a completed step "${stepId}"`);
+  // Allow signaling on done steps: conditions are routing metadata written after
+  // the step completes (parsed from agent output). Only reject pruned/cancelled.
+  if (meta.status === 'pruned' || meta.status === 'cancelled') {
+    return fail('INVALID_STATE', `Cannot signal condition on a ${meta.status} step "${stepId}"`);
   }
 
   const existing = Array.isArray(meta.condition_signals)

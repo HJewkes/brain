@@ -42,12 +42,24 @@ export async function advanceWorkflow(
   const taskDisplayIdMap = new Map(steps.map((s) => [s.stepId, s.taskDisplayId]));
   const allStepIds = steps.map((s) => s.stepId);
 
-  const readySteps = buildReadySet(allStepIds, steps, definition);
+  // Filter definition to only include steps/edges present in this instance.
+  // Complexity filtering may have excluded steps during expansion, so the
+  // instance has a subset of the definition's topology.
+  const instanceStepSet = new Set(allStepIds);
+  const scopedDefinition: WorkflowDefinition = {
+    ...definition,
+    steps: definition.steps.filter((s) => instanceStepSet.has(s.id)),
+    edges: definition.edges.filter(
+      (e) => instanceStepSet.has(e.from) && instanceStepSet.has(e.to)
+    ),
+  };
+
+  const readySteps = buildReadySet(allStepIds, steps, scopedDefinition);
   const advanced = await findAdvancedSteps(
     allStepIds,
     statusMap,
     taskDisplayIdMap,
-    definition,
+    scopedDefinition,
     readySteps,
     db,
     config,
@@ -59,7 +71,7 @@ export async function advanceWorkflow(
     allStepIds,
     statusMap,
     taskDisplayIdMap,
-    definition,
+    scopedDefinition,
     readySteps,
     advanced
   );
