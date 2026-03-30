@@ -12,7 +12,8 @@ export type TaskStatus =
   | 'done'
   | 'blocked'
   | 'cancelled'
-  | 'pruned';
+  | 'pruned'
+  | 'skipped';
 export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived';
 export type WorkstreamStatus = 'active' | 'paused' | 'completed';
 export type DecisionStatus = 'proposed' | 'accepted' | 'superseded' | 'rejected';

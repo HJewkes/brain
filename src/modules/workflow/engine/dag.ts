@@ -35,6 +35,11 @@ export function getPredecessors(stepId: string, edges: WorkflowEdge[]): string[]
   return edges.filter((e) => e.to === stepId).map((e) => e.from);
 }
 
+export function isConditionalOnlyTarget(stepId: string, edges: WorkflowEdge[]): boolean {
+  const incoming = edges.filter((e) => e.to === stepId);
+  return incoming.length > 0 && incoming.every((e) => !!e.condition);
+}
+
 export function validateDag(definition: WorkflowDefinition): Result<void> {
   const { steps, edges } = definition;
 
@@ -170,52 +175,4 @@ export function topologicalSort(steps: WorkflowStep[], edges: WorkflowEdge[]): R
   }
 
   return ok(sorted);
-}
-
-/**
- * Find steps not reachable from completed steps via the DAG.
- *
- * A step is reachable if:
- * - It is a completed step, OR
- * - At least one of its predecessors is a completed step, OR
- * - It has multiple predecessors and at least one is reachable
- *
- * This models pruning cascades: if a non-completed step is the sole
- * path to a downstream step, the downstream step becomes unreachable.
- * If multiple independent paths exist, the step remains reachable.
- */
-export function getUnreachableSteps(
-  completedSteps: string[],
-  edges: WorkflowEdge[],
-  allSteps: string[]
-): string[] {
-  const completed = new Set(completedSteps);
-  const reachable = new Set(completedSteps);
-
-  // Process in topological order to ensure predecessors are resolved first
-  const stepObjs = allSteps.map((id) => ({ id, name: id }));
-  const sortResult = topologicalSort(stepObjs, edges);
-  const order = sortResult.ok ? sortResult.data : allSteps;
-
-  for (const stepId of order) {
-    if (reachable.has(stepId)) continue;
-
-    const preds = getPredecessors(stepId, edges);
-    if (preds.length === 0) continue;
-
-    const hasCompletedPred = preds.some((p) => completed.has(p));
-    if (hasCompletedPred) {
-      reachable.add(stepId);
-      continue;
-    }
-
-    // Multiple predecessors: reachable if at least one pred is reachable
-    // (models alternate paths surviving single-point pruning)
-    const reachablePreds = preds.filter((p) => reachable.has(p));
-    if (reachablePreds.length >= 2) {
-      reachable.add(stepId);
-    }
-  }
-
-  return allSteps.filter((s) => !reachable.has(s));
 }

@@ -4,14 +4,14 @@ import type { Result } from '../../../errors.js';
 import { ok, fail } from '../../../errors.js';
 import type { WorkflowDefinition } from '../types.js';
 import { getInstanceByDisplayId, getInstanceStepStates } from '../data/queries.js';
-import { getPredecessors } from './dag.js';
+import { getPredecessors, isConditionalOnlyTarget } from './dag.js';
 import { evaluateGates } from './gates.js';
 import { getConditionSignals } from './condition.js';
 import { computeTransitiveBridges } from '../data/workflow-ops.js';
 
 interface AdvanceResult {
   advanced: string[];
-  pruned: string[];
+  skipped: string[];
   warnings: string[];
   completed: boolean;
 }
@@ -31,7 +31,7 @@ export async function advanceWorkflow(
 
   const { steps } = stepsResult.data;
   if (steps.length === 0) {
-    return ok({ advanced: [], pruned: [], warnings: [], completed: true });
+    return ok({ advanced: [], skipped: [], warnings: [], completed: true });
   }
 
   const definition = resolveDefinition(db, instanceNote);
@@ -73,7 +73,7 @@ export async function advanceWorkflow(
     config,
     instanceDisplayId
   );
-  const { pruned, warnings } = pruneUnreachableSteps(
+  const { skipped, warnings } = skipUntriggeredConditionals(
     db,
     instanceDisplayId,
     allStepIds,
@@ -84,10 +84,19 @@ export async function advanceWorkflow(
     advanced
   );
 
-  const prunedSet = new Set(pruned);
+  const skippedSet = new Set(skipped);
   const completed = allStepIds.every((stepId) => {
     const status = statusMap.get(stepId);
-    if (status === 'pruned' || status === 'cancelled' || prunedSet.has(stepId)) return true;
+    if (status === 'done' || status === 'pruned' || status === 'cancelled' || status === 'skipped')
+      return true;
+    if (skippedSet.has(stepId)) return true;
+    // Implicit completion: conditional-only targets whose sources are all done
+    // but whose condition was never signaled — no status change needed
+    if (isConditionalOnlyTarget(stepId, scopedDefinition.edges)) {
+      const incoming = scopedDefinition.edges.filter((e) => e.to === stepId);
+      const allSourcesDone = incoming.every((e) => readySteps.has(e.from));
+      if (allSourcesDone && !advanced.includes(stepId)) return true;
+    }
     return readySteps.has(stepId);
   });
 
@@ -95,7 +104,7 @@ export async function advanceWorkflow(
     updateInstanceStatus(db, instanceNote.id, 'completed');
   }
 
-  return ok({ advanced, pruned, warnings, completed });
+  return ok({ advanced, skipped, warnings, completed });
 }
 
 function buildReadySet(
@@ -184,7 +193,7 @@ async function findAdvancedSteps(
   return advanced;
 }
 
-function pruneUnreachableSteps(
+function skipUntriggeredConditionals(
   db: BrainDB,
   instanceDisplayId: string,
   allStepIds: string[],
@@ -193,56 +202,23 @@ function pruneUnreachableSteps(
   definition: WorkflowDefinition,
   readySteps: Set<string>,
   advanced: string[]
-): { pruned: string[]; warnings: string[] } {
-  const pruned: string[] = [];
+): { skipped: string[]; warnings: string[] } {
+  const skipped: string[] = [];
   const warnings: string[] = [];
 
-  // Only prune steps whose ALL unconditional predecessors are pruned or
-  // cancelled. Steps with pending/in-progress predecessors still have
-  // viable paths and must not be pruned prematurely.
-  const unconditionalEdges = definition.edges.filter((e) => !e.condition);
-  const unreachable: string[] = [];
-
-  // Build a local status overlay so pruning cascades within this pass
-  const localStatus = new Map(statusMap);
-
-  // Process in topological order so predecessor pruning cascades correctly
+  // Only skip conditional-only targets whose sources completed without signaling.
+  // This is reversible — if the condition fires later, the step resets to pending.
   for (const stepId of allStepIds) {
-    const status = localStatus.get(stepId);
-    if (status === 'done' || status === 'pruned' || status === 'cancelled') continue;
-
-    const preds = getPredecessors(stepId, unconditionalEdges);
-    if (preds.length === 0) continue; // Entry nodes are never prunable
-
-    const allPredsDead = preds.every((p) => {
-      const predStatus = localStatus.get(p);
-      return predStatus === 'pruned' || predStatus === 'cancelled';
-    });
-
-    if (allPredsDead) {
-      unreachable.push(stepId);
-      localStatus.set(stepId, 'pruned');
-    }
-  }
-
-  const conditionalTargets = new Set(definition.edges.filter((e) => e.condition).map((e) => e.to));
-
-  for (const stepId of allStepIds) {
-    if (unreachable.includes(stepId)) continue;
-    if (!conditionalTargets.has(stepId)) continue;
+    if (!isConditionalOnlyTarget(stepId, definition.edges)) continue;
 
     const status = statusMap.get(stepId);
-    if (status === 'done' || status === 'pruned' || status === 'cancelled') continue;
+    if (status === 'done' || status === 'pruned' || status === 'cancelled' || status === 'skipped')
+      continue;
 
     const incoming = definition.edges.filter((e) => e.to === stepId);
-    const allConditional = incoming.every((e) => e.condition);
-    if (!allConditional) continue;
-
     const allSourcesReady = incoming.every((e) => readySteps.has(e.from));
     if (!allSourcesReady || advanced.includes(stepId)) continue;
 
-    // Before pruning, check if any incoming conditional edge's source step has signaled.
-    // If a signal matches, the condition was triggered — don't prune this step.
     const hasActiveSignal = incoming.some((e) => {
       if (!e.condition) return false;
       const srcSignals = getConditionSignals(db, instanceDisplayId, e.from);
@@ -250,22 +226,16 @@ function pruneUnreachableSteps(
     });
     if (hasActiveSignal) continue;
 
-    unreachable.push(stepId);
-  }
-
-  for (const stepId of unreachable) {
-    const status = statusMap.get(stepId);
     const displayId = taskDisplayIdMap.get(stepId);
-
     if (status === 'pending' || status === 'blocked') {
-      pruneTask(db, displayId!);
-      pruned.push(stepId);
+      skipTask(db, displayId!);
+      skipped.push(stepId);
     } else if (status === 'claimed' || status === 'in-progress') {
-      warnings.push(`Step "${stepId}" (${displayId}) should be pruned but is ${status}`);
+      warnings.push(`Step "${stepId}" (${displayId}) should be skipped but is ${status}`);
     }
   }
 
-  return { pruned, warnings };
+  return { skipped, warnings };
 }
 
 function lookupTaskMetadata(
@@ -302,14 +272,108 @@ function resolveDefinition(db: BrainDB, instanceNote: { id: string }): WorkflowD
   }
 }
 
-function pruneTask(db: BrainDB, targetDisplayId: string): void {
+export function cancelStep(
+  db: BrainDB,
+  instanceDisplayId: string,
+  stepId: string
+): { cancelled: string[]; warnings: string[] } {
+  const stepsResult = getInstanceStepStates(db, instanceDisplayId);
+  if (!stepsResult.ok) return { cancelled: [], warnings: ['Could not load instance steps'] };
+
+  const { steps } = stepsResult.data;
+  const statusMap = new Map(steps.map((s) => [s.stepId, s.status]));
+  const taskDisplayIdMap = new Map(steps.map((s) => [s.stepId, s.taskDisplayId]));
+
+  const instanceResult = getInstanceByDisplayId(db, instanceDisplayId);
+  if (!instanceResult.ok) return { cancelled: [], warnings: ['Could not load instance'] };
+
+  const definition = resolveDefinition(db, instanceResult.data.note);
+  if (!definition) return { cancelled: [], warnings: ['Could not resolve definition'] };
+
+  const displayId = taskDisplayIdMap.get(stepId);
+  if (!displayId) return { cancelled: [], warnings: [`Step "${stepId}" not found`] };
+
+  const status = statusMap.get(stepId);
+  if (status === 'cancelled' || status === 'pruned') {
+    return { cancelled: [], warnings: [] };
+  }
+
+  cancelTask(db, displayId);
+  statusMap.set(stepId, 'cancelled');
+
+  const cascaded = cascadeCancellation(
+    db,
+    definition,
+    steps.map((s) => s.stepId),
+    statusMap,
+    taskDisplayIdMap
+  );
+  return { cancelled: [stepId, ...cascaded], warnings: [] };
+}
+
+function cascadeCancellation(
+  db: BrainDB,
+  definition: WorkflowDefinition,
+  allStepIds: string[],
+  statusMap: Map<string, string>,
+  taskDisplayIdMap: Map<string, string>
+): string[] {
+  const cancelled: string[] = [];
+  const unconditionalEdges = definition.edges.filter((e) => !e.condition);
+
+  // Iterate until no more steps are cancelled (handles multi-level cascades)
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const stepId of allStepIds) {
+      const status = statusMap.get(stepId);
+      if (status === 'done' || status === 'cancelled' || status === 'pruned') continue;
+
+      const preds = getPredecessors(stepId, unconditionalEdges);
+      if (preds.length === 0) continue;
+
+      const allPredsDead = preds.every((p) => {
+        const predStatus = statusMap.get(p);
+        return predStatus === 'cancelled' || predStatus === 'pruned';
+      });
+
+      if (allPredsDead) {
+        const displayId = taskDisplayIdMap.get(stepId);
+        if (displayId) {
+          cancelTask(db, displayId);
+          cancelled.push(stepId);
+        }
+        statusMap.set(stepId, 'cancelled');
+        changed = true;
+      }
+    }
+  }
+
+  return cancelled;
+}
+
+function cancelTask(db: BrainDB, targetDisplayId: string): void {
   const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
   const notes = db.getNotesByIds(noteIds);
   for (const [, note] of notes) {
     if (!note.metadata) continue;
     const meta = JSON.parse(note.metadata) as Record<string, unknown>;
     if (meta.display_id === targetDisplayId) {
-      const updated = { ...meta, status: 'pruned' };
+      const updated = { ...meta, status: 'cancelled' };
+      db.upsertNote({ ...note, metadata: JSON.stringify(updated) });
+      break;
+    }
+  }
+}
+
+function skipTask(db: BrainDB, targetDisplayId: string): void {
+  const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+  const notes = db.getNotesByIds(noteIds);
+  for (const [, note] of notes) {
+    if (!note.metadata) continue;
+    const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+    if (meta.display_id === targetDisplayId) {
+      const updated = { ...meta, status: 'skipped' };
       db.upsertNote({ ...note, metadata: JSON.stringify(updated) });
       break;
     }

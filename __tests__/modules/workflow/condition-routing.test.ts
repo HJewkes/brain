@@ -130,8 +130,8 @@ describe('condition routing', () => {
 
     // spec-tests should be advanced (unconditional edge)
     expect(advResult.data.advanced).toContain('spec-tests');
-    // design should be pruned (conditional edge with no signal)
-    expect(advResult.data.pruned).toContain('design');
+    // design should be skipped (conditional edge with no signal)
+    expect(advResult.data.skipped).toContain('design');
   });
 
   // --- AC-14: Condition signal on completed step is rejected ---

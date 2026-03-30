@@ -20,7 +20,8 @@ import {
   collapseWorkflow,
   getWorkflowStatus,
 } from '../../../../src/modules/workflow/data/workflow-ops.js';
-import { advanceWorkflow } from '../../../../src/modules/workflow/engine/lifecycle.js';
+import { advanceWorkflow, cancelStep } from '../../../../src/modules/workflow/engine/lifecycle.js';
+import { signalCondition } from '../../../../src/modules/workflow/engine/condition.js';
 import type {
   WorkflowDefinition,
   WorkflowStep,
@@ -279,7 +280,7 @@ describe('advanceWorkflow', () => {
     expect(advanceResult.data.advanced).toContain('b');
   });
 
-  test('AC-07: prunable branch step is pruned when condition not met', async () => {
+  test('AC-07: conditional branch step is skipped (not pruned) when condition not met', async () => {
     const workflowId = await createAndRegisterWorkflow(
       [step('a'), step('b'), step('c')],
       [edge('a', 'b'), edge('a', 'c', 'condition-met')]
@@ -303,10 +304,10 @@ describe('advanceWorkflow', () => {
     const advanceResult = await advanceWorkflow(db, config, instResult.data.display_id);
     expect(advanceResult.ok).toBe(true);
     if (!advanceResult.ok) return;
-    expect(advanceResult.data.pruned).toBeDefined();
+    expect(advanceResult.data.skipped).toContain('c');
   });
 
-  test('AC-07: claimed task that should be pruned is reported but not pruned', async () => {
+  test('AC-07: claimed task that should be skipped is warned but not skipped', async () => {
     const workflowId = await createAndRegisterWorkflow(
       [step('a'), step('b'), step('c')],
       [edge('a', 'b'), edge('a', 'c', 'condition-met')]
@@ -319,7 +320,7 @@ describe('advanceWorkflow', () => {
     if (!instResult.ok) return;
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
 
-    // Complete step A, claim step C, then try to advance with pruning
+    // Complete step A, claim step C, then try to advance
     const preStatus3 = getWorkflowStatus(db, instResult.data.display_id);
     expect(preStatus3.ok).toBe(true);
     if (!preStatus3.ok) return;
@@ -331,6 +332,9 @@ describe('advanceWorkflow', () => {
 
     const advanceResult = await advanceWorkflow(db, config, instResult.data.display_id);
     expect(advanceResult.ok).toBe(true);
+    if (!advanceResult.ok) return;
+    expect(advanceResult.data.skipped).not.toContain('c');
+    expect(advanceResult.data.warnings.length).toBeGreaterThan(0);
   });
 
   test('AC-07: all non-pruned steps done marks instance as completed', async () => {
@@ -425,6 +429,241 @@ describe('collapseWorkflow', () => {
     if (!collapseResult.ok) {
       expect(collapseResult.error.code).toBe('NOT_EXPANDED');
     }
+  });
+});
+
+// --- Pruning Redesign: Deferred Pruning with Soft Skipping ---
+
+describe('soft skipping and deferred pruning', () => {
+  test('linear chain completes without any pruning or skipping', async () => {
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b'), step('c')],
+      [edge('a', 'b'), edge('b', 'c')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    const status = getWorkflowStatus(db, instResult.data.display_id);
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+
+    // Complete all steps in order
+    for (const s of ['a', 'b', 'c']) {
+      const stepInfo = status.data.steps.find((st) => st.stepId === s);
+      setTestTaskStatus(db, stepInfo!.taskDisplayId, 'done');
+      const result = await advanceWorkflow(db, config, instResult.data.display_id);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.skipped).toHaveLength(0);
+      }
+    }
+  });
+
+  test('conditional branch not taken → skipped, not pruned', async () => {
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b'), step('c')],
+      [edge('a', 'b'), edge('a', 'c', 'needs_revision')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    const status = getWorkflowStatus(db, instResult.data.display_id);
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    const stepA = status.data.steps.find((s) => s.stepId === 'a');
+    setTestTaskStatus(db, stepA!.taskDisplayId, 'done');
+
+    const result = await advanceWorkflow(db, config, instResult.data.display_id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.data.skipped).toContain('c');
+
+    // Verify the task status is 'skipped', not 'pruned'
+    const postStatus = getWorkflowStatus(db, instResult.data.display_id);
+    expect(postStatus.ok).toBe(true);
+    if (!postStatus.ok) return;
+    const stepC = postStatus.data.steps.find((s) => s.stepId === 'c');
+    expect(stepC!.status).toBe('skipped');
+  });
+
+  test('conditional loop: skip reversed when condition fires', async () => {
+    // a → b (unconditional), b → a (conditional: needs_revision)
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b')],
+      [edge('a', 'b'), edge('b', 'a', 'needs_revision')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    const status = getWorkflowStatus(db, instResult.data.display_id);
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+
+    // Complete step a → advances to b
+    const stepA = status.data.steps.find((s) => s.stepId === 'a');
+    setTestTaskStatus(db, stepA!.taskDisplayId, 'done');
+    await advanceWorkflow(db, config, instResult.data.display_id);
+
+    // Complete step b without signaling → 'a' would be a conditional-only target from b
+    // But 'a' also has no unconditional predecessors (it's an entry node), so it won't be skipped
+    // Signal the condition to test reversal
+    const stepB = status.data.steps.find((s) => s.stepId === 'b');
+    setTestTaskStatus(db, stepB!.taskDisplayId, 'done');
+
+    // Signal needs_revision from b → should reset a to pending
+    signalCondition(db, instResult.data.display_id, 'b', 'needs_revision');
+    setTestTaskStatus(db, stepA!.taskDisplayId, 'pending');
+
+    const result = await advanceWorkflow(db, config, instResult.data.display_id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.advanced).toContain('a');
+  });
+
+  test('explicit cancellation cascades to downstream steps', async () => {
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b'), step('c')],
+      [edge('a', 'b'), edge('b', 'c')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    const { cancelled } = cancelStep(db, instResult.data.display_id, 'a');
+    expect(cancelled).toContain('a');
+    expect(cancelled).toContain('b');
+    expect(cancelled).toContain('c');
+  });
+
+  test('cancellation with alternate path does NOT cascade', async () => {
+    // a → c, b → c. Cancel a — c still reachable via b
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b'), step('c')],
+      [edge('a', 'c'), edge('b', 'c')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    const { cancelled } = cancelStep(db, instResult.data.display_id, 'a');
+    expect(cancelled).toContain('a');
+    expect(cancelled).not.toContain('c');
+  });
+
+  test('complexity-filtered topology with bridge edges — no premature pruning', async () => {
+    // Full definition: a → b → c → d, with b filtered out at instance level
+    // Bridge edge: a → c should be created
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b'), step('c'), step('d')],
+      [edge('a', 'b'), edge('b', 'c'), edge('c', 'd')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    const status = getWorkflowStatus(db, instResult.data.display_id);
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+
+    // Complete a, advance — c should advance (via bridge or direct), no spurious skipping
+    const stepA = status.data.steps.find((s) => s.stepId === 'a');
+    setTestTaskStatus(db, stepA!.taskDisplayId, 'done');
+
+    const result = await advanceWorkflow(db, config, instResult.data.display_id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.skipped).toHaveLength(0);
+  });
+
+  test('multiple advancement cycles do not cause spurious skipping', async () => {
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b'), step('c')],
+      [edge('a', 'b'), edge('b', 'c')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    // Advance multiple times without completing any step
+    for (let i = 0; i < 3; i++) {
+      const result = await advanceWorkflow(db, config, instResult.data.display_id);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.skipped).toHaveLength(0);
+      }
+    }
+
+    // All steps should still be in non-skipped state
+    const status = getWorkflowStatus(db, instResult.data.display_id);
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    for (const s of status.data.steps) {
+      expect(s.status).not.toBe('skipped');
+      expect(s.status).not.toBe('pruned');
+    }
+  });
+
+  test('completion with untriggered conditional targets (implicit completion)', async () => {
+    // a → b (unconditional), a → c (conditional: needs_revision)
+    // When a and b complete without triggering needs_revision, workflow should complete
+    const workflowId = await createAndRegisterWorkflow(
+      [step('a'), step('b'), step('c')],
+      [edge('a', 'b'), edge('a', 'c', 'needs_revision')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    await expandWorkflow(db, config, embedder, instResult.data.display_id);
+
+    const status = getWorkflowStatus(db, instResult.data.display_id);
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+
+    // Complete a and b
+    const stepA = status.data.steps.find((s) => s.stepId === 'a');
+    const stepB = status.data.steps.find((s) => s.stepId === 'b');
+    setTestTaskStatus(db, stepA!.taskDisplayId, 'done');
+    setTestTaskStatus(db, stepB!.taskDisplayId, 'done');
+
+    const result = await advanceWorkflow(db, config, instResult.data.display_id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.completed).toBe(true);
   });
 });
 

@@ -427,7 +427,14 @@ type StatusErrorCode = 'NOT_FOUND';
 interface StatusResult {
   instance: WorkflowInstanceMetadata;
   steps: Array<{ stepId: string; taskDisplayId: string; status: TaskStatus }>;
-  progress: { total: number; done: number; pruned: number; active: number; pending: number };
+  progress: {
+    total: number;
+    done: number;
+    pruned: number;
+    skipped: number;
+    active: number;
+    pending: number;
+  };
 }
 
 export function getWorkflowStatus(
@@ -497,11 +504,10 @@ export async function collapseWorkflow(
   }
 
   const { steps } = stepsResult.data;
-  const incomplete = steps.filter(
-    (s) => s.status !== 'done' && s.status !== 'pruned' && s.status !== 'cancelled'
-  );
+  const terminalStatuses = new Set(['done', 'pruned', 'cancelled', 'skipped']);
+  const incomplete = steps.filter((s) => !terminalStatuses.has(s.status));
   if (incomplete.length > 0) {
-    return fail('INCOMPLETE_WORKFLOW', `${incomplete.length} tasks are not done/pruned`, {
+    return fail('INCOMPLETE_WORKFLOW', `${incomplete.length} tasks are not done/pruned/skipped`, {
       incomplete: incomplete.map((s) => s.taskDisplayId),
     });
   }
