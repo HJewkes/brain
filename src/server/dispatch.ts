@@ -1,8 +1,8 @@
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import { spawn } from 'node:child_process';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
 import type { BrainServiceClass } from '../services/brain-service.js';
 import type { BrainDB } from '../services/brain-db.js';
 import type { Embedder } from '../types.js';
@@ -11,14 +11,14 @@ import type { PullResult } from '../modules/agents/task-pull.js';
 import { pullNextTask } from '../modules/agents/task-pull.js';
 import { getTask } from '../modules/pm/data/task-ops.js';
 import { buildWorkerDispatchFromPull } from '../modules/agents/coordinator.js';
-import { generateClaim } from '../modules/pm/engine/claims.js';
-import { isClaimStale } from '../modules/pm/engine/claims.js';
+import { generateClaim, isClaimStale } from '../modules/pm/engine/claims.js';
 import { getPmNotes } from '../modules/pm/data/queries.js';
 import {
   buildAgentDispatchContext,
   formatDispatchBrief,
 } from '../modules/agents/dispatch-context.js';
 import { replaceFrontmatterField } from '../utils.js';
+import { indexSingleFile } from '../services/indexing.js';
 import { allocateWorktree } from '../modules/agents/worktree.js';
 import type { AllocateWorktreeResult } from '../modules/agents/worktree.js';
 import { createAgent, updateAgentStatus, setAgentContext } from '../modules/agents/data.js';
@@ -90,19 +90,8 @@ export async function dispatchTask(
     return { taskId, prompt, routing, model, dryRun: true as const };
   }
 
-  // Step 6: Worktree allocation (conditional)
-  let worktreeResult: AllocateWorktreeResult | undefined;
-  if (routing.isolation === 'worktree') {
-    const workstream = pullResult.dispatchContext.context?.workstream?.displayId || '';
-    worktreeResult = allocateWorktree(svc.db, projectDir, {
-      taskId,
-      workstream,
-      claimToken: pullResult.claimToken,
-    });
-  }
-  const cwd = worktreeResult?.worktreePath || projectDir;
+  const worktreeResult = maybeAllocateWorktree(svc.db, projectDir, routing, taskId, pullResult);
 
-  // Step 7: Create agent record (starts as 'pending')
   const agentId = createAgent(svc.db, {
     name: workerDispatch?.description || `headless-${taskId}`,
     parent: 'headless-dispatch',
@@ -112,128 +101,27 @@ export async function dispatchTask(
     worktree_path: worktreeResult?.worktreePath,
   });
 
-  // Step 8: Spawn claude -p
   const sessionId = randomUUID();
+  const mcpConfigPath = writeMcpConfig(agentId, projectDir);
 
-  const mcpConfigPath = join(tmpdir(), `brain-mcp-${agentId}.json`);
-  writeFileSync(
-    mcpConfigPath,
-    JSON.stringify({
-      mcpServers: {
-        brain: {
-          command: 'node',
-          args: [join(projectDir, 'dist', 'cli.js'), 'serve', '--mcp'],
-        },
-      },
-    })
-  );
-
-  const maxBudget = opts.maxBudgetUsd ?? 2.0;
-
-  const args = [
-    '-p',
-    '--output-format',
-    'json',
-    '--model',
+  const proc = spawnClaude({
+    prompt,
     model,
-    '--permission-mode',
-    'bypassPermissions',
-    '--no-session-persistence',
-    '--session-id',
+    taskId,
     sessionId,
-    '--append-system-prompt',
-    `On task completion output exactly: DONE ${taskId} <one-line summary>. On failure output exactly: FAILED ${taskId} <reason>.`,
-    '--allowed-tools',
-    'Bash,Edit,Read,Write,Glob,Grep',
-    '--mcp-config',
+    agentId,
+    claimToken: pullResult.claimToken,
     mcpConfigPath,
-    '--max-budget-usd',
-    String(maxBudget),
-  ];
-
-  if (worktreeResult) {
-    args.push('--add-dir', projectDir);
-  }
-
-  const proc = spawn('claude', args, {
-    cwd,
-    env: {
-      ...process.env,
-      BRAIN_AGENT_ID: agentId,
-      AGENT_WORKTREE_PATH: worktreeResult?.worktreePath || '',
-      BRAIN_PM_TASK: taskId,
-      BRAIN_PM_CLAIM_TOKEN: pullResult.claimToken,
-    },
-    stdio: ['pipe', 'pipe', 'pipe'],
-    detached: true,
+    maxBudgetUsd: opts.maxBudgetUsd ?? 2.0,
+    cwd: worktreeResult?.worktreePath || projectDir,
+    worktreePath: worktreeResult?.worktreePath,
+    addDir: worktreeResult ? projectDir : undefined,
   });
 
-  // Pipe prompt via stdin
-  proc.stdin.write(prompt);
-  proc.stdin.end();
-
-  // Step 9: Transition to active + set up tracking
   updateAgentStatus(svc.db, agentId, 'active', { pid: proc.pid });
-
-  const stdoutChunks: Buffer[] = [];
-  proc.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
-
-  const stderrChunks: Buffer[] = [];
-  proc.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
-
-  // Exit handler
-  proc.on('exit', async (code) => {
-    try {
-      unlinkSync(mcpConfigPath);
-    } catch {
-      /* already cleaned */
-    }
-
-    const stdout = Buffer.concat(stdoutChunks).toString('utf-8');
-    let result: ClaudeJsonResult | null = null;
-    try {
-      result = JSON.parse(stdout);
-    } catch {
-      /* non-JSON output */
-    }
-
-    if (code === 0 && result) {
-      const completion = parseCompletionMessage(result.result ?? '');
-      if (completion) {
-        await handleCompletion(svc.db, svc.config, svc.embedder, completion);
-        updateAgentStatus(svc.db, agentId, 'completed', {
-          summary: completion.summary,
-        });
-      } else {
-        updateAgentStatus(svc.db, agentId, 'completed', {
-          summary: 'Completed without protocol message',
-        });
-      }
-    } else if (code === 143) {
-      updateAgentStatus(svc.db, agentId, 'failed', {
-        exit_reason: 'rate_limited',
-      });
-    } else {
-      updateAgentStatus(svc.db, agentId, 'failed', {
-        exit_reason: `exit_code_${code}`,
-        summary: Buffer.concat(stderrChunks).toString('utf-8').slice(0, 500),
-      });
-    }
-
-    if (result) {
-      setAgentContext(svc.db, agentId, 'claude_result', {
-        duration_ms: result.duration_ms,
-        total_cost_usd: result.total_cost_usd,
-        usage: result.usage,
-        subtype: result.subtype,
-        session_id: result.session_id,
-      });
-    }
-  });
-
+  setupProcessTracking(svc, proc, agentId, mcpConfigPath);
   proc.unref();
 
-  // Step 10: Return handle
   return {
     agentId,
     taskId,
@@ -302,10 +190,6 @@ async function claimTask(db: BrainDB, embedder: Embedder, taskId: string): Promi
   }
 
   const filePath = notes[0].filePath;
-  const { existsSync, readFileSync, writeFileSync } = await import('node:fs');
-  const { createHash } = await import('node:crypto');
-  const { indexSingleFile } = await import('../services/indexing.js');
-
   if (!existsSync(filePath)) {
     throw new Error(`Task file not found: ${filePath}`);
   }
@@ -321,4 +205,177 @@ async function claimTask(db: BrainDB, embedder: Embedder, taskId: string): Promi
 
   const hash = createHash('sha256').update(content).digest('hex');
   await indexSingleFile(db, embedder, filePath, content, hash, Date.now());
+}
+
+// --- Spawn helpers ---
+
+interface SpawnOptions {
+  prompt: string;
+  model: string;
+  taskId: string;
+  sessionId: string;
+  agentId: string;
+  claimToken: string;
+  mcpConfigPath: string;
+  maxBudgetUsd: number;
+  cwd: string;
+  worktreePath?: string;
+  addDir?: string;
+}
+
+function maybeAllocateWorktree(
+  db: BrainDB,
+  projectDir: string,
+  routing: RoutingResult,
+  taskId: string,
+  pullResult: PullResult
+): AllocateWorktreeResult | undefined {
+  if (routing.isolation !== 'worktree') return undefined;
+  const workstream = pullResult.dispatchContext.context?.workstream?.displayId || '';
+  return allocateWorktree(db, projectDir, {
+    taskId,
+    workstream,
+    claimToken: pullResult.claimToken,
+  });
+}
+
+function writeMcpConfig(agentId: string, projectDir: string): string {
+  const configPath = join(tmpdir(), `brain-mcp-${agentId}.json`);
+  writeFileSync(
+    configPath,
+    JSON.stringify({
+      mcpServers: {
+        brain: {
+          command: 'node',
+          args: [join(projectDir, 'dist', 'cli.js'), 'serve', '--mcp'],
+        },
+      },
+    })
+  );
+  return configPath;
+}
+
+function cleanupTempFile(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    /* already cleaned or missing */
+  }
+}
+
+function spawnClaude(opts: SpawnOptions): ChildProcess {
+  const args = [
+    '-p',
+    '--output-format',
+    'json',
+    '--model',
+    opts.model,
+    '--permission-mode',
+    'bypassPermissions',
+    '--no-session-persistence',
+    '--session-id',
+    opts.sessionId,
+    '--append-system-prompt',
+    `On task completion output exactly: DONE ${opts.taskId} <one-line summary>. On failure output exactly: FAILED ${opts.taskId} <reason>.`,
+    '--allowed-tools',
+    'Bash,Edit,Read,Write,Glob,Grep',
+    '--mcp-config',
+    opts.mcpConfigPath,
+    '--max-budget-usd',
+    String(opts.maxBudgetUsd),
+  ];
+
+  if (opts.addDir) {
+    args.push('--add-dir', opts.addDir);
+  }
+
+  const proc = spawn('claude', args, {
+    cwd: opts.cwd,
+    env: {
+      ...process.env,
+      BRAIN_AGENT_ID: opts.agentId,
+      AGENT_WORKTREE_PATH: opts.worktreePath || '',
+      BRAIN_PM_TASK: opts.taskId,
+      BRAIN_PM_CLAIM_TOKEN: opts.claimToken,
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: true,
+  });
+
+  proc.stdin.write(opts.prompt);
+  proc.stdin.end();
+
+  return proc;
+}
+
+function setupProcessTracking(
+  svc: BrainServiceClass,
+  proc: ChildProcess,
+  agentId: string,
+  mcpConfigPath: string
+): void {
+  const stdoutChunks: Buffer[] = [];
+  proc.stdout!.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+
+  const stderrChunks: Buffer[] = [];
+  proc.stderr!.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+
+  // Handle spawn errors (e.g. ENOENT if claude binary not found)
+  proc.on('error', (err) => {
+    cleanupTempFile(mcpConfigPath);
+    updateAgentStatus(svc.db, agentId, 'failed', {
+      exit_reason: 'spawn_error',
+      summary: err.message.slice(0, 500),
+    });
+  });
+
+  proc.on('exit', async (code) => {
+    cleanupTempFile(mcpConfigPath);
+    await handleProcessExit(svc, agentId, code, stdoutChunks, stderrChunks);
+  });
+}
+
+async function handleProcessExit(
+  svc: BrainServiceClass,
+  agentId: string,
+  code: number | null,
+  stdoutChunks: Buffer[],
+  stderrChunks: Buffer[]
+): Promise<void> {
+  const stdout = Buffer.concat(stdoutChunks).toString('utf-8');
+  let result: ClaudeJsonResult | null = null;
+  try {
+    result = JSON.parse(stdout);
+  } catch {
+    /* non-JSON output */
+  }
+
+  if (code === 0 && result) {
+    const completion = parseCompletionMessage(result.result ?? '');
+    if (completion) {
+      await handleCompletion(svc.db, svc.config, svc.embedder, completion);
+      updateAgentStatus(svc.db, agentId, 'completed', { summary: completion.summary });
+    } else {
+      updateAgentStatus(svc.db, agentId, 'completed', {
+        summary: 'Completed without protocol message',
+      });
+    }
+  } else if (code === 143) {
+    updateAgentStatus(svc.db, agentId, 'failed', { exit_reason: 'rate_limited' });
+  } else {
+    updateAgentStatus(svc.db, agentId, 'failed', {
+      exit_reason: `exit_code_${code}`,
+      summary: Buffer.concat(stderrChunks).toString('utf-8').slice(0, 500),
+    });
+  }
+
+  if (result) {
+    setAgentContext(svc.db, agentId, 'claude_result', {
+      duration_ms: result.duration_ms,
+      total_cost_usd: result.total_cost_usd,
+      usage: result.usage,
+      subtype: result.subtype,
+      session_id: result.session_id,
+    });
+  }
 }
