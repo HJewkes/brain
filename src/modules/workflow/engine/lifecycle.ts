@@ -4,7 +4,7 @@ import type { Result } from '../../../errors.js';
 import { ok, fail } from '../../../errors.js';
 import type { WorkflowDefinition } from '../types.js';
 import { getInstanceByDisplayId, getInstanceStepStates } from '../data/queries.js';
-import { getPredecessors, getUnreachableSteps } from './dag.js';
+import { getPredecessors } from './dag.js';
 import { evaluateGates } from './gates.js';
 import { getConditionSignals } from './condition.js';
 import { computeTransitiveBridges } from '../data/workflow-ops.js';
@@ -197,13 +197,33 @@ function pruneUnreachableSteps(
   const pruned: string[] = [];
   const warnings: string[] = [];
 
-  // Only prune when at least one step is done. Pruning cascades from
-  // completed branches that took a different route — meaningless when
-  // nothing is done yet. Pass only done steps (not entry nodes) to avoid
-  // treating pending entry steps as "completed" for reachability.
-  const doneSteps = allStepIds.filter((id) => statusMap.get(id) === 'done');
-  const unreachable =
-    doneSteps.length > 0 ? getUnreachableSteps(doneSteps, definition.edges, allStepIds) : [];
+  // Only prune steps whose ALL unconditional predecessors are pruned or
+  // cancelled. Steps with pending/in-progress predecessors still have
+  // viable paths and must not be pruned prematurely.
+  const unconditionalEdges = definition.edges.filter((e) => !e.condition);
+  const unreachable: string[] = [];
+
+  // Build a local status overlay so pruning cascades within this pass
+  const localStatus = new Map(statusMap);
+
+  // Process in topological order so predecessor pruning cascades correctly
+  for (const stepId of allStepIds) {
+    const status = localStatus.get(stepId);
+    if (status === 'done' || status === 'pruned' || status === 'cancelled') continue;
+
+    const preds = getPredecessors(stepId, unconditionalEdges);
+    if (preds.length === 0) continue; // Entry nodes are never prunable
+
+    const allPredsDead = preds.every((p) => {
+      const predStatus = localStatus.get(p);
+      return predStatus === 'pruned' || predStatus === 'cancelled';
+    });
+
+    if (allPredsDead) {
+      unreachable.push(stepId);
+      localStatus.set(stepId, 'pruned');
+    }
+  }
 
   const conditionalTargets = new Set(definition.edges.filter((e) => e.condition).map((e) => e.to));
 
