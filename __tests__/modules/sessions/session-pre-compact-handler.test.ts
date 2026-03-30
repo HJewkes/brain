@@ -15,15 +15,21 @@ vi.mock('../../../src/modules/sessions/hooks/capture-event.js', () => ({
   captureSessionChunk: vi.fn(),
 }));
 
+vi.mock('../../../src/modules/sessions/data/session-ops.js', () => ({
+  updateSessionNoteMeta: vi.fn(),
+}));
+
 import { loadConfig, resolveInstance } from '../../../src/services/config.js';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { captureSessionChunk } from '../../../src/modules/sessions/hooks/capture-event.js';
+import { updateSessionNoteMeta } from '../../../src/modules/sessions/data/session-ops.js';
 import { sessionPreCompactHandler } from '../../../src/modules/sessions/hooks/session-pre-compact-handler.js';
 
 const mockLoadConfig = loadConfig as ReturnType<typeof vi.fn>;
 const mockResolveInstance = resolveInstance as ReturnType<typeof vi.fn>;
 const mockBrainDB = BrainDB as ReturnType<typeof vi.fn>;
 const mockCaptureChunk = captureSessionChunk as ReturnType<typeof vi.fn>;
+const mockUpdateMeta = updateSessionNoteMeta as ReturnType<typeof vi.fn>;
 
 function makeInput(summary: string, cwd = '/proj'): HookInput {
   return {
@@ -36,18 +42,13 @@ function makeInput(summary: string, cwd = '/proj'): HookInput {
 
 describe('sessions:pre-compact handler', () => {
   const origEnv = process.env.BRAIN_PM_SESSION;
-  let fakeDb: { close: ReturnType<typeof vi.fn>; db: Record<string, unknown> };
-  let mockPrepare: ReturnType<typeof vi.fn>;
+  let fakeDb: { close: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.BRAIN_PM_SESSION = 'test-session-id';
 
-    mockPrepare = vi.fn().mockReturnValue({
-      get: vi.fn().mockReturnValue(undefined),
-      run: vi.fn(),
-    });
-    fakeDb = { close: vi.fn(), db: { prepare: mockPrepare } };
+    fakeDb = { close: vi.fn() };
     mockBrainDB.mockReturnValue(fakeDb);
     mockResolveInstance.mockReturnValue({ root: '/tmp' });
     mockLoadConfig.mockReturnValue({ dbPath: '/tmp/db' });
@@ -145,27 +146,17 @@ describe('sessions:pre-compact handler', () => {
       );
     });
 
-    it('increments micro_summary_count in session note metadata', () => {
-      const existingMeta = { session_id: 'test-session-id', status: 'active' };
-      mockPrepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) {
-          return {
-            get: vi.fn().mockReturnValue({
-              id: 'note-123',
-              metadata: JSON.stringify(existingMeta),
-            }),
-          };
-        }
-        return { run: vi.fn() };
-      });
-
+    it('calls updateSessionNoteMeta to increment micro_summary_count', () => {
       sessionPreCompactHandler.run(makeInput('A summary'), DEFAULT_HOOK_CONFIG);
 
-      // Verify UPDATE was called with incremented count
-      const updateCall = mockPrepare.mock.calls.find(
-        (c: string[]) => typeof c[0] === 'string' && c[0].includes('UPDATE')
-      );
-      expect(updateCall).toBeDefined();
+      expect(mockUpdateMeta).toHaveBeenCalledWith(fakeDb, 'test-session-id', expect.any(Function));
+
+      // Verify the updater function increments correctly
+      const updater = mockUpdateMeta.mock.calls[0][2] as (m: Record<string, unknown>) => void;
+      const meta: Record<string, unknown> = {};
+      updater(meta);
+      expect(meta.micro_summary_count).toBe(1);
+      expect(meta.last_captured_at).toBeDefined();
     });
 
     it('returns allow on error', () => {

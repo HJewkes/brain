@@ -1,5 +1,6 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import { getSessionBySessionId } from '../data/session-ops.js';
+import { getSessionChunkContents } from './aggregate.js';
 
 export interface SessionResumeContext {
   sessionId: string;
@@ -11,6 +12,7 @@ export interface SessionResumeContext {
   tasksWorked: string[];
   tasksCompleted: string[];
   commits: string[];
+  microSummaries: string[];
   activeConstraints: {
     worktreePath?: string;
     gitBranch?: string;
@@ -22,6 +24,7 @@ export function generateResumeContext(db: BrainDB, sessionId: string): SessionRe
   if (!meta) return null;
 
   const filesWritten = queryFilesWritten(db, sessionId);
+  const microSummaries = getSessionChunkContents(db, sessionId);
 
   return {
     sessionId: meta.session_id,
@@ -33,6 +36,7 @@ export function generateResumeContext(db: BrainDB, sessionId: string): SessionRe
     tasksWorked: meta.tasks_worked ?? [],
     tasksCompleted: meta.tasks_completed ?? [],
     commits: meta.commits ?? [],
+    microSummaries,
     activeConstraints: {
       worktreePath: meta.worktree_path,
       gitBranch: meta.branch,
@@ -65,6 +69,11 @@ export function renderResumeXml(ctx: SessionResumeContext): string {
   if (ctx.commits.length > 0) {
     lines.push(`  <commits>${ctx.commits.slice(0, 5).join(', ')}</commits>`);
   }
+  if (ctx.microSummaries?.length > 0) {
+    lines.push('  <prior_context>');
+    for (const s of ctx.microSummaries.slice(-3)) lines.push(`    <summary>${s}</summary>`);
+    lines.push('  </prior_context>');
+  }
   lines.push('</session-resume>');
   return lines.join('\n');
 }
@@ -86,6 +95,9 @@ export function renderResumePlain(ctx: SessionResumeContext): string {
     lines.push(`Files written: ${ctx.filesWritten.slice(0, 10).join(', ')}`);
   }
   if (ctx.commits.length > 0) lines.push(`Commits: ${ctx.commits.slice(0, 3).join(', ')}`);
+  if (ctx.microSummaries?.length > 0) {
+    lines.push(`Prior context: ${ctx.microSummaries.slice(-3).join(' | ')}`);
+  }
   return lines.join('\n');
 }
 

@@ -16,6 +16,10 @@ vi.mock('../../../src/modules/sessions/engine/session-resume.js', () => ({
   renderResumePlain: vi.fn(),
 }));
 
+vi.mock('../../../src/modules/sessions/data/session-ops.js', () => ({
+  updateSessionNoteMeta: vi.fn(),
+}));
+
 import { loadConfig } from '../../../src/services/config.js';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import {
@@ -110,6 +114,7 @@ describe('sessions:compact handler', () => {
         tasksWorked: [],
         tasksCompleted: [],
         commits: [],
+        microSummaries: [],
         activeConstraints: {},
       });
       mockRenderResumeXml.mockReturnValue('<session-resume>...</session-resume>');
@@ -136,6 +141,7 @@ describe('sessions:compact handler', () => {
         tasksWorked: [],
         tasksCompleted: [],
         commits: [],
+        microSummaries: [],
         activeConstraints: {},
       });
       mockRenderResumeXml.mockReturnValue('<session-resume>ctx</session-resume>');
@@ -161,6 +167,7 @@ describe('sessions:compact handler', () => {
         tasksWorked: [],
         tasksCompleted: [],
         commits: [],
+        microSummaries: [],
         activeConstraints: {},
       });
       mockRenderResumeXml.mockReturnValue('<session-resume>ctx</session-resume>');
@@ -191,6 +198,7 @@ describe('sessions:compact handler', () => {
         tasksWorked: [],
         tasksCompleted: [],
         commits: [],
+        microSummaries: [],
         activeConstraints: {},
       });
       mockRenderResumeXml.mockReturnValue('<session-resume>data</session-resume>');
@@ -264,6 +272,7 @@ describe('sessions:compact handler', () => {
         tasksWorked: [],
         tasksCompleted: [],
         commits: [],
+        microSummaries: [],
         activeConstraints: {},
       });
       mockRenderResumeXml.mockReturnValue('<session-resume>data</session-resume>');

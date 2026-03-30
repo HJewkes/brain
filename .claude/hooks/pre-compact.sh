@@ -17,9 +17,10 @@ if [ "$HTTP_CODE" = "200" ]; then
   [ -n "$STDOUT" ] && echo "$STDOUT"
   exit 0
 elif [ "$HTTP_CODE" = "202" ]; then
+  # Log warning but never block compaction (exit 2 would prevent it)
   STDERR=$(echo "$BODY" | command -p python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('stderr',''),end='')" 2>/dev/null || true)
   [ -n "$STDERR" ] && echo "$STDERR" >&2
-  exit 2
+  exit 0
 fi
 
 # Fallback: spawn CLI process
