@@ -54,6 +54,17 @@
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "brain hook dispatch pre-compact"
+          }
+        ]
+      }
     ]
   }
 }

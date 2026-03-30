@@ -17,6 +17,7 @@ import { sessionCaptureHandler } from './hooks/session-capture-handler.js';
 import { sessionStartHandler } from './hooks/session-start-handler.js';
 import { sessionCompactHandler } from './hooks/session-compact-handler.js';
 import { sessionCommitHandler } from './hooks/session-commit-handler.js';
+import { sessionPreCompactHandler } from './hooks/session-pre-compact-handler.js';
 
 const SESSION_NOTE_TYPE: ModuleNoteType = {
   name: 'session',
@@ -215,6 +216,7 @@ export const sessionsModule: BrainModule = {
     ctx.registerHookHandler(sessionBriefingHandler);
     ctx.registerHookHandler(sessionCaptureHandler);
     ctx.registerHookHandler(sessionCompactHandler);
+    ctx.registerHookHandler(sessionPreCompactHandler);
     ctx.registerHookHandler(sessionCommitHandler);
 
     // Migration v1: json_extract indexes for session frontmatter queries
