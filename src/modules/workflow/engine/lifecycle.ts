@@ -197,11 +197,13 @@ function pruneUnreachableSteps(
   const pruned: string[] = [];
   const warnings: string[] = [];
 
-  // Only pass actually-done steps to pruning, not entry nodes that happen
-  // to be in readySet. Entry nodes are "ready" but not "completed" — they
-  // shouldn't trigger pruning of downstream steps.
+  // Only prune when at least one step is done. Pruning cascades from
+  // completed branches that took a different route — meaningless when
+  // nothing is done yet. Pass only done steps (not entry nodes) to avoid
+  // treating pending entry steps as "completed" for reachability.
   const doneSteps = allStepIds.filter((id) => statusMap.get(id) === 'done');
-  const unreachable = getUnreachableSteps(doneSteps, definition.edges, allStepIds);
+  const unreachable =
+    doneSteps.length > 0 ? getUnreachableSteps(doneSteps, definition.edges, allStepIds) : [];
 
   const conditionalTargets = new Set(definition.edges.filter((e) => e.condition).map((e) => e.to));
 
