@@ -76,7 +76,7 @@ export function computeVirtualState(input: VirtualStateInput): VirtualState[] {
     }
   }
 
-  if (dueDate && !['done', 'cancelled', 'pruned'].includes(status)) {
+  if (dueDate && !['done', 'cancelled', 'pruned', 'skipped'].includes(status)) {
     const now = input.now ?? new Date();
     const due = new Date(dueDate + 'T23:59:59');
     if (due < now) {

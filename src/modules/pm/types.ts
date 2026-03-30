@@ -174,6 +174,7 @@ const VALID_TASK_STATUSES = new Set<string>([
   'blocked',
   'cancelled',
   'pruned',
+  'skipped',
 ]);
 
 export function isValidTaskCategory(value: unknown): value is TaskCategory {
