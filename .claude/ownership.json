@@ -1,1 +1,1 @@
-{"agents": {"default": {"paths": ["src/", "__tests__/", "docs/", "scripts/", "skill/", "templates/", "CLAUDE.md", ".claude/", "ao.config.json", "package.json", ".gitignore"]}}}
+{"agents": {"default": {"paths": ["src/", "__tests__/", "docs/", "scripts/", "skill/", "templates/", "CLAUDE.md", ".claude/", "ao.config.json", "package.json", "vitest.config.ts", ".gitignore", ".mcp.json", "../titan-design/", ".worktrees/"]}}}

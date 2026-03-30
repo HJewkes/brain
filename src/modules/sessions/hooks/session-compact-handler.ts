@@ -1,6 +1,6 @@
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../../../hooks/types.js';
 import { hookAllow, hookAllowJson } from '../../../hooks/types.js';
-import { loadConfig } from '../../../services/config.js';
+import { loadConfig, resolveInstance } from '../../../services/config.js';
 import { BrainDB } from '../../../services/brain-db.js';
 import {
   generateResumeContext,
@@ -34,7 +34,8 @@ export const sessionCompactHandler: HookHandler = {
 
     let db: BrainDB | null = null;
     try {
-      const config = loadConfig();
+      const instance = resolveInstance({ cwd: input.cwd });
+      const config = loadConfig(instance);
       db = new BrainDB(config.dbPath);
 
       updateSessionNoteMeta(db, sessionId, (meta) => {

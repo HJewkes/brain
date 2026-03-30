@@ -4,6 +4,7 @@ import type { HookInput } from '../../../src/hooks/types.js';
 
 vi.mock('../../../src/services/config.js', () => ({
   loadConfig: vi.fn(),
+  resolveInstance: vi.fn(),
 }));
 
 vi.mock('../../../src/services/brain-db.js', () => ({
@@ -20,7 +21,7 @@ vi.mock('../../../src/modules/sessions/data/session-ops.js', () => ({
   updateSessionNoteMeta: vi.fn(),
 }));
 
-import { loadConfig } from '../../../src/services/config.js';
+import { loadConfig, resolveInstance } from '../../../src/services/config.js';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import {
   generateResumeContext,
@@ -30,6 +31,7 @@ import {
 import { sessionCompactHandler } from '../../../src/modules/sessions/hooks/session-compact-handler.js';
 
 const mockLoadConfig = loadConfig as ReturnType<typeof vi.fn>;
+const mockResolveInstance = resolveInstance as ReturnType<typeof vi.fn>;
 const mockBrainDB = BrainDB as ReturnType<typeof vi.fn>;
 const mockGenerateResumeContext = generateResumeContext as ReturnType<typeof vi.fn>;
 const mockRenderResumeXml = renderResumeXml as ReturnType<typeof vi.fn>;
@@ -53,6 +55,7 @@ describe('sessions:compact handler', () => {
 
     const fakeDb = { close: vi.fn() };
     mockBrainDB.mockReturnValue(fakeDb);
+    mockResolveInstance.mockReturnValue({ root: '/tmp' });
     mockLoadConfig.mockReturnValue({
       notesDir: '/tmp',
       dbPath: '/tmp/db',
