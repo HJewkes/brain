@@ -31,6 +31,7 @@ export const sessionCaptureHandler: HookHandler = {
         category,
         data: {
           tool: toolName,
+          agent_id: process.env.BRAIN_AGENT_ID ?? null,
           input: sanitizeToolInput(input.parsed),
         },
         timestamp: new Date().toISOString(),

@@ -41,6 +41,10 @@ const SCHEMA_VERSION = 11;
 
 export class BrainDB {
   private db: Database.Database;
+  /** Raw database handle for module migrations. */
+  get rawDb(): Database.Database {
+    return this.db;
+  }
   private vectorDimensions: number | null = null;
   private noteRepo: NoteRepo;
   private memoryRepo: MemoryRepo;

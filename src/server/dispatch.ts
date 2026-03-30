@@ -108,6 +108,16 @@ export async function dispatchTask(
   });
 
   const sessionId = randomUUID();
+  setAgentContext(svc.db, agentId, 'session_id', sessionId);
+  setAgentContext(svc.db, agentId, 'sessions', [sessionId]);
+
+  // Store workflow step context so resolveWorkflowInstance can trace back
+  const stepMeta = resolveStepMetadata(svc, taskId);
+  if (stepMeta) {
+    setAgentContext(svc.db, agentId, 'workflow_step', stepMeta.stepId);
+    setAgentContext(svc.db, agentId, 'workflow_instance', stepMeta.instanceDisplayId);
+  }
+
   const mcpConfigPath = writeMcpConfig(agentId, projectDir);
 
   const proc = spawnClaude({
@@ -401,6 +411,33 @@ async function handleProcessExit(
       session_id: result.session_id,
     });
   }
+}
+
+// --- Workflow Context ---
+
+function resolveStepMetadata(
+  svc: BrainServiceClass,
+  taskId: string
+): { stepId: string; instanceDisplayId: string } | undefined {
+  const taskNotes = getPmNotes(svc.db, 'task', { display_id: taskId });
+  if (taskNotes.length === 0) return undefined;
+
+  const meta = JSON.parse(taskNotes[0].metadata ?? '{}') as Record<string, unknown>;
+  const stepId = meta.step_id as string | undefined;
+  if (!stepId) return undefined;
+
+  const incomingRelations = svc.db.getRelationsTo(taskNotes[0].id);
+  const expandsToRel = incomingRelations.find((r) => r.type === 'expands-to');
+  if (!expandsToRel) return undefined;
+
+  const instanceNote = svc.db.getNoteById(expandsToRel.sourceId);
+  if (!instanceNote?.metadata) return undefined;
+
+  const instanceMeta = JSON.parse(instanceNote.metadata) as Record<string, unknown>;
+  const instanceDisplayId = instanceMeta.display_id as string;
+  if (!instanceDisplayId) return undefined;
+
+  return { stepId, instanceDisplayId };
 }
 
 // --- Workflow Advancement ---
