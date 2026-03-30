@@ -6,12 +6,6 @@ export default defineConfig({
     passWithNoTests: true,
     teardownTimeout: 30_000,
     hookTimeout: 30_000,
-    pool: 'forks',
-    poolOptions: {
-      forks: {
-        maxForks: 4,
-      },
-    },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

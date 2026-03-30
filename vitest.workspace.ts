@@ -13,10 +13,10 @@ export default defineWorkspace([
         '__tests__/utils/**/*.test.ts',
         '__tests__/adapters/**/*.test.ts',
       ],
-      pool: 'forks',
+      pool: 'threads',
       poolOptions: {
-        forks: {
-          maxForks: 2,
+        threads: {
+          maxThreads: 4,
         },
       },
     },
@@ -29,7 +29,7 @@ export default defineWorkspace([
       pool: 'threads',
       poolOptions: {
         threads: {
-          singleThread: true,
+          maxThreads: 1,
         },
       },
       testTimeout: 60_000,
@@ -40,10 +40,10 @@ export default defineWorkspace([
     test: {
       name: 'eval',
       include: ['__tests__/eval/**/*.test.ts'],
-      pool: 'forks',
+      pool: 'threads',
       poolOptions: {
-        forks: {
-          maxForks: 2,
+        threads: {
+          maxThreads: 2,
         },
       },
       testTimeout: 60_000,
