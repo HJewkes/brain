@@ -7,17 +7,27 @@ import { aggregateSessionEvents } from '../engine/aggregate.js';
 
 type Outcome = 'success' | 'partial' | 'abandoned' | 'unknown';
 
+/**
+ * Lightweight outcome classification for the synchronous end hook.
+ * Note: taskRefs is always [] for hook-captured sessions (aggregate.ts
+ * only populates it from JSONL accumulation, not live events). So the
+ * primary signal is error rate. The full commitSession flow (priority 20)
+ * later overwrites with a richer classification that has task link data.
+ * This provides a fast interim value during the commit window.
+ */
 export function classifyOutcome(analytics: {
   toolCalls: { length: number };
   errorRate: number;
-  taskRefs: string[];
+  userTurns: number;
 }): Outcome {
-  const toolCount = analytics.toolCalls.length;
-  const hasCompletedTasks = analytics.taskRefs.length > 0;
+  const total = analytics.toolCalls.length;
 
-  if (toolCount < 5 && !hasCompletedTasks) return 'abandoned';
-  if (hasCompletedTasks || analytics.errorRate < 0.1) return 'success';
-  return 'partial';
+  if (total === 0 && analytics.userTurns < 2) return 'unknown';
+  if (total < 5 || analytics.errorRate > 0.3) return 'abandoned';
+  if (analytics.errorRate < 0.1) return 'success';
+  if (total > 10) return 'partial';
+
+  return 'unknown';
 }
 
 export const sessionEndHandler: HookHandler = {
@@ -47,10 +57,17 @@ export const sessionEndHandler: HookHandler = {
       const outcome = classifyOutcome(analytics);
       const endedAt = new Date().toISOString();
 
+      // Write interim values — commitSession (priority 20) may overwrite
+      // with richer data from full JSONL analysis and task link resolution
       updateSessionNoteMeta(db, sessionId, (meta) => {
-        meta.ended_at = endedAt;
-        meta.outcome = outcome;
-        meta.status = outcome === 'abandoned' ? 'abandoned' : 'completed';
+        meta.ended_at = meta.ended_at ?? endedAt;
+        meta.outcome = meta.outcome ?? outcome;
+        meta.status =
+          meta.status === 'active'
+            ? outcome === 'abandoned'
+              ? 'abandoned'
+              : 'completed'
+            : meta.status;
       });
 
       return hookAllow();

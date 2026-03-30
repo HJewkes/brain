@@ -93,38 +93,50 @@ describe('sessions:end handler', () => {
   });
 
   describe('classifyOutcome()', () => {
-    it('returns abandoned when few tool calls and no tasks', () => {
-      expect(classifyOutcome({ toolCalls: { length: 3 }, errorRate: 0, taskRefs: [] })).toBe(
+    it('returns unknown when no tools and fewer than 2 turns', () => {
+      expect(classifyOutcome({ toolCalls: { length: 0 }, errorRate: 0, userTurns: 1 })).toBe(
+        'unknown'
+      );
+    });
+
+    it('returns abandoned when few tool calls', () => {
+      expect(classifyOutcome({ toolCalls: { length: 3 }, errorRate: 0, userTurns: 5 })).toBe(
         'abandoned'
       );
     });
 
-    it('returns success when tasks were completed', () => {
-      expect(
-        classifyOutcome({ toolCalls: { length: 50 }, errorRate: 0.2, taskRefs: ['VNM-01.01'] })
-      ).toBe('success');
+    it('returns abandoned when error rate exceeds 30%', () => {
+      expect(classifyOutcome({ toolCalls: { length: 20 }, errorRate: 0.35, userTurns: 5 })).toBe(
+        'abandoned'
+      );
     });
 
     it('returns success when error rate is below 10%', () => {
-      expect(classifyOutcome({ toolCalls: { length: 20 }, errorRate: 0.05, taskRefs: [] })).toBe(
+      expect(classifyOutcome({ toolCalls: { length: 20 }, errorRate: 0.05, userTurns: 5 })).toBe(
         'success'
       );
     });
 
-    it('returns partial when error rate >= 10% and no tasks completed', () => {
-      expect(classifyOutcome({ toolCalls: { length: 20 }, errorRate: 0.15, taskRefs: [] })).toBe(
+    it('returns partial when many tools but moderate error rate', () => {
+      expect(classifyOutcome({ toolCalls: { length: 15 }, errorRate: 0.15, userTurns: 5 })).toBe(
         'partial'
       );
     });
 
-    it('returns abandoned at exactly 4 tool calls with no tasks', () => {
-      expect(classifyOutcome({ toolCalls: { length: 4 }, errorRate: 0, taskRefs: [] })).toBe(
+    it('returns unknown when moderate tools and moderate error rate with few tools', () => {
+      expect(classifyOutcome({ toolCalls: { length: 8 }, errorRate: 0.15, userTurns: 5 })).toBe(
+        'unknown'
+      );
+    });
+
+    it('returns abandoned at exactly 4 tool calls', () => {
+      expect(classifyOutcome({ toolCalls: { length: 4 }, errorRate: 0, userTurns: 5 })).toBe(
         'abandoned'
       );
     });
 
     it('returns success at exactly 5 tool calls with low error rate', () => {
-      expect(classifyOutcome({ toolCalls: { length: 5 }, errorRate: 0, taskRefs: [] })).toBe(
+      expect(classifyOutcome({ toolCalls: { length: 5 }, errorRate: 0, userTurns: 5 })).toBe(
         'success'
       );
     });
@@ -146,7 +158,6 @@ describe('sessions:end handler', () => {
         userTurns: 1,
         toolCalls: [],
         errorRate: 0,
-        taskRefs: [],
       });
 
       const result = sessionEndHandler.run(makeInput(), DEFAULT_HOOK_CONFIG);
@@ -171,7 +182,6 @@ describe('sessions:end handler', () => {
         userTurns: 5,
         toolCalls: new Array(20),
         errorRate: 0.02,
-        taskRefs: ['VNM-01.01'],
       });
 
       const result = sessionEndHandler.run(makeInput(), DEFAULT_HOOK_CONFIG);
@@ -182,7 +192,7 @@ describe('sessions:end handler', () => {
       const updater = mockUpdateSessionNoteMeta.mock.calls[0][2] as (
         meta: Record<string, unknown>
       ) => void;
-      const meta: Record<string, unknown> = {};
+      const meta: Record<string, unknown> = { status: 'active' };
       updater(meta);
 
       expect(meta.ended_at).toBeDefined();
@@ -196,7 +206,6 @@ describe('sessions:end handler', () => {
         userTurns: 3,
         toolCalls: new Array(2),
         errorRate: 0,
-        taskRefs: [],
       });
 
       sessionEndHandler.run(makeInput(), DEFAULT_HOOK_CONFIG);
@@ -204,7 +213,7 @@ describe('sessions:end handler', () => {
       const updater = mockUpdateSessionNoteMeta.mock.calls[0][2] as (
         meta: Record<string, unknown>
       ) => void;
-      const meta: Record<string, unknown> = {};
+      const meta: Record<string, unknown> = { status: 'active' };
       updater(meta);
 
       expect(meta.outcome).toBe('abandoned');
@@ -217,7 +226,6 @@ describe('sessions:end handler', () => {
         userTurns: 5,
         toolCalls: new Array(30),
         errorRate: 0.2,
-        taskRefs: [],
       });
 
       sessionEndHandler.run(makeInput(), DEFAULT_HOOK_CONFIG);
@@ -225,10 +233,35 @@ describe('sessions:end handler', () => {
       const updater = mockUpdateSessionNoteMeta.mock.calls[0][2] as (
         meta: Record<string, unknown>
       ) => void;
-      const meta: Record<string, unknown> = {};
+      const meta: Record<string, unknown> = { status: 'active' };
       updater(meta);
 
       expect(meta.outcome).toBe('partial');
+      expect(meta.status).toBe('completed');
+    });
+
+    it('does not overwrite existing ended_at or outcome', () => {
+      process.env.BRAIN_PM_SESSION = 'sess-abc123';
+      mockAggregateSessionEvents.mockReturnValue({
+        userTurns: 5,
+        toolCalls: new Array(20),
+        errorRate: 0.02,
+      });
+
+      sessionEndHandler.run(makeInput(), DEFAULT_HOOK_CONFIG);
+
+      const updater = mockUpdateSessionNoteMeta.mock.calls[0][2] as (
+        meta: Record<string, unknown>
+      ) => void;
+      const meta: Record<string, unknown> = {
+        status: 'completed',
+        ended_at: '2026-03-29T00:00:00Z',
+        outcome: 'success',
+      };
+      updater(meta);
+
+      expect(meta.ended_at).toBe('2026-03-29T00:00:00Z');
+      expect(meta.outcome).toBe('success');
       expect(meta.status).toBe('completed');
     });
 
