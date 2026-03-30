@@ -12,7 +12,7 @@ import {
 
 interface NextResult {
   advanced: string[];
-  pruned: string[];
+  skipped: string[];
   completed: boolean;
   dispatched: Array<{ stepId: string; taskId: string; template: string }>;
   errors: Array<{ stepId: string; error: string }>;

@@ -309,6 +309,7 @@ describe('getInstanceStepStates', () => {
       total: 2,
       done: 1,
       pruned: 0,
+      skipped: 0,
       active: 0,
       pending: 1,
     });
@@ -341,6 +342,7 @@ describe('getInstanceStepStates', () => {
       total: 3,
       done: 1,
       pruned: 2,
+      skipped: 0,
       active: 0,
       pending: 0,
     });
@@ -361,6 +363,7 @@ describe('getInstanceStepStates', () => {
       total: 2,
       done: 0,
       pruned: 0,
+      skipped: 0,
       active: 2,
       pending: 0,
     });

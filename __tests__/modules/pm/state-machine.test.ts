@@ -22,6 +22,8 @@ describe('validateTransition', () => {
     ['blocked', 'pending'],
     ['blocked', 'cancelled'],
     ['done', 'pending'],
+    ['pending', 'skipped'],
+    ['skipped', 'pending'],
   ];
 
   test.each(validTransitions)('%s -> %s is valid', (from, to) => {
@@ -47,6 +49,11 @@ describe('validateTransition', () => {
     ['blocked', 'in-progress'],
     ['blocked', 'done'],
     ['in-progress', 'claimed'],
+    ['skipped', 'done'],
+    ['skipped', 'claimed'],
+    ['skipped', 'in-progress'],
+    ['skipped', 'cancelled'],
+    ['skipped', 'blocked'],
   ];
 
   test.each(invalidTransitions)('%s -> %s is invalid', (from, to) => {
@@ -245,6 +252,26 @@ describe('computeVirtualState', () => {
     });
     expect(result).toEqual([]);
   });
+
+  test('skipped returns []', () => {
+    const result = computeVirtualState({
+      status: 'skipped',
+      dependenciesComplete: false,
+      hasDependencies: true,
+    });
+    expect(result).toEqual([]);
+  });
+
+  test('skipped with due date does not return +OVERDUE', () => {
+    const result = computeVirtualState({
+      status: 'skipped',
+      dependenciesComplete: false,
+      hasDependencies: false,
+      dueDate: '2020-01-01',
+      now: new Date('2025-01-01'),
+    });
+    expect(result).toEqual([]);
+  });
 });
 
 describe('canClaim', () => {
@@ -282,8 +309,14 @@ describe('canClaim', () => {
 });
 
 describe('allowedTransitions', () => {
-  test('pending returns [claimed, blocked, cancelled]', () => {
-    expect(allowedTransitions('pending')).toEqual(['claimed', 'blocked', 'cancelled', 'pruned']);
+  test('pending returns [claimed, blocked, cancelled, pruned, skipped]', () => {
+    expect(allowedTransitions('pending')).toEqual([
+      'claimed',
+      'blocked',
+      'cancelled',
+      'pruned',
+      'skipped',
+    ]);
   });
 
   test('claimed returns [in-progress, pending, cancelled]', () => {
@@ -304,6 +337,10 @@ describe('allowedTransitions', () => {
 
   test('cancelled returns []', () => {
     expect(allowedTransitions('cancelled')).toEqual([]);
+  });
+
+  test('skipped returns [pending]', () => {
+    expect(allowedTransitions('skipped')).toEqual(['pending']);
   });
 
   test('returns a copy, not the original array', () => {

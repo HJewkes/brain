@@ -117,9 +117,9 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
           process.stdout.write(JSON.stringify(data, null, 2) + '\n');
         } else {
           const advancedStr = data.advanced.length > 0 ? data.advanced.join(', ') : '(none)';
-          const prunedStr = data.pruned.length > 0 ? data.pruned.join(', ') : '(none)';
+          const skippedStr = data.skipped.length > 0 ? data.skipped.join(', ') : '(none)';
           process.stdout.write(`Advanced: ${advancedStr}\n`);
-          process.stdout.write(`Pruned: ${prunedStr}\n`);
+          process.stdout.write(`Skipped: ${skippedStr}\n`);
           if (data.warnings.length > 0) {
             process.stdout.write(`Warnings: ${data.warnings.join('; ')}\n`);
           }
@@ -141,7 +141,7 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
           process.exitCode = 1;
           return;
         }
-        const { advanced, pruned, warnings, completed } = advResult.data;
+        const { advanced, skipped, warnings, completed } = advResult.data;
 
         // 2. Map step IDs to task display IDs
         const stepsResult = getInstanceStepStates(svc.db, instanceId);
@@ -204,7 +204,7 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
             JSON.stringify(
               {
                 advanced,
-                pruned,
+                skipped,
                 warnings,
                 completed,
                 dispatched,
@@ -216,9 +216,9 @@ export function createLifecycleCommands(): CommandUnknownOpts[] {
           );
         } else {
           const advancedStr = advanced.length > 0 ? advanced.join(', ') : '(none)';
-          const prunedStr = pruned.length > 0 ? pruned.join(', ') : '(none)';
+          const skippedStr = skipped.length > 0 ? skipped.join(', ') : '(none)';
           process.stdout.write(`Advanced: ${advancedStr}\n`);
-          process.stdout.write(`Pruned: ${prunedStr}\n`);
+          process.stdout.write(`Skipped: ${skippedStr}\n`);
           if (warnings.length > 0) {
             process.stdout.write(`Warnings: ${warnings.join('; ')}\n`);
           }

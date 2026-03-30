@@ -129,7 +129,14 @@ export function getInstanceStepStates(
   instanceDisplayId: string
 ): Result<{
   steps: Array<{ stepId: string; taskDisplayId: string; status: TaskStatus }>;
-  progress: { total: number; done: number; pruned: number; active: number; pending: number };
+  progress: {
+    total: number;
+    done: number;
+    pruned: number;
+    skipped: number;
+    active: number;
+    pending: number;
+  };
 }> {
   const instanceResult = getInstanceByDisplayId(db, instanceDisplayId);
   if (!instanceResult.ok) return instanceResult;
@@ -141,7 +148,7 @@ export function getInstanceStepStates(
   if (expandsToRelations.length === 0) {
     return ok({
       steps: [],
-      progress: { total: 0, done: 0, pruned: 0, active: 0, pending: 0 },
+      progress: { total: 0, done: 0, pruned: 0, skipped: 0, active: 0, pending: 0 },
     });
   }
 
@@ -151,6 +158,7 @@ export function getInstanceStepStates(
   const steps: Array<{ stepId: string; taskDisplayId: string; status: TaskStatus }> = [];
   let done = 0;
   let pruned = 0;
+  let skipped = 0;
   let active = 0;
   let pending = 0;
 
@@ -171,6 +179,9 @@ export function getInstanceStepStates(
       case 'cancelled':
         pruned++;
         break;
+      case 'skipped':
+        skipped++;
+        break;
       case 'claimed':
       case 'in-progress':
         active++;
@@ -183,6 +194,6 @@ export function getInstanceStepStates(
 
   return ok({
     steps,
-    progress: { total: steps.length, done, pruned, active, pending },
+    progress: { total: steps.length, done, pruned, skipped, active, pending },
   });
 }

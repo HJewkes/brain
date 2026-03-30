@@ -33,7 +33,7 @@ export interface AdvanceDispatchResult {
   advanced: string[];
   dispatched: StepExecutionResult[];
   assisted: StepExecutionResult[];
-  pruned: string[];
+  skipped: string[];
   warnings: string[];
   completed: boolean;
 }
@@ -250,10 +250,10 @@ export async function advanceAndDispatch(
   const advResult = await advanceWorkflow(svc.db, svc.config, instanceDisplayId);
   if (!advResult.ok) return fail('ADVANCE_FAILED', advResult.error.message);
 
-  const { advanced, pruned, warnings, completed } = advResult.data;
+  const { advanced, skipped, warnings, completed } = advResult.data;
 
   if (completed) {
-    return ok({ advanced, dispatched: [], assisted: [], pruned, warnings, completed });
+    return ok({ advanced, dispatched: [], assisted: [], skipped, warnings, completed });
   }
 
   const dispatched: StepExecutionResult[] = [];
@@ -273,7 +273,7 @@ export async function advanceAndDispatch(
     }
   }
 
-  return ok({ advanced, dispatched, assisted, pruned, warnings, completed });
+  return ok({ advanced, dispatched, assisted, skipped, warnings, completed });
 }
 
 // --- Start Workflow ---
@@ -303,6 +303,18 @@ export async function startWorkflow(
   const expandResult = await expandWorkflow(svc.db, svc.config, svc.embedder, instanceId);
   if (!expandResult.ok) {
     return fail(expandResult.error.code as ExecutorErrorCode, expandResult.error.message);
+  }
+
+  if (options?.dryRun) {
+    return ok({
+      instanceId,
+      workflowId,
+      workflowVersion: instResult.data.workflow_version,
+      tasksCreated: expandResult.data.tasksCreated,
+      edges: expandResult.data.edges,
+      dispatched: [],
+      assisted: [],
+    });
   }
 
   setInstanceStatus(svc, instanceId, 'executing');
@@ -492,7 +504,7 @@ function resetStepToPending(
   if (taskNotes.length === 0) return;
 
   const meta = JSON.parse(taskNotes[0].metadata ?? '{}') as Record<string, unknown>;
-  if (meta.status !== 'done') return;
+  if (meta.status !== 'done' && meta.status !== 'skipped') return;
 
   const updated = { ...meta, status: 'pending' };
   svc.db.upsertNote({ ...taskNotes[0], metadata: JSON.stringify(updated) });

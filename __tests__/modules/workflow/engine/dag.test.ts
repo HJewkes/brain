@@ -4,7 +4,7 @@ import {
   topologicalSort,
   getSuccessors,
   getPredecessors,
-  getUnreachableSteps,
+  isConditionalOnlyTarget,
 } from '../../../../src/modules/workflow/engine/dag.js';
 import type {
   WorkflowDefinition,
@@ -228,26 +228,26 @@ describe('getPredecessors', () => {
   });
 });
 
-// --- AC-E6: Pruning cascades / unreachable steps ---
+// --- isConditionalOnlyTarget ---
 
-describe('getUnreachableSteps', () => {
-  test('AC-E6: step reachable via alternate path is NOT unreachable', () => {
-    // DAG: A -> B -> D, A -> C -> D. B is pruned.
-    // D is still reachable via C, so D should NOT be unreachable.
-    const edges = [edge('a', 'b'), edge('b', 'd'), edge('a', 'c'), edge('c', 'd')];
-    const allSteps = ['a', 'b', 'c', 'd'];
-    const completedSteps = ['a'];
-    const unreachable = getUnreachableSteps(completedSteps, edges, allSteps);
-    expect(unreachable).not.toContain('d');
+describe('isConditionalOnlyTarget', () => {
+  test('returns true for step with only conditional incoming edges', () => {
+    const edges = [edge('a', 'b', 'needs_revision')];
+    expect(isConditionalOnlyTarget('b', edges)).toBe(true);
   });
 
-  test('AC-E6: step only reachable through pruned branch IS unreachable', () => {
-    // DAG: A -> B -> C (linear). B is pruned.
-    // C is only reachable through B, so C should be unreachable.
-    const edges = [edge('a', 'b'), edge('b', 'c')];
-    const allSteps = ['a', 'b', 'c'];
-    const completedSteps = ['a'];
-    const unreachable = getUnreachableSteps(completedSteps, edges, allSteps);
-    expect(unreachable).toContain('c');
+  test('returns false for step with unconditional incoming edges', () => {
+    const edges = [edge('a', 'b'), edge('c', 'b', 'needs_revision')];
+    expect(isConditionalOnlyTarget('b', edges)).toBe(false);
+  });
+
+  test('returns false for step with no incoming edges (entry node)', () => {
+    const edges = [edge('a', 'b')];
+    expect(isConditionalOnlyTarget('a', edges)).toBe(false);
+  });
+
+  test('returns true for step with multiple conditional incoming edges', () => {
+    const edges = [edge('a', 'c', 'cond1'), edge('b', 'c', 'cond2')];
+    expect(isConditionalOnlyTarget('c', edges)).toBe(true);
   });
 });

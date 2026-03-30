@@ -144,7 +144,7 @@ export function createWorkflowCommand(): Command {
           );
           process.stdout.write(`  Status: ${metadata.instance_status}\n`);
           process.stdout.write(
-            `  Progress: ${progress.done}/${progress.total} done, ${progress.active} active, ${progress.pending} pending, ${progress.pruned} pruned\n`
+            `  Progress: ${progress.done}/${progress.total} done, ${progress.active} active, ${progress.pending} pending, ${progress.skipped} skipped, ${progress.pruned} pruned\n`
           );
 
           if (steps.length > 0) {

@@ -3,13 +3,14 @@ import type { Result } from '../errors.js';
 import { ok, fail } from '../errors.js';
 
 const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  pending: ['claimed', 'blocked', 'cancelled', 'pruned'],
+  pending: ['claimed', 'blocked', 'cancelled', 'pruned', 'skipped'],
   claimed: ['in-progress', 'pending', 'cancelled'],
   'in-progress': ['done', 'blocked', 'cancelled', 'pending'],
   done: ['pending'],
   blocked: ['pending', 'cancelled', 'pruned'],
   cancelled: [],
   pruned: [],
+  skipped: ['pending'],
 };
 
 const DEFAULT_STALE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -52,7 +53,7 @@ export function computeVirtualState(input: VirtualStateInput): VirtualState[] {
   const states: VirtualState[] = [];
   const { status, dependenciesComplete, hasDependencies, claimedAt, dueDate } = input;
 
-  if (status === 'pruned') return states;
+  if (status === 'pruned' || status === 'skipped') return states;
 
   if (status === 'pending') {
     if (!hasDependencies || dependenciesComplete) {
@@ -75,7 +76,7 @@ export function computeVirtualState(input: VirtualStateInput): VirtualState[] {
     }
   }
 
-  if (dueDate && !['done', 'cancelled', 'pruned'].includes(status)) {
+  if (dueDate && !['done', 'cancelled', 'pruned', 'skipped'].includes(status)) {
     const now = input.now ?? new Date();
     const due = new Date(dueDate + 'T23:59:59');
     if (due < now) {
