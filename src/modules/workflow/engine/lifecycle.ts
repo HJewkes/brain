@@ -7,6 +7,7 @@ import { getInstanceByDisplayId, getInstanceStepStates } from '../data/queries.j
 import { getPredecessors, getUnreachableSteps } from './dag.js';
 import { evaluateGates } from './gates.js';
 import { getConditionSignals } from './condition.js';
+import { computeTransitiveBridges } from '../data/workflow-ops.js';
 
 interface AdvanceResult {
   advanced: string[];
@@ -44,14 +45,21 @@ export async function advanceWorkflow(
 
   // Filter definition to only include steps/edges present in this instance.
   // Complexity filtering may have excluded steps during expansion, so the
-  // instance has a subset of the definition's topology.
+  // instance has a subset of the definition's topology. Compute transitive
+  // bridge edges to maintain connectivity across excluded steps
+  // (e.g., research → [interview excluded] → design becomes research → design).
   const instanceStepSet = new Set(allStepIds);
+  const excludedStepSet = new Set(
+    definition.steps.map((s) => s.id).filter((id) => !instanceStepSet.has(id))
+  );
+  const directEdges = definition.edges.filter(
+    (e) => instanceStepSet.has(e.from) && instanceStepSet.has(e.to)
+  );
+  const bridgeEdges = computeTransitiveBridges(definition.edges, instanceStepSet, excludedStepSet);
   const scopedDefinition: WorkflowDefinition = {
     ...definition,
     steps: definition.steps.filter((s) => instanceStepSet.has(s.id)),
-    edges: definition.edges.filter(
-      (e) => instanceStepSet.has(e.from) && instanceStepSet.has(e.to)
-    ),
+    edges: [...directEdges, ...bridgeEdges],
   };
 
   const readySteps = buildReadySet(allStepIds, steps, scopedDefinition);
@@ -189,7 +197,11 @@ function pruneUnreachableSteps(
   const pruned: string[] = [];
   const warnings: string[] = [];
 
-  const unreachable = getUnreachableSteps([...readySteps], definition.edges, allStepIds);
+  // Only pass actually-done steps to pruning, not entry nodes that happen
+  // to be in readySet. Entry nodes are "ready" but not "completed" — they
+  // shouldn't trigger pruning of downstream steps.
+  const doneSteps = allStepIds.filter((id) => statusMap.get(id) === 'done');
+  const unreachable = getUnreachableSteps(doneSteps, definition.edges, allStepIds);
 
   const conditionalTargets = new Set(definition.edges.filter((e) => e.condition).map((e) => e.to));
 
