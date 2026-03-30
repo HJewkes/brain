@@ -25,7 +25,7 @@ const COMPLEXITY_EXCLUSIONS: Record<string, Set<string>> = {
  * the nearest included predecessor, returning bridge edges to close the gap.
  * Only generates edges for paths that traverse at least one excluded step.
  */
-function computeTransitiveBridges(
+export function computeTransitiveBridges(
   edges: WorkflowEdge[],
   includedSteps: Set<string>,
   excludedSteps: Set<string>
