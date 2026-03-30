@@ -9,7 +9,7 @@ import type { Embedder } from '../types.js';
 import type { RoutingResult } from '../modules/pm/engine/routing.js';
 import type { PullResult } from '../modules/agents/task-pull.js';
 import { pullNextTask } from '../modules/agents/task-pull.js';
-import { getTask, updateTaskStatus } from '../modules/pm/data/task-ops.js';
+import { getTask } from '../modules/pm/data/task-ops.js';
 import { buildWorkerDispatchFromPull } from '../modules/agents/coordinator.js';
 import { generateClaim, isClaimStale } from '../modules/pm/engine/claims.js';
 import { getPmNotes } from '../modules/pm/data/queries.js';
@@ -420,7 +420,8 @@ async function handleProcessExit(
       await tryAdvanceWorkflow(svc, completedTaskId, result?.result ?? '');
     } else if (code === 0) {
       // Exit 0 without protocol message — mark task done and advance
-      await updateTaskStatus(svc.db, svc.config, svc.embedder, agentTaskId, 'done');
+      // Use direct DB update to preserve workflow metadata (step_id)
+      markTaskDoneInDb(svc, agentTaskId);
       await tryAdvanceWorkflow(svc, agentTaskId, result?.result ?? '');
     } else {
       const exitReason = code === 143 ? 'rate_limited' : `exit_code_${code}`;
@@ -437,6 +438,15 @@ async function handleProcessExit(
       session_id: result.session_id,
     });
   }
+}
+
+function markTaskDoneInDb(svc: BrainServiceClass, taskId: string): void {
+  const notes = getPmNotes(svc.db, 'task', { display_id: taskId });
+  if (notes.length === 0) return;
+  const note = notes[0];
+  const meta = note.metadata ? (JSON.parse(note.metadata) as Record<string, unknown>) : {};
+  meta.status = 'done';
+  svc.db.upsertNote({ ...note, metadata: JSON.stringify(meta) });
 }
 
 // --- Workflow Context ---
