@@ -205,6 +205,12 @@ async function claimTask(db: BrainDB, embedder: Embedder, taskId: string): Promi
     throw new Error(`No note found for task ${taskId}`);
   }
 
+  // Preserve workflow metadata (step_id, etc.) that expandWorkflow set in DB
+  // but isn't in the frontmatter file — re-indexing from disk would lose it
+  const priorMeta = notes[0].metadata
+    ? (JSON.parse(notes[0].metadata) as Record<string, unknown>)
+    : {};
+
   const filePath = notes[0].filePath;
   if (!existsSync(filePath)) {
     throw new Error(`Task file not found: ${filePath}`);
@@ -221,6 +227,25 @@ async function claimTask(db: BrainDB, embedder: Embedder, taskId: string): Promi
 
   const hash = createHash('sha256').update(content).digest('hex');
   await indexSingleFile(db, embedder, filePath, content, hash, Date.now());
+
+  // Merge back workflow metadata fields that existed before re-indexing
+  const WORKFLOW_FIELDS = ['step_id', 'workflow_id', 'instance_status', 'context'] as const;
+  const reindexedNotes = getPmNotes(db, 'task', { display_id: taskId });
+  if (reindexedNotes.length > 0) {
+    const newMeta = reindexedNotes[0].metadata
+      ? (JSON.parse(reindexedNotes[0].metadata) as Record<string, unknown>)
+      : {};
+    let needsUpdate = false;
+    for (const field of WORKFLOW_FIELDS) {
+      if (priorMeta[field] !== undefined && newMeta[field] === undefined) {
+        newMeta[field] = priorMeta[field];
+        needsUpdate = true;
+      }
+    }
+    if (needsUpdate) {
+      db.upsertNote({ ...reindexedNotes[0], metadata: JSON.stringify(newMeta) });
+    }
+  }
 }
 
 // --- Spawn helpers ---
