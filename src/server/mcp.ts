@@ -19,7 +19,7 @@ import { getWorkflowStatus } from '../modules/workflow/data/workflow-ops.js';
 import { getInstanceByDisplayId, getInstanceStepStates } from '../modules/workflow/data/queries.js';
 import { startWorkflow, advanceAndDispatch } from '../modules/workflow/engine/executor.js';
 import { signalCondition } from '../modules/workflow/engine/condition.js';
-import { updateTaskStatus as updateTaskStatusDirect } from '../modules/pm/data/task-ops.js';
+import { getPmNotes as getPmNotesForSignal } from '../modules/pm/data/queries.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -332,6 +332,15 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
   );
 }
 
+function updateStepTaskStatus(db: BrainDB, taskDisplayId: string, status: string): void {
+  const notes = getPmNotesForSignal(db, 'task', { display_id: taskDisplayId });
+  if (notes.length === 0) return;
+  const note = notes[0];
+  const meta = note.metadata ? (JSON.parse(note.metadata) as Record<string, unknown>) : {};
+  meta.status = status;
+  db.upsertNote({ ...note, metadata: JSON.stringify(meta) });
+}
+
 function resetInstanceToExecuting(db: BrainDB, instanceId: string): void {
   const result = getInstanceByDisplayId(db, instanceId);
   if (!result.ok) return;
@@ -433,23 +442,11 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
         if (!step) return errorResult(`Step "${stepId}" not found in instance "${instanceId}"`);
 
         if (action === 'complete' || action === 'skip') {
-          await updateTaskStatusDirect(
-            svc.db,
-            svc.config,
-            svc.embedder,
-            step.taskDisplayId,
-            'done'
-          );
+          updateStepTaskStatus(svc.db, step.taskDisplayId, 'done');
         }
 
         if (action === 'retry') {
-          await updateTaskStatusDirect(
-            svc.db,
-            svc.config,
-            svc.embedder,
-            step.taskDisplayId,
-            'pending' as TaskStatus
-          );
+          updateStepTaskStatus(svc.db, step.taskDisplayId, 'pending');
         }
 
         if (action === 'signal' && condition) {
