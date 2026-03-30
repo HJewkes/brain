@@ -135,27 +135,25 @@ describe('hook install', () => {
 
   describe('dry-run mode', () => {
     let tmpDir: string;
-    let originalCwd: string;
+    let cwdSpy: ReturnType<typeof vi.spyOn>;
     let stderrSpy: ReturnType<typeof vi.spyOn>;
     let stdoutSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
       tmpDir = mkdtempSync(join(tmpdir(), 'hook-install-'));
-      originalCwd = process.cwd();
+      cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
       stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     });
 
     afterEach(() => {
-      process.chdir(originalCwd);
+      cwdSpy.mockRestore();
       stderrSpy.mockRestore();
       stdoutSpy.mockRestore();
       rmSync(tmpDir, { recursive: true, force: true });
     });
 
     it('should output merged settings without writing file', async () => {
-      process.chdir(tmpDir);
-
       await hookInstallCommand.parseAsync(['--dry-run', '--project'], { from: 'user' });
 
       const settingsPath = join(tmpDir, '.claude', 'settings.local.json');
@@ -168,24 +166,22 @@ describe('hook install', () => {
 
   describe('file writing', () => {
     let tmpDir: string;
-    let originalCwd: string;
+    let cwdSpy: ReturnType<typeof vi.spyOn>;
     let stderrSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
       tmpDir = mkdtempSync(join(tmpdir(), 'hook-install-'));
-      originalCwd = process.cwd();
+      cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
       stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
 
     afterEach(() => {
-      process.chdir(originalCwd);
+      cwdSpy.mockRestore();
       stderrSpy.mockRestore();
       rmSync(tmpDir, { recursive: true, force: true });
     });
 
     it('should write project-level settings', async () => {
-      process.chdir(tmpDir);
-
       await hookInstallCommand.parseAsync(['--project'], { from: 'user' });
 
       const settingsPath = join(tmpDir, '.claude', 'settings.local.json');
@@ -197,7 +193,6 @@ describe('hook install', () => {
     });
 
     it('should merge into existing project settings', async () => {
-      process.chdir(tmpDir);
       const claudeDir = join(tmpDir, '.claude');
       mkdirSync(claudeDir, { recursive: true });
       writeFileSync(
@@ -215,8 +210,6 @@ describe('hook install', () => {
     });
 
     it('should not duplicate hooks on repeated install', async () => {
-      process.chdir(tmpDir);
-
       await hookInstallCommand.parseAsync(['--project'], { from: 'user' });
       await hookInstallCommand.parseAsync(['--project'], { from: 'user' });
 
