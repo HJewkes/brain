@@ -12,6 +12,8 @@ import { computeEligible } from '../modules/pm/engine/dependency.js';
 import { resolveProject } from '../modules/pm/data/queries.js';
 import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
+import { getAgent, listAgents } from '../modules/agents/data.js';
+import { dispatchTask } from './dispatch.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -282,6 +284,48 @@ function registerSessionAgentTools(server: McpServer, svc: BrainServiceClass): v
   );
 }
 
+function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void {
+  server.tool(
+    'brain_agent_dispatch',
+    'Dispatch a headless claude -p agent for a PM task. Returns agent handle with PID and session ID. Use dryRun to preview the prompt without spawning.',
+    {
+      taskId: z
+        .string()
+        .optional()
+        .describe('Task display ID (e.g. VNM-46.17). Omit to auto-pull next eligible.'),
+      model: z.string().optional().describe('Model override: opus, sonnet, haiku'),
+      maxBudgetUsd: z.number().optional().describe('Cost cap per session (default 2.00)'),
+      dryRun: z.boolean().optional().describe('Preview prompt without spawning'),
+    },
+    async ({ taskId, model, maxBudgetUsd, dryRun }) => {
+      try {
+        const result = await dispatchTask(svc, { taskId, model, maxBudgetUsd, dryRun });
+        return textResult(result);
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  server.tool(
+    'brain_agent_status',
+    'Get status of dispatched agents. Omit agentId for all active agents.',
+    {
+      agentId: z.string().optional().describe('Specific agent UUID'),
+    },
+    async ({ agentId }) => {
+      if (agentId) {
+        const agent = getAgent(svc.db, agentId);
+        if (!agent) return errorResult(`Agent "${agentId}" not found`);
+        return textResult(agent);
+      }
+      const active = listAgents(svc.db, { status: 'active' as AgentStatus });
+      const pending = listAgents(svc.db, { status: 'pending' as AgentStatus });
+      return textResult([...active, ...pending]);
+    }
+  );
+}
+
 export function createBrainMcpServer(svc: BrainServiceClass): McpServer {
   const server = new McpServer(
     { name: 'brain', version: '0.7.0' },
@@ -291,6 +335,7 @@ export function createBrainMcpServer(svc: BrainServiceClass): McpServer {
   registerSearchTools(server, svc);
   registerPmTools(server, svc);
   registerSessionAgentTools(server, svc);
+  registerDispatchTools(server, svc);
 
   return server;
 }

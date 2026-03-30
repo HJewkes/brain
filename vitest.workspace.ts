@@ -12,6 +12,7 @@ export default defineWorkspace([
         '__tests__/hooks/**/*.test.ts',
         '__tests__/utils/**/*.test.ts',
         '__tests__/adapters/**/*.test.ts',
+        '__tests__/server/**/*.test.ts',
       ],
       pool: 'threads',
       poolOptions: {
