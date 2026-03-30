@@ -10,7 +10,8 @@ import { readTaskBody } from '../../pm/engine/dispatch.js';
 import { getPmNotes } from '../../pm/data/queries.js';
 import { generateClaim } from '../../pm/engine/claims.js';
 import type { TaskMode } from '../../pm/types.js';
-import { getWorkflowDefinition } from '../data/queries.js';
+import { getWorkflowDefinition, getInstanceStepStates } from '../data/queries.js';
+import { injectStepOutputVariables } from './output-capture.js';
 
 export interface DispatchOptions {
   branch?: string;
@@ -160,6 +161,26 @@ function injectWorkflowContext(db: BrainDB, taskId: string, vars: Record<string,
       }
     }
   }
+
+  // Inject previous step outputs as template variables
+  if (instanceDisplayId) {
+    const projectDir = resolveProjectDirFromTask(db, taskId);
+    if (projectDir) {
+      const stepsResult = getInstanceStepStates(db, instanceDisplayId);
+      if (stepsResult.ok) {
+        const completedStepIds = stepsResult.data.steps
+          .filter((s) => s.status === 'done')
+          .map((s) => s.stepId);
+        injectStepOutputVariables(projectDir, instanceDisplayId, completedStepIds, vars);
+      }
+    }
+  }
+}
+
+function resolveProjectDirFromTask(db: BrainDB, taskId: string): string | null {
+  const prefix = taskId.split('-')[0];
+  const projectResult = getProject(db, prefix);
+  return projectResult.ok ? (projectResult.data.path ?? null) : null;
 }
 
 export async function dispatchTemplate(

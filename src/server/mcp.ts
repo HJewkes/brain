@@ -14,6 +14,14 @@ import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents } from '../modules/agents/data.js';
 import { dispatchTask } from './dispatch.js';
+import { getWorkflowStatus } from '../modules/workflow/data/workflow-ops.js';
+import { getInstanceStepStates } from '../modules/workflow/data/queries.js';
+import {
+  startWorkflow,
+  advanceAndDispatch,
+} from '../modules/workflow/engine/executor.js';
+import { signalCondition } from '../modules/workflow/engine/condition.js';
+import { updateTaskStatus as updateTaskStatusDirect } from '../modules/pm/data/task-ops.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -326,6 +334,124 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
   );
 }
 
+function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void {
+  server.tool(
+    'brain_workflow_start',
+    'Start a workflow: instantiate, expand into tasks, and dispatch entry steps. Returns immediately — agents run in background. Poll with brain_workflow_status.',
+    {
+      workflowId: z.string().describe('Workflow definition ID (e.g. "planning")'),
+      project: z.string().describe('Project prefix (e.g. "VNM")'),
+      workstream: z.number().describe('Workstream number for created tasks'),
+      context: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe('Context parameters (e.g. { planId: "my-plan", complexity: "high" })'),
+      model: z.string().optional().describe('Model override for dispatched agents'),
+      maxBudgetUsd: z.number().optional().describe('Cost cap per agent session (default 2.00)'),
+      dryRun: z.boolean().optional().describe('Preview without spawning agents'),
+    },
+    async ({ workflowId, project, workstream, context, model, maxBudgetUsd, dryRun }) => {
+      try {
+        const result = await startWorkflow(svc, workflowId, project, context ?? {}, {
+          workstream,
+          model,
+          maxBudgetUsd,
+          dryRun,
+        });
+        if (!result.ok) return errorResult(result.error.message);
+        return textResult(result.data);
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  server.tool(
+    'brain_workflow_status',
+    'Get workflow instance status: step states, progress, stalled info, and active agents.',
+    {
+      instanceId: z.string().describe('Workflow instance display ID'),
+    },
+    async ({ instanceId }) => {
+      const statusResult = getWorkflowStatus(svc.db, instanceId);
+      if (!statusResult.ok) return errorResult(statusResult.error.message);
+
+      const { instance, steps, progress } = statusResult.data;
+
+      const activeAgents = steps
+        .filter((s) => s.status === 'claimed' || s.status === 'in-progress')
+        .map((s) => {
+          const agents = svc.agentList({ status: 'active' as AgentStatus });
+          const agent = agents.find((a) => a.brain_task === s.taskDisplayId);
+          return {
+            stepId: s.stepId,
+            taskId: s.taskDisplayId,
+            agentId: agent?.id,
+            pid: agent?.pid,
+          };
+        });
+
+      return textResult({
+        instance,
+        steps,
+        progress,
+        activeAgents,
+      });
+    }
+  );
+
+  server.tool(
+    'brain_workflow_signal',
+    'Signal a workflow step: complete an assisted step, retry a failed step, skip a step, or signal a condition for routing.',
+    {
+      instanceId: z.string().describe('Workflow instance display ID'),
+      stepId: z.string().describe('Step ID to signal'),
+      action: z
+        .enum(['complete', 'retry', 'skip', 'signal'])
+        .describe('Action: complete (assisted done), retry (re-dispatch), skip (mark done), signal (condition)'),
+      condition: z
+        .string()
+        .optional()
+        .describe('Condition name for signal action (e.g. "needs_revision")'),
+    },
+    async ({ instanceId, stepId, action, condition }) => {
+      try {
+        const stepsResult = getInstanceStepStates(svc.db, instanceId);
+        if (!stepsResult.ok) return errorResult(stepsResult.error.message);
+
+        const step = stepsResult.data.steps.find((s) => s.stepId === stepId);
+        if (!step) return errorResult(`Step "${stepId}" not found in instance "${instanceId}"`);
+
+        if (action === 'complete' || action === 'skip') {
+          await updateTaskStatusDirect(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            step.taskDisplayId,
+            'done'
+          );
+        }
+
+        if (action === 'signal' && condition) {
+          const sigResult = signalCondition(svc.db, instanceId, stepId, condition);
+          if (!sigResult.ok) return errorResult(sigResult.error.message);
+        }
+
+        const advResult = await advanceAndDispatch(svc, instanceId, stepId);
+        if (!advResult.ok) return errorResult(advResult.error.message);
+
+        return textResult({
+          action,
+          stepId,
+          ...advResult.data,
+        });
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+}
+
 export function createBrainMcpServer(svc: BrainServiceClass): McpServer {
   const server = new McpServer(
     { name: 'brain', version: '0.7.0' },
@@ -336,6 +462,7 @@ export function createBrainMcpServer(svc: BrainServiceClass): McpServer {
   registerPmTools(server, svc);
   registerSessionAgentTools(server, svc);
   registerDispatchTools(server, svc);
+  registerWorkflowTools(server, svc);
 
   return server;
 }

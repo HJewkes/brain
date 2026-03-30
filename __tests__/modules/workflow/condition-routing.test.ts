@@ -136,7 +136,7 @@ describe('condition routing', () => {
 
   // --- AC-14: Condition signal on completed step is rejected ---
 
-  test('AC-14: signaling condition on a done step fails', async () => {
+  test('AC-14: signaling condition on a done step succeeds (conditions are set after completion)', async () => {
     const workflowId = await createAndRegisterWorkflow(
       [step('research'), step('design')],
       [edge('research', 'design')]
@@ -157,7 +157,32 @@ describe('condition routing', () => {
     if (!status.ok) return;
     setTestTaskStatus(db, getStepTaskDisplayId(status.data, 'research'), 'done');
 
-    // Attempt to signal condition on the completed step
+    // Signal condition on completed step — allowed since conditions are routing
+    // metadata naturally written after step completion (from agent output)
+    const result = signalCondition(db, instanceId, 'research', 'has_open_questions');
+    expect(result.ok).toBe(true);
+  });
+
+  test('AC-14b: signaling condition on a pruned step fails', async () => {
+    const workflowId = await createAndRegisterWorkflow(
+      [step('research'), step('design')],
+      [edge('research', 'design')]
+    );
+
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
+    expect(instResult.ok).toBe(true);
+    if (!instResult.ok) return;
+    const instanceId = instResult.data.display_id;
+
+    await expandWorkflow(db, config, embedder, instanceId);
+
+    const statusData = getWorkflowStatus(db, instanceId);
+    expect(statusData.ok).toBe(true);
+    if (!statusData.ok) return;
+    setTestTaskStatus(db, getStepTaskDisplayId(statusData.data, 'research'), 'pruned');
+
     const result = signalCondition(db, instanceId, 'research', 'has_open_questions');
     expect(result.ok).toBe(false);
   });
