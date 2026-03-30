@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import Database from 'better-sqlite3';
 
 vi.mock('../../src/modules/loader.js', () => ({
-  loadModules: vi.fn().mockResolvedValue({ registry: { getCommands: () => [] } }),
+  loadModules: vi
+    .fn()
+    .mockResolvedValue({ registry: { getCommands: () => [], getMigrations: () => [] } }),
+  runModuleMigrations: vi.fn().mockReturnValue([]),
 }));
 
 function makeTempBrainDir(): { projectDir: string; brainDir: string } {

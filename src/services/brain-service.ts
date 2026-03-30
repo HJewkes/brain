@@ -6,7 +6,7 @@ import { loadConfig, resolveInstance } from './config.js';
 import type { ResolveOptions, InstancePaths } from './config.js';
 import { BrainDB } from './brain-db.js';
 import { createEmbedder } from '../adapters/index.js';
-import { loadModules } from '../modules/loader.js';
+import { loadModules, runModuleMigrations } from '../modules/loader.js';
 import type { ModuleRegistry } from '../modules/registry.js';
 import type { Embedder, BrainConfig, SearchResult } from '../types.js';
 import { search as runSearch } from './search.js';
@@ -74,6 +74,8 @@ export class BrainServiceClass {
     const db = new BrainDB(config.dbPath);
     const embedder = createEmbedder(config);
     const { registry } = await loadModules();
+    // Ensure all module schemas are up to date (CREATE IF NOT EXISTS is idempotent)
+    runModuleMigrations(registry, db.rawDb, new Map());
     return new BrainServiceClass(db, config, embedder, registry, instance);
   }
 
