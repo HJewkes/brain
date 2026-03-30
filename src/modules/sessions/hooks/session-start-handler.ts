@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, existsSync } from 'node:fs';
+import { appendFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../../../hooks/types.js';
 import { hookAllow, hookAllowJson } from '../../../hooks/types.js';
@@ -137,19 +137,4 @@ function tryStartBrainServe(): void {
   }
 }
 
-function findBrainBinary(): string | null {
-  // Check common locations
-  const candidates = ['/opt/homebrew/bin/brain', '/usr/local/bin/brain'];
-  // Also check if brain is in PATH via which
-  try {
-    const { execFileSync } = require('node:child_process') as typeof import('node:child_process'); // eslint-disable-line @typescript-eslint/no-require-imports
-    const which = execFileSync('which', ['brain'], { encoding: 'utf-8', timeout: 1000 }).trim();
-    if (which) candidates.unshift(which);
-  } catch {
-    // brain not in PATH
-  }
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-  return null;
-}
+import { findBrainBinary } from '../../../hooks/utils.js';

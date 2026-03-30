@@ -810,7 +810,158 @@ export function createOrchestrationCommands(): Command[] {
       });
     });
 
-  return [nextCmd, wavesCmd, dispatchCmd, renderPromptCmd, completeCmd, briefingCmd] as Command[];
+  const overviewCmd = new Command('overview')
+    .description('Strategic project overview: workstreams, priorities, and focus areas in one call')
+    .option('--project <prefix>', 'Project prefix (uses active project if omitted)')
+    .option('--json', 'Output JSON')
+    .action(async (opts) => {
+      await withBrain(async (svc) => {
+        const resolvedResult = resolveProject(svc.db, opts.project);
+        if (!resolvedResult.ok) {
+          process.stderr.write(formatError(resolvedResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+        const prefix = resolvedResult.data;
+
+        const projectResult = getProject(svc.db, prefix);
+        const project = projectResult.ok ? projectResult.data : null;
+
+        const allTasksResult = listTasks(svc.db, prefix);
+        const allTasks = allTasksResult.ok ? allTasksResult.data : [];
+
+        const wsResult = listWorkstreams(svc.db, prefix);
+        const workstreams = wsResult.ok ? wsResult.data : [];
+
+        const eligible = computeEligible(svc.db, prefix);
+        const eligibleSet = new Set(eligible);
+
+        // Build workstream summaries (only those with pending work)
+        const wsOverviews = workstreams
+          .map((ws) => {
+            const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
+            const pending = wsTasks.filter((t) => t.status === 'pending').length;
+            const inProgress = wsTasks.filter((t) => t.status === 'in-progress').length;
+            const done = wsTasks.filter((t) => t.status === 'done').length;
+            const blocked = wsTasks.filter(
+              (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
+            ).length;
+            const highPriTasks = wsTasks.filter(
+              (t) =>
+                (t.priority === 'critical' || t.priority === 'high') &&
+                t.status === 'pending' &&
+                eligibleSet.has(t.display_id)
+            );
+            return {
+              display_id: ws.display_id,
+              name: ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`,
+              description: ws.description,
+              total: wsTasks.length,
+              pending,
+              inProgress,
+              done,
+              blocked,
+              eligibleHighPri: highPriTasks.map((t) => ({
+                displayId: t.display_id,
+                title: t.title ?? t.display_id,
+                priority: t.priority,
+                category: t.category,
+              })),
+            };
+          })
+          .filter((ws) => ws.pending > 0 || ws.inProgress > 0);
+
+        // Recent completions (tasks with modified date, sorted desc)
+        const recentDone = allTasks
+          .filter((t) => t.status === 'done' && t.modified)
+          .sort((a, b) => (b.modified ?? '').localeCompare(a.modified ?? ''))
+          .slice(0, 10)
+          .map((t) => ({
+            displayId: t.display_id,
+            title: t.title ?? t.display_id,
+            workstream: t.workstream_display_id ?? `WS-${t.workstream}`,
+            modified: t.modified,
+          }));
+
+        // Priority summary across all pending
+        const pendingTasks = allTasks.filter((t) => t.status === 'pending');
+        const priorityMatrix = {
+          critical: pendingTasks.filter((t) => t.priority === 'critical').length,
+          high: pendingTasks.filter((t) => t.priority === 'high').length,
+          medium: pendingTasks.filter((t) => t.priority === 'medium').length,
+          low: pendingTasks.filter((t) => t.priority === 'low').length,
+        };
+
+        const overview = {
+          project: {
+            prefix,
+            display_id: project?.display_id ?? prefix,
+            status: project?.status ?? 'active',
+          },
+          summary: {
+            totalTasks: allTasks.length,
+            done: allTasks.filter((t) => t.status === 'done').length,
+            inProgress: allTasks.filter((t) => t.status === 'in-progress').length,
+            pending: pendingTasks.length,
+            eligible: eligible.length,
+            activeWorkstreams: wsOverviews.length,
+            totalWorkstreams: workstreams.length,
+          },
+          priorityMatrix,
+          workstreams: wsOverviews,
+          recentCompletions: recentDone,
+        };
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(overview, null, 2) + '\n');
+          return;
+        }
+
+        const lines: string[] = [];
+        lines.push(`=== ${project?.display_id ?? prefix} Overview ===`);
+        lines.push(
+          `${overview.summary.totalTasks} tasks: ${overview.summary.done} done, ${overview.summary.inProgress} in-progress, ${overview.summary.pending} pending (${overview.summary.eligible} eligible)`
+        );
+        lines.push(
+          `Priority: ${priorityMatrix.critical} critical, ${priorityMatrix.high} high, ${priorityMatrix.medium} medium, ${priorityMatrix.low} low`
+        );
+        lines.push(
+          `Workstreams: ${overview.summary.activeWorkstreams} active / ${overview.summary.totalWorkstreams} total`
+        );
+        lines.push('');
+
+        lines.push('--- Active Workstreams ---');
+        for (const ws of wsOverviews) {
+          const progress = ws.total > 0 ? Math.round((ws.done / ws.total) * 100) : 0;
+          lines.push(
+            `  ${ws.display_id} ${ws.name} (${progress}%: ${ws.done}/${ws.total} done, ${ws.pending} pending${ws.inProgress > 0 ? `, ${ws.inProgress} in-progress` : ''}${ws.blocked > 0 ? `, ${ws.blocked} blocked` : ''})`
+          );
+          for (const t of ws.eligibleHighPri) {
+            lines.push(`    -> [${t.priority}] ${t.displayId}: ${t.title}`);
+          }
+        }
+
+        if (recentDone.length > 0) {
+          lines.push('');
+          lines.push('--- Recent Completions ---');
+          for (const t of recentDone) {
+            lines.push(`  ${t.displayId} (${t.workstream}): ${t.title}`);
+          }
+        }
+
+        process.stdout.write(lines.join('\n') + '\n');
+      });
+    });
+
+  return [
+    nextCmd,
+    wavesCmd,
+    dispatchCmd,
+    renderPromptCmd,
+    completeCmd,
+    briefingCmd,
+    overviewCmd,
+  ] as Command[];
 }
 
 export interface TemplateVariableOptions {

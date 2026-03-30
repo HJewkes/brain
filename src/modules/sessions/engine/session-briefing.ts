@@ -86,19 +86,49 @@ export function generateSessionBriefing(
     });
   }
 
-  // 4. Recent sessions for this project
-  const recentSessions = listSessions(db, { project, since: daysAgo(7) }).slice(0, 3);
+  // 4. Recent sessions — last session gets detailed handoff, older ones get summary
+  const recentSessions = listSessions(db, { project, since: daysAgo(7) }).slice(0, 5);
   if (recentSessions.length > 0) {
-    sections.push({
-      heading: 'Recent Sessions',
-      items: recentSessions.map((s) => {
-        const summary = s.summary ? ` — ${s.summary}` : '';
-        const tasks = s.tasks_completed?.length
-          ? ` (completed: ${s.tasks_completed.join(', ')})`
-          : '';
-        return `${s.display_id} ${s.started_at.slice(0, 10)}${summary}${tasks}`;
-      }),
-    });
+    const lastSession = recentSessions[0];
+
+    // Detailed handoff from most recent session
+    const handoffItems: string[] = [];
+    if (lastSession.summary) {
+      handoffItems.push(`Summary: ${lastSession.summary}`);
+    }
+    if (lastSession.tasks_worked?.length) {
+      handoffItems.push(`Tasks worked: ${lastSession.tasks_worked.join(', ')}`);
+    }
+    if (lastSession.tasks_completed?.length) {
+      handoffItems.push(`Tasks completed: ${lastSession.tasks_completed.join(', ')}`);
+    }
+    if (lastSession.branch) {
+      handoffItems.push(`Branch: ${lastSession.branch}`);
+    }
+    if (lastSession.commits?.length) {
+      handoffItems.push(`Commits: ${lastSession.commits.length}`);
+    }
+    if (handoffItems.length > 0) {
+      sections.push({
+        heading: `Last Session (${lastSession.display_id} ${lastSession.started_at.slice(0, 10)})`,
+        items: handoffItems,
+      });
+    }
+
+    // Older sessions as one-liners
+    const olderSessions = recentSessions.slice(1);
+    if (olderSessions.length > 0) {
+      sections.push({
+        heading: 'Earlier Sessions',
+        items: olderSessions.map((s) => {
+          const summary = s.summary ? ` — ${s.summary}` : '';
+          const tasks = s.tasks_completed?.length
+            ? ` (completed: ${s.tasks_completed.join(', ')})`
+            : '';
+          return `${s.display_id} ${s.started_at.slice(0, 10)}${summary}${tasks}`;
+        }),
+      });
+    }
   }
 
   // 5. Progress summary
@@ -166,7 +196,10 @@ export function renderBriefingMarkdown(briefing: SessionBriefing): string {
 }
 
 function toTag(heading: string): string {
-  return heading.toLowerCase().replace(/\s+/g, '_');
+  return heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
 }
 
 function daysAgo(n: number): string {

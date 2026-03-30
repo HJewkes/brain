@@ -5,8 +5,11 @@ import { z } from 'zod';
 import type { BrainServiceClass } from '../services/brain-service.js';
 import type { InboxItem } from '../types.js';
 import { searchMemories } from '../services/search.js';
-import { getTask } from '../modules/pm/data/task-ops.js';
+import { getTask, listTasks } from '../modules/pm/data/task-ops.js';
 import { updateTaskStatus } from '../modules/pm/data/task-ops.js';
+import { listWorkstreams } from '../modules/pm/data/workstream-ops.js';
+import { computeEligible } from '../modules/pm/engine/dependency.js';
+import { resolveProject } from '../modules/pm/data/queries.js';
 import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 
@@ -152,6 +155,86 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
     async ({ prefix }) => {
       const tasks = svc.pmNext(prefix);
       return textResult(tasks);
+    }
+  );
+
+  server.tool(
+    'brain_pm_overview',
+    'Strategic project overview: active workstreams with task counts, high-priority eligible tasks, and recent completions — all in one call',
+    { prefix: z.string().optional().describe('Project prefix (e.g. VNM)') },
+    async ({ prefix }) => {
+      const resolvedResult = resolveProject(svc.db, prefix);
+      if (!resolvedResult.ok) return errorResult(resolvedResult.error.message);
+      const pfx = resolvedResult.data;
+
+      const allTasksResult = listTasks(svc.db, pfx);
+      const allTasks = allTasksResult.ok ? allTasksResult.data : [];
+
+      const wsResult = listWorkstreams(svc.db, pfx);
+      const workstreams = wsResult.ok ? wsResult.data : [];
+
+      const eligible = computeEligible(svc.db, pfx);
+      const eligibleSet = new Set(eligible);
+
+      const wsOverviews = workstreams
+        .map((ws) => {
+          const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
+          const pending = wsTasks.filter((t) => t.status === 'pending').length;
+          const inProgress = wsTasks.filter((t) => t.status === 'in-progress').length;
+          const done = wsTasks.filter((t) => t.status === 'done').length;
+          const highPri = wsTasks.filter(
+            (t) =>
+              (t.priority === 'critical' || t.priority === 'high') &&
+              t.status === 'pending' &&
+              eligibleSet.has(t.display_id)
+          );
+          return {
+            display_id: ws.display_id,
+            name: ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`,
+            pending,
+            inProgress,
+            done,
+            total: wsTasks.length,
+            eligibleHighPri: highPri.map((t) => ({
+              displayId: t.display_id,
+              title: t.title ?? t.display_id,
+              priority: t.priority,
+            })),
+          };
+        })
+        .filter((ws) => ws.pending > 0 || ws.inProgress > 0);
+
+      const pendingTasks = allTasks.filter((t) => t.status === 'pending');
+
+      const recentCompletions = allTasks
+        .filter((t) => t.status === 'done' && t.modified)
+        .sort((a, b) => (b.modified ?? '').localeCompare(a.modified ?? ''))
+        .slice(0, 10)
+        .map((t) => ({
+          displayId: t.display_id,
+          title: t.title ?? t.display_id,
+          workstream: t.workstream_display_id ?? `WS-${t.workstream}`,
+          modified: t.modified,
+        }));
+
+      return textResult({
+        summary: {
+          totalTasks: allTasks.length,
+          done: allTasks.filter((t) => t.status === 'done').length,
+          inProgress: allTasks.filter((t) => t.status === 'in-progress').length,
+          pending: pendingTasks.length,
+          eligible: eligible.length,
+          activeWorkstreams: wsOverviews.length,
+        },
+        priorityMatrix: {
+          critical: pendingTasks.filter((t) => t.priority === 'critical').length,
+          high: pendingTasks.filter((t) => t.priority === 'high').length,
+          medium: pendingTasks.filter((t) => t.priority === 'medium').length,
+          low: pendingTasks.filter((t) => t.priority === 'low').length,
+        },
+        workstreams: wsOverviews,
+        recentCompletions,
+      });
     }
   );
 }

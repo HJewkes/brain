@@ -133,15 +133,26 @@ describe('generateSessionBriefing', () => {
         display_id: 'SNS-001',
         started_at: '2026-03-12T10:00:00Z',
         summary: 'Worked on auth',
+        tasks_worked: ['VNM-02.01'],
         tasks_completed: ['VNM-01.01'],
+        branch: 'feat/auth',
+        commits: ['abc123'],
       },
     ]);
 
     const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
-    const sessionSection = briefing.sections.find((s) => s.heading === 'Recent Sessions');
+    const sessionSection = briefing.sections.find((s) => s.heading.includes('Last Session'));
     expect(sessionSection).toBeDefined();
-    expect(sessionSection!.items[0]).toContain('SNS-001');
-    expect(sessionSection!.items[0]).toContain('Worked on auth');
+    expect(sessionSection!.heading).toContain('SNS-001');
+    expect(sessionSection!.items).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Worked on auth'),
+        expect.stringContaining('VNM-02.01'),
+        expect.stringContaining('VNM-01.01'),
+        expect.stringContaining('feat/auth'),
+        expect.stringContaining('Commits: 1'),
+      ])
+    );
   });
 
   it('includes progress summary', () => {
