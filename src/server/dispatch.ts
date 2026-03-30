@@ -9,7 +9,7 @@ import type { Embedder } from '../types.js';
 import type { RoutingResult } from '../modules/pm/engine/routing.js';
 import type { PullResult } from '../modules/agents/task-pull.js';
 import { pullNextTask } from '../modules/agents/task-pull.js';
-import { getTask } from '../modules/pm/data/task-ops.js';
+import { getTask, updateTaskStatus } from '../modules/pm/data/task-ops.js';
 import { buildWorkerDispatchFromPull } from '../modules/agents/coordinator.js';
 import { generateClaim, isClaimStale } from '../modules/pm/engine/claims.js';
 import { getPmNotes } from '../modules/pm/data/queries.js';
@@ -419,7 +419,8 @@ async function handleProcessExit(
     if (completedTaskId) {
       await tryAdvanceWorkflow(svc, completedTaskId, result?.result ?? '');
     } else if (code === 0) {
-      // Exit 0 without protocol message — still advance using the agent's task
+      // Exit 0 without protocol message — mark task done and advance
+      await updateTaskStatus(svc.db, svc.config, svc.embedder, agentTaskId, 'done');
       await tryAdvanceWorkflow(svc, agentTaskId, result?.result ?? '');
     } else {
       const exitReason = code === 143 ? 'rate_limited' : `exit_code_${code}`;
