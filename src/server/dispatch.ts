@@ -456,7 +456,14 @@ function resolveWorkflowInstance(
 
   const meta = JSON.parse(taskNotes[0].metadata ?? '{}') as Record<string, unknown>;
   const stepId = meta.step_id as string | undefined;
-  if (!stepId) return undefined;
+  if (!stepId) {
+    if (meta.workflow_id || meta.instance_status) {
+      process.stderr.write(
+        `[workflow:advance] Task ${taskId} appears workflow-related but has no step_id — advancement skipped\n`
+      );
+    }
+    return undefined;
+  }
 
   const incomingRelations = svc.db.getRelationsTo(taskNotes[0].id);
   const expandsToRel = incomingRelations.find((r) => r.type === 'expands-to');
