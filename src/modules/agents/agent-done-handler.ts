@@ -161,6 +161,14 @@ export function handleAgentDone(
     }
   }
 
+  // Verify observability linkage before aggregation
+  const sessionId = getAgentContext(db, agentId, 'session_id') as string | undefined;
+  if (!sessionId) {
+    process.stderr.write(
+      `[agent-done] Agent ${agentId} has no session_id — token/artifact tracking will be empty\n`
+    );
+  }
+
   // Snapshot session token totals into agent context
   trySnapshotSessionTokens(db, agentId);
 

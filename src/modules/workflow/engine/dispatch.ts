@@ -180,7 +180,8 @@ function injectWorkflowContext(db: BrainDB, taskId: string, vars: Record<string,
 function resolveProjectDirFromTask(db: BrainDB, taskId: string): string | null {
   const prefix = taskId.split('-')[0];
   const projectResult = getProject(db, prefix);
-  return projectResult.ok ? (projectResult.data.path ?? null) : null;
+  if (projectResult.ok && projectResult.data.path) return projectResult.data.path;
+  return process.cwd();
 }
 
 export async function dispatchTemplate(
@@ -208,7 +209,7 @@ export async function dispatchTemplate(
 
   if (projectResult.ok) {
     const p = projectResult.data;
-    vars.REPO_PATH = p.path ?? '';
+    vars.REPO_PATH = p.path || process.cwd();
     vars.BUILD_CMD = p.commands?.build ?? 'N/A';
     vars.TEST_CMD = p.commands?.test ?? 'N/A';
     vars.TYPECHECK_CMD = p.commands?.typecheck ?? 'N/A';
@@ -219,7 +220,7 @@ export async function dispatchTemplate(
     vars.BRANCH_NAME =
       opts.branch ?? buildBranchName(task.category, task.title ?? taskId, p.branch_prefix);
   } else {
-    vars.REPO_PATH = '';
+    vars.REPO_PATH = process.cwd();
     vars.BUILD_CMD = 'N/A';
     vars.TEST_CMD = 'N/A';
     vars.TYPECHECK_CMD = 'N/A';
