@@ -3,6 +3,8 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { WorkflowFn, WorkflowRun, StepResult } from './types.js';
 import { WorkflowContext } from './context.js';
+import { findAgentByTask } from '../../agents/data.js';
+import { parseSignals } from './signals.js';
 
 /** Row shape returned from the workflow_runs table. */
 interface WorkflowRunRow {
@@ -144,17 +146,96 @@ export class WorkflowRuntime {
       if (this.active.has(row.id)) continue;
 
       const run = deserializeRun(row);
+
+      this.resolveStaleAgent(run);
+
       const ctx = new WorkflowContext(run, this.db, this.config, this.channelPush, {
-      embedder: this.embedder,
-      model: this.model,
-      maxBudgetUsd: this.maxBudgetUsd,
-    });
+        embedder: this.embedder,
+        model: this.model,
+        maxBudgetUsd: this.maxBudgetUsd,
+      });
       const promise = fn(ctx).then(
         () => this.onComplete(run.id),
         (err: unknown) => this.onFailed(run.id, err)
       );
       this.active.set(run.id, { ctx, promise });
     }
+  }
+
+  /**
+   * Check if the active agent completed or died while the runtime was down.
+   * Mutates the run in-place so the hydrated context picks up the result.
+   */
+  private resolveStaleAgent(run: WorkflowRun): void {
+    if (!run.activeAgent) return;
+
+    const agent = findAgentByTask(this.db, run.activeAgent.taskId);
+    if (!agent) {
+      run.activeAgent = null;
+      this.persistRun(run);
+      return;
+    }
+
+    if (agent.status === 'completed') {
+      const stepId = run.activeAgent.stepId;
+      const iter = this.currentIteration(run, stepId);
+      const iterKey = `${stepId}:${iter}`;
+      const output = agent.summary ?? '';
+
+      run.stepResults[iterKey] = {
+        stepId,
+        taskId: run.activeAgent.taskId,
+        agentId: agent.id,
+        signal: parseSignals(stepId, run.workflowName, output),
+        completedAt: agent.completed_at ?? new Date().toISOString(),
+        output,
+      };
+      run.activeAgent = null;
+      this.persistRun(run);
+
+      this.channelPush?.('step_complete', {
+        workflow: run.id,
+        step: stepId,
+        signal: run.stepResults[iterKey].signal ?? '',
+        taskId: run.stepResults[iterKey].taskId,
+      });
+    } else if (agent.status === 'failed' || agent.status === 'abandoned') {
+      run.activeAgent = null;
+      this.persistRun(run);
+    }
+    // If agent is still active/pending, leave activeAgent in place —
+    // the reconciler will monitor it after hydration.
+  }
+
+  private currentIteration(run: WorkflowRun, stepId: string): number {
+    let maxIter = -1;
+    for (const key of Object.keys(run.stepResults)) {
+      const colonIdx = key.lastIndexOf(':');
+      if (colonIdx === -1) continue;
+      const id = key.slice(0, colonIdx);
+      if (id !== stepId) continue;
+      const iter = parseInt(key.slice(colonIdx + 1), 10);
+      if (!Number.isNaN(iter) && iter > maxIter) maxIter = iter;
+    }
+    return maxIter + 1;
+  }
+
+  private persistRun(run: WorkflowRun): void {
+    const rawDb = this.db.rawDb;
+    rawDb
+      .prepare(
+        `UPDATE workflow_runs SET status = ?, current_step = ?, step_results = ?,
+         active_agent = ?, completed_at = ?, error = ? WHERE id = ?`
+      )
+      .run(
+        run.status,
+        run.currentStep,
+        JSON.stringify(run.stepResults),
+        run.activeAgent ? JSON.stringify(run.activeAgent) : null,
+        run.completedAt,
+        run.error,
+        run.id
+      );
   }
 
   getStatus(runId: string): WorkflowRun | null {
@@ -164,12 +245,17 @@ export class WorkflowRuntime {
     }
 
     const rawDb = this.db.rawDb;
-    const row = rawDb
-      .prepare(`SELECT * FROM workflow_runs WHERE id = ?`)
-      .get(runId) as WorkflowRunRow | undefined;
+    const row = rawDb.prepare(`SELECT * FROM workflow_runs WHERE id = ?`).get(runId) as
+      | WorkflowRunRow
+      | undefined;
 
     if (!row) return null;
     return deserializeRun(row);
+  }
+
+  async waitForCompletion(runId: string): Promise<void> {
+    const running = this.active.get(runId);
+    if (running) await running.promise;
   }
 
   signal(runId: string, stepId: string, data?: Record<string, string>): void {
@@ -206,14 +292,16 @@ export class WorkflowRuntime {
   }
 
   private onComplete(runId: string): void {
-    const rawDb = this.db.rawDb;
-    const now = new Date().toISOString();
-    rawDb
-      .prepare(
-        `UPDATE workflow_runs SET status = 'completed', completed_at = ? WHERE id = ?`
-      )
-      .run(now, runId);
     this.active.delete(runId);
+    try {
+      const rawDb = this.db.rawDb;
+      const now = new Date().toISOString();
+      rawDb
+        .prepare(`UPDATE workflow_runs SET status = 'completed', completed_at = ? WHERE id = ?`)
+        .run(now, runId);
+    } catch {
+      // DB may be closed during shutdown — non-fatal
+    }
 
     this.channelPush?.('workflow_complete', { workflow: runId });
   }

@@ -576,10 +576,23 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
   );
 }
 
-export function createBrainMcpServer(svc: BrainServiceClass): McpServer {
+export interface BrainMcpServerOptions {
+  channelInstructions?: string;
+}
+
+export function createBrainMcpServer(
+  svc: BrainServiceClass,
+  options?: BrainMcpServerOptions
+): McpServer {
   const server = new McpServer(
     { name: 'brain', version: '0.7.0' },
-    { capabilities: { tools: {} } }
+    {
+      capabilities: {
+        tools: {},
+        ...(options?.channelInstructions ? { experimental: { 'claude/channel': {} } } : {}),
+      },
+      ...(options?.channelInstructions ? { instructions: options.channelInstructions } : {}),
+    }
   );
 
   registerSearchTools(server, svc);

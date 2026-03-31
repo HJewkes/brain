@@ -12,11 +12,19 @@ import { createHttpHandler, broadcast } from './serve-http.js';
 import type { SseClients } from './serve-http.js';
 import { startMcpServer } from '../server/index.js';
 import { installLaunchd, uninstallLaunchd } from './serve-launchd.js';
+import { WORKFLOW_CHANNEL_INSTRUCTIONS } from '../modules/workflow/runtime/channel.js';
 
 export function createServeServer(service: BrainServiceClass): McpServer {
+  const useV2 = process.env.BRAIN_EXECUTOR_V2 === '1';
   const server = new McpServer(
     { name: 'brain', version: '0.7.0' },
-    { capabilities: { tools: {} } }
+    {
+      capabilities: {
+        tools: {},
+        ...(useV2 ? { experimental: { 'claude/channel': {} } } : {}),
+      },
+      ...(useV2 ? { instructions: WORKFLOW_CHANNEL_INSTRUCTIONS } : {}),
+    }
   );
 
   server.tool(

@@ -8,12 +8,7 @@
 
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
-import type {
-  WorkflowRun,
-  StepResult,
-  WorkflowStatus,
-  ChannelPushFn,
-} from './types.js';
+import type { WorkflowRun, StepResult, WorkflowStatus, ChannelPushFn } from './types.js';
 import { parseSignals } from './signals.js';
 import { createTask } from '../../pm/data/task-ops.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
@@ -21,6 +16,18 @@ import { dispatchTask } from '../../../server/dispatch.js';
 
 // Re-export the interface for use by runtime.ts
 export type { WorkflowContext as WorkflowContextInterface } from './types.js';
+
+/** Thrown when an agent process dies unexpectedly. */
+export class AgentDeathError extends Error {
+  constructor(
+    public readonly pid: number,
+    public readonly taskId: string,
+    public readonly stepId: string
+  ) {
+    super(`Agent died: pid=${pid} task=${taskId}`);
+    this.name = 'AgentDeathError';
+  }
+}
 
 interface AgentWaitpoint {
   resolve: (output: string) => void;
@@ -53,6 +60,7 @@ export class WorkflowContext {
 
   private agentWaitpoints = new Map<string, AgentWaitpoint>();
   private signalWaitpoints = new Map<string, SignalWaitpoint>();
+  private _retries = new Map<string, number>();
 
   private db: BrainDB;
   private config: BrainConfig;
@@ -119,8 +127,20 @@ export class WorkflowContext {
       return cached;
     }
 
-    const taskId = await this.createStepTask(stepId);
+    return this.dispatchWithRetry(stepId, template, iterKey);
+  }
 
+  /** Maximum number of automatic retries when an agent dies. */
+  static readonly MAX_RETRIES = 1;
+
+  private async dispatchWithRetry(
+    stepId: string,
+    template: string,
+    iterKey: string
+  ): Promise<StepResult> {
+    const retryCount = this._retries.get(iterKey) ?? 0;
+
+    const taskId = await this.createStepTask(stepId);
     const rendered = await this.renderTemplate(taskId, template);
 
     this._currentStep = stepId;
@@ -131,7 +151,29 @@ export class WorkflowContext {
     this._activeAgent = { pid: agent.pid, taskId: agent.taskId, stepId };
     this.persist();
 
-    const output = await this.waitForAgent(iterKey);
+    let output: string;
+    try {
+      output = await this.waitForAgent(iterKey);
+    } catch (err) {
+      if (err instanceof AgentDeathError && retryCount < WorkflowContext.MAX_RETRIES) {
+        this._retries.set(iterKey, retryCount + 1);
+        this.channel?.('step_retry', {
+          workflow: this.runId,
+          step: stepId,
+          taskId: agent.taskId,
+          attempt: String(retryCount + 2),
+        });
+        return this.dispatchWithRetry(stepId, template, iterKey);
+      }
+
+      this.channel?.('step_failed', {
+        workflow: this.runId,
+        step: stepId,
+        taskId: agent.taskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
 
     const signal = parseSignals(stepId, this.workflowName, output);
 
@@ -215,14 +257,14 @@ export class WorkflowContext {
     }
   }
 
-  /** Handle agent death detected by reconciler. */
+  /** Handle agent death detected by reconciler. Rejects with AgentDeathError for retry logic. */
   handleAgentDeath(agent: { pid: number; taskId: string; stepId: string }): void {
     const iterKey = this.findActiveAgentKey(agent.stepId);
     if (!iterKey) return;
 
     const waitpoint = this.agentWaitpoints.get(iterKey);
     if (waitpoint) {
-      waitpoint.reject(new Error(`Agent died: pid=${agent.pid} task=${agent.taskId}`));
+      waitpoint.reject(new AgentDeathError(agent.pid, agent.taskId, agent.stepId));
       this.agentWaitpoints.delete(iterKey);
     }
     this._activeAgent = null;
