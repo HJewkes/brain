@@ -119,6 +119,10 @@ export const advanceHook: HookHandler = {
   },
 
   run(input: HookInput, _config: HookConfig): ReturnType<typeof hookAllow> {
+    if (process.env.BRAIN_EXECUTOR_V2 === '1') {
+      return hookAllow(); // New runtime handles advancement in-process
+    }
+
     const agentId = (input.parsed.agent_id as string | undefined) ?? process.env.BRAIN_AGENT_ID;
     if (!agentId) return hookAllow();
 

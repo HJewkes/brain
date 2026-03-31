@@ -5,11 +5,43 @@ import type { ResolveOptions } from '../services/config.js';
 
 export async function startMcpServer(resolveOpts?: ResolveOptions): Promise<void> {
   const svc = await getSharedInstance(resolveOpts);
+
+  if (process.env.BRAIN_EXECUTOR_V2 === '1') {
+    const { WorkflowRuntime } = await import('../modules/workflow/runtime/runtime.js');
+    const { workflows } = await import('../modules/workflow/flows/index.js');
+    const { workflowRuntimeMigrationV1 } = await import(
+      '../modules/workflow/runtime/migration.js'
+    );
+
+    const runtime = new WorkflowRuntime({
+      db: svc.db,
+      config: svc.config,
+      embedder: svc.embedder,
+    });
+
+    for (const [name, fn] of Object.entries(workflows)) {
+      runtime.register(name, fn);
+    }
+
+    workflowRuntimeMigrationV1.up(svc.db.rawDb);
+
+    await runtime.hydrate();
+    runtime.startReconciler();
+
+    (svc as unknown as Record<string, unknown>)._workflowRuntime = runtime;
+  }
+
   const server = createBrainMcpServer(svc);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   const shutdown = () => {
+    if (process.env.BRAIN_EXECUTOR_V2 === '1') {
+      const runtime = (svc as unknown as Record<string, unknown>)._workflowRuntime as
+        | { stopReconciler(): void }
+        | undefined;
+      runtime?.stopReconciler();
+    }
     closeSharedInstance();
     process.exit(0);
   };
