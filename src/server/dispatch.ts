@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import type { BrainServiceClass } from '../services/brain-service.js';
 import type { BrainDB } from '../services/brain-db.js';
@@ -304,6 +304,17 @@ function cleanupTempFile(path: string): void {
   }
 }
 
+let _claudePath: string | null = null;
+function getClaudePath(): string {
+  if (_claudePath) return _claudePath;
+  try {
+    _claudePath = execSync('which claude', { encoding: 'utf-8' }).trim();
+  } catch {
+    _claudePath = 'claude';
+  }
+  return _claudePath;
+}
+
 function spawnClaude(opts: SpawnOptions): ChildProcess {
   const args = [
     '-p',
@@ -330,7 +341,7 @@ function spawnClaude(opts: SpawnOptions): ChildProcess {
     args.push('--add-dir', opts.addDir);
   }
 
-  const proc = spawn('claude', args, {
+  const proc = spawn(getClaudePath(), args, {
     cwd: opts.cwd,
     env: {
       ...process.env,
