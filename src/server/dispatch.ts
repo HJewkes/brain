@@ -134,12 +134,18 @@ export async function dispatchTask(
     addDir: worktreeResult ? projectDir : undefined,
   });
 
+  // Catch spawn errors to prevent unhandled 'error' event crashing the process
+  proc.on('error', () => {});
+
   if (!proc.pid) {
+    const cwd = worktreeResult?.worktreePath || projectDir;
     updateAgentStatus(svc.db, agentId, 'failed', {
       exit_reason: 'spawn_error',
-      summary: `Failed to spawn claude (pid undefined). Binary: ${getClaudePath()}`,
+      summary: `Failed to spawn claude. Binary: ${getClaudePath()}, cwd: ${cwd}, cwd exists: ${existsSync(cwd)}`,
     });
-    throw new Error(`Agent spawn failed: claude binary not executable or cwd does not exist`);
+    throw new Error(
+      `Agent spawn failed: binary=${getClaudePath()} cwd=${cwd} cwdExists=${existsSync(cwd)}`
+    );
   }
 
   updateAgentStatus(svc.db, agentId, 'active', { pid: proc.pid });
@@ -281,11 +287,22 @@ function maybeAllocateWorktree(
 ): AllocateWorktreeResult | undefined {
   if (routing.isolation !== 'worktree') return undefined;
   const workstream = pullResult.dispatchContext.context?.workstream?.displayId || '';
-  return allocateWorktree(db, projectDir, {
-    taskId,
-    workstream,
-    claimToken: pullResult.claimToken,
-  });
+  try {
+    const result = allocateWorktree(db, projectDir, {
+      taskId,
+      workstream,
+      claimToken: pullResult.claimToken,
+    });
+    if (result?.worktreePath && !existsSync(result.worktreePath)) {
+      process.stderr.write(
+        `[dispatch] worktree path ${result.worktreePath} does not exist, falling back to project dir\n`
+      );
+      return undefined;
+    }
+    return result;
+  } catch {
+    return undefined;
+  }
 }
 
 function writeMcpConfig(agentId: string, projectDir: string): string {
