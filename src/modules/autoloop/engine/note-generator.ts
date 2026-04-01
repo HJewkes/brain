@@ -63,7 +63,7 @@ export async function generateInsightNotes(
   return generated;
 }
 
-function buildInsightMarkdown(insight: AutoloopInsight, set: InsightSet): string {
+function buildInsightMarkdown(insight: AutoloopInsight, _set: InsightSet): string {
   const now = new Date().toISOString().slice(0, 10);
   const sessionRefs = insight.sourceSessionDisplayIds.join(', ');
 
@@ -93,11 +93,7 @@ function buildInsightMarkdown(insight: AutoloopInsight, set: InsightSet): string
   return lines.join('\n') + '\n';
 }
 
-function linkInsightToSession(
-  db: BrainDB,
-  insightNoteId: string,
-  sessionDisplayId: string
-): void {
+function linkInsightToSession(db: BrainDB, insightNoteId: string, sessionDisplayId: string): void {
   try {
     const sessionNotes = db.getModuleNoteIds({
       module: 'sessions',

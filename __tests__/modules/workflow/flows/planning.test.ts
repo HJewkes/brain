@@ -8,11 +8,10 @@ import type { BrainConfig } from '../../../../src/types.js';
 import type {
   WorkflowContext as WorkflowContextInterface,
   StepResult,
-  WorkflowRun,
 } from '../../../../src/modules/workflow/runtime/types.js';
 import { planningWorkflow } from '../../../../src/modules/workflow/flows/planning.js';
 import { WorkflowRuntime } from '../../../../src/modules/workflow/runtime/runtime.js';
-import { WorkflowContext } from '../../../../src/modules/workflow/runtime/context.js';
+
 import { createTestDb, createMockEmbedder } from '../../../helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -134,11 +133,31 @@ describe('planningWorkflow — flow logic', () => {
     ]);
 
     // Verify correct methods
-    expect(ctx.calls[0]).toEqual({ method: 'dispatch', stepId: 'research', template: 'planning-research' });
-    expect(ctx.calls[1]).toEqual({ method: 'assisted', stepId: 'interview', template: 'planning-interview' });
-    expect(ctx.calls[2]).toEqual({ method: 'dispatch', stepId: 'design', template: 'planning-design' });
-    expect(ctx.calls[3]).toEqual({ method: 'dispatch', stepId: 'critic', template: 'planning-critic' });
-    expect(ctx.calls[7]).toEqual({ method: 'dispatch', stepId: 'review', template: 'review-agent' });
+    expect(ctx.calls[0]).toEqual({
+      method: 'dispatch',
+      stepId: 'research',
+      template: 'planning-research',
+    });
+    expect(ctx.calls[1]).toEqual({
+      method: 'assisted',
+      stepId: 'interview',
+      template: 'planning-interview',
+    });
+    expect(ctx.calls[2]).toEqual({
+      method: 'dispatch',
+      stepId: 'design',
+      template: 'planning-design',
+    });
+    expect(ctx.calls[3]).toEqual({
+      method: 'dispatch',
+      stepId: 'critic',
+      template: 'planning-critic',
+    });
+    expect(ctx.calls[7]).toEqual({
+      method: 'dispatch',
+      stepId: 'review',
+      template: 'review-agent',
+    });
   });
 
   test('medium complexity: skips interview', async () => {
@@ -167,14 +186,7 @@ describe('planningWorkflow — flow logic', () => {
     await planningWorkflow(ctx);
 
     const stepIds = ctx.calls.map((c) => c.stepId);
-    expect(stepIds).toEqual([
-      'design',
-      'critic',
-      'spec-tests',
-      'decompose',
-      'implement',
-      'review',
-    ]);
+    expect(stepIds).toEqual(['design', 'critic', 'spec-tests', 'decompose', 'implement', 'review']);
   });
 
   test('defaults to high complexity when param is missing', async () => {
@@ -198,10 +210,10 @@ describe('planningWorkflow — flow logic', () => {
 
     const stepIds = ctx.calls.map((c) => c.stepId);
     expect(stepIds).toEqual([
-      'design',   // initial design (iter 0)
-      'critic',   // initial critic (iter 0) -> needs_revision
-      'design',   // loop design (iter 1)
-      'critic',   // loop critic (iter 1) -> null (approved)
+      'design', // initial design (iter 0)
+      'critic', // initial critic (iter 0) -> needs_revision
+      'design', // loop design (iter 1)
+      'critic', // loop critic (iter 1) -> null (approved)
       'spec-tests',
       'decompose',
       'implement',
@@ -243,11 +255,11 @@ describe('planningWorkflow — flow logic', () => {
 
     const stepIds = ctx.calls.map((c) => c.stepId);
     expect(stepIds).toEqual([
-      'design',       // initial
-      'critic',       // -> has_open_questions
-      'research',     // re-research
-      'design',       // re-design
-      'critic',       // re-critic
+      'design', // initial
+      'critic', // -> has_open_questions
+      'research', // re-research
+      'design', // re-design
+      'critic', // re-critic
       'spec-tests',
       'decompose',
       'implement',
@@ -284,13 +296,13 @@ describe('planningWorkflow — flow logic', () => {
 
     const stepIds = ctx.calls.map((c) => c.stepId);
     expect(stepIds).toEqual([
-      'design',       // initial (iter 0)
-      'critic',       // iter 0 -> needs_revision
-      'design',       // loop (iter 1)
-      'critic',       // iter 1 -> has_open_questions, exits while loop
-      'research',     // re-research
-      'design',       // re-design (iter 2)
-      'critic',       // re-critic (iter 2)
+      'design', // initial (iter 0)
+      'critic', // iter 0 -> needs_revision
+      'design', // loop (iter 1)
+      'critic', // iter 1 -> has_open_questions, exits while loop
+      'research', // re-research
+      'design', // re-design (iter 2)
+      'critic', // re-critic (iter 2)
       'spec-tests',
       'decompose',
       'implement',
@@ -471,9 +483,9 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
 
     // Wait for the workflow to complete
     await vi.waitFor(() => {
-      const row = db.rawDb
-        .prepare('SELECT status FROM workflow_runs WHERE id = ?')
-        .get(runId) as Record<string, unknown> | undefined;
+      const row = db.rawDb.prepare('SELECT status FROM workflow_runs WHERE id = ?').get(runId) as
+        | Record<string, unknown>
+        | undefined;
       expect(row).toBeDefined();
       expect(row!.status).toBe('completed');
     });

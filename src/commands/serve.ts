@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { Command } from '@commander-js/extra-typings';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+
 import { z } from 'zod';
 import { BrainServiceClass } from '../services/brain-service.js';
 import type { ResolveOptions } from '../services/config.js';
@@ -188,7 +188,7 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
     broadcast(sseClients, 'heartbeat', { ts: Date.now() });
   }, 30_000);
 
-  let shutdown = () => {
+  const shutdown = () => {
     clearInterval(heartbeat);
     httpServer.close();
     service.close();
