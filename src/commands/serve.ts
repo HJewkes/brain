@@ -188,18 +188,18 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
     broadcast(sseClients, 'heartbeat', { ts: Date.now() });
   }, 30_000);
 
-  const shutdown = () => {
+  let shutdown = () => {
     clearInterval(heartbeat);
     httpServer.close();
     service.close();
     process.exit(0);
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown());
+  process.on('SIGTERM', () => shutdown());
 
-  const server = createServeServer(service);
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  // Use the full MCP server (with workflow tools) instead of the subset
+  const { startMcpServerWithService } = await import('../server/index.js');
+  await startMcpServerWithService(service, shutdown);
 }
 
 export const serveCommand = new Command('serve')
