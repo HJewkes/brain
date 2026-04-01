@@ -6,6 +6,8 @@
  * results for completed steps instead of re-dispatching.
  */
 
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { WorkflowRun, StepResult, WorkflowStatus, ChannelPushFn } from './types.js';
@@ -389,13 +391,15 @@ export class WorkflowContext {
   private buildServiceShim(): Parameters<typeof dispatchTask>[0] {
     // Minimal shim satisfying what dispatchTask reads from BrainServiceClass.
     // dispatchTask accesses: svc.db, svc.config, svc.embedder, svc.instance
+    // instance.root must be the .brain directory so dirname(root) = project dir
+    const brainDir = join(dirname(this.config.dbPath), '..');
     return {
       db: this.db,
       config: this.config,
       embedder: this.embedder!,
       instance: {
         isLocal: true,
-        root: this.config.notesDir,
+        root: existsSync(join(process.cwd(), '.brain')) ? join(process.cwd(), '.brain') : brainDir,
       },
     } as Parameters<typeof dispatchTask>[0];
   }
