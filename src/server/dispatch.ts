@@ -134,6 +134,14 @@ export async function dispatchTask(
     addDir: worktreeResult ? projectDir : undefined,
   });
 
+  if (!proc.pid) {
+    updateAgentStatus(svc.db, agentId, 'failed', {
+      exit_reason: 'spawn_error',
+      summary: `Failed to spawn claude (pid undefined). Binary: ${getClaudePath()}`,
+    });
+    throw new Error(`Agent spawn failed: claude binary not executable or cwd does not exist`);
+  }
+
   updateAgentStatus(svc.db, agentId, 'active', { pid: proc.pid });
   setupProcessTracking(svc, proc, agentId, mcpConfigPath);
   proc.unref();
@@ -141,7 +149,7 @@ export async function dispatchTask(
   return {
     agentId,
     taskId,
-    pid: proc.pid!,
+    pid: proc.pid,
     worktreePath: worktreeResult?.worktreePath,
     branch: worktreeResult?.branch,
     model,
@@ -354,9 +362,6 @@ function spawnClaude(opts: SpawnOptions): ChildProcess {
   }
 
   const claudeBin = getClaudePath();
-  process.stderr.write(
-    `[dispatch] spawn: ${claudeBin} cwd=${opts.cwd} exists=${existsSync(opts.cwd)}\n`
-  );
   const proc = spawn(claudeBin, args, {
     cwd: opts.cwd,
     env: {
