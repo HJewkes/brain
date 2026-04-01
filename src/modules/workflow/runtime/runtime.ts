@@ -286,7 +286,15 @@ export class WorkflowRuntime {
       if (!agent) continue;
 
       if (!isProcessAlive(agent.pid)) {
-        workflow.ctx.handleAgentDeath(agent);
+        // Check if the agent actually completed successfully before declaring death.
+        // The PID disappears on normal exit too — don't confuse success with failure.
+        const agentRecord = findAgentByTask(this.db, agent.taskId);
+        if (agentRecord?.status === 'completed') {
+          const output = agentRecord.summary ?? '';
+          workflow.ctx.resolveAgent(agent.stepId, output);
+        } else {
+          workflow.ctx.handleAgentDeath(agent);
+        }
       }
     }
   }

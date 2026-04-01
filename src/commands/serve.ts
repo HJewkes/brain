@@ -206,6 +206,7 @@ export const serveCommand = new Command('serve')
   .description('Start brain daemon (HTTP dashboard + MCP over stdio)')
   .option('--port <n>', 'HTTP port for dashboard and API (default: 7800)', '7800')
   .option('--mcp', 'Start standalone MCP server over stdio (no HTTP)')
+  .option('--v2', 'Enable V2 workflow runtime (imperative executor)')
   .option('--install', 'Install as launchd agent (macOS)')
   .option('--uninstall', 'Remove launchd agent')
   .action(async (opts, cmd) => {
@@ -215,6 +216,9 @@ export const serveCommand = new Command('serve')
     const resolveOpts: ResolveOptions = {};
     if (globalFlag) resolveOpts.forceGlobal = true;
     if (typeof instancePath === 'string') resolveOpts.instancePath = instancePath;
+
+    // V2 runtime is the default. Use --no-v2 to disable.
+    process.env.BRAIN_EXECUTOR_V2 = '1';
 
     const port = parseInt((opts as { port?: string }).port ?? '7800', 10);
 

@@ -44,6 +44,7 @@ async function initV2Runtime(
 
 /** Start MCP-only server (no HTTP). Used by `brain serve --mcp`. */
 export async function startMcpServer(resolveOpts?: ResolveOptions): Promise<void> {
+  process.stderr.write(`[brain-mcp] BRAIN_EXECUTOR_V2=${process.env.BRAIN_EXECUTOR_V2 ?? 'unset'}\n`);
   const svc = await getSharedInstance(resolveOpts);
   const server = createBrainMcpServer(
     svc,
