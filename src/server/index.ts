@@ -11,9 +11,7 @@ import {
 async function initV2Runtime(
   svc: BrainServiceClass,
   server: ReturnType<typeof createBrainMcpServer>
-): Promise<{ stopReconciler: () => void } | null> {
-  if (process.env.BRAIN_EXECUTOR_V2 !== '1') return null;
-
+): Promise<{ stopReconciler: () => void }> {
   const { WorkflowRuntime } = await import('../modules/workflow/runtime/runtime.js');
   const { workflows } = await import('../modules/workflow/flows/index.js');
   const { workflowRuntimeMigrationV1 } = await import('../modules/workflow/runtime/migration.js');
@@ -37,23 +35,17 @@ async function initV2Runtime(
   runtime.startReconciler();
 
   (svc as unknown as Record<string, unknown>)._workflowRuntime = runtime;
-  process.stderr.write('Workflow runtime V2 active\n');
+  process.stderr.write('Workflow runtime active\n');
 
   return runtime;
 }
 
 /** Start MCP-only server (no HTTP). Used by `brain serve --mcp`. */
 export async function startMcpServer(resolveOpts?: ResolveOptions): Promise<void> {
-  process.stderr.write(
-    `[brain-mcp] BRAIN_EXECUTOR_V2=${process.env.BRAIN_EXECUTOR_V2 ?? 'unset'}\n`
-  );
   const svc = await getSharedInstance(resolveOpts);
-  const server = createBrainMcpServer(
-    svc,
-    process.env.BRAIN_EXECUTOR_V2 === '1'
-      ? { channelInstructions: WORKFLOW_CHANNEL_INSTRUCTIONS }
-      : undefined
-  );
+  const server = createBrainMcpServer(svc, {
+    channelInstructions: WORKFLOW_CHANNEL_INSTRUCTIONS,
+  });
 
   const runtime = await initV2Runtime(svc, server);
 
@@ -61,7 +53,7 @@ export async function startMcpServer(resolveOpts?: ResolveOptions): Promise<void
   await server.connect(transport);
 
   const shutdown = () => {
-    runtime?.stopReconciler();
+    runtime.stopReconciler();
     closeSharedInstance();
     process.exit(0);
   };
@@ -74,12 +66,9 @@ export async function startMcpServerWithService(
   svc: BrainServiceClass,
   onShutdown?: () => void
 ): Promise<void> {
-  const server = createBrainMcpServer(
-    svc,
-    process.env.BRAIN_EXECUTOR_V2 === '1'
-      ? { channelInstructions: WORKFLOW_CHANNEL_INSTRUCTIONS }
-      : undefined
-  );
+  const server = createBrainMcpServer(svc, {
+    channelInstructions: WORKFLOW_CHANNEL_INSTRUCTIONS,
+  });
 
   const runtime = await initV2Runtime(svc, server);
 
@@ -87,7 +76,7 @@ export async function startMcpServerWithService(
   await server.connect(transport);
 
   const shutdown = () => {
-    runtime?.stopReconciler();
+    runtime.stopReconciler();
     onShutdown?.();
   };
   process.on('SIGINT', shutdown);

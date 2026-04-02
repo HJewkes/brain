@@ -3,7 +3,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { BrainServiceClass } from '../services/brain-service.js';
-import type { BrainDB } from '../services/brain-db.js';
 import type { InboxItem } from '../types.js';
 import { searchMemories } from '../services/search.js';
 import { getTask, listTasks } from '../modules/pm/data/task-ops.js';
@@ -15,11 +14,6 @@ import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents } from '../modules/agents/data.js';
 import { dispatchTask } from './dispatch.js';
-import { getWorkflowStatus } from '../modules/workflow/data/workflow-ops.js';
-import { getInstanceByDisplayId, getInstanceStepStates } from '../modules/workflow/data/queries.js';
-import { startWorkflow, advanceAndDispatch } from '../modules/workflow/engine/executor.js';
-import { signalCondition } from '../modules/workflow/engine/condition.js';
-import { getPmNotes as getPmNotesForSignal } from '../modules/pm/data/queries.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
@@ -333,25 +327,6 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
   );
 }
 
-function updateStepTaskStatus(db: BrainDB, taskDisplayId: string, status: string): void {
-  const notes = getPmNotesForSignal(db, 'task', { display_id: taskDisplayId });
-  if (notes.length === 0) return;
-  const note = notes[0];
-  const meta = note.metadata ? (JSON.parse(note.metadata) as Record<string, unknown>) : {};
-  meta.status = status;
-  db.upsertNote({ ...note, metadata: JSON.stringify(meta) });
-}
-
-function resetInstanceToExecuting(db: BrainDB, instanceId: string): void {
-  const result = getInstanceByDisplayId(db, instanceId);
-  if (!result.ok) return;
-  const { note } = result.data;
-  const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-  if (meta.instance_status === 'stalled' || meta.instance_status === 'paused') {
-    db.upsertNote({ ...note, metadata: JSON.stringify({ ...meta, instance_status: 'executing' }) });
-  }
-}
-
 function isAlive(pid: number | null | undefined): boolean {
   if (!pid) return false;
   try {
@@ -363,7 +338,6 @@ function isAlive(pid: number | null | undefined): boolean {
 }
 
 function getV2Runtime(svc: BrainServiceClass): WorkflowRuntime | null {
-  if (process.env.BRAIN_EXECUTOR_V2 !== '1') return null;
   return ((svc as unknown as Record<string, unknown>)._workflowRuntime as WorkflowRuntime) ?? null;
 }
 
@@ -386,30 +360,23 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
     async ({ workflowId, project, workstream, context, model, maxBudgetUsd, dryRun }) => {
       try {
         const runtime = getV2Runtime(svc);
-        if (runtime && !dryRun) {
-          const params: Record<string, string> = {
-            ...context,
-            project,
-            workstream: String(workstream),
-          };
-          const runId = await runtime.start(workflowId, params, { model, maxBudgetUsd });
-          const status = runtime.getStatus(runId);
-          return textResult({
-            instanceId: runId,
-            workflowId,
-            status: status?.status ?? 'running',
-            runtimeVersion: 'v2',
-          });
+        if (!runtime) return errorResult('Workflow runtime not initialized');
+        if (dryRun) {
+          return textResult({ workflowId, project, workstream, context, dryRun: true });
         }
 
-        const result = await startWorkflow(svc, workflowId, project, context ?? {}, {
-          workstream,
-          model,
-          maxBudgetUsd,
-          dryRun,
+        const params: Record<string, string> = {
+          ...context,
+          project,
+          workstream: String(workstream),
+        };
+        const runId = await runtime.start(workflowId, params, { model, maxBudgetUsd });
+        const status = runtime.getStatus(runId);
+        return textResult({
+          instanceId: runId,
+          workflowId,
+          status: status?.status ?? 'running',
         });
-        if (!result.ok) return errorResult(result.error.message);
-        return textResult(result.data);
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
@@ -424,84 +391,40 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
     },
     async ({ instanceId }) => {
       const runtime = getV2Runtime(svc);
-      if (runtime) {
-        const status = runtime.getStatus(instanceId);
-        if (!status) return errorResult('Workflow not found');
-        const stepEntries = Object.values(status.stepResults);
-        return textResult({
-          instance: {
-            workflow_id: status.workflowName,
-            instance_status: status.status,
-            context: status.context,
-          },
-          steps: stepEntries.map((r) => ({
-            stepId: r.stepId,
-            taskDisplayId: r.taskId,
-            status: 'done',
-          })),
-          progress: {
-            total: stepEntries.length,
-            done: stepEntries.length,
-            pruned: 0,
-            skipped: 0,
-            active: status.activeAgent ? 1 : 0,
-            pending: 0,
-          },
-          activeAgents: status.activeAgent
-            ? [
-                {
-                  stepId: status.activeAgent.stepId,
-                  taskId: status.activeAgent.taskId,
-                  pid: status.activeAgent.pid,
-                  alive: isAlive(status.activeAgent.pid),
-                },
-              ]
-            : [],
-          runtimeVersion: 'v2',
-        });
-      }
+      if (!runtime) return errorResult('Workflow runtime not initialized');
 
-      const statusResult = getWorkflowStatus(svc.db, instanceId);
-      if (!statusResult.ok) return errorResult(statusResult.error.message);
-
-      const { instance, steps, progress } = statusResult.data;
-
-      const allActiveAgents = svc.agentList({ status: 'active' as AgentStatus });
-      const activeAgents: Array<{
-        stepId: string;
-        taskId: string;
-        agentId?: string;
-        pid?: number | null;
-        alive: boolean;
-      }> = [];
-
-      for (const s of steps) {
-        if (s.status !== 'claimed' && s.status !== 'in-progress') continue;
-        const agent = allActiveAgents.find((a) => a.brain_task === s.taskDisplayId);
-        const pid = agent?.pid;
-        let alive = false;
-        if (pid) {
-          try {
-            process.kill(pid, 0);
-            alive = true;
-          } catch {
-            alive = false;
-          }
-        }
-        activeAgents.push({
-          stepId: s.stepId,
-          taskId: s.taskDisplayId,
-          agentId: agent?.id,
-          pid,
-          alive,
-        });
-      }
-
+      const status = runtime.getStatus(instanceId);
+      if (!status) return errorResult('Workflow not found');
+      const stepEntries = Object.values(status.stepResults);
       return textResult({
-        instance,
-        steps,
-        progress,
-        activeAgents,
+        instance: {
+          workflow_id: status.workflowName,
+          instance_status: status.status,
+          context: status.context,
+        },
+        steps: stepEntries.map((r) => ({
+          stepId: r.stepId,
+          taskDisplayId: r.taskId,
+          status: 'done',
+        })),
+        progress: {
+          total: stepEntries.length,
+          done: stepEntries.length,
+          pruned: 0,
+          skipped: 0,
+          active: status.activeAgent ? 1 : 0,
+          pending: 0,
+        },
+        activeAgents: status.activeAgent
+          ? [
+              {
+                stepId: status.activeAgent.stepId,
+                taskId: status.activeAgent.taskId,
+                pid: status.activeAgent.pid,
+                alive: isAlive(status.activeAgent.pid),
+              },
+            ]
+          : [],
       });
     }
   );
@@ -525,49 +448,15 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
     async ({ instanceId, stepId, action, condition }) => {
       try {
         const runtime = getV2Runtime(svc);
-        if (runtime) {
-          if (action === 'complete' || action === 'signal') {
-            runtime.signal(instanceId, stepId, condition ? { signal: condition } : undefined);
-          }
-          return textResult({
-            action,
-            stepId,
-            instanceId,
-            runtimeVersion: 'v2',
-          });
+        if (!runtime) return errorResult('Workflow runtime not initialized');
+
+        if (action === 'complete' || action === 'signal') {
+          runtime.signal(instanceId, stepId, condition ? { signal: condition } : undefined);
         }
-
-        const stepsResult = getInstanceStepStates(svc.db, instanceId);
-        if (!stepsResult.ok) return errorResult(stepsResult.error.message);
-
-        const step = stepsResult.data.steps.find((s) => s.stepId === stepId);
-        if (!step) return errorResult(`Step "${stepId}" not found in instance "${instanceId}"`);
-
-        if (action === 'complete' || action === 'skip') {
-          updateStepTaskStatus(svc.db, step.taskDisplayId, 'done');
-        }
-
-        if (action === 'retry') {
-          updateStepTaskStatus(svc.db, step.taskDisplayId, 'pending');
-        }
-
-        if (action === 'signal' && condition) {
-          const sigResult = signalCondition(svc.db, instanceId, stepId, condition);
-          if (!sigResult.ok) return errorResult(sigResult.error.message);
-        }
-
-        // Clear stalled/paused status before advancing
-        if (action === 'complete' || action === 'retry' || action === 'skip') {
-          resetInstanceToExecuting(svc.db, instanceId);
-        }
-
-        const advResult = await advanceAndDispatch(svc, instanceId, stepId);
-        if (!advResult.ok) return errorResult(advResult.error.message);
-
         return textResult({
           action,
           stepId,
-          ...advResult.data,
+          instanceId,
         });
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
