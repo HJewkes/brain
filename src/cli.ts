@@ -86,7 +86,14 @@ program.addCommand(launchCommand);
 
 async function main(): Promise<void> {
   const { registry } = await loadModules({
-    modules: [pmModule, workflowModule, sessionsModule, agentsModule, codebaseModule, autoloopModule],
+    modules: [
+      pmModule,
+      workflowModule,
+      sessionsModule,
+      agentsModule,
+      codebaseModule,
+      autoloopModule,
+    ],
   });
   for (const { command } of registry.getCommands()) {
     program.addCommand(command);

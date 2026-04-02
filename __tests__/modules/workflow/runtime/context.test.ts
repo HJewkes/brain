@@ -206,9 +206,9 @@ describe('WorkflowContext — dispatch flow', () => {
     });
 
     // Check the DB row exists mid-flight
-    const row = db.rawDb
-      .prepare('SELECT * FROM workflow_runs WHERE id = ?')
-      .get(runId) as Record<string, unknown> | undefined;
+    const row = db.rawDb.prepare('SELECT * FROM workflow_runs WHERE id = ?').get(runId) as
+      | Record<string, unknown>
+      | undefined;
     expect(row).toBeDefined();
     expect(row!.current_step).toBe('design');
 
@@ -234,9 +234,7 @@ describe('WorkflowContext — dispatch flow', () => {
 
     const state = ctx.toRun();
     expect(state.currentStep).toBe('implement');
-    expect(state.activeAgent).toEqual(
-      expect.objectContaining({ pid: 12345, stepId: 'implement' })
-    );
+    expect(state.activeAgent).toEqual(expect.objectContaining({ pid: 12345, stepId: 'implement' }));
 
     ctx.resolveAgent('implement', 'done');
     await dispatchPromise;
@@ -270,9 +268,9 @@ describe('WorkflowContext — assisted flow', () => {
 
     // Wait for the assisted step to persist
     await vi.waitFor(() => {
-      const row = db.rawDb
-        .prepare('SELECT status FROM workflow_runs WHERE id = ?')
-        .get(runId) as Record<string, unknown> | undefined;
+      const row = db.rawDb.prepare('SELECT status FROM workflow_runs WHERE id = ?').get(runId) as
+        | Record<string, unknown>
+        | undefined;
       expect(row).toBeDefined();
       expect(row!.status).toBe('paused');
     });
@@ -366,9 +364,10 @@ describe('WorkflowContext — persistence', () => {
 
     // First persist (INSERT)
     ctx.persist();
-    const row1 = db.rawDb
-      .prepare('SELECT * FROM workflow_runs WHERE id = ?')
-      .get(runId) as Record<string, unknown>;
+    const row1 = db.rawDb.prepare('SELECT * FROM workflow_runs WHERE id = ?').get(runId) as Record<
+      string,
+      unknown
+    >;
     expect(row1).toBeDefined();
     expect(row1.status).toBe('running');
 

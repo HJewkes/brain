@@ -33,7 +33,7 @@ export const indexCommand = new Command('index')
     const instance = resolveInstance(parentResolveOpts(cmd));
     const config = loadConfig(instance);
     const db = new BrainDB(config.dbPath);
-    const embedder = createEmbedder(config);
+    const embedder = await createEmbedder(config);
 
     try {
       const result = await indexFiles(db, embedder, config.notesDir, {

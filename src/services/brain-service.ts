@@ -72,7 +72,7 @@ export class BrainServiceClass {
     const instance = resolveInstance(opts);
     const config = loadConfig(instance);
     const db = new BrainDB(config.dbPath);
-    const embedder = createEmbedder(config);
+    const embedder = await createEmbedder(config);
     const { registry } = await loadModules();
     // Ensure all module schemas are up to date (CREATE IF NOT EXISTS is idempotent)
     runModuleMigrations(registry, db.rawDb, new Map());

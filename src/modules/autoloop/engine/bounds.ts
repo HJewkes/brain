@@ -3,14 +3,9 @@ import { join } from 'node:path';
 import type { AutoloopBounds, AutoloopCounters } from '../types.js';
 import { DEFAULT_BOUNDS } from '../types.js';
 
-export type BoundCheckResult =
-  | { exceeded: false }
-  | { exceeded: true; reason: string };
+export type BoundCheckResult = { exceeded: false } | { exceeded: true; reason: string };
 
-export function checkBounds(
-  bounds: AutoloopBounds,
-  counters: AutoloopCounters
-): BoundCheckResult {
+export function checkBounds(bounds: AutoloopBounds, counters: AutoloopCounters): BoundCheckResult {
   const elapsed = Date.now() - counters.startedAt;
   if (elapsed >= bounds.maxDurationMs) {
     return {

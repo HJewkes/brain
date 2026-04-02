@@ -478,7 +478,7 @@ export const initCommand = new Command('init')
     // Ingest brain's own PM reference docs (best-effort, with indexing)
     try {
       const { createEmbedder } = await import('../adapters/index.js');
-      const embedder = createEmbedder(config);
+      const embedder = await createEmbedder(config);
       await ingestBrainReferenceDocs(config, db, embedder);
     } catch {
       // Fall back to write-only (no indexing) if embedder fails

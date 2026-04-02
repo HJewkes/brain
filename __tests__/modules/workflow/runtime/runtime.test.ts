@@ -109,9 +109,10 @@ describe('WorkflowRuntime — start', () => {
 
     const runId = await runtime.start('simple', { project: 'TST' });
 
-    const row = db.rawDb
-      .prepare('SELECT * FROM workflow_runs WHERE id = ?')
-      .get(runId) as Record<string, unknown>;
+    const row = db.rawDb.prepare('SELECT * FROM workflow_runs WHERE id = ?').get(runId) as Record<
+      string,
+      unknown
+    >;
     expect(row).toBeDefined();
     expect(row.workflow_name).toBe('simple');
     expect(row.status).toBe('completed');

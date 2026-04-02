@@ -89,13 +89,7 @@ export async function runSessionReviewLoop(
   let notesCreated = 0;
   if (insightSets.length > 0) {
     try {
-      const generated = await generateInsightNotes(
-        db,
-        config,
-        embedder,
-        insightSets,
-        counters
-      );
+      const generated = await generateInsightNotes(db, config, embedder, insightSets, counters);
       notesCreated = generated.length;
     } catch (err) {
       errors.push(`Note generation: ${err instanceof Error ? err.message : String(err)}`);

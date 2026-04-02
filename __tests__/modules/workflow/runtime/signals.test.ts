@@ -1,5 +1,8 @@
 import { describe, test, expect } from 'vitest';
-import { parseSignals, registerSignalPattern } from '../../../../src/modules/workflow/runtime/signals.js';
+import {
+  parseSignals,
+  registerSignalPattern,
+} from '../../../../src/modules/workflow/runtime/signals.js';
 
 describe('parseSignals', () => {
   test('returns needs_revision for "## Verdict: NEEDS REVISION"', () => {
@@ -30,8 +33,7 @@ describe('parseSignals', () => {
   });
 
   test('needs_revision takes priority over has_open_questions', () => {
-    const output =
-      '## Verdict: NEEDS REVISION\n\n## Open Questions\n- Something?\n';
+    const output = '## Verdict: NEEDS REVISION\n\n## Open Questions\n- Something?\n';
     expect(parseSignals('review', 'wf', output)).toBe('needs_revision');
   });
 
