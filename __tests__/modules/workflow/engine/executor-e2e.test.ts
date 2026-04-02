@@ -30,7 +30,10 @@ import { advanceWorkflow } from '../../../../src/modules/workflow/engine/lifecyc
 import { signalCondition } from '../../../../src/modules/workflow/engine/condition.js';
 import { getInstanceStepStates } from '../../../../src/modules/workflow/data/queries.js';
 import { parseConditionSignals } from '../../../../src/modules/workflow/engine/executor.js';
-import { captureStepOutput, getStepOutput } from '../../../../src/modules/workflow/engine/output-capture.js';
+import {
+  captureStepOutput,
+  getStepOutput,
+} from '../../../../src/modules/workflow/engine/output-capture.js';
 import type {
   WorkflowDefinition,
   WorkflowStep,
@@ -117,10 +120,9 @@ describe('full planning workflow traversal', () => {
       [edge('research', 'design'), edge('design', 'implement')]
     );
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     const instanceId = instResult.data.display_id;
@@ -183,10 +185,9 @@ describe('full planning workflow traversal', () => {
       ]
     );
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     const instanceId = instResult.data.display_id;
@@ -229,10 +230,9 @@ describe('full planning workflow traversal', () => {
       ]
     );
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     const instanceId = instResult.data.display_id;
@@ -293,10 +293,9 @@ describe('condition signal parsing with file artifacts', () => {
       ].join('\n')
     );
 
-    const signals = parseConditionSignals(
-      notesDir, 'inst-1', 'critic', criticDef,
-      { planId: 'my-plan' }
-    );
+    const signals = parseConditionSignals(notesDir, 'inst-1', 'critic', criticDef, {
+      planId: 'my-plan',
+    });
 
     expect(signals).toEqual(['needs_revision']);
   });
@@ -318,10 +317,9 @@ describe('condition signal parsing with file artifacts', () => {
       ].join('\n')
     );
 
-    const signals = parseConditionSignals(
-      notesDir, 'inst-1', 'critic', criticDef,
-      { planId: 'my-plan' }
-    );
+    const signals = parseConditionSignals(notesDir, 'inst-1', 'critic', criticDef, {
+      planId: 'my-plan',
+    });
 
     expect(signals).toEqual(['has_open_questions']);
   });
@@ -349,10 +347,9 @@ describe('workflow status tracking', () => {
       [edge('a', 'b'), edge('b', 'c')]
     );
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     const instanceId = instResult.data.display_id;
@@ -389,15 +386,11 @@ describe('workflow status tracking', () => {
 
 describe('workflow stall behavior', () => {
   test('stalling sets instance status and records reason', async () => {
-    const workflowId = await createAndRegisterWorkflow(
-      [step('a'), step('b')],
-      [edge('a', 'b')]
-    );
+    const workflowId = await createAndRegisterWorkflow([step('a'), step('b')], [edge('a', 'b')]);
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
     const instanceId = instResult.data.display_id;
@@ -405,14 +398,12 @@ describe('workflow stall behavior', () => {
     await expandWorkflow(db, config, embedder, instanceId);
 
     // Import and call handleStepFailure with non-rate-limited error
-    const { handleStepFailure } = await import(
-      '../../../../src/modules/workflow/engine/executor.js'
-    );
+    const { handleStepFailure: _handleStepFailure } =
+      await import('../../../../src/modules/workflow/engine/executor.js');
     // We need a mock svc-like object — but handleStepFailure needs BrainServiceClass
     // Instead, test the stall by checking instance metadata directly
-    const { getInstanceByDisplayId } = await import(
-      '../../../../src/modules/workflow/data/queries.js'
-    );
+    const { getInstanceByDisplayId } =
+      await import('../../../../src/modules/workflow/data/queries.js');
 
     // Manually set the stall state (simulating what handleStepFailure does)
     const instData = getInstanceByDisplayId(db, instanceId);
@@ -421,7 +412,12 @@ describe('workflow stall behavior', () => {
 
     const { note } = instData.data;
     const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
-    const updated = { ...meta, instance_status: 'stalled', stalled_at: 'a', stall_reason: 'exit_code_1' };
+    const updated = {
+      ...meta,
+      instance_status: 'stalled',
+      stalled_at: 'a',
+      stall_reason: 'exit_code_1',
+    };
     db.upsertNote({ ...note, metadata: JSON.stringify(updated) });
 
     // Verify stall is reflected

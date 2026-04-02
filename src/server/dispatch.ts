@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { spawn, execSync, type ChildProcess } from 'node:child_process';
+import { tmpdir, homedir } from 'node:os';
 import type { BrainServiceClass } from '../services/brain-service.js';
 import type { BrainDB } from '../services/brain-db.js';
 import type { Embedder } from '../types.js';
@@ -134,6 +134,20 @@ export async function dispatchTask(
     addDir: worktreeResult ? projectDir : undefined,
   });
 
+  // Catch spawn errors to prevent unhandled 'error' event crashing the process
+  proc.on('error', () => {});
+
+  if (!proc.pid) {
+    const cwd = worktreeResult?.worktreePath || projectDir;
+    updateAgentStatus(svc.db, agentId, 'failed', {
+      exit_reason: 'spawn_error',
+      summary: `Failed to spawn claude. Binary: ${getClaudePath()}, cwd: ${cwd}, cwd exists: ${existsSync(cwd)}`,
+    });
+    throw new Error(
+      `Agent spawn failed: binary=${getClaudePath()} cwd=${cwd} cwdExists=${existsSync(cwd)}`
+    );
+  }
+
   updateAgentStatus(svc.db, agentId, 'active', { pid: proc.pid });
   setupProcessTracking(svc, proc, agentId, mcpConfigPath);
   proc.unref();
@@ -141,7 +155,7 @@ export async function dispatchTask(
   return {
     agentId,
     taskId,
-    pid: proc.pid!,
+    pid: proc.pid,
     worktreePath: worktreeResult?.worktreePath,
     branch: worktreeResult?.branch,
     model,
@@ -273,11 +287,22 @@ function maybeAllocateWorktree(
 ): AllocateWorktreeResult | undefined {
   if (routing.isolation !== 'worktree') return undefined;
   const workstream = pullResult.dispatchContext.context?.workstream?.displayId || '';
-  return allocateWorktree(db, projectDir, {
-    taskId,
-    workstream,
-    claimToken: pullResult.claimToken,
-  });
+  try {
+    const result = allocateWorktree(db, projectDir, {
+      taskId,
+      workstream,
+      claimToken: pullResult.claimToken,
+    });
+    if (result?.worktreePath && !existsSync(result.worktreePath)) {
+      process.stderr.write(
+        `[dispatch] worktree path ${result.worktreePath} does not exist, falling back to project dir\n`
+      );
+      return undefined;
+    }
+    return result;
+  } catch {
+    return undefined;
+  }
 }
 
 function writeMcpConfig(agentId: string, projectDir: string): string {
@@ -302,6 +327,29 @@ function cleanupTempFile(path: string): void {
   } catch {
     /* already cleaned or missing */
   }
+}
+
+let _claudePath: string | null = null;
+function getClaudePath(): string {
+  if (_claudePath) return _claudePath;
+  // Check common install locations first, then fall back to which/bare name
+  const candidates = [
+    join(homedir(), '.local', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) {
+      _claudePath = p;
+      return p;
+    }
+  }
+  try {
+    _claudePath = execSync('which claude', { encoding: 'utf-8' }).trim();
+  } catch {
+    _claudePath = 'claude';
+  }
+  return _claudePath;
 }
 
 function spawnClaude(opts: SpawnOptions): ChildProcess {
@@ -330,7 +378,8 @@ function spawnClaude(opts: SpawnOptions): ChildProcess {
     args.push('--add-dir', opts.addDir);
   }
 
-  const proc = spawn('claude', args, {
+  const claudeBin = getClaudePath();
+  const proc = spawn(claudeBin, args, {
     cwd: opts.cwd,
     env: {
       ...process.env,

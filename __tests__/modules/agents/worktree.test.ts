@@ -124,6 +124,39 @@ describe('worktree lifecycle', () => {
       expect(allocs[0].worktree_path).toBe(allocs[1].worktree_path);
     });
 
+    it('cleans up stale DB records and creates fresh worktree when directory is gone', () => {
+      // First allocation creates a worktree
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'vnm-09',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 3,
+      });
+
+      vi.clearAllMocks();
+      // Simulate the worktree directory being deleted externally
+      mockExistsSync.mockReturnValue(false);
+
+      const result = allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.02',
+        workstream: 'vnm-09',
+        claimToken: 'tok-2',
+        basePath: '.worktrees',
+        budget: 3,
+      });
+
+      expect(result.reused).toBe(false);
+      // Should have called git branch -D (cleanup) + git worktree add
+      const calls = mockExecFileSync.mock.calls.map((c) => (c as string[][])[1]);
+      expect(calls.some((args) => args.includes('branch') && args.includes('-D'))).toBe(true);
+      expect(calls.some((args) => args.includes('worktree') && args.includes('add'))).toBe(true);
+      // Stale record for VNM-09.01 should be gone, only VNM-09.02 remains
+      const allocs = getWorktreeAllocations(db);
+      expect(allocs).toHaveLength(1);
+      expect(allocs[0].task_id).toBe('VNM-09.02');
+    });
+
     it('enforces budget — throws when limit reached', () => {
       allocateWorktree(db, '/repo', {
         taskId: 'VNM-09.01',

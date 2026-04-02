@@ -66,24 +66,44 @@ export function allocateWorktree(
 
   const existing = allocations.find((a) => a.workstream === opts.workstream);
   if (existing) {
-    // Insert a new record for the new task pointing to the same physical worktree
-    const input: AllocateWorktreeInput = {
-      task_id: opts.taskId,
-      workstream: opts.workstream,
-      worktree_path: existing.worktree_path,
-      branch: existing.branch,
-      claim_token: opts.claimToken,
-    };
-    dbAllocate(db, input);
-    return { worktreePath: existing.worktree_path, branch: existing.branch, reused: true };
+    const resolvedPath = resolve(projectRoot, existing.worktree_path);
+    if (existsSync(resolvedPath)) {
+      // Reuse existing physical worktree for the same workstream
+      const input: AllocateWorktreeInput = {
+        task_id: opts.taskId,
+        workstream: opts.workstream,
+        worktree_path: existing.worktree_path,
+        branch: existing.branch,
+        claim_token: opts.claimToken,
+      };
+      dbAllocate(db, input);
+      return { worktreePath: existing.worktree_path, branch: existing.branch, reused: true };
+    }
+    // Worktree directory is gone — clean up stale DB records for this workstream
+    for (const a of allocations.filter((a) => a.workstream === opts.workstream)) {
+      dbRelease(db, a.task_id);
+    }
   }
 
-  if (allocations.length >= budget) {
-    throw new Error(`Worktree budget exhausted: ${allocations.length}/${budget} allocated`);
+  // Re-check budget after cleaning stale records
+  const currentAllocations = getWorktreeAllocations(db);
+  if (currentAllocations.length >= budget) {
+    throw new Error(`Worktree budget exhausted: ${currentAllocations.length}/${budget} allocated`);
   }
 
   const branch = `agent/${opts.workstream}/${opts.taskId}`;
   const worktreePath = resolve(projectRoot, basePath, opts.workstream);
+
+  // Clean up stale branch if it exists from a prior run
+  try {
+    execFileSync('git', ['branch', '-D', branch], {
+      cwd: projectRoot,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+  } catch {
+    // Branch doesn't exist — expected for fresh allocations
+  }
 
   execFileSync('git', ['worktree', 'add', '-b', branch, worktreePath], {
     cwd: projectRoot,

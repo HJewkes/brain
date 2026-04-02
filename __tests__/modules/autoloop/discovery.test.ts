@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readSessionTranscript, type TranscriptTurn } from '../../../src/modules/autoloop/engine/discovery.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { readSessionTranscript } from '../../../src/modules/autoloop/engine/discovery.js';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';

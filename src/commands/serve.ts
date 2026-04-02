@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { Command } from '@commander-js/extra-typings';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+
 import { z } from 'zod';
 import { BrainServiceClass } from '../services/brain-service.js';
 import type { ResolveOptions } from '../services/config.js';
@@ -12,11 +12,19 @@ import { createHttpHandler, broadcast } from './serve-http.js';
 import type { SseClients } from './serve-http.js';
 import { startMcpServer } from '../server/index.js';
 import { installLaunchd, uninstallLaunchd } from './serve-launchd.js';
+import { WORKFLOW_CHANNEL_INSTRUCTIONS } from '../modules/workflow/runtime/channel.js';
 
 export function createServeServer(service: BrainServiceClass): McpServer {
+  const useV2 = process.env.BRAIN_EXECUTOR_V2 === '1';
   const server = new McpServer(
     { name: 'brain', version: '0.7.0' },
-    { capabilities: { tools: {} } }
+    {
+      capabilities: {
+        tools: {},
+        ...(useV2 ? { experimental: { 'claude/channel': {} } } : {}),
+      },
+      ...(useV2 ? { instructions: WORKFLOW_CHANNEL_INSTRUCTIONS } : {}),
+    }
   );
 
   server.tool(
@@ -186,18 +194,19 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
     service.close();
     process.exit(0);
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown());
+  process.on('SIGTERM', () => shutdown());
 
-  const server = createServeServer(service);
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  // Use the full MCP server (with workflow tools) instead of the subset
+  const { startMcpServerWithService } = await import('../server/index.js');
+  await startMcpServerWithService(service, shutdown);
 }
 
 export const serveCommand = new Command('serve')
   .description('Start brain daemon (HTTP dashboard + MCP over stdio)')
   .option('--port <n>', 'HTTP port for dashboard and API (default: 7800)', '7800')
   .option('--mcp', 'Start standalone MCP server over stdio (no HTTP)')
+  .option('--v2', 'Enable V2 workflow runtime (imperative executor)')
   .option('--install', 'Install as launchd agent (macOS)')
   .option('--uninstall', 'Remove launchd agent')
   .action(async (opts, cmd) => {
@@ -207,6 +216,9 @@ export const serveCommand = new Command('serve')
     const resolveOpts: ResolveOptions = {};
     if (globalFlag) resolveOpts.forceGlobal = true;
     if (typeof instancePath === 'string') resolveOpts.instancePath = instancePath;
+
+    // V2 runtime is the default. Use --no-v2 to disable.
+    process.env.BRAIN_EXECUTOR_V2 = '1';
 
     const port = parseInt((opts as { port?: string }).port ?? '7800', 10);
 
