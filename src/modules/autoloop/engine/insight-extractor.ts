@@ -94,11 +94,7 @@ function parseInsightResponse(
 
     return parsed
       .filter(
-        (item) =>
-          item.title &&
-          item.content &&
-          item.category &&
-          validCategories.has(item.category)
+        (item) => item.title && item.content && item.category && validCategories.has(item.category)
       )
       .map((item) => ({
         category: item.category as AutoloopInsight['category'],

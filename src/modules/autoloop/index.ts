@@ -142,11 +142,7 @@ export const autoloopModule: BrainModule = {
 
           const sessionReviewLast = getLastRunTime(svc.db, 'session-review');
           const consolidationLast = getLastRunTime(svc.db, 'task-consolidation');
-          const sessionReviewCooldown = isOnCooldown(
-            svc.db,
-            'session-review',
-            bounds.cooldownMs
-          );
+          const sessionReviewCooldown = isOnCooldown(svc.db, 'session-review', bounds.cooldownMs);
           const consolidationCooldown = isOnCooldown(
             svc.db,
             'task-consolidation',

@@ -17,18 +17,18 @@ export function getEmbedderInfo(backend: EmbedderBackend): EmbedderInfo {
       throw new Error(`Unknown embedder backend: ${backend as string}`);
   }
 }
-import { LocalEmbedder } from './local-embedder.js';
 import { OllamaEmbedder } from './ollama-embedder.js';
 import { RemoteEmbedder } from './remote-embedder.js';
 
-export { LocalEmbedder } from './local-embedder.js';
 export { OllamaEmbedder } from './ollama-embedder.js';
 export { RemoteEmbedder } from './remote-embedder.js';
 
-export function createEmbedder(config: BrainConfig): Embedder {
+export async function createEmbedder(config: BrainConfig): Promise<Embedder> {
   switch (config.embedder) {
-    case 'local':
+    case 'local': {
+      const { LocalEmbedder } = await import('./local-embedder.js');
       return new LocalEmbedder();
+    }
     case 'ollama':
       return new OllamaEmbedder(config.ollamaUrl);
     case 'remote':

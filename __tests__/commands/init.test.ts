@@ -37,7 +37,7 @@ vi.mock('../../src/services/brain-db.js', () => {
 });
 
 vi.mock('../../src/adapters/index.js', () => ({
-  createEmbedder: vi.fn(() => ({
+  createEmbedder: vi.fn(async () => ({
     model: 'mock-embedder',
     dimensions: 384,
     embed: vi.fn().mockResolvedValue([]),

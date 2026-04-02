@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 vi.mock('../../src/adapters/index.js', () => ({
-  createEmbedder: vi.fn().mockReturnValue({
+  createEmbedder: vi.fn().mockResolvedValue({
     embed: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
     model: 'mock-model',
     dimensions: 3,

@@ -67,7 +67,7 @@ export function createMcpServer(resolveOpts?: ResolveOptions): McpServer {
     async ({ query, limit }) => {
       const db = new BrainDB(config.dbPath);
       try {
-        const embedder = createEmbedder(config);
+        const embedder = await createEmbedder(config);
         const { results: hits, throttleMessage } = await search(db, embedder, query, {
           limit: limit ?? 10,
           throttle,

@@ -15,13 +15,7 @@ export function recordAutoloopRun(db: BrainDB, report: AutoloopReport): void {
          (loop_type, status, started_at, completed_at, duration_ms)
          VALUES (?, ?, ?, ?, ?)`
       )
-      .run(
-        report.loopType,
-        report.status,
-        report.startedAt,
-        report.completedAt,
-        report.durationMs
-      );
+      .run(report.loopType, report.status, report.startedAt, report.completedAt, report.durationMs);
   } catch {
     // Best-effort tracking
   }
@@ -45,11 +39,7 @@ export function getLastRunTime(db: BrainDB, loopType: AutoloopType): Date | null
   }
 }
 
-export function isOnCooldown(
-  db: BrainDB,
-  loopType: AutoloopType,
-  cooldownMs: number
-): boolean {
+export function isOnCooldown(db: BrainDB, loopType: AutoloopType, cooldownMs: number): boolean {
   const lastRun = getLastRunTime(db, loopType);
   if (!lastRun) return false;
   return Date.now() - lastRun.getTime() < cooldownMs;

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { checkBounds, createCounters, loadBounds } from '../../../src/modules/autoloop/engine/bounds.js';
+import {
+  checkBounds,
+  createCounters,
+  loadBounds,
+} from '../../../src/modules/autoloop/engine/bounds.js';
 import { DEFAULT_BOUNDS } from '../../../src/modules/autoloop/types.js';
 import type { AutoloopBounds } from '../../../src/modules/autoloop/types.js';
 

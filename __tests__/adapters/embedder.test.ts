@@ -155,21 +155,21 @@ describe('createEmbedder', () => {
   it('creates LocalEmbedder for local backend', async () => {
     const { createEmbedder } = await import('../../src/adapters/index.js');
     const { LocalEmbedder } = await import('../../src/adapters/local-embedder.js');
-    const embedder = createEmbedder({ ...baseConfig, embedder: 'local' });
+    const embedder = await createEmbedder({ ...baseConfig, embedder: 'local' });
     expect(embedder).toBeInstanceOf(LocalEmbedder);
   });
 
   it('creates OllamaEmbedder for ollama backend', async () => {
     const { createEmbedder } = await import('../../src/adapters/index.js');
     const { OllamaEmbedder } = await import('../../src/adapters/ollama-embedder.js');
-    const embedder = createEmbedder({ ...baseConfig, embedder: 'ollama' });
+    const embedder = await createEmbedder({ ...baseConfig, embedder: 'ollama' });
     expect(embedder).toBeInstanceOf(OllamaEmbedder);
   });
 
   it('creates RemoteEmbedder for remote backend with ollamaUrl', async () => {
     const { createEmbedder } = await import('../../src/adapters/index.js');
     const { RemoteEmbedder } = await import('../../src/adapters/remote-embedder.js');
-    const embedder = createEmbedder({
+    const embedder = await createEmbedder({
       ...baseConfig,
       embedder: 'remote',
       ollamaUrl: 'http://remote:11434',
@@ -179,7 +179,7 @@ describe('createEmbedder', () => {
 
   it('throws when remote backend has no ollamaUrl', async () => {
     const { createEmbedder } = await import('../../src/adapters/index.js');
-    expect(() => createEmbedder({ ...baseConfig, embedder: 'remote' })).toThrow(
+    await expect(createEmbedder({ ...baseConfig, embedder: 'remote' })).rejects.toThrow(
       /ollamaUrl is required/
     );
   });

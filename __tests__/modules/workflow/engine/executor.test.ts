@@ -116,10 +116,9 @@ describe('parseConditionSignals', () => {
       '# Critic Report\n\n## Verdict: NEEDS REVISION\n\n## Findings\n...'
     );
 
-    const signals = parseConditionSignals(
-      notesDir, 'instance-1', 'critic', criticDef,
-      { planId: 'test-plan' }
-    );
+    const signals = parseConditionSignals(notesDir, 'instance-1', 'critic', criticDef, {
+      planId: 'test-plan',
+    });
 
     expect(signals).toContain('needs_revision');
   });
@@ -132,10 +131,9 @@ describe('parseConditionSignals', () => {
       '# Critic Report\n\n## Verdict: READY\n\n## Open Questions\n\n1. How should X work?\n2. What about Y?\n'
     );
 
-    const signals = parseConditionSignals(
-      notesDir, 'instance-1', 'critic', criticDef,
-      { planId: 'test-plan' }
-    );
+    const signals = parseConditionSignals(notesDir, 'instance-1', 'critic', criticDef, {
+      planId: 'test-plan',
+    });
 
     expect(signals).toContain('has_open_questions');
     expect(signals).not.toContain('needs_revision');
@@ -149,17 +147,19 @@ describe('parseConditionSignals', () => {
       '# Critic Report\n\n## Verdict: READY\n\n## Open Questions\n\n'
     );
 
-    const signals = parseConditionSignals(
-      notesDir, 'instance-1', 'critic', criticDef,
-      { planId: 'test-plan' }
-    );
+    const signals = parseConditionSignals(notesDir, 'instance-1', 'critic', criticDef, {
+      planId: 'test-plan',
+    });
 
     expect(signals).toHaveLength(0);
   });
 
   test('returns empty for steps with no outgoing conditional edges', () => {
     const signals = parseConditionSignals(
-      notesDir, 'instance-1', 'design', criticDef,
+      notesDir,
+      'instance-1',
+      'design',
+      criticDef,
       { planId: 'test-plan' },
       'some agent output'
     );
@@ -169,7 +169,10 @@ describe('parseConditionSignals', () => {
 
   test('falls back to agentOutput when file not found', () => {
     const signals = parseConditionSignals(
-      notesDir, 'instance-1', 'critic', criticDef,
+      notesDir,
+      'instance-1',
+      'critic',
+      criticDef,
       { planId: 'nonexistent-plan' },
       '## Verdict: NEEDS REVISION\n\nSome output from agent'
     );
@@ -185,19 +188,16 @@ describe('parseConditionSignals', () => {
       '# Critic Report\n\n## Verdict: NEEDS REVISION\n\n## Open Questions\n\n1. Unresolved question\n'
     );
 
-    const signals = parseConditionSignals(
-      notesDir, 'instance-1', 'critic', criticDef,
-      { planId: 'test-plan' }
-    );
+    const signals = parseConditionSignals(notesDir, 'instance-1', 'critic', criticDef, {
+      planId: 'test-plan',
+    });
 
     expect(signals).toContain('needs_revision');
     expect(signals).toContain('has_open_questions');
   });
 
   test('returns empty when no planId in context', () => {
-    const signals = parseConditionSignals(
-      notesDir, 'instance-1', 'critic', criticDef, {}
-    );
+    const signals = parseConditionSignals(notesDir, 'instance-1', 'critic', criticDef, {});
 
     expect(signals).toHaveLength(0);
   });
@@ -212,23 +212,19 @@ describe('workflow expansion and advancement integration', () => {
       [edge('a', 'b'), edge('b', 'c')]
     );
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
-    const expandResult = await expandWorkflow(
-      db, config, embedder, instResult.data.display_id
-    );
+    const expandResult = await expandWorkflow(db, config, embedder, instResult.data.display_id);
     expect(expandResult.ok).toBe(true);
     if (!expandResult.ok) return;
     expect(expandResult.data.tasksCreated).toBe(3);
 
-    const { getInstanceStepStates } = await import(
-      '../../../../src/modules/workflow/data/queries.js'
-    );
+    const { getInstanceStepStates } =
+      await import('../../../../src/modules/workflow/data/queries.js');
     const stepsResult = getInstanceStepStates(db, instResult.data.display_id);
     expect(stepsResult.ok).toBe(true);
     if (!stepsResult.ok) return;
@@ -238,15 +234,11 @@ describe('workflow expansion and advancement integration', () => {
   });
 
   test('advancement includes successors of entry steps (entry nodes are inherently ready)', async () => {
-    const workflowId = await createAndRegisterWorkflow(
-      [step('a'), step('b')],
-      [edge('a', 'b')]
-    );
+    const workflowId = await createAndRegisterWorkflow([step('a'), step('b')], [edge('a', 'b')]);
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
@@ -262,23 +254,18 @@ describe('workflow expansion and advancement integration', () => {
   });
 
   test('completing entry step and advancing reveals successor', async () => {
-    const workflowId = await createAndRegisterWorkflow(
-      [step('a'), step('b')],
-      [edge('a', 'b')]
-    );
+    const workflowId = await createAndRegisterWorkflow([step('a'), step('b')], [edge('a', 'b')]);
 
-    const instResult = await instantiateWorkflow(
-      db, config, embedder, workflowId, 'TST',
-      { workstream: '1' }
-    );
+    const instResult = await instantiateWorkflow(db, config, embedder, workflowId, 'TST', {
+      workstream: '1',
+    });
     expect(instResult.ok).toBe(true);
     if (!instResult.ok) return;
 
     await expandWorkflow(db, config, embedder, instResult.data.display_id);
 
-    const { getInstanceStepStates } = await import(
-      '../../../../src/modules/workflow/data/queries.js'
-    );
+    const { getInstanceStepStates } =
+      await import('../../../../src/modules/workflow/data/queries.js');
     const stepsResult = getInstanceStepStates(db, instResult.data.display_id);
     if (!stepsResult.ok) return;
 
@@ -300,9 +287,8 @@ describe('output capture in project directory', () => {
   test('captureStepOutput and getStepOutput round-trip', async () => {
     captureStepOutput(notesDir, 'TST-01.05', 'research', 'Research brief content');
 
-    const { getStepOutput } = await import(
-      '../../../../src/modules/workflow/engine/output-capture.js'
-    );
+    const { getStepOutput } =
+      await import('../../../../src/modules/workflow/engine/output-capture.js');
 
     const output = getStepOutput(notesDir, 'TST-01.05', 'research');
     expect(output).toBe('Research brief content');
