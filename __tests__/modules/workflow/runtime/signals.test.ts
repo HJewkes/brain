@@ -41,4 +41,55 @@ describe('parseSignals', () => {
     expect(parseSignals('s', 'w', '## Open Questions\n(none)\n')).toBeNull();
     expect(parseSignals('s', 'w', '## Open Questions\nNone\n')).toBeNull();
   });
+
+  // --- Review signals ---
+
+  test('returns approved for "Verdict: PASS"', () => {
+    expect(parseSignals('review', 'wf', 'Verdict: PASS\n\nAll good.')).toBe('approved');
+  });
+
+  test('returns approved for "## Verdict: READY"', () => {
+    expect(parseSignals('critic', 'wf', '## Verdict: READY\n\nDesign approved.')).toBe('approved');
+  });
+
+  test('returns needs_fixes for "Verdict: NEEDS WORK"', () => {
+    expect(parseSignals('review', 'wf', 'Verdict: NEEDS WORK\n\n## FIX Items\n1. Fix X')).toBe(
+      'needs_fixes'
+    );
+  });
+
+  test('returns needs_fixes for FIX Items section with content', () => {
+    expect(parseSignals('review', 'wf', '## FIX Items\n1. Something broken')).toBe('needs_fixes');
+  });
+
+  test('returns changes_requested for PR review signal', () => {
+    expect(parseSignals('review', 'wf', 'Status: changes requested')).toBe('changes_requested');
+  });
+
+  // --- Brainstorming signals ---
+
+  test('returns needs_clarification for ambiguous designs', () => {
+    expect(parseSignals('design', 'wf', 'This needs clarification on the API.')).toBe(
+      'needs_clarification'
+    );
+  });
+
+  // --- Risk routing ---
+
+  test('returns high_risk for risk score >= 4', () => {
+    expect(parseSignals('review', 'wf', 'Risk Score: 5')).toBe('high_risk');
+    expect(parseSignals('review', 'wf', 'Risk Level: 4')).toBe('high_risk');
+  });
+
+  test('returns null for low risk score', () => {
+    expect(parseSignals('review', 'wf', 'Risk Score: 2')).toBeNull();
+  });
+
+  // --- UX prototype signals ---
+
+  test('returns needs_changes for iterate verdict', () => {
+    expect(parseSignals('review', 'wf', '## Verdict: ITERATE\n\nNeeds polish.')).toBe(
+      'needs_changes'
+    );
+  });
 });

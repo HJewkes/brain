@@ -3,7 +3,12 @@
  * Runs outside of MCP — starts the runtime directly, dispatches a real workflow,
  * and monitors until completion or failure.
  *
- * Usage: npx tsx scripts/test-v2-e2e.ts [low|medium|high] [--plan-id <id>]
+ * Usage:
+ *   npx tsx scripts/test-v2-e2e.ts [low|medium|high]         # planning workflow
+ *   npx tsx scripts/test-v2-e2e.ts --workflow implementation  # other workflows
+ *   npx tsx scripts/test-v2-e2e.ts --plan-id my-test         # custom plan ID
+ *   npx tsx scripts/test-v2-e2e.ts --timeout 60              # timeout in minutes
+ *   npx tsx scripts/test-v2-e2e.ts --list                    # list available workflows
  */
 import { BrainServiceClass } from '../src/services/brain-service.js';
 import { WorkflowRuntime } from '../src/modules/workflow/runtime/runtime.js';
@@ -12,12 +17,41 @@ import { workflowRuntimeMigrationV1 } from '../src/modules/workflow/runtime/migr
 
 const out = (msg: string) => process.stdout.write(msg + '\n');
 
-async function main() {
-  process.env.BRAIN_EXECUTOR_V2 = '1';
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const opts: Record<string, string> = {};
 
-  const complexity = process.argv[2] ?? 'low';
-  const planIdIdx = process.argv.indexOf('--plan-id');
-  const planId = planIdIdx !== -1 ? process.argv[planIdIdx + 1] : `v2-e2e-${complexity}`;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--list') {
+      out('Available workflows:');
+      for (const name of Object.keys(workflows)) out(`  ${name}`);
+      process.exit(0);
+    }
+    if (args[i].startsWith('--') && i + 1 < args.length) {
+      opts[args[i].slice(2)] = args[++i];
+    } else if (!args[i].startsWith('--')) {
+      opts.complexity = args[i];
+    }
+  }
+
+  return {
+    workflow: opts.workflow ?? 'planning',
+    complexity: opts.complexity ?? 'low',
+    planId: opts['plan-id'] ?? `v2-e2e-${opts.workflow ?? 'planning'}-${Date.now().toString(36)}`,
+    timeoutMin: parseInt(opts.timeout ?? '60', 10),
+    project: opts.project ?? 'VNM',
+    workstream: opts.workstream ?? '53',
+  };
+}
+
+async function main() {
+  const opts = parseArgs();
+
+  if (!workflows[opts.workflow]) {
+    out(`Unknown workflow: ${opts.workflow}`);
+    out(`Available: ${Object.keys(workflows).join(', ')}`);
+    process.exit(1);
+  }
 
   const svc = await BrainServiceClass.create();
   try {
@@ -26,6 +60,7 @@ async function main() {
     /* already exists */
   }
 
+  const stepTimings: Record<string, { start: number; end?: number }> = {};
   const events: Array<{ ts: number; event: string; meta: Record<string, string> }> = [];
   const runtime = new WorkflowRuntime({
     db: svc.db,
@@ -34,6 +69,10 @@ async function main() {
     channelPush: (event, meta) => {
       events.push({ ts: Date.now(), event, meta });
       out(`  [channel] ${event}: ${JSON.stringify(meta)}`);
+      if (event === 'step_complete' && meta.step) {
+        const key = meta.step;
+        if (stepTimings[key]) stepTimings[key].end = Date.now();
+      }
     },
   });
 
@@ -43,20 +82,24 @@ async function main() {
   runtime.startReconciler();
 
   out('=== V2 Runtime E2E ===');
-  out(`Complexity: ${complexity}`);
-  out(`Plan ID:    ${planId}`);
+  out(`Workflow:   ${opts.workflow}`);
+  out(`Complexity: ${opts.complexity}`);
+  out(`Plan ID:    ${opts.planId}`);
+  out(`Timeout:    ${opts.timeoutMin}m`);
   out('');
 
-  const runId = await runtime.start('planning', {
-    planId,
-    complexity,
-    project: 'VNM',
-    workstream: '53',
-  });
+  const params: Record<string, string> = {
+    planId: opts.planId,
+    complexity: opts.complexity,
+    project: opts.project,
+    workstream: opts.workstream,
+  };
+
+  const runId = await runtime.start(opts.workflow, params);
   out(`Run ID: ${runId}`);
   out('');
 
-  const timeout = 30 * 60 * 1000; // 30 minutes (agents can be slow)
+  const timeout = opts.timeoutMin * 60 * 1000;
   const start = Date.now();
   let lastStep = '';
   let lastAgentPid = 0;
@@ -73,7 +116,6 @@ async function main() {
     const step = status.currentStep ?? '(none)';
     const agentPid = status.activeAgent?.pid ?? 0;
 
-    // Print on step change or agent change
     if (step !== lastStep || agentPid !== lastAgentPid) {
       lastStep = step;
       lastAgentPid = agentPid;
@@ -81,6 +123,7 @@ async function main() {
       out(`  Completed steps: ${Object.keys(status.stepResults).join(', ') || '(none)'}`);
       if (status.activeAgent) {
         out(`  Active agent: pid=${status.activeAgent.pid} task=${status.activeAgent.taskId}`);
+        if (!stepTimings[step]) stepTimings[step] = { start: Date.now() };
       }
     }
 
@@ -89,6 +132,7 @@ async function main() {
       out(`=== COMPLETED in ${elapsed(start)} ===`);
       out(`Steps: ${Object.keys(status.stepResults).join(', ')}`);
       printStepSummary(status.stepResults);
+      printTimings(stepTimings);
       out(`Channel events: ${events.length}`);
       break;
     }
@@ -99,10 +143,10 @@ async function main() {
       out(`Error: ${status.error}`);
       out(`Current step: ${status.currentStep}`);
       out(`Completed: ${Object.keys(status.stepResults).join(', ')}`);
+      printTimings(stepTimings);
       break;
     }
 
-    // Check agent liveness every poll
     if (status.activeAgent?.pid) {
       try {
         process.kill(status.activeAgent.pid, 0);
@@ -114,6 +158,7 @@ async function main() {
 
   if (Date.now() - start >= timeout) {
     out(`\n=== TIMEOUT after ${elapsed(start)} ===`);
+    printTimings(stepTimings);
   }
 
   runtime.stopReconciler();
@@ -129,6 +174,16 @@ function printStepSummary(results: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(results)) {
     const r = value as { signal?: string | null; completedAt?: string };
     out(`  ${key}: signal=${r.signal ?? 'none'} completed=${r.completedAt ?? '?'}`);
+  }
+}
+
+function printTimings(timings: Record<string, { start: number; end?: number }>): void {
+  const entries = Object.entries(timings);
+  if (entries.length === 0) return;
+  out('\nStep timings:');
+  for (const [step, t] of entries) {
+    const dur = t.end ? `${Math.round((t.end - t.start) / 1000)}s` : 'running';
+    out(`  ${step}: ${dur}`);
   }
 }
 
