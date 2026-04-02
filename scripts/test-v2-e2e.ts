@@ -2,27 +2,38 @@
  * E2E test for the V2 workflow runtime.
  * Runs outside of MCP — starts the runtime directly, dispatches a real workflow,
  * and monitors until completion or failure.
+ *
+ * Usage: npx tsx scripts/test-v2-e2e.ts [low|medium|high] [--plan-id <id>]
  */
 import { BrainServiceClass } from '../src/services/brain-service.js';
 import { WorkflowRuntime } from '../src/modules/workflow/runtime/runtime.js';
 import { workflows } from '../src/modules/workflow/flows/index.js';
 import { workflowRuntimeMigrationV1 } from '../src/modules/workflow/runtime/migration.js';
 
+const out = (msg: string) => process.stdout.write(msg + '\n');
+
 async function main() {
   process.env.BRAIN_EXECUTOR_V2 = '1';
 
-  const svc = await BrainServiceClass.create();
-  workflowRuntimeMigrationV1.up(svc.db.rawDb);
+  const complexity = process.argv[2] ?? 'low';
+  const planIdIdx = process.argv.indexOf('--plan-id');
+  const planId = planIdIdx !== -1 ? process.argv[planIdIdx + 1] : `v2-e2e-${complexity}`;
 
-  const events: string[] = [];
+  const svc = await BrainServiceClass.create();
+  try {
+    workflowRuntimeMigrationV1.up(svc.db.rawDb);
+  } catch {
+    /* already exists */
+  }
+
+  const events: Array<{ ts: number; event: string; meta: Record<string, string> }> = [];
   const runtime = new WorkflowRuntime({
     db: svc.db,
     config: svc.config,
     embedder: svc.embedder,
     channelPush: (event, meta) => {
-      const msg = `[channel] ${event}: ${JSON.stringify(meta)}`;
-      events.push(msg);
-      console.log(msg);
+      events.push({ ts: Date.now(), event, meta });
+      out(`  [channel] ${event}: ${JSON.stringify(meta)}`);
     },
   });
 
@@ -31,64 +42,78 @@ async function main() {
   }
   runtime.startReconciler();
 
-  console.log('=== V2 E2E Test ===');
-  console.log('Starting planning workflow (medium complexity)...\n');
+  out('=== V2 Runtime E2E ===');
+  out(`Complexity: ${complexity}`);
+  out(`Plan ID:    ${planId}`);
+  out('');
 
   const runId = await runtime.start('planning', {
-    planId: 'v2-e2e-test',
-    complexity: 'medium',
+    planId,
+    complexity,
     project: 'VNM',
     workstream: '53',
   });
-  console.log('Run ID:', runId);
+  out(`Run ID: ${runId}`);
+  out('');
 
-  // Poll until done or timeout
-  const timeout = 10 * 60 * 1000; // 10 minutes
+  const timeout = 30 * 60 * 1000; // 30 minutes (agents can be slow)
   const start = Date.now();
   let lastStep = '';
+  let lastAgentPid = 0;
 
   while (Date.now() - start < timeout) {
     await new Promise((r) => setTimeout(r, 5000));
 
     const status = runtime.getStatus(runId);
     if (!status) {
-      console.log('ERROR: run not found');
+      out('ERROR: run not found');
       break;
     }
 
-    if (status.currentStep !== lastStep) {
-      lastStep = status.currentStep ?? '';
-      console.log(`\n[${elapsed(start)}] Step: ${lastStep || '(none)'}`);
-      console.log(`  Status: ${status.status}`);
-      console.log(`  Completed: ${Object.keys(status.stepResults).length} steps`);
+    const step = status.currentStep ?? '(none)';
+    const agentPid = status.activeAgent?.pid ?? 0;
+
+    // Print on step change or agent change
+    if (step !== lastStep || agentPid !== lastAgentPid) {
+      lastStep = step;
+      lastAgentPid = agentPid;
+      out(`[${elapsed(start)}] Step: ${step}  Status: ${status.status}`);
+      out(`  Completed steps: ${Object.keys(status.stepResults).join(', ') || '(none)'}`);
       if (status.activeAgent) {
-        console.log(`  Agent: pid=${status.activeAgent.pid} task=${status.activeAgent.taskId}`);
+        out(`  Active agent: pid=${status.activeAgent.pid} task=${status.activeAgent.taskId}`);
       }
     }
 
     if (status.status === 'completed') {
-      console.log(`\n=== WORKFLOW COMPLETED in ${elapsed(start)} ===`);
-      console.log('Steps completed:', Object.keys(status.stepResults).join(', '));
-      console.log('Channel events:', events.length);
+      out('');
+      out(`=== COMPLETED in ${elapsed(start)} ===`);
+      out(`Steps: ${Object.keys(status.stepResults).join(', ')}`);
+      printStepSummary(status.stepResults);
+      out(`Channel events: ${events.length}`);
       break;
     }
 
     if (status.status === 'failed') {
-      console.log(`\n=== WORKFLOW FAILED at ${elapsed(start)} ===`);
-      console.log('Error:', status.error);
-      console.log('Current step:', status.currentStep);
-      console.log('Steps completed:', Object.keys(status.stepResults).join(', '));
+      out('');
+      out(`=== FAILED at ${elapsed(start)} ===`);
+      out(`Error: ${status.error}`);
+      out(`Current step: ${status.currentStep}`);
+      out(`Completed: ${Object.keys(status.stepResults).join(', ')}`);
       break;
     }
 
-    // Check agent liveness
+    // Check agent liveness every poll
     if (status.activeAgent?.pid) {
       try {
         process.kill(status.activeAgent.pid, 0);
       } catch {
-        console.log(`  [${elapsed(start)}] Agent PID ${status.activeAgent.pid} is dead`);
+        out(`  [${elapsed(start)}] Agent PID ${status.activeAgent.pid} no longer alive`);
       }
     }
+  }
+
+  if (Date.now() - start >= timeout) {
+    out(`\n=== TIMEOUT after ${elapsed(start)} ===`);
   }
 
   runtime.stopReconciler();
@@ -97,10 +122,17 @@ async function main() {
 
 function elapsed(start: number): string {
   const s = Math.round((Date.now() - start) / 1000);
-  return `${Math.floor(s / 60)}m${s % 60}s`;
+  return `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`;
+}
+
+function printStepSummary(results: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(results)) {
+    const r = value as { signal?: string | null; completedAt?: string };
+    out(`  ${key}: signal=${r.signal ?? 'none'} completed=${r.completedAt ?? '?'}`);
+  }
 }
 
 main().catch((err) => {
-  console.error('Fatal:', err);
+  process.stderr.write(`Fatal: ${err}\n`);
   process.exit(1);
 });
