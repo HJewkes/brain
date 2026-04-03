@@ -10,7 +10,13 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
-import type { WorkflowRun, StepResult, WorkflowStatus, ChannelPushFn } from './types.js';
+import type {
+  WorkflowRun,
+  StepResult,
+  SeedResult,
+  WorkflowStatus,
+  ChannelPushFn,
+} from './types.js';
 import { parseSignals } from './signals.js';
 import { createTask } from '../../pm/data/task-ops.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
@@ -131,6 +137,46 @@ export class WorkflowContext {
     }
 
     return this.dispatchWithRetry(stepId, template, iterKey);
+  }
+
+  async seed(stepId: string, fn: () => Promise<SeedResult>): Promise<StepResult> {
+    const cached = this._stepResults[stepId];
+    if (cached) return cached;
+
+    this._currentStep = stepId;
+    this.persist();
+
+    const seedResult = await fn();
+
+    // Merge seed data into workflow context for downstream templates
+    for (const [key, value] of Object.entries(seedResult.data)) {
+      this._context[key] = value;
+    }
+
+    const stepResult: StepResult = {
+      stepId,
+      taskId: `seed:${stepId}`,
+      agentId: null,
+      signal: null,
+      completedAt: new Date().toISOString(),
+      output: seedResult.output,
+    };
+
+    this._stepResults[stepId] = stepResult;
+    this.persist();
+
+    if (seedResult.output) {
+      this.writeStepOutput(stepId, seedResult.output);
+    }
+
+    this.channel?.('step_complete', {
+      workflow: this.runId,
+      step: stepId,
+      signal: '',
+      taskId: `seed:${stepId}`,
+    });
+
+    return stepResult;
   }
 
   /** Maximum number of automatic retries when an agent dies. */

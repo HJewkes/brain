@@ -8,6 +8,7 @@ import type { BrainConfig } from '../../../../src/types.js';
 import type { WorkflowFn } from '../../../../src/modules/workflow/runtime/types.js';
 import { WorkflowRuntime } from '../../../../src/modules/workflow/runtime/runtime.js';
 import { createTestDb, createMockEmbedder } from '../../../helpers.js';
+import { createWorkflowRunsTable } from '../helpers.js';
 
 const embedder = createMockEmbedder();
 
@@ -37,25 +38,6 @@ vi.mock('../../../../src/server/dispatch.js', () => ({
   }),
 }));
 
-function createWorkflowRunsMigration(db: BrainDB): void {
-  db.rawDb.exec(`
-    CREATE TABLE IF NOT EXISTS workflow_runs (
-      id TEXT PRIMARY KEY,
-      workflow_name TEXT NOT NULL,
-      context JSON NOT NULL,
-      status TEXT NOT NULL DEFAULT 'running'
-        CHECK(status IN ('running', 'completed', 'failed', 'paused')),
-      current_step TEXT,
-      step_results JSON NOT NULL DEFAULT '{}',
-      active_agent JSON,
-      started_at TEXT NOT NULL,
-      completed_at TEXT,
-      error TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status);
-  `);
-}
-
 let db: BrainDB;
 let dbPath: string;
 let notesDir: string;
@@ -63,7 +45,7 @@ let config: BrainConfig;
 
 beforeEach(() => {
   ({ dbPath, db } = createTestDb());
-  createWorkflowRunsMigration(db);
+  createWorkflowRunsTable(db);
   notesDir = join(tmpdir(), `wf-rt-${randomUUID()}`);
   mkdirSync(notesDir, { recursive: true });
   config = {

@@ -29,6 +29,14 @@ export interface WorkflowRun {
   error: string | null;
 }
 
+/** Result of a deterministic seed step (no LLM agent). */
+export interface SeedResult {
+  /** Arbitrary output data from the seed function. */
+  data: Record<string, string>;
+  /** Optional summary written to step output. */
+  output?: string;
+}
+
 export interface WorkflowContext {
   runId: string;
   workflowName: string;
@@ -40,6 +48,9 @@ export interface WorkflowContext {
 
   /** Dispatch an agent step. Memoized — returns cached result on re-invocation. */
   dispatch(stepId: string, template: string): Promise<StepResult>;
+
+  /** Run a deterministic seed step (no LLM). Memoized — returns cached result on re-invocation. */
+  seed(stepId: string, fn: () => Promise<SeedResult>): Promise<StepResult>;
 
   /** Pause for human/coordinator input. Pushes prompt via channel, awaits signal. */
   assisted(stepId: string, template: string): Promise<StepResult>;

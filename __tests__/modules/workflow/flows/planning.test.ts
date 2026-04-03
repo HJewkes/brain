@@ -8,6 +8,7 @@ import type { BrainConfig } from '../../../../src/types.js';
 import type {
   WorkflowContext as WorkflowContextInterface,
   StepResult,
+  SeedResult,
 } from '../../../../src/modules/workflow/runtime/types.js';
 import { planningWorkflow } from '../../../../src/modules/workflow/flows/planning.js';
 import { WorkflowRuntime } from '../../../../src/modules/workflow/runtime/runtime.js';
@@ -21,7 +22,7 @@ import { createTestDb, createMockEmbedder } from '../../../helpers.js';
 type SignalKey = `${string}:${number}`;
 
 interface DispatchCall {
-  method: 'dispatch' | 'assisted';
+  method: 'dispatch' | 'assisted' | 'seed';
   stepId: string;
   template: string;
 }
@@ -40,7 +41,7 @@ class TestableContext implements WorkflowContextInterface {
   private cachedResults: Record<string, StepResult> = {};
 
   constructor(params: Record<string, string> = {}) {
-    this.params = params;
+    this.params = { brief: 'Test planning workflow', ...params };
   }
 
   /** Pre-configure what signal a step returns at a given iteration index. */
@@ -105,6 +106,29 @@ class TestableContext implements WorkflowContextInterface {
     };
   }
 
+  async seed(stepId: string, fn: () => Promise<SeedResult>): Promise<StepResult> {
+    const cached = this.cachedResults[stepId];
+    if (cached) return cached;
+
+    this.calls.push({ method: 'seed', stepId, template: '' });
+
+    const seedResult = await fn();
+
+    // Merge seed data into params (mirrors real WorkflowContext behavior)
+    for (const [key, value] of Object.entries(seedResult.data)) {
+      this.params[key] = value;
+    }
+
+    return {
+      stepId,
+      taskId: `seed:${stepId}`,
+      agentId: null,
+      signal: null,
+      completedAt: new Date().toISOString(),
+      output: seedResult.output,
+    };
+  }
+
   signal(_stepId: string, _data?: Record<string, string>): void {
     // no-op for tests
   }
@@ -114,14 +138,18 @@ class TestableContext implements WorkflowContextInterface {
 // Flow logic tests using TestableContext
 // ---------------------------------------------------------------------------
 
+/** Filter out seed calls to focus on LLM pipeline steps. */
+function llmSteps(ctx: TestableContext): string[] {
+  return ctx.calls.filter((c) => c.method !== 'seed').map((c) => c.stepId);
+}
+
 describe('planningWorkflow — flow logic', () => {
   test('high complexity: full pipeline with approved critic', async () => {
     const ctx = new TestableContext({ complexity: 'high' });
 
     await planningWorkflow(ctx);
 
-    const stepIds = ctx.calls.map((c) => c.stepId);
-    expect(stepIds).toEqual([
+    expect(llmSteps(ctx)).toEqual([
       'research',
       'interview',
       'design',
@@ -132,28 +160,29 @@ describe('planningWorkflow — flow logic', () => {
       'review',
     ]);
 
-    // Verify correct methods
-    expect(ctx.calls[0]).toEqual({
+    // Verify correct methods (offset by 1 for seed step)
+    const llmCalls = ctx.calls.filter((c) => c.method !== 'seed');
+    expect(llmCalls[0]).toEqual({
       method: 'dispatch',
       stepId: 'research',
       template: 'planning-research',
     });
-    expect(ctx.calls[1]).toEqual({
+    expect(llmCalls[1]).toEqual({
       method: 'assisted',
       stepId: 'interview',
       template: 'planning-interview',
     });
-    expect(ctx.calls[2]).toEqual({
+    expect(llmCalls[2]).toEqual({
       method: 'dispatch',
       stepId: 'design',
       template: 'planning-design',
     });
-    expect(ctx.calls[3]).toEqual({
+    expect(llmCalls[3]).toEqual({
       method: 'dispatch',
       stepId: 'critic',
       template: 'planning-critic',
     });
-    expect(ctx.calls[7]).toEqual({
+    expect(llmCalls[7]).toEqual({
       method: 'dispatch',
       stepId: 'review',
       template: 'review-agent',
@@ -165,8 +194,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    const stepIds = ctx.calls.map((c) => c.stepId);
-    expect(stepIds).toEqual([
+    expect(llmSteps(ctx)).toEqual([
       'research',
       'design',
       'critic',
@@ -176,8 +204,9 @@ describe('planningWorkflow — flow logic', () => {
       'review',
     ]);
 
-    // No assisted calls
-    expect(ctx.calls.every((c) => c.method === 'dispatch')).toBe(true);
+    // No assisted calls (excluding seed)
+    const llmCalls = ctx.calls.filter((c) => c.method !== 'seed');
+    expect(llmCalls.every((c) => c.method === 'dispatch')).toBe(true);
   });
 
   test('low complexity: skips research and interview', async () => {
@@ -185,8 +214,14 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    const stepIds = ctx.calls.map((c) => c.stepId);
-    expect(stepIds).toEqual(['design', 'critic', 'spec-tests', 'decompose', 'implement', 'review']);
+    expect(llmSteps(ctx)).toEqual([
+      'design',
+      'critic',
+      'spec-tests',
+      'decompose',
+      'implement',
+      'review',
+    ]);
   });
 
   test('defaults to high complexity when param is missing', async () => {
@@ -208,8 +243,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    const stepIds = ctx.calls.map((c) => c.stepId);
-    expect(stepIds).toEqual([
+    expect(llmSteps(ctx)).toEqual([
       'design', // initial design (iter 0)
       'critic', // initial critic (iter 0) -> needs_revision
       'design', // loop design (iter 1)
@@ -253,8 +287,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    const stepIds = ctx.calls.map((c) => c.stepId);
-    expect(stepIds).toEqual([
+    expect(llmSteps(ctx)).toEqual([
       'design', // initial
       'critic', // -> has_open_questions
       'research', // re-research
@@ -294,8 +327,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    const stepIds = ctx.calls.map((c) => c.stepId);
-    expect(stepIds).toEqual([
+    expect(llmSteps(ctx)).toEqual([
       'design', // initial (iter 0)
       'critic', // iter 0 -> needs_revision
       'design', // loop (iter 1)
@@ -367,9 +399,128 @@ describe('planningWorkflow — flow logic', () => {
     await planningWorkflow(ctx);
 
     const calledSteps = ctx.calls.map((c) => c.stepId);
-    expect(calledSteps).not.toContain('design');
-    expect(calledSteps).not.toContain('critic');
-    expect(calledSteps).toEqual(['spec-tests', 'decompose', 'implement', 'review']);
+    const llm = calledSteps.filter((s) => s !== 'seed');
+    expect(llm).not.toContain('design');
+    expect(llm).not.toContain('critic');
+    expect(llm).toEqual(['spec-tests', 'decompose', 'implement', 'review']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Seed step tests
+// ---------------------------------------------------------------------------
+
+describe('planningWorkflow — seed step', () => {
+  test('brief always triggers seed step', async () => {
+    const ctx = new TestableContext({ complexity: 'high' });
+
+    await planningWorkflow(ctx);
+
+    const seedCalls = ctx.calls.filter((c) => c.method === 'seed');
+    expect(seedCalls).toHaveLength(1);
+  });
+
+  test('missing brief throws', async () => {
+    const ctx = new TestableContext({});
+    // Override to remove brief
+    (ctx as unknown as { params: Record<string, string> }).params = { complexity: 'low' };
+
+    await expect(planningWorkflow(ctx)).rejects.toThrow('requires a "brief"');
+  });
+
+  test('brainNotes param triggers seed step before research', async () => {
+    const ctx = new TestableContext({
+      complexity: 'high',
+      brainNotes: 'some-note',
+      projectDir: '/tmp/nonexistent',
+    });
+
+    await planningWorkflow(ctx);
+
+    const stepIds = ctx.calls.map((c) => c.stepId);
+    expect(stepIds[0]).toBe('seed');
+    expect(stepIds).toContain('research');
+    expect(stepIds).toContain('interview');
+  });
+
+  test('files param triggers seed step', async () => {
+    const ctx = new TestableContext({
+      complexity: 'medium',
+      files: 'src/foo.ts,src/bar.ts',
+      projectDir: '/tmp/nonexistent',
+    });
+
+    await planningWorkflow(ctx);
+
+    const stepIds = ctx.calls.map((c) => c.stepId);
+    expect(stepIds[0]).toBe('seed');
+  });
+
+  test('priorContext param triggers seed step', async () => {
+    const ctx = new TestableContext({
+      complexity: 'low',
+      priorContext: 'We decided to use approach X',
+      projectDir: '/tmp/nonexistent',
+    });
+
+    await planningWorkflow(ctx);
+
+    const seedCalls = ctx.calls.filter((c) => c.method === 'seed');
+    expect(seedCalls).toHaveLength(1);
+  });
+
+  test('interviewAnswers skips interview step for high complexity', async () => {
+    const ctx = new TestableContext({
+      complexity: 'high',
+      interviewAnswers: 'Q1: Yes. Q2: No.',
+      projectDir: '/tmp/nonexistent',
+    });
+
+    await planningWorkflow(ctx);
+
+    const stepIds = ctx.calls.map((c) => c.stepId);
+    expect(stepIds).toContain('seed');
+    expect(stepIds).not.toContain('interview');
+    expect(stepIds).toContain('research');
+  });
+
+  test('skipResearch=true from seed skips research for medium complexity', async () => {
+    // Test the direct param path: when skipResearch is already set (as it
+    // would be after seed merges data), research is skipped.
+    const ctxDirect = new TestableContext({
+      complexity: 'medium',
+      skipResearch: 'true',
+    });
+
+    await planningWorkflow(ctxDirect);
+
+    expect(llmSteps(ctxDirect)).not.toContain('research');
+    expect(llmSteps(ctxDirect)[0]).toBe('design');
+  });
+
+  test('seed step is memoized on restart', async () => {
+    const ctx = new TestableContext({
+      complexity: 'high',
+      brainNotes: 'note-a',
+      projectDir: '/tmp/nonexistent',
+    });
+
+    // Pre-populate seed as cached
+    ctx.setCachedAssisted('seed', {
+      stepId: 'seed',
+      taskId: 'seed:seed',
+      agentId: null,
+      signal: null,
+      completedAt: '2026-01-01T00:00:00Z',
+      output: 'Seed gathered 1 context section(s). Skip research: false',
+    });
+
+    await planningWorkflow(ctx);
+
+    const seedCalls = ctx.calls.filter((c) => c.method === 'seed');
+    expect(seedCalls).toHaveLength(0);
+    // But downstream steps still run
+    expect(ctx.calls.map((c) => c.stepId)).toContain('research');
   });
 });
 
@@ -458,6 +609,7 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
       project: 'TST',
       workstream: '1',
       complexity: 'low',
+      brief: 'Test workflow run',
     });
 
     // The workflow will block on first dispatch waiting for agent resolution.
@@ -526,7 +678,12 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
       .run(
         runId,
         'planning',
-        JSON.stringify({ project: 'TST', workstream: '1', complexity: 'low' }),
+        JSON.stringify({
+          project: 'TST',
+          workstream: '1',
+          complexity: 'low',
+          brief: 'Test hydration',
+        }),
         JSON.stringify(stepResults),
         new Date().toISOString()
       );

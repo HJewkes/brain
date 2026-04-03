@@ -19,9 +19,24 @@ Explore-type agent gathering context for a planning workflow. Read broadly, prod
 
 {{RESEARCH_FOCUS}}
 
+## Pre-Existing Context
+
+Check for pre-existing context gathered during the seed phase:
+
+```bash
+cat {{REPO_PATH}}/.plans/{{PLAN_ID}}/pre-existing-context.md 2>/dev/null
+```
+
+If this file exists, review its contents carefully. For areas already covered:
+- **Validate** rather than re-research — confirm the information is current and accurate
+- **Fill gaps** — focus your effort on areas the pre-existing context does NOT cover
+- **Note conflicts** — if your findings contradict the pre-existing context, flag them explicitly
+
+If no pre-existing context exists, proceed with full research.
+
 ## Instructions
 
-Work through each research area below. Spend proportional effort on the focus areas listed above.
+Work through each research area below. Spend proportional effort on the focus areas listed above. If pre-existing context covers an area well, summarize what it provides and note any gaps.
 
 ### 1. Codebase Exploration
 

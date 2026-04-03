@@ -14,6 +14,16 @@ Produce design artifacts for a planning workflow. Read the research brief, synth
 
 ## Input
 
+### Pre-Existing Context
+
+Check for pre-existing context gathered during the seed phase:
+
+```bash
+cat {{REPO_PATH}}/.plans/{{PLAN_ID}}/pre-existing-context.md 2>/dev/null
+```
+
+If this file exists, treat it as foundational context alongside the research brief. Decisions and constraints documented here take precedence over fresh research where they conflict.
+
 ### Research Brief
 
 Read `{{REPO_PATH}}/.plans/{{PLAN_ID}}/research-brief.md` for context gathered during the research phase. This is your primary source of truth for existing code, patterns, constraints, and external findings.
