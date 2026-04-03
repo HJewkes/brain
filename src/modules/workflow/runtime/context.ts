@@ -15,6 +15,7 @@ import { parseSignals } from './signals.js';
 import { createTask } from '../../pm/data/task-ops.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
 import { dispatchTask } from '../../../server/dispatch.js';
+import { captureStepOutput } from '../engine/output-capture.js';
 
 // Re-export the interface for use by runtime.ts
 export type { WorkflowContext as WorkflowContextInterface } from './types.js';
@@ -193,6 +194,8 @@ export class WorkflowContext {
     this._activeAgent = null;
     this.persist();
 
+    this.writeStepOutput(stepId, output);
+
     this.channel?.('step_complete', {
       workflow: this.runId,
       step: stepId,
@@ -344,13 +347,15 @@ export class WorkflowContext {
       throw new Error('Embedder required for template rendering');
     }
 
+    const extraVars = this.buildExtraVars();
+
     const result = await dispatchTemplate(
       this.db,
       this.config,
       this.embedder,
       taskId,
       templateName,
-      { dryRun: true }
+      { dryRun: true, extraVars }
     );
 
     if (!result.ok) {
@@ -426,6 +431,50 @@ export class WorkflowContext {
       if (key.startsWith(`${stepId}:`)) return key;
     }
     return null;
+  }
+
+  /** Build extra template variables from V2 runtime state. */
+  private buildExtraVars(): Record<string, string> {
+    const vars: Record<string, string> = {};
+
+    // Inject workflow params (planId → PLAN_ID, etc.)
+    for (const [key, value] of Object.entries(this._context)) {
+      vars[key] = value;
+      const snakeKey = key
+        .replace(/([A-Z])/g, '_$1')
+        .toUpperCase()
+        .replace(/^_/, '');
+      if (!(snakeKey in vars)) vars[snakeKey] = value;
+    }
+
+    vars.WORKFLOW_NAME = this.workflowName;
+    vars.INSTANCE_ID = this.runId.slice(0, 8);
+
+    // Inject completed step outputs
+    const parts: string[] = [];
+    for (const [iterKey, result] of Object.entries(this._stepResults)) {
+      if (!result.output) continue;
+      const stepId = iterKey.includes(':') ? iterKey.slice(0, iterKey.lastIndexOf(':')) : iterKey;
+      const varName = `STEP_OUTPUT_${stepId.toUpperCase().replace(/-/g, '_')}`;
+      vars[varName] = result.output;
+      parts.push(`### ${stepId}\n\n${result.output}`);
+    }
+    if (parts.length > 0) {
+      vars.PREVIOUS_STEP_OUTPUTS = parts.join('\n\n---\n\n');
+    }
+
+    return vars;
+  }
+
+  /** Write step output to disk for external consumption and template injection. */
+  private writeStepOutput(stepId: string, output: string): void {
+    if (!output) return;
+    const planId = this._context.planId ?? this.runId.slice(0, 8);
+    try {
+      captureStepOutput(this.projectDir, planId, stepId, output);
+    } catch {
+      // Non-fatal — disk write failure shouldn't crash the workflow
+    }
   }
 
   /**

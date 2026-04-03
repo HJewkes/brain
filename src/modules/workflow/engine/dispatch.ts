@@ -18,6 +18,8 @@ export interface DispatchOptions {
   worktree?: string;
   dryRun?: boolean;
   claim?: boolean;
+  /** Extra template variables injected by the caller (e.g., V2 runtime context). */
+  extraVars?: Record<string, string>;
 }
 
 export interface DispatchResult {
@@ -253,6 +255,10 @@ export async function dispatchTemplate(
   }
 
   injectWorkflowContext(db, taskId, vars);
+
+  if (opts.extraVars) {
+    Object.assign(vars, opts.extraVars);
+  }
 
   const stepMode = resolveStepMode(db, taskId);
 

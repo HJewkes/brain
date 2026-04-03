@@ -24,6 +24,10 @@ vi.mock('../../../../src/modules/workflow/engine/dispatch.js', () => ({
   }),
 }));
 
+vi.mock('../../../../src/modules/workflow/engine/output-capture.js', () => ({
+  captureStepOutput: vi.fn(),
+}));
+
 vi.mock('../../../../src/server/dispatch.js', () => ({
   dispatchTask: vi.fn().mockResolvedValue({
     pid: 12345,
@@ -428,5 +432,69 @@ describe('WorkflowContext — signal parsing integration', () => {
     const result = await p;
 
     expect(result.signal).toBeNull();
+  });
+});
+
+describe('WorkflowContext — step output capture', () => {
+  test('dispatch() writes step output to disk via captureStepOutput', async () => {
+    const { captureStepOutput } =
+      await import('../../../../src/modules/workflow/engine/output-capture.js');
+    const mockCapture = captureStepOutput as ReturnType<typeof vi.fn>;
+    mockCapture.mockClear();
+
+    const run = makeRun({ context: { planId: 'test-plan', project: 'TST', workstream: '1' } });
+    const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
+
+    const p = ctx.dispatch('design', 'design-template');
+    await vi.waitFor(() => expect(ctx.activeAgent).not.toBeNull());
+    ctx.resolveAgent('design', 'Design output content');
+    await p;
+
+    expect(mockCapture).toHaveBeenCalledWith(
+      expect.any(String),
+      'test-plan',
+      'design',
+      'Design output content'
+    );
+  });
+
+  test('dispatch() passes extraVars with step outputs to dispatchTemplate', async () => {
+    const { dispatchTemplate } =
+      await import('../../../../src/modules/workflow/engine/dispatch.js');
+    const mockDispatch = dispatchTemplate as ReturnType<typeof vi.fn>;
+
+    // First step — populates step results
+    const run = makeRun({ context: { planId: 'test-plan', project: 'TST', workstream: '1' } });
+    const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
+
+    const p1 = ctx.dispatch('research', 'research-template');
+    await vi.waitFor(() => expect(ctx.activeAgent).not.toBeNull());
+    ctx.resolveAgent('research', 'Research findings here');
+    await p1;
+
+    mockDispatch.mockClear();
+
+    // Second step — should include research output in extraVars
+    const p2 = ctx.dispatch('design', 'design-template');
+    await vi.waitFor(() => expect(ctx.activeAgent).not.toBeNull());
+
+    // Check that dispatchTemplate was called with extraVars containing step output
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.any(String),
+      'design-template',
+      expect.objectContaining({
+        extraVars: expect.objectContaining({
+          STEP_OUTPUT_RESEARCH: 'Research findings here',
+          PREVIOUS_STEP_OUTPUTS: expect.stringContaining('Research findings here'),
+          PLAN_ID: 'test-plan',
+        }),
+      })
+    );
+
+    ctx.resolveAgent('design', 'Design output');
+    await p2;
   });
 });
