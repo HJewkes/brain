@@ -344,7 +344,7 @@ function getV2Runtime(svc: BrainServiceClass): WorkflowRuntime | null {
 function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void {
   server.tool(
     'brain_workflow_start',
-    'Start a workflow: instantiate, expand into tasks, and dispatch entry steps. Returns immediately — agents run in background. Poll with brain_workflow_status.',
+    'Start a workflow. Returns immediately — agents run in background. Poll with brain_workflow_status. Planning workflow requires context.brief describing what to build.',
     {
       workflowId: z.string().describe('Workflow definition ID (e.g. "planning")'),
       project: z.string().describe('Project prefix (e.g. "VNM")'),
@@ -352,7 +352,10 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
       context: z
         .record(z.string(), z.string())
         .optional()
-        .describe('Context parameters (e.g. { planId: "my-plan", complexity: "high" })'),
+        .describe(
+          'Context parameters. Planning workflow requires: brief (what to build), planId, complexity (low/medium/high). ' +
+            'Optional: brainNotes (comma-separated slugs), files (comma-separated paths), priorContext, interviewAnswers.'
+        ),
       model: z.string().optional().describe('Model override for dispatched agents'),
       maxBudgetUsd: z.number().optional().describe('Cost cap per agent session (default 2.00)'),
       dryRun: z.boolean().optional().describe('Preview without spawning agents'),

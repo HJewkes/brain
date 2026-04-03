@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { BrainDB } from '../../../../src/services/brain-db.js';
 import type { BrainConfig } from '../../../../src/types.js';
-import type { WorkflowRun, StepResult } from '../../../../src/modules/workflow/runtime/types.js';
+import type {
+  WorkflowRun,
+  StepResult,
+  SeedResult,
+} from '../../../../src/modules/workflow/runtime/types.js';
 import { WorkflowContext } from '../../../../src/modules/workflow/runtime/context.js';
 import { createTestDb, createMockEmbedder } from '../../../helpers.js';
 
@@ -496,5 +500,121 @@ describe('WorkflowContext — step output capture', () => {
 
     ctx.resolveAgent('design', 'Design output');
     await p2;
+  });
+});
+
+describe('WorkflowContext — seed step', () => {
+  test('seed() runs function and stores result', async () => {
+    const run = makeRun({ context: { project: 'TST', workstream: '1' } });
+    const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
+
+    const seedFn = async (): Promise<SeedResult> => ({
+      data: { skipResearch: 'true', hasCodebaseReview: 'true' },
+      output: 'Seed gathered 2 sections.',
+    });
+
+    const result = await ctx.seed('seed-step', seedFn);
+
+    expect(result.stepId).toBe('seed-step');
+    expect(result.taskId).toBe('seed:seed-step');
+    expect(result.agentId).toBeNull();
+    expect(result.output).toBe('Seed gathered 2 sections.');
+  });
+
+  test('seed() merges data into workflow context', async () => {
+    const run = makeRun({ context: { project: 'TST', workstream: '1' } });
+    const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
+
+    await ctx.seed('seed-step', async () => ({
+      data: { skipResearch: 'true', customKey: 'customValue' },
+    }));
+
+    expect(ctx.param('skipResearch')).toBe('true');
+    expect(ctx.param('customKey')).toBe('customValue');
+  });
+
+  test('seed() returns cached result on re-invocation', async () => {
+    const existingResult: StepResult = {
+      stepId: 'seed-step',
+      taskId: 'seed:seed-step',
+      agentId: null,
+      signal: null,
+      completedAt: '2026-01-01T00:00:00Z',
+      output: 'cached seed output',
+    };
+
+    const run = makeRun({
+      stepResults: { 'seed-step': existingResult },
+    });
+
+    const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
+    const fn = vi.fn().mockResolvedValue({ data: {} });
+
+    const result = await ctx.seed('seed-step', fn);
+
+    expect(result).toEqual(existingResult);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  test('seed() persists state to workflow_runs table', async () => {
+    const runId = randomUUID();
+    const run = makeRun({ id: runId, context: { project: 'TST', workstream: '1' } });
+    const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
+
+    await ctx.seed('seed-step', async () => ({
+      data: { flag: 'value' },
+      output: 'seed output',
+    }));
+
+    const row = db.rawDb.prepare('SELECT * FROM workflow_runs WHERE id = ?').get(runId) as Record<
+      string,
+      unknown
+    >;
+    expect(row).toBeDefined();
+    const stepResults = JSON.parse(row.step_results as string);
+    expect(stepResults['seed-step']).toBeDefined();
+    expect(stepResults['seed-step'].stepId).toBe('seed-step');
+  });
+
+  test('seed() writes output to disk via captureStepOutput', async () => {
+    const { captureStepOutput } =
+      await import('../../../../src/modules/workflow/engine/output-capture.js');
+    const mockCapture = captureStepOutput as ReturnType<typeof vi.fn>;
+    mockCapture.mockClear();
+
+    const run = makeRun({
+      context: { planId: 'test-plan', project: 'TST', workstream: '1' },
+    });
+    const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
+
+    await ctx.seed('seed-step', async () => ({
+      data: {},
+      output: 'Seed output content',
+    }));
+
+    expect(mockCapture).toHaveBeenCalledWith(
+      expect.any(String),
+      'test-plan',
+      'seed-step',
+      'Seed output content'
+    );
+  });
+
+  test('seed() emits step_complete channel event', async () => {
+    const channel = vi.fn();
+    const run = makeRun({ context: { project: 'TST', workstream: '1' } });
+    const ctx = new WorkflowContext(run, db, config, channel, { embedder });
+
+    await ctx.seed('seed-step', async () => ({
+      data: {},
+      output: 'done',
+    }));
+
+    expect(channel).toHaveBeenCalledWith('step_complete', {
+      workflow: run.id,
+      step: 'seed-step',
+      signal: '',
+      taskId: 'seed:seed-step',
+    });
   });
 });
