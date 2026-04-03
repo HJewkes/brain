@@ -21,7 +21,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all tests (Vitest, ~2,350 tests) |
+| `npm test` | Run all tests (Vitest, ~4,035 tests) |
 | `npm run build` | Build with tsup (output: `dist/cli.js`) |
 | `npm run typecheck` | TypeScript type checking |
 | `npm run lint` | ESLint |
@@ -57,7 +57,7 @@ npx tsx src/cli.ts extract --all  # Extract memories (requires Ollama)
 | `hook` | Hook dispatch, status, and install (`dispatch`, `status`, `install`) |
 | `agent` | Agent lifecycle management (`list`, `show`, `migrate-ao`) |
 | `session` | Session intelligence (`list`, `analytics`, `restore`) |
-| `workflow` | Workflow engine (`register`, `observe`, `improve`, `report`) |
+| `workflow` | V2 workflow runtime (start, status, signal via MCP) |
 | `codebase` | Architecture indexing (`index`, `install-hook`) |
 
 ## Architecture
@@ -101,12 +101,16 @@ src/
       engine/           — State machine, routing, dispatch, templates, worktrees, dependencies, consistency
     agents/             — Agent orchestration (lifecycle, worktrees, state, done-handler)
     sessions/           — Session intelligence (capture, restore, briefing, analytics)
-    workflow/           — Workflow engine (definitions, lifecycle, friction, observe, improve)
+    workflow/           — V2 imperative workflow runtime
+      runtime/          — WorkflowRuntime, WorkflowContext, signals, channels, migration
+      flows/            — 6 workflow definitions (planning, implementation, review, brainstorming, pr-lifecycle, ux-prototype)
+      engine/           — Template rendering (dispatch, templates, output-capture)
+      templates/        — 16 agent prompt templates
     codebase/           — Architecture indexing (scanner, notes, post-merge hook)
   hooks/                — Hook dispatch infrastructure
     registry.ts         — HookRegistry with register/dispatch
     config.ts           — resolveHookConfig from ao.config.json
-    checks/             — Core checks (ownership, git-safety, workspace, dod, wip, worktree, workflow-resource)
+    checks/             — Core checks (ownership, git-safety, workspace, dod, wip, worktree, workflow-resource, friction)
   utils/
     template.ts         — Shared template substitution (single/double brace styles)
 ```
@@ -130,7 +134,7 @@ Commands access the DB through `withBrain`/`withDb` helpers in `brain-service.ts
 - **PM Module**: Project/workstream/task management with dependency waves, agent routing, worktree isolation, claim tokens, verification agents, telemetry, and consistency checking
 - **Agent Module**: Agent lifecycle (spawn, track, complete), worktree allocation, extensible context storage, ao migration
 - **Session Module**: Session intelligence with event capture, analytics, restore/resume context, and briefing generation
-- **Workflow Module**: Workflow definitions, lifecycle, friction detection, observation system, and improvement suggestions
+- **Workflow Module**: V2 imperative runtime — TypeScript async workflow functions with memoized dispatch, agent supervision, step output capture, and channel-based push events. 6 registered flows (planning, implementation, review, brainstorming, pr-lifecycle, ux-prototype)
 - **Codebase Module**: Architecture indexing with incremental scanning, note generation, and post-merge hooks
 - **Hook System**: Centralized dispatch for Claude Code hooks (pre-tool-use, session-start, agent-done, etc.) with configurable checks and module handlers
 
@@ -167,12 +171,12 @@ Registered checks:
 - **Definition of Done**: Completion requires passing typecheck + tests + lint
 - **Worktree isolation**: Agents confined to their allocated worktree
 - **Workflow resources**: Tool calls validated against workflow resource allocations
+- **Friction detection**: Blocks consecutive failures of same tool (retry spiral guard)
 
 Module hook handlers:
 - **agents:agent-done**: Marks agents completed, releases worktrees, updates PM
 - **sessions:start**: Creates session record, generates briefing context
 - **sessions:capture**: Captures tool events for session analytics
-- **workflow:friction**: Real-time friction pattern detection
 
 Install hooks: `brain hook install --project` or `brain hook install --user`
 View status: `brain hook status`
