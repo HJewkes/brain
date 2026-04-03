@@ -107,7 +107,7 @@ function resolveStepMode(db: BrainDB, taskId: string): TaskMode | undefined {
   if (!defResult.ok) return undefined;
 
   const step = defResult.data.definition.steps.find((s) => s.id === stepId);
-  return step?.mode;
+  return step?.mode as TaskMode | undefined;
 }
 
 function injectWorkflowContext(db: BrainDB, taskId: string, vars: Record<string, string>): void {

@@ -13,7 +13,7 @@ describe('template resolver', () => {
     expect(names).toContain('implementation-compact');
     expect(names).toContain('review-agent');
     expect(names).toContain('ops');
-    expect(names.length).toBe(18);
+    expect(names.length).toBe(16);
   });
 
   it('resolves template by name without extension', () => {
@@ -77,7 +77,7 @@ describe('template resolver', () => {
 
   it('listTemplates returns info for all templates', () => {
     const templates = listTemplates();
-    expect(templates.length).toBe(18);
+    expect(templates.length).toBe(16);
     for (const t of templates) {
       expect(t.name).toBeTruthy();
       expect(t.content.length).toBeGreaterThan(0);

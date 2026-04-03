@@ -6,6 +6,7 @@ import { dodCheck } from './checks/dod.js';
 import { wipCheck } from './checks/wip.js';
 import { worktreeIsolationCheck } from './checks/worktree-isolation.js';
 import { workflowResourceCheck } from './checks/workflow-resource.js';
+import { frictionHook } from './checks/friction.js';
 import { loadModules } from '../modules/loader.js';
 import { pmModule } from '../modules/pm/index.js';
 import { workflowModule } from '../modules/workflow/index.js';
@@ -34,6 +35,7 @@ export function buildRegistry(): HookRegistry {
   registry.register(wipCheck);
   registry.register(worktreeIsolationCheck);
   registry.register(workflowResourceCheck);
+  registry.register(frictionHook);
   return registry;
 }
 

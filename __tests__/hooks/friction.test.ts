@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  frictionHook,
-  getBuffer,
-  clearBuffer,
-} from '../../../../src/modules/workflow/hooks/friction-hook.js';
-import type { HookInput, HookConfig } from '../../../../src/hooks/types.js';
+import { frictionHook, getBuffer, clearBuffer } from '../../src/hooks/checks/friction.js';
+import type { HookInput, HookConfig } from '../../src/hooks/types.js';
 
 function makeInput(tool: string, error = false): HookInput {
   return {
@@ -24,7 +20,7 @@ describe('frictionHook', () => {
   });
 
   it('has correct metadata', () => {
-    expect(frictionHook.name).toBe('workflow:friction');
+    expect(frictionHook.name).toBe('friction');
     expect(frictionHook.event).toBe('pre-tool-use');
     expect(frictionHook.priority).toBe(90);
     expect(frictionHook.enabled({} as HookConfig)).toBe(true);

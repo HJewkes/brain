@@ -2,11 +2,38 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { NoteRecord } from '../../../types.js';
 import type { Result } from '../../../errors.js';
 import { ok, fail } from '../../../errors.js';
-import type {
-  WorkflowDefinition,
-  WorkflowNoteMetadata,
-  WorkflowInstanceMetadata,
-} from '../types.js';
+// Inline types from deleted types.ts — only used by legacy query functions
+// that dispatch.ts calls (returning empty results for V2 tasks)
+interface WorkflowStep {
+  id: string;
+  name: string;
+  mode?: string;
+}
+interface WorkflowEdge {
+  from: string;
+  to: string;
+  condition?: string;
+}
+interface WorkflowDefinition {
+  name: string;
+  version: number;
+  steps: WorkflowStep[];
+  edges: WorkflowEdge[];
+}
+interface WorkflowNoteMetadata {
+  display_id: string;
+  name: string;
+  version: number;
+  registration_status: 'registered' | 'draft' | 'archived';
+  step_count: number;
+  edge_count: number;
+}
+interface WorkflowInstanceMetadata {
+  workflow_id: string;
+  workflow_version: number;
+  instance_status: 'placeholder' | 'expanding' | 'active' | 'completed' | 'stalled' | 'collapsed';
+  context: Record<string, string>;
+}
 import type { TaskStatus } from '../../pm/types.js';
 
 export function getWorkflowDefinition(

@@ -1,5 +1,5 @@
-import type { HookHandler, HookInput, HookConfig, HookResult } from '../../../hooks/types.js';
-import { hookAllow, hookAllowJson } from '../../../hooks/types.js';
+import type { HookHandler, HookInput, HookConfig, HookResult } from '../types.js';
+import { hookAllow, hookAllowJson } from '../types.js';
 
 const BUFFER_SIZE = 20;
 const REPEATED_FAILURE_THRESHOLD = 3;
@@ -73,7 +73,7 @@ function checkFrictionPatterns(): string | null {
 }
 
 export const frictionHook: HookHandler = {
-  name: 'workflow:friction',
+  name: 'friction',
   event: 'pre-tool-use',
   priority: 90,
 
