@@ -10,8 +10,6 @@ import { readTaskBody } from '../../pm/engine/dispatch.js';
 import { getPmNotes } from '../../pm/data/queries.js';
 import { generateClaim } from '../../pm/engine/claims.js';
 import type { TaskMode } from '../../pm/types.js';
-import { getWorkflowDefinition, getInstanceStepStates } from '../data/queries.js';
-import { injectStepOutputVariables } from './output-capture.js';
 
 export interface DispatchOptions {
   branch?: string;
@@ -47,13 +45,6 @@ const CATEGORY_TO_PREFIX: Record<string, keyof ProjectBranchPrefix> = {
   review: 'feature',
 };
 
-function camelToUpperSnake(key: string): string {
-  return key
-    .replace(/([A-Z])/g, '_$1')
-    .toUpperCase()
-    .replace(/^_/, '');
-}
-
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -86,104 +77,23 @@ function defaultBranchPrefix(key: keyof ProjectBranchPrefix): string {
 function resolveStepMode(db: BrainDB, taskId: string): TaskMode | undefined {
   const taskNotes = getPmNotes(db, 'task', { display_id: taskId });
   if (taskNotes.length === 0) return undefined;
-
-  const taskNote = taskNotes[0];
-  if (!taskNote.metadata) return undefined;
-
-  const taskMeta = JSON.parse(taskNote.metadata) as Record<string, unknown>;
-  const stepId = taskMeta.step_id as string | undefined;
-  if (!stepId) return undefined;
-
-  const incomingRelations = db.getRelationsTo(taskNote.id);
-  const expandsToRel = incomingRelations.find((r) => r.type === 'expands-to');
-  if (!expandsToRel) return undefined;
-
-  const instanceNote = db.getNoteById(expandsToRel.sourceId);
-  if (!instanceNote?.metadata) return undefined;
-
-  const instanceMeta = JSON.parse(instanceNote.metadata) as Record<string, unknown>;
-  const workflowId = instanceMeta.workflow_id as string | undefined;
-  if (!workflowId) return undefined;
-
-  const defResult = getWorkflowDefinition(db, workflowId);
-  if (!defResult.ok) return undefined;
-
-  const step = defResult.data.definition.steps.find((s) => s.id === stepId);
-  return step?.mode as TaskMode | undefined;
+  const meta = taskNotes[0].metadata
+    ? (JSON.parse(taskNotes[0].metadata) as Record<string, unknown>)
+    : {};
+  return (meta.mode as TaskMode) ?? undefined;
 }
 
 function injectWorkflowContext(db: BrainDB, taskId: string, vars: Record<string, string>): void {
   const taskNotes = getPmNotes(db, 'task', { display_id: taskId });
   if (taskNotes.length === 0) return;
 
-  const taskNote = taskNotes[0];
-  if (!taskNote.metadata) return;
+  const meta = taskNotes[0].metadata
+    ? (JSON.parse(taskNotes[0].metadata) as Record<string, unknown>)
+    : {};
 
-  const taskMeta = JSON.parse(taskNote.metadata) as Record<string, unknown>;
-  const stepId = taskMeta.step_id as string | undefined;
-
-  if (stepId) {
-    vars.STEP_ID = stepId;
-  }
-
-  // Find the parent instance via incoming expands-to relation
-  const incomingRelations = db.getRelationsTo(taskNote.id);
-  const expandsToRel = incomingRelations.find((r) => r.type === 'expands-to');
-  if (!expandsToRel) return;
-
-  const instanceNote = db.getNoteById(expandsToRel.sourceId);
-  if (!instanceNote?.metadata) return;
-
-  const instanceMeta = JSON.parse(instanceNote.metadata) as Record<string, unknown>;
-  const instanceDisplayId = instanceMeta.display_id as string | undefined;
-  const workflowId = instanceMeta.workflow_id as string | undefined;
-  const context = instanceMeta.context as Record<string, string> | undefined;
-
-  if (instanceDisplayId) {
-    vars.INSTANCE_ID = instanceDisplayId;
-  }
-
-  if (workflowId) {
-    vars.WORKFLOW_ID = workflowId;
-
-    const defResult = getWorkflowDefinition(db, workflowId);
-    if (defResult.ok) {
-      vars.WORKFLOW_NAME = defResult.data.definition.name;
-    }
-  }
-
-  // Inject instance context params (e.g. planId, researchFocus) into template variables.
-  // Provide both original case and UPPER_SNAKE_CASE for template flexibility (e.g. {{PLAN_ID}}).
-  if (context) {
-    for (const [key, value] of Object.entries(context)) {
-      vars[key] = value;
-      const snakeKey = camelToUpperSnake(key);
-      if (!(snakeKey in vars)) {
-        vars[snakeKey] = value;
-      }
-    }
-  }
-
-  // Inject previous step outputs as template variables
-  if (instanceDisplayId) {
-    const projectDir = resolveProjectDirFromTask(db, taskId);
-    if (projectDir) {
-      const stepsResult = getInstanceStepStates(db, instanceDisplayId);
-      if (stepsResult.ok) {
-        const completedStepIds = stepsResult.data.steps
-          .filter((s) => s.status === 'done')
-          .map((s) => s.stepId);
-        injectStepOutputVariables(projectDir, instanceDisplayId, completedStepIds, vars);
-      }
-    }
-  }
-}
-
-function resolveProjectDirFromTask(db: BrainDB, taskId: string): string | null {
-  const prefix = taskId.split('-')[0];
-  const projectResult = getProject(db, prefix);
-  if (projectResult.ok && projectResult.data.path) return projectResult.data.path;
-  return process.cwd();
+  // V2 runtime passes workflow params and step outputs via extraVars.
+  // This function only injects task-level metadata that the runtime doesn't own.
+  if (meta.step_id) vars.STEP_ID = meta.step_id as string;
 }
 
 export async function dispatchTemplate(
