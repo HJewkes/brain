@@ -1,20 +1,23 @@
-# Research Brief: VNM-42.114
+# Research Brief: VNM-42.159
 
 Plan: bcff4ce1 | Project: VNM
 
-## Existing Code
+## Current Implementation State (as of 2026-04-04)
 
-### MCP Server (`src/server/mcp.ts`)
+All 10 originally-missing tools have been implemented. The MCP server now registers **28 tools** across 7 groups.
 
-Currently registers **17 tools** across 5 groups:
+### Full Tool Inventory (`src/server/mcp.ts`)
 
 | Group | Tools |
 |-------|-------|
 | Search | `brain_search`, `brain_note_read`, `brain_memory_search`, `brain_memory_list` |
-| PM | `brain_pm_task_list`, `brain_pm_task_show`, `brain_pm_task_update`, `brain_pm_next`, `brain_pm_overview` |
-| Session/Agent | `brain_session_list`, `brain_agent_list`, `brain_inbox_add` |
+| Notes | `brain_note_list`, `brain_note_add` |
+| Memory | `brain_memory_add` |
+| PM (core) | `brain_pm_task_list`, `brain_pm_task_show`, `brain_pm_task_update`, `brain_pm_next`, `brain_pm_overview` |
+| PM (ext) | `brain_pm_task_add`, `brain_pm_workstream_list`, `brain_pm_workstream_add`, `brain_pm_wave`, `brain_pm_context`, `brain_pm_capture` |
+| Session/Agent | `brain_session_list`, `brain_agent_list`, `brain_session_show`, `brain_inbox_add` |
 | Dispatch | `brain_agent_dispatch`, `brain_agent_status` |
-| Workflow | `brain_workflow_start`, `brain_workflow_status`, `brain_workflow_signal` |
+| Workflow | `brain_workflow_start`, `brain_workflow_status`, `brain_workflow_signal`, `brain_workflow_events` |
 
 ### Server entry (`src/server/index.ts`)
 
@@ -22,147 +25,65 @@ Currently registers **17 tools** across 5 groups:
 - `startMcpServerWithService()` — combined HTTP+MCP
 - `initV2Runtime()` — registers `WorkflowChannel` push + SSE broadcast
 - SSE broadcast works via `broadcast(sseClients, 'workflow', {...})` — dashboard path is healthy
-- Channel push uses `notifications/claude/channel` — broken in Claude Code
+- Channel push still uses `notifications/claude/channel` (broken in Claude Code) — fire-and-forget
 
-### Channel notification (`src/modules/workflow/runtime/channel.ts`)
+### Channel Notification Status
 
-- `WorkflowChannel.push()` calls `server.server.notification({ method: 'notifications/claude/channel', ... })`
-- GitHub issues #40729, #36802, #41733 confirm these are silently dropped in Claude Code
-- The `WORKFLOW_CHANNEL_INSTRUCTIONS` tells the coordinator to listen for `<channel source="brain" event="...">` tags — never arrives
+**`brain_workflow_events` (implemented)** — Polls `workflow_runs` table directly via `rawDb`:
+- Accepts `instanceId`, `since` (ISO timestamp), `limit`
+- Returns snapshot of workflow runs with cursor for incremental polling
+- Documented as reliable alternative to push notifications
+- `WORKFLOW_CHANNEL_INSTRUCTIONS` still instructs passive listening — could be updated
 
-### Functions available for missing tools
+**`notifications/claude/channel` (broken, kept as-is)** — fire-and-forget via `WorkflowChannel.push()`:
+- GitHub issues #40729, #36802, #41733 confirm silent failures
+- Still emitted but not relied upon
+- No MCP resources (`notifications/resources/list_changed`) were added
 
-**`brain_pm_task_add`**
-- `createTask(db, config, embedder, input: CreateTaskInput)` → `Result<TaskMetadata>`
-- `src/modules/pm/data/task-ops.ts:187`
-- Inputs: `project`, `workstream` (number), `name`, `description` (required), plus optional `mode`, `category`, `priority`, `dependsOn[]`, `dueDate`, `milestone`, `doneWhen`, `acceptanceCriteria[]`, `references[]`
+### What Was NOT Done
 
-**`brain_pm_workstream_list`**
-- `listWorkstreams(db, prefix)` → `Result<WorkstreamMetadata[]>`
-- `src/modules/pm/data/workstream-ops.ts:93` (already imported in `registerPmTools` for `brain_pm_overview`)
+1. **MCP Resources** — `notifications/resources/list_changed` not implemented; no `brain://workflow/{instanceId}` resources registered
+2. **`WORKFLOW_CHANNEL_INSTRUCTIONS` update** — still says "events arrive in real-time, no polling needed" even though polling via `brain_workflow_events` is the actual reliable path
+3. **Event ring buffer** — `brain_workflow_events` queries SQLite `workflow_runs` table (not step events); step-level events (step_complete, step_failed, assisted_step) are NOT persisted and cannot be polled
 
-**`brain_pm_workstream_add`**
-- `createWorkstream(db, config, embedder, input: CreateWorkstreamInput)` → `Result<WorkstreamMetadata>`
-- `src/modules/pm/data/workstream-ops.ts:93`
-- Inputs: `project`, `name`, optional `description`
+## Remaining Gaps
 
-**`brain_pm_context`** (rich task context bundle)
-- `buildAgentDispatchContext(db, taskDisplayId)` → `AgentDispatchContext | null`
-- `src/modules/agents/dispatch-context.ts:49`
-- Returns: task title, body, workstream, prompt, dependencies, decisions, constraints, waveInfo, routing, fileOwnership
+### Gap 1: Step-level events not pollable
 
-**`brain_pm_wave`** (dependency-ordered dispatch waves)
-- `computeWaves(db, prefix)` → `WaveAssignment[]`
-- `src/modules/pm/engine/dependency.ts:191`
-- Returns array of `{ wave: number, taskIds: string[] }` — topological wave grouping
+`brain_workflow_events` returns workflow run rows (`status`, `current_step`) but not discrete step events. The coordinator cannot distinguish `step_complete` from `step_failed` from `assisted_step` via polling — it only sees the current workflow state.
 
-**`brain_pm_capture`** (lightweight intake)
-- `createCapture(db, config, embedder, input: CaptureInput)` → `Result<CaptureRecord>`
-- `src/modules/pm/data/capture-ops.ts:56`
-- Inputs: `content` (required), optional `source`, `project`
-- Distinct from `brain_inbox_add` — PM-aware, writes to `modules/pm/captures/`, indexes
+**Fix needed**: Either:
+- Add a `workflow_step_events` table and log events there, exposed via `brain_workflow_events`
+- Or update `WorkflowRuntime` to maintain an in-memory event log (last N events) exposed via the tool
 
-**`brain_note_add`**
-- No dedicated "add note" service method yet
-- Pattern: write markdown file to `config.notesDir`, call `indexSingleFile(db, embedder, filePath, markdown, hash, mtime)`
-- `src/services/indexing.ts` exports `indexSingleFile`
-- Need to: construct frontmatter, resolve path from `type`+`tier`, write file, index it
-- Simplest approach: write to `~/brain/<type>/<slug>.md`, then index
+### Gap 2: `WORKFLOW_CHANNEL_INSTRUCTIONS` is misleading
 
-**`brain_note_list`**
-- `svc.db.getAllNotes()` → `NoteRecord[]` (all notes, no filtering by module or visibility)
-- Filter by `note.type` and/or `note.tier` in application layer
-- `src/services/repos/note-repo.ts:85`
-- Should exclude PM private notes (filter `module !== 'pm'` or `visibility !== 'private'`) unless caller opts in
+Current instructions say "events arrive in real-time as workflow steps complete. You don't need to poll." This is incorrect — notifications don't arrive in practice.
 
-**`brain_session_show`**
-- `svc.sessionGet(displayId)` → `SessionMetadata | null`
-- Already implemented in `BrainServiceClass` at `src/services/brain-service.ts:171`
-- Not yet exposed as MCP tool
+**Fix needed**: Update instructions to say poll `brain_workflow_events` after each `brain_workflow_signal` or periodically.
 
-**`brain_memory_add`**
-- `svc.db.addMemory(entry: MemoryEntry)` → void
-- `src/services/brain-db.ts:709`
-- Need to construct `MemoryEntry` with required fields: `id`, `memory`, `sourceNoteId`, `sourceChunkId`, `containerTag`, `category`, `isLatest`, `parentMemoryId`, `rootMemoryId`, `relationType`, `validAt`, `invalidAt`, `forgetAfter`, `isForgotten`, `isInference`, `createdAt`
-- Also need to embed and store the vector for search to work
-- `src/services/repos/memory-repo.ts` has `addMemory` with vector upsert logic
+### Gap 3: MCP resources not registered
 
-### Channel notification analysis
+The task description requested MCP resources as one replacement strategy. Resources would allow `notifications/resources/list_changed` to hint the coordinator to re-fetch.
 
-The `notifications/claude/channel` push mechanism is broken for the MCP stdio transport case — Claude Code drops them silently. Two replacement strategies:
+**Fix needed** (optional / lower priority): Register `brain://workflow/runs` as an MCP resource; call `server.sendResourceListChanged()` from `channelPush` lambda.
 
-**Option A: MCP Resources + `notifications/resources/list_changed`**
-- Register a resource: `brain://workflow/events` (or per-instance URIs)
-- On each event, call `server.server.notification({ method: 'notifications/resources/list_changed' })`
-- Claude Code should trigger a resource re-fetch, making the event visible
-- Downside: the coordinator must call `resources/read` to get the event — not a push
+## Recommendations for Implementation Phase
 
-**Option B: `brain_workflow_events` polling tool**
-- Add a tool that returns events since a timestamp or sequence ID
-- Coordinator polls: e.g. `brain_workflow_events({ since: "2024-..." })` returns array of `{ event, meta, timestamp }`
-- Events stored in the `WorkflowRuntime` instance (or SQLite for persistence)
-- No broken notification path; works with any client
-- Coordinator's `WORKFLOW_CHANNEL_INSTRUCTIONS` updated to poll instead of passively receive
+1. **Fix channel instructions** (high value, trivial effort): Update `WORKFLOW_CHANNEL_INSTRUCTIONS` in `channel.ts` — owned by parallel worker, flag to coordinator
+2. **Enhance event polling** (medium value, low effort): Extend `brain_workflow_events` to include step-level events from an in-memory log on `WorkflowRuntime`
+3. **MCP resources** (low priority): Skip or defer; polling tool covers the use case adequately
 
-**Option C: Hybrid (recommended)**
-- Implement Option B (`brain_workflow_events` tool) as the reliable fallback — always works
-- Also attempt Option A resource notification as a hint (best-effort, same fire-and-forget pattern)
-- Coordinator instructions updated: "poll `brain_workflow_events` periodically; treat resource change notifications as polling hints if they arrive"
+## Implementation Ownership
 
-The SSE dashboard path already works and should NOT be changed.
+Files within scope:
+- `src/server/mcp.ts` — owned, all 10 tools already implemented
+- `src/server/index.ts` — owned, SSE path working; `channelPush` lambda could call `sendResourceListChanged()`
 
-## External Findings
-
-- MCP `notifications/resources/list_changed` is part of the MCP spec and should be reliable
-- Claude Code GitHub issues confirm `notifications/claude/channel` is experimental and broken:
-  - #40729: notifications silently dropped in stdio mode
-  - #36802: channel capability not wired in production Claude Code builds
-  - #41733: no error — just silent failure
-- MCP resource subscriptions (`resources/subscribe`) are more reliable than experimental channels
-- The `@modelcontextprotocol/sdk` `McpServer` class supports resource registration via `server.resource()`
+Files needing changes but read-only:
+- `src/modules/workflow/runtime/channel.ts` — update `WORKFLOW_CHANNEL_INSTRUCTIONS`; coordinator must sequence this
 
 ## Knowledge Gaps
 
-1. Whether `notifications/resources/list_changed` actually triggers a coordinator re-read in practice — needs validation
-2. How the runtime should store events for the polling tool (in-memory ring buffer vs SQLite `workflow_events` table vs nothing — just the `stepResults` map)
-3. Whether `brain_note_add` should support URL import (the task description mentions "content/URL") — that's a much heavier operation involving fetch + extraction
-4. Whether `brain_memory_add` needs full embedding on the fast path — may need async option
-5. The `brain_pm_context` tool overlaps with the existing dispatch path in `brain_agent_dispatch` — need clarity on whether it returns the same bundle or a lighter summary
-
-## Recommendations
-
-### CLI-to-MCP Migration
-
-1. **`brain_pm_task_add`** — straightforward: zod schema wrapping `CreateTaskInput`, call `createTask()`, return `Result.data`
-2. **`brain_pm_workstream_list`** — already imported; one-liner wrapping `listWorkstreams()`
-3. **`brain_pm_workstream_add`** — wrap `createWorkstream()`, same pattern as task_add
-4. **`brain_pm_capture`** — wrap `createCapture()`, distinct from `brain_inbox_add` (PM-aware vs generic)
-5. **`brain_pm_context`** — wrap `buildAgentDispatchContext()`, return full `AgentDispatchContext`; import is async (dynamic import needed or move to static)
-6. **`brain_pm_wave`** — wrap `computeWaves()`, takes prefix, returns wave assignments
-7. **`brain_session_show`** — wrap `svc.sessionGet(displayId)`, simplest of all
-8. **`brain_note_list`** — `getAllNotes()` + filter by type/tier; exclude PM private notes by default
-9. **`brain_note_add`** — write file to notesDir + `indexSingleFile()`; start with content-only (skip URL import for now)
-10. **`brain_memory_add`** — construct `MemoryEntry` with UUID; embed via `svc.embedder.embed([memory])` then call `addMemory`
-
-### Channel Notification Fix
-
-- **Primary fix**: Add `brain_workflow_events` polling tool. Store events in a ring buffer on the `WorkflowRuntime` instance (last 500 events, keyed by sequence ID or timestamp). Tool accepts `since` (ISO timestamp or sequence number).
-- **Secondary fix**: Replace `notifications/claude/channel` with `notifications/resources/list_changed` as a best-effort hint. Register `brain://workflow/events` resource.
-- **Update `WORKFLOW_CHANNEL_INSTRUCTIONS`** to instruct polling rather than passive listening.
-- **Do NOT touch the SSE broadcast path** in `src/server/index.ts` — it works for the dashboard.
-
-### Implementation order (suggested for next step)
-
-1. Add simple read-only tools first: `brain_pm_workstream_list`, `brain_session_show`, `brain_pm_wave`, `brain_note_list`
-2. Add write tools: `brain_pm_task_add`, `brain_pm_workstream_add`, `brain_pm_capture`, `brain_memory_add`
-3. Add context bundle: `brain_pm_context` (involves dynamic import of agents module)
-4. Add note creation: `brain_note_add` (file I/O + indexing)
-5. Fix channel: add event ring buffer to runtime, `brain_workflow_events` tool, update instructions
-
-## Suggested Interview Questions
-
-1. Should `brain_note_add` support URL import in this phase, or content-only? URL import requires fetch + extraction pipeline and is much more complex.
-2. For `brain_memory_add`, should embedding happen synchronously (blocking response) or fire-and-forget? The embedding call can take 100-500ms with Ollama.
-3. For `brain_pm_context`, should it return the full `AgentDispatchContext` (same as dispatch path) or a lighter summary? The full context includes file ownership, breaking changes, architecture indexing — is that needed over MCP?
-4. For the `brain_workflow_events` ring buffer, should events persist across server restarts (SQLite) or in-memory only? In-memory is simpler but drops events on restart.
-5. Is there a budget/priority concern about testing `notifications/resources/list_changed` in practice before committing to that path?
+1. Whether `sendResourceListChanged()` is available on `McpServer` (SDK v1.27.1+) — needs verification before implementing
+2. Whether step-level event persistence is needed for current workflow use cases or if run-level polling suffices
