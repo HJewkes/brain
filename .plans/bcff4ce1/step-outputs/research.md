@@ -1,126 +1,212 @@
-# Research: MCP Server Hardening (VNM-42.17)
+# Research Brief: MCP Server Hardening (VNM-42.20)
 
-## Current MCP Tool Inventory (src/server/mcp.ts)
+## Scope
 
-17 tools already registered across 5 groups:
+Two parallel workstreams:
+1. **CLI-to-MCP Migration** — expose 10 new tools in `src/server/mcp.ts`
+2. **Channel Notification Fix** — replace broken `notifications/claude/channel` with reliable alternatives
 
-**Search:** `brain_search`, `brain_note_read`, `brain_memory_search`, `brain_memory_list`  
-**PM:** `brain_pm_task_list`, `brain_pm_task_show`, `brain_pm_task_update`, `brain_pm_next`, `brain_pm_overview`  
-**Session/Agent:** `brain_session_list`, `brain_agent_list`, `brain_inbox_add`  
-**Dispatch:** `brain_agent_dispatch`, `brain_agent_status`  
-**Workflow:** `brain_workflow_start`, `brain_workflow_status`, `brain_workflow_signal`
+---
 
-## Missing Tools — Implementation Mapping
+## Workstream 1: CLI-to-MCP Migration
 
-All 10 have existing backend functions. No new business logic required.
+### Current Tool Inventory (already registered)
 
-| Tool | Backend function | File |
-|------|-----------------|------|
-| `brain_pm_task_add` | `createTask(db, config, embedder, input)` | `src/modules/pm/data/task-ops.ts:187` |
-| `brain_note_add` | `indexSingleFile` + `writeFileSync` | `src/services/indexing.ts:128` |
-| `brain_note_list` | `db.getAllNotes()` filtered by type/tier | `src/services/repos/note-repo.ts:85` |
-| `brain_pm_context` | Compose: `getTask` + `listTasks` (deps) + `getSessionsForTask` + `searchMemories` | Multiple |
-| `brain_pm_wave` | `computeWaves(db, prefix)` | `src/modules/pm/engine/dependency.ts:191` |
-| `brain_pm_capture` | Same as `brain_inbox_add` but with PM tags/metadata | `src/services/brain-db.ts:709` |
-| `brain_pm_workstream_list` | `listWorkstreams(db, prefix)` | `src/modules/pm/data/workstream-ops.ts:136` |
-| `brain_pm_workstream_add` | `createWorkstream(db, config, embedder, input)` | `src/modules/pm/data/workstream-ops.ts:93` |
-| `brain_session_show` | `svc.sessionDetail(displayId)` | `src/services/brain-service.ts:345` |
-| `brain_memory_add` | `svc.db.addMemory(entry)` | `src/services/brain-db.ts:709` |
+`brain_search`, `brain_note_read`, `brain_memory_search`, `brain_memory_list`,
+`brain_pm_task_list`, `brain_pm_task_show`, `brain_pm_task_update`, `brain_pm_next`,
+`brain_pm_overview`, `brain_session_list`, `brain_agent_list`, `brain_inbox_add`,
+`brain_agent_dispatch`, `brain_agent_status`, `brain_workflow_start`,
+`brain_workflow_status`, `brain_workflow_signal`
 
-### Tool-specific notes
+### Missing Tools — Handler Mapping
 
-**brain_pm_task_add** — `CreateTaskInput` requires: `project`, `workstream` (number), `name`, `description`. Optional: `mode`, `category`, `priority`, `dependsOn[]`, `dueDate`, `milestone`, `doneWhen`, `acceptanceCriteria[]`, `references[]`. Function writes a markdown file, indexes it, and returns `Result<TaskMetadata>`.
+#### 1. `brain_pm_task_add`
+- **Handler**: `createTask(db, config, embedder, input: CreateTaskInput)` → `Result<TaskMetadata>`
+- **File**: `src/modules/pm/data/task-ops.ts`
+- **Input schema** (CreateTaskInput):
+  - `project: string` — prefix e.g. "VNM"
+  - `workstream: number` — workstream number
+  - `name: string` — task title
+  - `description: string` — required (tasks without body content are invisible to search)
+  - `mode?: TaskMode` — default 'auto'
+  - `category?: TaskCategory` — default 'implementation'
+  - `priority?: TaskPriority` — default 'medium'
+  - `dependsOn?: string[]` — display IDs e.g. ["VNM-42.19"]
+  - `dueDate?, milestone?, doneWhen?, acceptanceCriteria?, references?`
 
-**brain_note_add** — Needs to write a temp/inbox file then call `indexSingleFile`. Simplest path: write to inbox dir and call `indexSingleFile`. Alternative: reuse `brain_inbox_add` flow (already captures content without indexing). For URL ingestion, the import pipeline exists but is complex; suggest supporting `content` param only in v1, URL as stretch goal.
+#### 2. `brain_note_add`
+- **Handler**: write markdown to file + `indexSingleFile(db, embedder, filePath, content, hash, mtime)`
+- **File**: `src/services/indexing.ts`
+- **Approach**: write to `config.notesDir/<tier>/<type>/<slug>.md`, then index
+- **Input schema**: `{ title: string, content: string, type?: string, tier?: 'fast'|'slow', tags?: string[] }`
+- **Note**: URL import is too complex (extraction pipeline); for URL capture use `brain_inbox_add`
 
-**brain_note_list** — `db.getAllNotes()` returns all `NoteRecord[]`. Filter by `type` and/or `tier` fields. Exclude module-private notes (where `visibility = 'private'` or `module != null`) unless caller opts in. Cap default at 50.
+#### 3. `brain_note_list`
+- **Handler**: `svc.db.getAllNotes()` → `NoteRecord[]`, then filter by type/tier/module
+- **Alt for module notes**: `svc.db.getModuleNoteIds({ module, type })` + `getNotesByIds()`
+- **Input schema**: `{ type?: string, tier?: string, module?: string, limit?: number }`
 
-**brain_pm_context** — Compose in one call:
-1. `getTask(db, displayId)` — task metadata
-2. `listTasks(db, prefix)` filtered by `display_id IN task.depends_on` — blocking tasks
-3. `getSessionsForTask(db, displayId)` — recent sessions
-4. `searchMemories(db, embedder, task.title, 5, containerTag)` — relevant memories
+#### 4. `brain_pm_context`
+- **Handler**: composite — combines task + workstream + sessions + agents
+- **Sources**:
+  - Task: `getTask(db, displayId)`
+  - Workstream: `getWorkstream(db, wsDisplayId)` from `src/modules/pm/data/workstream-ops.ts`
+  - Sessions: `getSessionsForTask(db, displayId)` from `src/modules/sessions/data/session-ops.ts`
+  - Agents: `svc.agentList().filter(a => a.brain_task === displayId)` (client-side filter — listAgents has no brain_task filter)
+  - Body: read task file content
+- **Input schema**: `{ displayId: string }`
 
-**brain_pm_wave** — `computeWaves(db, prefix)` returns `WaveAssignment[]` with `{ wave: number, taskIds: string[] }`. Need to resolve `prefix` from param. Add task metadata enrichment (title, status, priority) per task ID.
+#### 5. `brain_pm_wave`
+- **Handler**: `computeEligible(db, prefix)` from `src/modules/pm/engine/dependency.ts`
+  - Returns `string[]` of display IDs with satisfied dependencies
+  - Already imported in `mcp.ts` (used by `brain_pm_overview`)
+- **Input schema**: `{ prefix?: string, workstream?: string, limit?: number }`
 
-**brain_pm_capture** — Lightweight: same `InboxItem` structure as `brain_inbox_add` but could accept optional `tags` and `project` fields for downstream routing. Functionally identical to `brain_inbox_add`; may be an alias with extended params.
+#### 6. `brain_pm_capture`
+- **Handler**: lighter alias of `brain_pm_task_add` — only `project`, `workstream`, `name`, `description` required
+- **Recommendation**: implement as `brain_pm_task_add` with fewer required fields rather than a separate tool
+  (to avoid duplication, expose this as `brain_pm_task_add` with all optional fields truly optional except description)
 
-**brain_pm_workstream_add** — `createWorkstream` is async (calls `indexSingleFile`). `BrainServiceClass` doesn't wrap it yet — needs direct call with `svc.db`, `svc.config`, `svc.embedder`.
+#### 7. `brain_pm_workstream_list`
+- **Handler**: `listWorkstreams(db, prefix)` → `Result<WorkstreamMetadata[]>`
+- **File**: `src/modules/pm/data/workstream-ops.ts`
+- **Already imported** in `mcp.ts`
+- **Input schema**: `{ prefix?: string }` — auto-resolves to default project if omitted
 
-**brain_session_show** — `svc.sessionDetail(displayId)` exists and returns full `SessionDetailData`. Truncate turns list to avoid huge responses (default last 10).
+#### 8. `brain_pm_workstream_add`
+- **Handler**: `createWorkstream(db, config, embedder, input: CreateWorkstreamInput)` → `Result<WorkstreamMetadata>`
+- **File**: `src/modules/pm/data/workstream-ops.ts`
+- **Input schema**: `{ project: string, name: string, description?: string }`
 
-**brain_memory_add** — `db.addMemory(entry: MemoryEntry)` requires: `id` (UUID), `memory` (string), `sourceNoteId` (nullable), `containerTag` (nullable), `createdAt`, `validUntil` (nullable), `confidence` (nullable). Simple wrapper.
+#### 9. `brain_session_show`
+- **Handler**: `svc.sessionGet(displayId)` → `SessionMetadata | null`
+  - Or `svc.sessionDetail(displayId)` → `SessionDetailData | null` (richer, includes segments/agents)
+- **Input schema**: `{ displayId: string }`
 
-## Channel Notification Analysis
+#### 10. `brain_memory_add`
+- **Handler**: `svc.db.addMemory(entry: MemoryEntry)` + optional embedding via `svc.embedder`
+- **File**: `src/services/brain-db.ts`
+- **Input schema**: `{ memory: string, containerTag?: string, sourceNoteId?: string }`
+- **Approach**: generate UUID, build MemoryEntry, call addMemory, optionally embed and upsertMemoryVector
 
-### Current implementation
-`WorkflowChannel.push()` in `src/modules/workflow/runtime/channel.ts:18` fires:
+---
+
+## Workstream 2: Channel Notification Fix
+
+### Problem
+
+`notifications/claude/channel` (experimental) is silently dropped in Claude Code:
+- GitHub issues #40729, #36802, #41733: notifications not delivered to coordinator session
+
+Current implementation in `src/modules/workflow/runtime/channel.ts`:
+```ts
+this.server.server.notification({ method: 'notifications/claude/channel', params: { content, meta } })
 ```
-notifications/claude/channel  (experimental)
-```
-This is fire-and-forget (`.catch(() => {})`). According to GitHub issues #40729, #36802, #41733, Claude Code silently drops these notifications — they never reach the coordinator session.
+This path is broken for MCP-to-coordinator delivery.
 
-### What works
-The SSE path in `src/server/index.ts:28-38` using `broadcast(sseClients, 'workflow', ...)` works correctly for the dashboard. `channelPush` is a composite that calls both `channel.push()` (MCP) and `broadcast()` (SSE).
+### What Works
 
-### Fix strategy
+The SSE bridge in `src/server/index.ts` works fine (dashboard path). Keep it unchanged.
 
-**Option A: MCP Resources (standards-compliant)**
-- Expose workflow runs as MCP resources: `brain://workflows/{instanceId}`
-- Send `notifications/resources/list_changed` when status changes
-- Coordinator polls `resources/read` on notification
-- Pro: standards-compliant. Con: coordinator must implement resource read logic; list_changed still needs coordinator to act on notification.
+### Solution A: MCP Resources + `notifications/resources/list_changed`
 
-**Option B: Polling tool `brain_workflow_events` (pragmatic)**
-- Maintain an in-memory event log (circular buffer, last N events)
-- Tool accepts `since` (ISO timestamp or sequence number) and returns events since that point
-- Coordinator polls on a schedule or after each tool response
-- Pro: works today, no dependency on notification delivery. Con: coordinator must poll.
+MCP SDK v1.27.1 exposes `server.sendResourceListChanged()` — sends `notifications/resources/list_changed`,
+a **standard** MCP notification that Claude Code reliably delivers.
 
-**Option C: Hybrid (recommended)**
-- Keep `channel.push()` as best-effort (no change to existing code)
-- Add `brain_workflow_events` polling tool for reliable delivery
-- Add MCP resource exposure for workflow runs (triggers `notifications/resources/list_changed`)
-- Coordinator uses polling as primary, treats channel push as acceleration
+**Approach**:
+1. Register workflow runs as resources: `server.resource('workflow-run', new ResourceTemplate('brain://workflow/{instanceId}', { list: ... }), callback)`
+2. On every workflow event: call `server.sendResourceListChanged()`
+3. Coordinator reads current status via `resources/read` on the workflow resource URI
 
-### Event log design for Option B/C
-Store events in `WorkflowRuntime` as an append-only array:
-```typescript
+**Limitation**: runtime is initialized after `createBrainMcpServer()` returns.
+Use same deferred reference pattern as current `getV2Runtime(svc)`.
+
+### Solution B: `brain_workflow_events` Polling Tool
+
+In-memory event log stored in `WorkflowRuntime` (or a thin wrapper), polled by coordinator:
+
+**Event shape**:
+```ts
 interface WorkflowEvent {
-  seq: number;      // monotonic sequence
-  instanceId: string;
-  event: string;    // step_complete | workflow_complete | step_failed | assisted_step
-  meta: Record<string, string>;
-  timestamp: string;
+  id: number           // monotonic counter
+  instanceId: string
+  event: string
+  meta: Record<string, string>
+  timestamp: string
 }
 ```
-`brain_workflow_events(since?: number)` returns events with `seq > since`. Coordinator tracks last seen `seq`.
 
-Cap at 1000 events in memory (rolling window). No DB required.
+**Tool**: `brain_workflow_events({ since?: string, instanceId?: string, limit?: number })`
+- Returns events since `since` (ISO timestamp or numeric event ID)
+- Coordinator tracks `lastTimestamp` and calls every N seconds
 
-## Key Findings
+**Event log management**: cap at 1000 events with FIFO eviction.
 
-1. **10 missing tools are thin wrappers** — all backend functions exist, registration is the only work.
-2. **`brain_note_add` is the most complex** — file write + indexing pipeline; scope to `content` param only.
-3. **`brain_pm_context` needs composition** — 4 parallel queries, no new data access needed.
-4. **`brain_pm_capture` can alias `brain_inbox_add`** with extended params, or be identical.
-5. **Channel notifications are provably broken** — event log + polling tool is the right fix.
-6. **Hybrid approach for notifications** — add `brain_workflow_events` without removing existing push attempt.
-7. **No schema migrations needed** — event log lives in `WorkflowRuntime` memory.
-8. **`BrainServiceClass` needs 3 new wrapper methods** for workstream_add, pm_task_add, pm_wave — to keep MCP handlers thin.
+### Recommendation: Implement Both
 
-## Implementation Order (suggested)
+- **Solution A** (resources + list_changed): push-based, Claude Code delivers it reliably
+- **Solution B** (events polling tool): reliable fallback, also useful for audit/debugging
 
-1. Simple getters first: `brain_note_list`, `brain_pm_workstream_list`, `brain_session_show`, `brain_memory_add`
-2. Composed reads: `brain_pm_context`, `brain_pm_wave`
-3. Mutations: `brain_pm_task_add`, `brain_pm_workstream_add`, `brain_pm_capture`
-4. Write pipeline: `brain_note_add`
-5. Event system: in-memory log in `WorkflowRuntime`, `brain_workflow_events` tool
-6. MCP resource exposure (stretch): workflow runs as resources
+Modified `WorkflowChannel.push()` (in channel.ts — **read-only file**):
+- Cannot modify `channel.ts` directly (owned by another worker)
+- Instead: wire `sendResourceListChanged()` into `channelPush` lambda in `src/server/index.ts`
+- The lambda is defined in `index.ts` (owned by this worker) — add the resource notification call there
 
-## Knowledge Gaps
+---
 
-1. Should `brain_note_list` expose private/module notes (PM tasks, sessions)? Default exclude is safer.
-2. Should `brain_pm_capture` be a distinct tool or just alias `brain_inbox_add`?
-3. For `brain_memory_add` — should `containerTag` be required to avoid orphaned memories?
-4. MCP resources: does Claude Code actually honor `notifications/resources/list_changed` today?
+## Implementation Plan
+
+### Files to modify (within ownership scope):
+- **`src/server/mcp.ts`**: add 10 new tools + resource registration + event log management
+- **`src/server/index.ts`**: add `server.sendResourceListChanged()` call in `channelPush` lambda
+
+### New registration functions to add in `mcp.ts`:
+- `registerNoteTools(server, svc)` — `brain_note_add`, `brain_note_list`
+- `registerPmExtTools(server, svc)` — `brain_pm_task_add`, `brain_pm_capture`, `brain_pm_workstream_list`, `brain_pm_workstream_add`, `brain_pm_context`, `brain_pm_wave`
+- `registerSessionExtTools(server, svc)` — `brain_session_show`
+- `registerMemoryExtTools(server, svc)` — `brain_memory_add`
+- `registerWorkflowResourceTools(server, svc)` — `brain_workflow_events` tool + resource template
+
+### New imports needed in `mcp.ts`:
+```ts
+import { createTask } from '../modules/pm/data/task-ops.js';
+import { createWorkstream, getWorkstream } from '../modules/pm/data/workstream-ops.js';
+import { getSessionsForTask } from '../modules/sessions/data/session-ops.js';
+import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { slugify } from '../utils.js';
+import { createHash } from 'node:crypto';
+import { indexSingleFile } from '../services/indexing.js';
+```
+
+### Event log wiring in `index.ts`:
+```ts
+// In initV2Runtime, after server.connect() is called, add to channelPush:
+channelPush: (event, meta) => {
+  channel.push(event, meta);          // existing (broken for MCP)
+  eventLog.push({ ... });             // new: in-memory log
+  server.sendResourceListChanged();   // new: standard MCP notification
+  if (sseClients?.size) { ... }       // existing (SSE dashboard)
+}
+```
+
+---
+
+## Key Risks
+
+1. **`brain_note_add` path resolution**: must derive file path from type/tier config.
+   `config.notesDir` is `~/brain/` (not the project repo). Follow same convention as index command.
+
+2. **`brain_pm_context` agent filter**: `listAgents` has no `brain_task` filter — filter client-side.
+
+3. **Resource notification timing**: `sendResourceListChanged()` is called inside `channelPush`
+   which fires after `server.connect()` — transport is alive, so this is safe.
+
+4. **Event log memory**: cap at 1000 events FIFO. No persistence needed (in-memory).
+
+5. **`brain_pm_capture` vs `brain_pm_task_add`**: recommend collapsing into one tool
+   with fewer required fields, to avoid duplicate tool confusion for LLMs.
+
+6. **`listWorkstreams` already imported**: `mcp.ts` already imports it for `brain_pm_overview`.
+   `brain_pm_workstream_list` just needs to expose it as a dedicated tool.
