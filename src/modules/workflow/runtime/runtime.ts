@@ -3,7 +3,7 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { WorkflowFn, WorkflowRun, StepResult } from './types.js';
 import { WorkflowContext } from './context.js';
-import { findAgentByTask } from '../../agents/data.js';
+import { findAgentByTask, getAgentContext } from '../../agents/data.js';
 import { parseSignals } from './signals.js';
 
 /** Row shape returned from the workflow_runs table. */
@@ -34,6 +34,12 @@ function isProcessAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+/** Get the full agent output for signal parsing. Falls back to summary. */
+function getAgentOutput(db: BrainDB, agentId: string, summary: string | null): string {
+  const fullOutput = getAgentContext(db, agentId, 'full_output') as string | undefined;
+  return fullOutput ?? summary ?? '';
 }
 
 function deserializeRun(row: WorkflowRunRow): WorkflowRun {
@@ -180,7 +186,7 @@ export class WorkflowRuntime {
       const stepId = run.activeAgent.stepId;
       const iter = this.currentIteration(run, stepId);
       const iterKey = `${stepId}:${iter}`;
-      const output = agent.summary ?? '';
+      const output = getAgentOutput(this.db, agent.id, agent.summary);
 
       run.stepResults[iterKey] = {
         stepId,
@@ -290,7 +296,7 @@ export class WorkflowRuntime {
         // The PID disappears on normal exit too — don't confuse success with failure.
         const agentRecord = findAgentByTask(this.db, agent.taskId);
         if (agentRecord?.status === 'completed') {
-          const output = agentRecord.summary ?? '';
+          const output = getAgentOutput(this.db, agentRecord.id, agentRecord.summary);
           workflow.ctx.resolveAgent(agent.stepId, output);
         } else {
           workflow.ctx.handleAgentDeath(agent);

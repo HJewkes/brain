@@ -378,7 +378,9 @@ export class WorkflowContext {
       workstream,
       name: `${this.workflowName}:${stepId} (run ${this.runId.slice(0, 8)})`,
       category: 'implementation',
-      description: `Workflow step: ${stepId} for ${this.workflowName}`,
+      description: this._context.brief
+        ? `${this._context.brief}\n\n(Workflow: ${this.workflowName}, step: ${stepId})`
+        : `Workflow step: ${stepId} for ${this.workflowName}`,
       mode: 'agent',
     });
 
@@ -495,6 +497,12 @@ export class WorkflowContext {
 
     vars.WORKFLOW_NAME = this.workflowName;
     vars.INSTANCE_ID = this.runId.slice(0, 8);
+
+    // Override TASK_DESCRIPTION with the brief so templates get the real
+    // objective rather than the generic "Workflow step: X" from the task body
+    if (this._context.brief) {
+      vars.TASK_DESCRIPTION = this._context.brief;
+    }
 
     // Inject completed step outputs
     const parts: string[] = [];
