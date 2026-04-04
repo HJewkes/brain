@@ -146,7 +146,10 @@ describe('releaseWorkflowTasks', () => {
     vi.mocked(updateTaskStatus).mockClear();
     vi.mocked(updateTaskStatus)
       .mockRejectedValueOnce(new Error('task not found'))
-      .mockResolvedValueOnce({ ok: true, data: { status: 'pending' } } as any);
+      .mockResolvedValueOnce({
+        ok: true as const,
+        data: { status: 'pending' } as Record<string, unknown>,
+      });
 
     const run = makeRun({
       stepResults: {
