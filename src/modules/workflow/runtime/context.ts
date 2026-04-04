@@ -498,10 +498,11 @@ export class WorkflowContext {
     vars.WORKFLOW_NAME = this.workflowName;
     vars.INSTANCE_ID = this.runId.slice(0, 8);
 
-    // Override TASK_DESCRIPTION with the brief so templates get the real
-    // objective rather than the generic "Workflow step: X" from the task body
+    // Override TASK_DESCRIPTION and RESEARCH_FOCUS with the brief so templates
+    // get the real objective rather than the generic "Workflow step: X" task body
     if (this._context.brief) {
       vars.TASK_DESCRIPTION = this._context.brief;
+      vars.RESEARCH_FOCUS = this._context.brief;
     }
 
     // Inject completed step outputs

@@ -149,16 +149,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    expect(llmSteps(ctx)).toEqual([
-      'research',
-      'interview',
-      'design',
-      'critic',
-      'spec-tests',
-      'decompose',
-      'implement',
-      'review',
-    ]);
+    expect(llmSteps(ctx)).toEqual(['research', 'interview', 'design', 'critic', 'spec-tests']);
 
     // Verify correct methods (offset by 1 for seed step)
     const llmCalls = ctx.calls.filter((c) => c.method !== 'seed');
@@ -182,10 +173,10 @@ describe('planningWorkflow — flow logic', () => {
       stepId: 'critic',
       template: 'planning-critic',
     });
-    expect(llmCalls[7]).toEqual({
+    expect(llmCalls[4]).toEqual({
       method: 'dispatch',
-      stepId: 'review',
-      template: 'review-agent',
+      stepId: 'spec-tests',
+      template: 'planning-spectests',
     });
   });
 
@@ -194,15 +185,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    expect(llmSteps(ctx)).toEqual([
-      'research',
-      'design',
-      'critic',
-      'spec-tests',
-      'decompose',
-      'implement',
-      'review',
-    ]);
+    expect(llmSteps(ctx)).toEqual(['research', 'design', 'critic', 'spec-tests']);
 
     // No assisted calls (excluding seed)
     const llmCalls = ctx.calls.filter((c) => c.method !== 'seed');
@@ -214,14 +197,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    expect(llmSteps(ctx)).toEqual([
-      'design',
-      'critic',
-      'spec-tests',
-      'decompose',
-      'implement',
-      'review',
-    ]);
+    expect(llmSteps(ctx)).toEqual(['design', 'critic', 'spec-tests']);
   });
 
   test('defaults to high complexity when param is missing', async () => {
@@ -249,9 +225,6 @@ describe('planningWorkflow — flow logic', () => {
       'design', // loop design (iter 1)
       'critic', // loop critic (iter 1) -> null (approved)
       'spec-tests',
-      'decompose',
-      'implement',
-      'review',
     ]);
 
     expect(ctx.iteration('design')).toBe(2);
@@ -294,9 +267,6 @@ describe('planningWorkflow — flow logic', () => {
       'design', // re-design
       'critic', // re-critic
       'spec-tests',
-      'decompose',
-      'implement',
-      'review',
     ]);
 
     // research ran once (low complexity skipped it initially, then re-research)
@@ -336,9 +306,6 @@ describe('planningWorkflow — flow logic', () => {
       'design', // re-design (iter 2)
       'critic', // re-critic (iter 2)
       'spec-tests',
-      'decompose',
-      'implement',
-      'review',
     ]);
   });
 
@@ -372,9 +339,6 @@ describe('planningWorkflow — flow logic', () => {
     expect(calledSteps).toContain('design');
     expect(calledSteps).toContain('critic');
     expect(calledSteps).toContain('spec-tests');
-    expect(calledSteps).toContain('decompose');
-    expect(calledSteps).toContain('implement');
-    expect(calledSteps).toContain('review');
   });
 
   test('restart recovery: cached design+critic skip, remaining steps run', async () => {
@@ -402,7 +366,7 @@ describe('planningWorkflow — flow logic', () => {
     const llm = calledSteps.filter((s) => s !== 'seed');
     expect(llm).not.toContain('design');
     expect(llm).not.toContain('critic');
-    expect(llm).toEqual(['spec-tests', 'decompose', 'implement', 'review']);
+    expect(llm).toEqual(['spec-tests']);
   });
 });
 
@@ -692,7 +656,7 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
     runtime.register('planning', planningWorkflow);
     await runtime.hydrate();
 
-    // Resolve remaining agents (spec-tests, decompose, implement, review)
+    // Resolve remaining agents (spec-tests)
     const resolveAllAgents = async () => {
       const maxSteps = 20;
       let steps = 0;
@@ -719,8 +683,8 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
     });
 
     // Verify design and critic were NOT re-dispatched (check that createTask
-    // was only called for the 4 remaining steps, not 6)
+    // was only called for the 1 remaining step: spec-tests)
     const { createTask } = await import('../../../../src/modules/pm/data/task-ops.js');
-    expect(createTask).toHaveBeenCalledTimes(4);
+    expect(createTask).toHaveBeenCalledTimes(1);
   });
 });

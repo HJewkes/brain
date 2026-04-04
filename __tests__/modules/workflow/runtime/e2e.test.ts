@@ -512,9 +512,6 @@ describe('AC-10: planningWorkflow low complexity runs to completion', () => {
     expect(status.stepResults['design:0']).toBeDefined();
     expect(status.stepResults['critic:0']).toBeDefined();
     expect(status.stepResults['spec-tests:0']).toBeDefined();
-    expect(status.stepResults['decompose:0']).toBeDefined();
-    expect(status.stepResults['implement:0']).toBeDefined();
-    expect(status.stepResults['review:0']).toBeDefined();
   });
 });
 
