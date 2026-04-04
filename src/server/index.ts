@@ -7,10 +7,13 @@ import {
   WorkflowChannel,
   WORKFLOW_CHANNEL_INSTRUCTIONS,
 } from '../modules/workflow/runtime/channel.js';
+import type { SseClients } from '../commands/serve-http.js';
+import { broadcast } from '../commands/serve-http.js';
 
 async function initV2Runtime(
   svc: BrainServiceClass,
-  server: ReturnType<typeof createBrainMcpServer>
+  server: ReturnType<typeof createBrainMcpServer>,
+  sseClients?: SseClients
 ): Promise<{ stopReconciler: () => void }> {
   const { WorkflowRuntime } = await import('../modules/workflow/runtime/runtime.js');
   const { workflows } = await import('../modules/workflow/flows/index.js');
@@ -22,7 +25,17 @@ async function initV2Runtime(
     db: svc.db,
     config: svc.config,
     embedder: svc.embedder,
-    channelPush: (event: string, meta: Record<string, string>) => channel.push(event, meta),
+    channelPush: (event: string, meta: Record<string, string>) => {
+      channel.push(event, meta);
+      if (sseClients?.size) {
+        try {
+          broadcast(sseClients, 'workflow', { event, ...meta });
+          broadcast(sseClients, 'refresh', {});
+        } catch {
+          // SSE broadcast failure is non-fatal
+        }
+      }
+    },
   });
 
   for (const [name, fn] of Object.entries(workflows)) {
@@ -64,13 +77,14 @@ export async function startMcpServer(resolveOpts?: ResolveOptions): Promise<void
 /** Start MCP server with an existing service instance. Used by `brain serve` (HTTP + MCP). */
 export async function startMcpServerWithService(
   svc: BrainServiceClass,
-  onShutdown?: () => void
+  onShutdown?: () => void,
+  sseClients?: SseClients
 ): Promise<void> {
   const server = createBrainMcpServer(svc, {
     channelInstructions: WORKFLOW_CHANNEL_INSTRUCTIONS,
   });
 
-  const runtime = await initV2Runtime(svc, server);
+  const runtime = await initV2Runtime(svc, server, sseClients);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

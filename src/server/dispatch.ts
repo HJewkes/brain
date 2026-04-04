@@ -454,6 +454,11 @@ async function handleProcessExit(
     });
   }
 
+  // Store full agent output for signal parsing (critic verdicts, etc.)
+  if (result?.result) {
+    setAgentContext(svc.db, agentId, 'full_output', result.result);
+  }
+
   if (result) {
     setAgentContext(svc.db, agentId, 'claude_result', {
       duration_ms: result.duration_ms,

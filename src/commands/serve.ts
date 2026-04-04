@@ -198,7 +198,7 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
 
   // Use the full MCP server (with workflow tools) instead of the subset
   const { startMcpServerWithService } = await import('../server/index.js');
-  await startMcpServerWithService(service, shutdown);
+  await startMcpServerWithService(service, shutdown, sseClients);
 }
 
 export const serveCommand = new Command('serve')
