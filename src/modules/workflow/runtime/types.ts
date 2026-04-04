@@ -1,5 +1,8 @@
 /** Workflow runtime type definitions. */
 
+import type { BrainDB } from '../../../services/brain-db.js';
+import type { BrainConfig, Embedder } from '../../../types.js';
+
 export type WorkflowStatus = 'running' | 'completed' | 'failed' | 'paused';
 
 export interface StepResult {
@@ -42,6 +45,13 @@ export interface WorkflowContext {
   workflowName: string;
   project: string;
   projectDir: string;
+
+  /** Database instance (available in runtime, absent in tests). */
+  readonly db?: BrainDB;
+  /** Brain configuration (available in runtime, absent in tests). */
+  readonly config?: BrainConfig;
+  /** Embedder instance (available in runtime, absent in tests). */
+  readonly embedder?: Embedder;
 
   /** Read a workflow parameter. */
   param(key: string): string | undefined;

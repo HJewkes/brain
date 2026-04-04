@@ -93,3 +93,47 @@ describe('parseSignals', () => {
     );
   });
 });
+
+// --- Bold markdown variant tests ---
+
+describe('parseSignals — bold markdown variants', () => {
+  test('needs_revision matches lowercase verdict with bold markdown', () => {
+    const output = 'verdict: **NEEDS REVISION**\n\nSee issues below.';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+
+  test('needs_revision matches standalone bold markdown', () => {
+    const output = 'The design has issues.\n\n**NEEDS REVISION**\n\nPlease fix.';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+
+  test('needs_revision still matches heading format', () => {
+    const output = '## Verdict: NEEDS REVISION\n\nFeedback here.';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+
+  test('approved matches lowercase verdict with bold PASS', () => {
+    const output = 'verdict: **PASS**\n\nLooks good.';
+    expect(parseSignals('critic', 'planning', output)).toBe('approved');
+  });
+
+  test('approved matches standalone bold PASS', () => {
+    const output = 'Overall assessment:\n\n**PASS**';
+    expect(parseSignals('critic', 'planning', output)).toBe('approved');
+  });
+
+  test('approved matches standalone bold READY', () => {
+    const output = 'Design review:\n\n**READY**\n\nShip it.';
+    expect(parseSignals('critic', 'planning', output)).toBe('approved');
+  });
+
+  test('needs_fixes matches lowercase verdict with bold NEEDS WORK', () => {
+    const output = 'verdict: **NEEDS WORK**\n\nSeveral issues found.';
+    expect(parseSignals('review', 'planning', output)).toBe('needs_fixes');
+  });
+
+  test('needs_fixes matches standalone bold NEEDS WORK', () => {
+    const output = 'Review result:\n\n**NEEDS WORK**';
+    expect(parseSignals('review', 'planning', output)).toBe('needs_fixes');
+  });
+});
