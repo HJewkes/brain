@@ -18,7 +18,7 @@
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
-    "build": "tsup && mkdir -p dist/templates dist/definitions && cp src/modules/workflow/templates/*.md dist/templates/ && cp src/modules/workflow/definitions/*.json dist/definitions/ && npm run build:dashboard",
+    "build": "tsup && mkdir -p dist/templates && cp src/modules/workflow/templates/*.md dist/templates/ && npm run build:dashboard",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run --project unit",
