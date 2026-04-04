@@ -57,9 +57,13 @@ export const ownershipCheck: HookHandler = {
     const filePath = toolInput?.file_path;
     if (!filePath) return hookAllow();
 
+    // Only enforce ownership for dispatched agents (AGENT_NAME set).
+    // The main interactive session should be unrestricted.
+    const agentName = process.env.AGENT_NAME;
+    if (!agentName) return hookAllow();
+
     const manifest = loadOwnershipManifest(resolve(input.cwd, config.ownershipManifest));
     const relPath = relative(input.cwd, filePath);
-    const agentName = process.env.AGENT_NAME ?? 'default';
 
     if (isFileOwned(agentName, relPath, manifest)) return hookAllow();
 

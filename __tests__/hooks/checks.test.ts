@@ -440,9 +440,29 @@ describe('ownership check', () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it('blocks writes outside owned paths', () => {
-    const manifest = { agents: { default: { paths: ['src/'] } } };
+  it('allows all writes from main session (no AGENT_NAME)', () => {
+    const manifest = { agents: { worker: { paths: ['src/'] } } };
     writeFileSync(join(tmpDir, '.claude', 'ownership.json'), JSON.stringify(manifest));
+    delete process.env.AGENT_NAME;
+
+    const config: HookConfig = {
+      ...DEFAULT_HOOK_CONFIG,
+      enforcement: { ...DEFAULT_HOOK_CONFIG.enforcement, ownership: true },
+    };
+    const result = ownershipCheck.run(
+      makeInput(
+        { tool_name: 'Write', tool_input: { file_path: join(tmpDir, 'docs/readme.md') } },
+        tmpDir
+      ),
+      config
+    );
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('blocks writes outside owned paths for dispatched agents', () => {
+    const manifest = { agents: { worker: { paths: ['src/'] } } };
+    writeFileSync(join(tmpDir, '.claude', 'ownership.json'), JSON.stringify(manifest));
+    process.env.AGENT_NAME = 'worker';
 
     const config: HookConfig = {
       ...DEFAULT_HOOK_CONFIG,
@@ -456,11 +476,13 @@ describe('ownership check', () => {
       config
     );
     expect(result.exitCode).toBe(2);
+    delete process.env.AGENT_NAME;
   });
 
-  it('allows writes inside owned paths', () => {
-    const manifest = { agents: { default: { paths: ['src/'] } } };
+  it('allows writes inside owned paths for dispatched agents', () => {
+    const manifest = { agents: { worker: { paths: ['src/'] } } };
     writeFileSync(join(tmpDir, '.claude', 'ownership.json'), JSON.stringify(manifest));
+    process.env.AGENT_NAME = 'worker';
 
     const config: HookConfig = {
       ...DEFAULT_HOOK_CONFIG,
@@ -474,6 +496,7 @@ describe('ownership check', () => {
       config
     );
     expect(result.exitCode).toBe(0);
+    delete process.env.AGENT_NAME;
   });
 
   it('skips non-write tools', () => {
@@ -489,8 +512,9 @@ describe('ownership check', () => {
   });
 
   it('treats Edit tool as a write tool', () => {
-    const manifest = { agents: { default: { paths: ['src/'] } } };
+    const manifest = { agents: { worker: { paths: ['src/'] } } };
     writeFileSync(join(tmpDir, '.claude', 'ownership.json'), JSON.stringify(manifest));
+    process.env.AGENT_NAME = 'worker';
 
     const config: HookConfig = {
       ...DEFAULT_HOOK_CONFIG,
@@ -504,6 +528,7 @@ describe('ownership check', () => {
       config
     );
     expect(result.exitCode).toBe(2);
+    delete process.env.AGENT_NAME;
   });
 
   it('allows writes when no file_path in tool input', () => {
@@ -519,8 +544,9 @@ describe('ownership check', () => {
   });
 
   it('includes agent name and allowed paths in block message', () => {
-    const manifest = { agents: { default: { paths: ['src/'] } } };
+    const manifest = { agents: { worker: { paths: ['src/'] } } };
     writeFileSync(join(tmpDir, '.claude', 'ownership.json'), JSON.stringify(manifest));
+    process.env.AGENT_NAME = 'worker';
 
     const config: HookConfig = {
       ...DEFAULT_HOOK_CONFIG,
@@ -534,8 +560,9 @@ describe('ownership check', () => {
       config
     );
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain('default');
+    expect(result.stderr).toContain('worker');
     expect(result.stderr).toContain('src/');
+    delete process.env.AGENT_NAME;
   });
 });
 
