@@ -26,6 +26,7 @@ import { existsSync, rmSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { WorkflowFn } from '../runtime/types.js';
 import { buildPlanningSeed } from './planning-seed.js';
+import { buildPlanningCompletion } from './planning-completion.js';
 
 export const planningWorkflow: WorkflowFn = async (ctx) => {
   const brief = ctx.param('brief');
@@ -92,4 +93,22 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
 
   // Spec tests validate the acceptance criteria
   await ctx.dispatch('spec-tests', 'planning-spectests');
+
+  // Completion phase — ingest plan artifacts into brain and create implementation task
+  if (ctx.db && ctx.config && ctx.embedder) {
+    await ctx.seed(
+      'completion',
+      buildPlanningCompletion({
+        projectDir: ctx.projectDir,
+        planId,
+        brief,
+        workflowName: 'planning',
+        project: ctx.project,
+        workstream: parseInt(ctx.param('workstream') ?? '1', 10),
+        db: ctx.db,
+        config: ctx.config,
+        embedder: ctx.embedder,
+      })
+    );
+  }
 };
