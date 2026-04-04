@@ -1,17 +1,24 @@
 /**
- * Planning workflow — imperative port of planning-workflow.json.
+ * Planning workflow — produces design artifacts for a feature.
  *
- * Steps: seed → research → interview → design ⇄ critic → spec-tests → decompose → implement → review
+ * Steps: seed → research → interview → design ⇄ critic → spec-tests
+ *
+ * Outputs (written to .plans/<planId>/):
+ *   - pre-existing-context.md (seed)
+ *   - research-brief.md (research agent)
+ *   - spec.md, design.md, acceptance-criteria.md (design agent)
+ *   - critic-report.md (critic agent)
  *
  * Parameters:
+ *   brief: REQUIRED — what to build (injected as RESEARCH_FOCUS and priorContext)
  *   complexity: 'low' | 'medium' | 'high' (default 'high')
  *     - low:    skip research and interview
  *     - medium: skip interview
  *     - high:   full pipeline including assisted interview
- *   planId: optional plan identifier
+ *   planId: plan identifier (defaults to run ID prefix)
  *   brainNotes: comma-separated note slugs for pre-existing context
  *   files: comma-separated file paths for pre-existing context
- *   priorContext: free-text prior research/decisions
+ *   priorContext: free-text prior research/decisions (defaults to brief)
  *   interviewAnswers: pre-filled interview responses
  */
 
@@ -41,7 +48,6 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
   mkdirSync(planDir, { recursive: true });
 
   // Seed phase — gather pre-existing context (deterministic, no LLM)
-  // Brief is always available (validated above), so seed always runs
   const priorContext = ctx.param('priorContext') ?? brief;
   await ctx.seed(
     'seed',
@@ -68,7 +74,7 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
     await ctx.assisted('interview', 'planning-interview');
   }
 
-  // Design -> Critic revision loop (max 3 iterations per JSON gates)
+  // Design → Critic revision loop (max 3 iterations)
   await ctx.dispatch('design', 'planning-design');
   let critic = await ctx.dispatch('critic', 'planning-critic');
 
@@ -84,9 +90,6 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
     await ctx.dispatch('critic', 'planning-critic');
   }
 
-  // Linear completion steps
+  // Spec tests validate the acceptance criteria
   await ctx.dispatch('spec-tests', 'planning-spectests');
-  await ctx.dispatch('decompose', 'planning-decompose');
-  await ctx.dispatch('implement', 'implementation-compact');
-  await ctx.dispatch('review', 'review-agent');
 };

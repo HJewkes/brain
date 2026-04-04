@@ -32,6 +32,12 @@ Read `{{REPO_PATH}}/.plans/{{PLAN_ID}}/research-brief.md` for context gathered d
 
 {{INTERVIEW_ANSWERS}}
 
+### Prior Step Outputs (fallback)
+
+If the research brief file is missing, use the outputs below (captured from prior workflow steps):
+
+{{PREVIOUS_STEP_OUTPUTS}}
+
 ### Task Description
 
 {{TASK_DESCRIPTION}}
