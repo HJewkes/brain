@@ -47,6 +47,7 @@ vi.mock('../../../../src/modules/agents/data.js', async (importOriginal) => {
   return {
     ...actual,
     findAgentByTask: vi.fn().mockReturnValue(null),
+    getAgentContext: vi.fn().mockReturnValue(undefined),
   };
 });
 

@@ -15,6 +15,8 @@
  *   interviewAnswers: pre-filled interview responses
  */
 
+import { existsSync, rmSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { WorkflowFn } from '../runtime/types.js';
 import { buildPlanningSeed } from './planning-seed.js';
 
@@ -29,6 +31,14 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
 
   const complexity = ctx.param('complexity') ?? 'high';
   const explicitSkipResearch = ctx.param('skipResearch') === 'true';
+  const planId = ctx.param('planId') ?? ctx.runId.slice(0, 8);
+
+  // Clean plan directory to prevent prior run artifacts from polluting this run
+  const planDir = resolve(ctx.projectDir, '.plans', planId);
+  if (existsSync(planDir)) {
+    rmSync(planDir, { recursive: true, force: true });
+  }
+  mkdirSync(planDir, { recursive: true });
 
   // Seed phase — gather pre-existing context (deterministic, no LLM)
   // Brief is always available (validated above), so seed always runs
@@ -37,7 +47,7 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
     'seed',
     buildPlanningSeed({
       projectDir: ctx.projectDir,
-      planId: ctx.param('planId') ?? ctx.runId.slice(0, 8),
+      planId,
       brainNotes: ctx.param('brainNotes'),
       files: ctx.param('files'),
       priorContext,
