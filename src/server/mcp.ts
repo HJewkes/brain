@@ -1,15 +1,19 @@
-import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { randomUUID, createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { BrainServiceClass } from '../services/brain-service.js';
-import type { InboxItem } from '../types.js';
+import type { InboxItem, MemoryEntry, MemoryCategory } from '../types.js';
 import { searchMemories } from '../services/search.js';
-import { getTask, listTasks } from '../modules/pm/data/task-ops.js';
+import { indexSingleFile } from '../services/indexing.js';
+import { slugify } from '../utils.js';
+import { getTask, listTasks, createTask } from '../modules/pm/data/task-ops.js';
 import { updateTaskStatus } from '../modules/pm/data/task-ops.js';
-import { listWorkstreams } from '../modules/pm/data/workstream-ops.js';
-import { computeEligible } from '../modules/pm/engine/dependency.js';
-import { resolveProject } from '../modules/pm/data/queries.js';
+import { listWorkstreams, createWorkstream } from '../modules/pm/data/workstream-ops.js';
+import { computeEligible, computeWaves } from '../modules/pm/engine/dependency.js';
+import { resolveProject, getPmNotes } from '../modules/pm/data/queries.js';
+import { readTaskBody } from '../modules/pm/engine/dispatch.js';
 import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents } from '../modules/agents/data.js';
@@ -242,6 +246,295 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
   );
 }
 
+function registerNoteTools(server: McpServer, svc: BrainServiceClass): void {
+  const TYPE_DIRS: Record<string, string> = {
+    note: 'notes',
+    decision: 'decisions',
+    research: 'research',
+    pattern: 'patterns',
+    guide: 'guides',
+    workflow: 'workflows',
+  };
+
+  server.tool(
+    'brain_note_list',
+    'List notes, optionally filtered by type or tier',
+    {
+      type: z.string().optional().describe('Filter by type (note, research, guide, etc.)'),
+      tier: z.string().optional().describe('Filter by tier (slow, fast)'),
+      limit: z.number().optional().describe('Max results (default 50)'),
+    },
+    async ({ type, tier, limit }) => {
+      const all = svc.db.getAllNotes();
+      let filtered = all;
+      if (type) filtered = filtered.filter((n) => n.type === type);
+      if (tier) filtered = filtered.filter((n) => n.tier === tier);
+      return textResult(
+        filtered.slice(0, limit ?? 50).map((n) => ({
+          id: n.id,
+          title: n.title,
+          type: n.type,
+          tier: n.tier,
+          filePath: n.filePath,
+          summary: n.summary,
+        }))
+      );
+    }
+  );
+
+  server.tool(
+    'brain_note_add',
+    'Create a new note from content and index it in the knowledge base',
+    {
+      title: z.string().describe('Note title'),
+      content: z.string().describe('Note body content in markdown'),
+      type: z
+        .enum(['note', 'decision', 'research', 'pattern', 'guide', 'workflow'])
+        .optional()
+        .describe('Note type (default: note)'),
+      tier: z.enum(['slow', 'fast']).optional().describe('Storage tier (default: slow)'),
+      tags: z.array(z.string()).optional().describe('List of tags'),
+      summary: z.string().optional().describe('Short summary of the note'),
+    },
+    async ({ title, content, type, tier, tags, summary }) => {
+      const noteType = type ?? 'note';
+      const noteTier = tier ?? 'slow';
+      const id = slugify(title);
+      const now = new Date().toISOString().slice(0, 10);
+      const typeDir = TYPE_DIRS[noteType] ?? 'notes';
+      const outPath = join(svc.config.notesDir, typeDir, `${id}.md`);
+
+      const lines = [
+        '---',
+        `id: ${id}`,
+        `title: "${title}"`,
+        `type: ${noteType}`,
+        `tier: ${noteTier}`,
+      ];
+      if (tags?.length) lines.push(`tags: [${tags.join(', ')}]`);
+      if (summary) lines.push(`summary: "${summary}"`);
+      lines.push(`created: ${now}`, `modified: ${now}`, '---');
+
+      const markdown = lines.join('\n') + '\n\n# ' + title + '\n\n' + content;
+      const dir = dirname(outPath);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(outPath, markdown, 'utf-8');
+
+      const hash = createHash('sha256').update(markdown).digest('hex');
+      const noteId = await indexSingleFile(
+        svc.db,
+        svc.embedder,
+        outPath,
+        markdown,
+        hash,
+        Date.now()
+      );
+      return textResult({ noteId, filePath: outPath, title, type: noteType, tier: noteTier });
+    }
+  );
+}
+
+function registerMemoryTools(server: McpServer, svc: BrainServiceClass): void {
+  server.tool(
+    'brain_memory_add',
+    'Add a memory directly to the knowledge base',
+    {
+      memory: z.string().describe('Memory content to store'),
+      containerTag: z
+        .string()
+        .optional()
+        .describe('Container tag for namespacing (e.g. session:SES-01)'),
+      category: z.string().optional().describe('Memory category'),
+      sourceNoteId: z.string().optional().describe('Source note ID this memory derives from'),
+    },
+    async ({ memory, containerTag, category, sourceNoteId }) => {
+      const now = new Date().toISOString();
+      const entry: MemoryEntry = {
+        id: randomUUID(),
+        memory,
+        sourceNoteId: sourceNoteId ?? '',
+        sourceChunkId: null,
+        containerTag: containerTag ?? '',
+        category: (category as MemoryCategory | null) ?? null,
+        isLatest: true,
+        parentMemoryId: null,
+        rootMemoryId: null,
+        relationType: null,
+        validAt: now,
+        invalidAt: null,
+        forgetAfter: null,
+        isForgotten: false,
+        isInference: false,
+        createdAt: now,
+      };
+      svc.db.addMemory(entry);
+      return textResult({ id: entry.id, memory: entry.memory });
+    }
+  );
+}
+
+function registerPmExtTools(server: McpServer, svc: BrainServiceClass): void {
+  server.tool(
+    'brain_pm_task_add',
+    'Create a new PM task in a workstream',
+    {
+      project: z.string().describe('Project prefix (e.g. VNM)'),
+      workstream: z.number().describe('Workstream number'),
+      name: z.string().describe('Task name/title'),
+      description: z.string().describe('Task description (required for search indexing)'),
+      priority: z.enum(['critical', 'high', 'medium', 'low']).optional(),
+      category: z
+        .enum([
+          'implementation',
+          'testing',
+          'documentation',
+          'research',
+          'review',
+          'infrastructure',
+          'configuration',
+          'design',
+          'migration',
+        ])
+        .optional(),
+      dependsOn: z.array(z.string()).optional().describe('Task display IDs this task depends on'),
+      acceptanceCriteria: z.array(z.string()).optional(),
+    },
+    async ({
+      project,
+      workstream,
+      name,
+      description,
+      priority,
+      category,
+      dependsOn,
+      acceptanceCriteria,
+    }) => {
+      const result = await createTask(svc.db, svc.config, svc.embedder, {
+        project,
+        workstream,
+        name,
+        description,
+        priority,
+        category,
+        dependsOn,
+        acceptanceCriteria,
+      });
+      if (!result.ok) return errorResult(result.error.message);
+      return textResult(result.data);
+    }
+  );
+
+  server.tool(
+    'brain_pm_workstream_list',
+    'List workstreams for a project',
+    {
+      prefix: z.string().optional().describe('Project prefix (e.g. VNM)'),
+    },
+    async ({ prefix }) => {
+      const resolvedResult = resolveProject(svc.db, prefix);
+      if (!resolvedResult.ok) return errorResult(resolvedResult.error.message);
+      const result = listWorkstreams(svc.db, resolvedResult.data);
+      if (!result.ok) return errorResult(result.error.message);
+      return textResult(result.data);
+    }
+  );
+
+  server.tool(
+    'brain_pm_workstream_add',
+    'Create a new workstream in a project',
+    {
+      project: z.string().describe('Project prefix (e.g. VNM)'),
+      name: z.string().describe('Workstream name'),
+      description: z.string().optional().describe('Workstream description'),
+    },
+    async ({ project, name, description }) => {
+      const result = await createWorkstream(svc.db, svc.config, svc.embedder, {
+        project,
+        name,
+        description,
+      });
+      if (!result.ok) return errorResult(result.error.message);
+      return textResult(result.data);
+    }
+  );
+
+  server.tool(
+    'brain_pm_wave',
+    'Get dependency-ordered dispatch waves — tasks grouped by what can be parallelized',
+    {
+      prefix: z.string().optional().describe('Project prefix (e.g. VNM)'),
+    },
+    async ({ prefix }) => {
+      const resolvedResult = resolveProject(svc.db, prefix);
+      if (!resolvedResult.ok) return errorResult(resolvedResult.error.message);
+      const waves = computeWaves(svc.db, resolvedResult.data);
+      return textResult(waves);
+    }
+  );
+
+  server.tool(
+    'brain_pm_context',
+    'Rich context bundle for a task: details, body, sessions, and related notes',
+    {
+      displayId: z.string().describe('Task display ID (e.g. VNM-01.03)'),
+    },
+    async ({ displayId }) => {
+      const taskResult = getTask(svc.db, displayId);
+      if (!taskResult.ok) return errorResult(taskResult.error.message);
+
+      const notes = getPmNotes(svc.db, 'task', { display_id: displayId });
+      const body = notes.length > 0 ? readTaskBody(notes[0]) : '';
+
+      const sessions = svc
+        .sessionsByTask(displayId)
+        .slice(0, 5)
+        .map((s) => ({ displayId: s.display_id, status: s.status, startedAt: s.started_at }));
+
+      const relations = notes.length > 0 ? svc.db.getRelationsFrom(notes[0].id) : [];
+      const relatedNotes = relations
+        .filter((r) => r.type !== 'depends_on')
+        .slice(0, 10)
+        .flatMap((r) => {
+          const n = svc.db.getNoteById(r.targetId);
+          return n ? [{ id: n.id, title: n.title, type: n.type, relation: r.type }] : [];
+        });
+
+      return textResult({ task: taskResult.data, body, sessions, relatedNotes });
+    }
+  );
+
+  server.tool(
+    'brain_pm_capture',
+    'Lightweight PM intake: capture a task idea without full task creation ceremony',
+    {
+      text: z.string().describe('Task description or idea to capture'),
+      project: z.string().optional().describe('Project prefix (e.g. VNM)'),
+      workstream: z.string().optional().describe('Workstream display ID (e.g. VNM-42)'),
+    },
+    async ({ text, project, workstream }) => {
+      const prefix = project
+        ? `[PM${project ? ` | ${project}` : ''}${workstream ? ` | ${workstream}` : ''}]`
+        : '[PM Capture]';
+      const item: InboxItem = {
+        id: randomUUID(),
+        content: `${prefix}\n\n${text}`,
+        title: null,
+        source: 'api',
+        sourceUrl: null,
+        sourceMeta: project || workstream ? JSON.stringify({ project, workstream }) : null,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        processedAt: null,
+      };
+      svc.db.addInboxItem(item);
+      return textResult({
+        captured: item.id,
+        hint: 'Use brain_pm_task_add to formalize into a task',
+      });
+    }
+  );
+}
+
 function registerSessionAgentTools(server: McpServer, svc: BrainServiceClass): void {
   server.tool(
     'brain_session_list',
@@ -260,6 +553,19 @@ function registerSessionAgentTools(server: McpServer, svc: BrainServiceClass): v
     async ({ status }) => {
       const agents = svc.agentList(status ? { status: status as AgentStatus } : undefined);
       return textResult(agents);
+    }
+  );
+
+  server.tool(
+    'brain_session_show',
+    'Get detailed information about a specific session including turns, tool calls, and token usage',
+    {
+      displayId: z.string().describe('Session display ID (e.g. SES-01)'),
+    },
+    async ({ displayId }) => {
+      const detail = svc.sessionDetail(displayId);
+      if (!detail) return errorResult(`Session "${displayId}" not found`);
+      return textResult(detail);
     }
   );
 
@@ -466,6 +772,68 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
       }
     }
   );
+
+  server.tool(
+    'brain_workflow_events',
+    'Poll for workflow run states. Returns current snapshot of workflow runs with a cursor for incremental polling. Use this as the reliable alternative to push notifications (notifications/claude/channel is not reliable in all Claude Code versions).',
+    {
+      instanceId: z.string().optional().describe('Filter by specific workflow instance ID'),
+      since: z
+        .string()
+        .optional()
+        .describe(
+          'ISO timestamp — return runs updated after this time (use cursor from previous response)'
+        ),
+      limit: z.number().optional().describe('Max results (default 20)'),
+    },
+    async ({ instanceId, since, limit }) => {
+      interface WorkflowRunRow {
+        id: string;
+        workflow_name: string;
+        status: string;
+        current_step: string | null;
+        started_at: string;
+        completed_at: string | null;
+        error: string | null;
+      }
+
+      const rawDb = svc.db.rawDb;
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+
+      if (instanceId) {
+        conditions.push('id = ?');
+        params.push(instanceId);
+      }
+      if (since) {
+        conditions.push('(completed_at > ? OR started_at > ?)');
+        params.push(since, since);
+      }
+
+      const where = conditions.length ? ' WHERE ' + conditions.join(' AND ') : '';
+      const query =
+        `SELECT id, workflow_name, status, current_step, started_at, completed_at, error` +
+        ` FROM workflow_runs${where} ORDER BY started_at DESC LIMIT ?`;
+      params.push(limit ?? 20);
+
+      const rows = rawDb.prepare(query).all(...params) as WorkflowRunRow[];
+      const events = rows.map((r) => ({
+        instanceId: r.id,
+        workflowId: r.workflow_name,
+        status: r.status,
+        currentStep: r.current_step,
+        startedAt: r.started_at,
+        completedAt: r.completed_at,
+        error: r.error,
+      }));
+
+      return textResult({
+        events,
+        cursor: new Date().toISOString(),
+        hint: 'Pass cursor as "since" in the next call for incremental updates',
+      });
+    }
+  );
 }
 
 export interface BrainMcpServerOptions {
@@ -488,7 +856,10 @@ export function createBrainMcpServer(
   );
 
   registerSearchTools(server, svc);
+  registerNoteTools(server, svc);
+  registerMemoryTools(server, svc);
   registerPmTools(server, svc);
+  registerPmExtTools(server, svc);
   registerSessionAgentTools(server, svc);
   registerDispatchTools(server, svc);
   registerWorkflowTools(server, svc);
