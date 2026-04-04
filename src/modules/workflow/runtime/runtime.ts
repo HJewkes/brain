@@ -5,6 +5,7 @@ import type { WorkflowFn, WorkflowRun, StepResult } from './types.js';
 import { WorkflowContext } from './context.js';
 import { findAgentByTask, getAgentContext } from '../../agents/data.js';
 import { parseSignals } from './signals.js';
+import { releaseWorkflowTasks } from './failure-cleanup.js';
 
 /** Row shape returned from the workflow_runs table. */
 interface WorkflowRunRow {
@@ -329,11 +330,26 @@ export class WorkflowRuntime {
         `UPDATE workflow_runs SET status = 'failed', completed_at = ?, error = ? WHERE id = ?`
       )
       .run(now, errMsg, runId);
+
+    this.releaseStuckTasks(runId);
     this.active.delete(runId);
 
     this.channelPush?.('step_failed', {
       workflow: runId,
       error: errMsg,
     });
+  }
+
+  /** Release any claimed tasks from a failed workflow so they don't stay stuck. */
+  private releaseStuckTasks(runId: string): void {
+    const running = this.active.get(runId);
+    if (!running) return;
+
+    const run = running.ctx.toRun();
+    try {
+      releaseWorkflowTasks(this.db, this.config, this.embedder, run);
+    } catch {
+      // Non-fatal — cleanup failure shouldn't mask the original error
+    }
   }
 }

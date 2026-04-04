@@ -9,8 +9,11 @@
 type SignalMatcher = (content: string) => boolean;
 
 const CONDITION_PATTERNS: Record<string, SignalMatcher> = {
-  // Planning critic signals
-  needs_revision: (content) => /##\s*Verdict:\s*NEEDS\s+REVISION/i.test(content),
+  // Planning critic signals — matches heading, inline, and bold markdown variants
+  needs_revision: (content) =>
+    /##\s*Verdict:\s*NEEDS\s+REVISION/i.test(content) ||
+    /verdict:\s*\*{0,2}NEEDS\s+REVISION\*{0,2}/i.test(content) ||
+    /\*{2}NEEDS\s+REVISION\*{2}/.test(content),
   has_open_questions: (content) => {
     const match = content.match(/##\s*Open\s+Questions\s*\n([\s\S]*?)(?=\n##\s|\n$|$)/i);
     if (!match) return false;
@@ -19,9 +22,16 @@ const CONDITION_PATTERNS: Record<string, SignalMatcher> = {
   },
 
   // Review signals
-  approved: (content) => /Verdict:\s*PASS/i.test(content) || /##\s*Verdict:\s*READY/i.test(content),
+  approved: (content) =>
+    /Verdict:\s*PASS/i.test(content) ||
+    /##\s*Verdict:\s*READY/i.test(content) ||
+    /verdict:\s*\*{0,2}(?:PASS|READY)\*{0,2}/i.test(content) ||
+    /\*{2}(?:PASS|READY)\*{2}/.test(content),
   needs_fixes: (content) =>
-    /Verdict:\s*NEEDS\s+WORK/i.test(content) || /##\s*FIX\s+Items\s*\n(?!\s*None)/i.test(content),
+    /Verdict:\s*NEEDS\s+WORK/i.test(content) ||
+    /##\s*FIX\s+Items\s*\n(?!\s*None)/i.test(content) ||
+    /verdict:\s*\*{0,2}NEEDS\s+WORK\*{0,2}/i.test(content) ||
+    /\*{2}NEEDS\s+WORK\*{2}/.test(content),
   changes_requested: (content) => /changes\s+requested/i.test(content),
 
   // Brainstorming signals

@@ -71,9 +71,9 @@ export class WorkflowContext {
   private signalWaitpoints = new Map<string, SignalWaitpoint>();
   private _retries = new Map<string, number>();
 
-  private db: BrainDB;
-  private config: BrainConfig;
-  private embedder: Embedder | undefined;
+  private _db: BrainDB;
+  private _config: BrainConfig;
+  private _embedder: Embedder | undefined;
   private channel: ChannelPushFn | undefined;
   private model: string;
   private maxBudgetUsd: number;
@@ -95,9 +95,9 @@ export class WorkflowContext {
     this._startedAt = run.startedAt;
     this._completedAt = run.completedAt;
     this._error = run.error;
-    this.db = db;
-    this.config = config;
-    this.embedder = options?.embedder;
+    this._db = db;
+    this._config = config;
+    this._embedder = options?.embedder;
     this.channel = channelPush;
     this.model = options?.model ?? 'sonnet';
     this.maxBudgetUsd = options?.maxBudgetUsd ?? 2.0;
@@ -113,6 +113,18 @@ export class WorkflowContext {
 
   get projectDir(): string {
     return this._context.projectDir ?? process.cwd();
+  }
+
+  get db(): BrainDB {
+    return this._db;
+  }
+
+  get config(): BrainConfig {
+    return this._config;
+  }
+
+  get embedder(): Embedder | undefined {
+    return this._embedder;
   }
 
   get activeAgent(): { pid: number; taskId: string; stepId: string } | null {
@@ -340,7 +352,7 @@ export class WorkflowContext {
 
   /** Persist current state to workflow_runs table. */
   persist(): void {
-    const rawDb = this.db.rawDb;
+    const rawDb = this._db.rawDb;
     rawDb
       .prepare(
         `INSERT INTO workflow_runs (id, workflow_name, context, status, current_step, step_results, active_agent, started_at, completed_at, error)
@@ -373,7 +385,7 @@ export class WorkflowContext {
     const project = this._context.project;
     const workstream = parseInt(this._context.workstream ?? '1', 10);
 
-    const result = await createTask(this.db, this.config, this.embedder!, {
+    const result = await createTask(this._db, this._config, this._embedder!, {
       project,
       workstream,
       name: `${this.workflowName}:${stepId} (run ${this.runId.slice(0, 8)})`,
@@ -391,16 +403,16 @@ export class WorkflowContext {
   }
 
   private async renderTemplate(taskId: string, templateName: string): Promise<string> {
-    if (!this.embedder) {
+    if (!this._embedder) {
       throw new Error('Embedder required for template rendering');
     }
 
     const extraVars = this.buildExtraVars();
 
     const result = await dispatchTemplate(
-      this.db,
-      this.config,
-      this.embedder,
+      this._db,
+      this._config,
+      this._embedder!,
       taskId,
       templateName,
       { dryRun: true, extraVars }
@@ -445,11 +457,11 @@ export class WorkflowContext {
     // Minimal shim satisfying what dispatchTask reads from BrainServiceClass.
     // dispatchTask accesses: svc.db, svc.config, svc.embedder, svc.instance
     // instance.root must be the .brain directory so dirname(root) = project dir
-    const brainDir = join(dirname(this.config.dbPath), '..');
+    const brainDir = join(dirname(this._config.dbPath), '..');
     return {
-      db: this.db,
-      config: this.config,
-      embedder: this.embedder!,
+      db: this._db,
+      config: this._config,
+      embedder: this._embedder!,
       instance: {
         isLocal: true,
         root: existsSync(join(process.cwd(), '.brain')) ? join(process.cwd(), '.brain') : brainDir,
