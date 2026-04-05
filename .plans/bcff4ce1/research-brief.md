@@ -1,10 +1,10 @@
-# Research Brief: VNM-42.159
+# Research Brief: VNM-42.211
 
 Plan: bcff4ce1 | Project: VNM
 
-## Current Implementation State (as of 2026-04-04)
+## Current Implementation State (as of 2026-04-04, updated VNM-42.211)
 
-All 10 originally-missing tools have been implemented. The MCP server now registers **28 tools** across 7 groups.
+All 10 originally-missing tools have been implemented. The MCP server now registers **28 tools** across 8 groups.
 
 ### Full Tool Inventory (`src/server/mcp.ts`)
 
@@ -19,42 +19,45 @@ All 10 originally-missing tools have been implemented. The MCP server now regist
 | Dispatch | `brain_agent_dispatch`, `brain_agent_status` |
 | Workflow | `brain_workflow_start`, `brain_workflow_status`, `brain_workflow_signal`, `brain_workflow_events` |
 
-### Server entry (`src/server/index.ts`)
+### Server entry (`src/server/index.ts`) — FULLY IMPLEMENTED
 
 - `startMcpServer()` — MCP-only (stdio transport)
 - `startMcpServerWithService()` — combined HTTP+MCP
-- `initV2Runtime()` — registers `WorkflowChannel` push + SSE broadcast
-- SSE broadcast works via `broadcast(sseClients, 'workflow', {...})` — dashboard path is healthy
-- Channel push still uses `notifications/claude/channel` (broken in Claude Code) — fire-and-forget
+- `initV2Runtime()` — registers `WorkflowChannel` push + SSE broadcast + `sendResourceListChanged()`
+- SSE broadcast works via `broadcast(sseClients, 'workflow', {...})` — dashboard path healthy
+- `server.server.sendResourceListChanged().catch(() => {})` wired in `channelPush` lambda ✓
+- `WORKFLOW_CHANNEL_INSTRUCTIONS` overridden in `index.ts` with polling-first instructions ✓
 
-### Channel Notification Status
+### Channel Notification Status — RESOLVED
 
 **`brain_workflow_events` (implemented)** — Polls `workflow_runs` table directly via `rawDb`:
 - Accepts `instanceId`, `since` (ISO timestamp), `limit`
 - Returns snapshot of workflow runs with cursor for incremental polling
-- Documented as reliable alternative to push notifications
-- `WORKFLOW_CHANNEL_INSTRUCTIONS` still instructs passive listening — could be updated
+- Is the primary reliable path; documented in updated instructions
 
-**`notifications/claude/channel` (broken, kept as-is)** — fire-and-forget via `WorkflowChannel.push()`:
+**`WORKFLOW_CHANNEL_INSTRUCTIONS` (updated in `index.ts`)** — Overrides channel.ts default:
+- Polling-first: tells coordinator to call `brain_workflow_events` after events
+- Includes cursor-based incremental polling instructions
+- `sendResourceListChanged()` fires as hint to trigger immediate re-poll
+
+**`notifications/claude/channel` (broken, fire-and-forget)** — still emitted:
 - GitHub issues #40729, #36802, #41733 confirm silent failures
-- Still emitted but not relied upon
-- No MCP resources (`notifications/resources/list_changed`) were added
+- Kept for forward compatibility but not relied upon
 
-### What Was NOT Done
+## Remaining Optional Gap
 
-1. **MCP Resources** — `notifications/resources/list_changed` not implemented; no `brain://workflow/{instanceId}` resources registered
-2. **`WORKFLOW_CHANNEL_INSTRUCTIONS` update** — still says "events arrive in real-time, no polling needed" even though polling via `brain_workflow_events` is the actual reliable path
-3. **Event ring buffer** — `brain_workflow_events` queries SQLite `workflow_runs` table (not step events); step-level events (step_complete, step_failed, assisted_step) are NOT persisted and cannot be polled
+**`resources` capability not declared + no resource registered**: `createBrainMcpServer` declares `capabilities: { tools: {} }` but not `resources: {}`. Without this, Claude Code may not subscribe to `notifications/resources/list_changed`, so `sendResourceListChanged()` may be silently ignored. No `brain://workflow/runs` resource URI is registered.
 
-## Remaining Gaps
+Fix (low risk, in `src/server/mcp.ts` which is owned):
+1. Add `resources: {}` to capabilities
+2. Register `brain://workflow/runs` resource in `registerWorkflowTools`
 
-### Gap 1: Step-level events not pollable
+## Implementation Ownership
 
-`brain_workflow_events` returns workflow run rows (`status`, `current_step`) but not discrete step events. The coordinator cannot distinguish `step_complete` from `step_failed` from `assisted_step` via polling — it only sees the current workflow state.
-
-**Fix needed**: Either:
-- Add a `workflow_step_events` table and log events there, exposed via `brain_workflow_events`
-- Or update `WorkflowRuntime` to maintain an in-memory event log (last N events) exposed via the tool
+Files owned and complete:
+- `src/server/mcp.ts` — all 28 tools implemented; optional resource fix goes here
+- `src/server/index.ts` — `sendResourceListChanged()` wired, polling instructions active
+ts) exposed via the tool
 
 ### Gap 2: `WORKFLOW_CHANNEL_INSTRUCTIONS` is misleading
 
