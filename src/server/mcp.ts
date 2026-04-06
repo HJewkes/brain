@@ -650,7 +650,9 @@ function getV2Runtime(svc: BrainServiceClass): WorkflowRuntime | null {
 function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void {
   server.tool(
     'brain_workflow_start',
-    'Start a workflow. Returns immediately — agents run in background. Poll with brain_workflow_status. Planning workflow requires context.brief describing what to build.',
+    'Start a workflow. Returns immediately — agents run in background. Poll with brain_workflow_status. ' +
+      'Planning workflow requires context.brief describing what to build. ' +
+      'wave-execution workflow dispatches tasks in dependency-ordered waves for a workstream (context: wipLimit, template).',
     {
       workflowId: z.string().describe('Workflow definition ID (e.g. "planning")'),
       project: z.string().describe('Project prefix (e.g. "VNM")'),
@@ -685,6 +687,7 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
           instanceId: runId,
           workflowId,
           status: status?.status ?? 'running',
+          runtimeVersion: 'v2',
         });
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
@@ -734,6 +737,7 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
               },
             ]
           : [],
+        runtimeVersion: 'v2',
       });
     }
   );
@@ -834,6 +838,16 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
       });
     }
   );
+
+  server.resource('workflow-runs', 'brain://workflow/runs', async () => ({
+    contents: [
+      {
+        uri: 'brain://workflow/runs',
+        mimeType: 'application/json',
+        text: 'Use the brain_workflow_events tool to poll for workflow run states.',
+      },
+    ],
+  }));
 }
 
 export interface BrainMcpServerOptions {
@@ -849,6 +863,7 @@ export function createBrainMcpServer(
     {
       capabilities: {
         tools: {},
+        resources: {},
         ...(options?.channelInstructions ? { experimental: { 'claude/channel': {} } } : {}),
       },
       ...(options?.channelInstructions ? { instructions: options.channelInstructions } : {}),
