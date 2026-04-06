@@ -137,6 +137,10 @@ export class WorkflowRuntime {
     );
     this.active.set(runId, { ctx, promise });
 
+    // Ensure the reconciler is running — it's the only mechanism that detects
+    // agent completion and resolves workflow waitpoints for headless dispatch.
+    this.startReconciler();
+
     return runId;
   }
 
@@ -277,7 +281,7 @@ export class WorkflowRuntime {
 
   startReconciler(): void {
     if (this.reconcileTimer) return;
-    this.reconcileTimer = setInterval(() => this.reconcile(), 60_000);
+    this.reconcileTimer = setInterval(() => this.reconcile(), 10_000);
   }
 
   stopReconciler(): void {
@@ -300,6 +304,9 @@ export class WorkflowRuntime {
           const output = getAgentOutput(this.db, agentRecord.id, agentRecord.summary);
           workflow.ctx.resolveAgent(agent.stepId, output);
         } else {
+          // Process is dead and agent is not marked completed — treat as death.
+          // This covers: failed, abandoned, or still 'active' (handleProcessExit
+          // may have run but didn't mark success).
           workflow.ctx.handleAgentDeath(agent);
         }
       }

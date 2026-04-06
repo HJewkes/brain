@@ -129,8 +129,11 @@ export async function dispatchTask(
     addDir: worktreeResult ? projectDir : undefined,
   });
 
-  // Catch spawn errors to prevent unhandled 'error' event crashing the process
-  proc.on('error', () => {});
+  // Catch spawn errors — logged in setupProcessTracking but we need a handler
+  // attached before the event loop tick to prevent unhandled 'error' crash
+  proc.on('error', () => {
+    /* handled in setupProcessTracking */
+  });
 
   if (!proc.pid) {
     const cwd = worktreeResult?.worktreePath || projectDir;
@@ -281,7 +284,15 @@ function maybeAllocateWorktree(
   pullResult: PullResult
 ): AllocateWorktreeResult | undefined {
   if (routing.isolation !== 'worktree') return undefined;
-  const workstream = pullResult.dispatchContext.context?.workstream?.displayId || '';
+
+  const workstream = pullResult.dispatchContext.context?.workstream?.displayId;
+  if (!workstream) {
+    process.stderr.write(
+      `[dispatch] task ${taskId} has no workstream — cannot allocate worktree, running in project dir\n`
+    );
+    return undefined;
+  }
+
   try {
     const result = allocateWorktree(db, projectDir, {
       taskId,
@@ -290,12 +301,14 @@ function maybeAllocateWorktree(
     });
     if (result?.worktreePath && !existsSync(result.worktreePath)) {
       process.stderr.write(
-        `[dispatch] worktree path ${result.worktreePath} does not exist, falling back to project dir\n`
+        `[dispatch] worktree path ${result.worktreePath} does not exist after allocation, falling back to project dir\n`
       );
       return undefined;
     }
     return result;
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[dispatch] worktree allocation failed for ${taskId}: ${msg}\n`);
     return undefined;
   }
 }

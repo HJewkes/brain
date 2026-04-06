@@ -35,8 +35,11 @@ function tryReleaseWorktree(db: Database.Database, agent: AgentRecord): void {
   if (!agent.brain_task) return;
   try {
     dbReleaseWorktree(db, agent.brain_task);
-  } catch {
-    // Non-fatal: worktree record may not exist
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `[agent-done] worktree release failed for task ${agent.brain_task}: ${msg}\n`
+    );
   }
 }
 
@@ -88,8 +91,9 @@ function trySessionCommit(cwd: string): void {
       stdio: 'pipe',
       timeout: 5000,
     });
-  } catch {
-    // Fire-and-forget: session module may not be available
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[agent-done] session commit failed: ${msg}\n`);
   }
 }
 
@@ -403,8 +407,10 @@ export function runAgentDoneHook(
     if (result.cascadeCount > 0) parts.push(`cascade=${result.cascadeCount}`);
 
     return { status: result.status, agentId, message: parts.join(', ') };
-  } catch {
-    return { status: 'completed', agentId, message: 'handler error (swallowed)' };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[agent-done] handler error for ${agentId}: ${msg}\n`);
+    return { status: 'failed', agentId, message: `handler error: ${msg}` };
   } finally {
     db?.close();
   }
