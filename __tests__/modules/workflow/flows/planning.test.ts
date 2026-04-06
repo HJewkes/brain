@@ -149,7 +149,15 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    expect(llmSteps(ctx)).toEqual(['research', 'interview', 'design', 'critic', 'spec-tests']);
+    expect(llmSteps(ctx)).toEqual([
+      'research',
+      'interview',
+      'design',
+      'critic',
+      'spec-tests',
+      'review',
+      'decompose',
+    ]);
 
     // Verify correct methods (offset by 1 for seed step)
     const llmCalls = ctx.calls.filter((c) => c.method !== 'seed');
@@ -178,6 +186,16 @@ describe('planningWorkflow — flow logic', () => {
       stepId: 'spec-tests',
       template: 'planning-spectests',
     });
+    expect(llmCalls[5]).toEqual({
+      method: 'assisted',
+      stepId: 'review',
+      template: 'planning-review',
+    });
+    expect(llmCalls[6]).toEqual({
+      method: 'dispatch',
+      stepId: 'decompose',
+      template: 'planning-decompose',
+    });
   });
 
   test('medium complexity: skips interview', async () => {
@@ -185,11 +203,20 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    expect(llmSteps(ctx)).toEqual(['research', 'design', 'critic', 'spec-tests']);
+    expect(llmSteps(ctx)).toEqual([
+      'research',
+      'design',
+      'critic',
+      'spec-tests',
+      'review',
+      'decompose',
+    ]);
 
-    // No assisted calls (excluding seed)
+    // review is assisted, all others are dispatch
     const llmCalls = ctx.calls.filter((c) => c.method !== 'seed');
-    expect(llmCalls.every((c) => c.method === 'dispatch')).toBe(true);
+    const nonReviewCalls = llmCalls.filter((c) => c.stepId !== 'review');
+    expect(nonReviewCalls.every((c) => c.method === 'dispatch')).toBe(true);
+    expect(llmCalls.find((c) => c.stepId === 'review')!.method).toBe('assisted');
   });
 
   test('low complexity: skips research and interview', async () => {
@@ -197,7 +224,7 @@ describe('planningWorkflow — flow logic', () => {
 
     await planningWorkflow(ctx);
 
-    expect(llmSteps(ctx)).toEqual(['design', 'critic', 'spec-tests']);
+    expect(llmSteps(ctx)).toEqual(['design', 'critic', 'spec-tests', 'review', 'decompose']);
   });
 
   test('defaults to high complexity when param is missing', async () => {
@@ -225,6 +252,8 @@ describe('planningWorkflow — flow logic', () => {
       'design', // loop design (iter 1)
       'critic', // loop critic (iter 1) -> null (approved)
       'spec-tests',
+      'review',
+      'decompose',
     ]);
 
     expect(ctx.iteration('design')).toBe(2);
@@ -267,6 +296,8 @@ describe('planningWorkflow — flow logic', () => {
       'design', // re-design
       'critic', // re-critic
       'spec-tests',
+      'review',
+      'decompose',
     ]);
 
     // research ran once (low complexity skipped it initially, then re-research)
@@ -306,6 +337,8 @@ describe('planningWorkflow — flow logic', () => {
       'design', // re-design (iter 2)
       'critic', // re-critic (iter 2)
       'spec-tests',
+      'review',
+      'decompose',
     ]);
   });
 
@@ -366,7 +399,7 @@ describe('planningWorkflow — flow logic', () => {
     const llm = calledSteps.filter((s) => s !== 'seed');
     expect(llm).not.toContain('design');
     expect(llm).not.toContain('critic');
-    expect(llm).toEqual(['spec-tests']);
+    expect(llm).toEqual(['spec-tests', 'review', 'decompose']);
   });
 });
 
@@ -489,6 +522,59 @@ describe('planningWorkflow — seed step', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Review and decompose step tests
+// ---------------------------------------------------------------------------
+
+describe('planningWorkflow — review and decompose steps', () => {
+  test('review step uses assisted method with planning-review template', async () => {
+    const ctx = new TestableContext({ complexity: 'low' });
+
+    await planningWorkflow(ctx);
+
+    const reviewCall = ctx.calls.find((c) => c.stepId === 'review');
+    expect(reviewCall).toBeDefined();
+    expect(reviewCall!.method).toBe('assisted');
+    expect(reviewCall!.template).toBe('planning-review');
+  });
+
+  test('decompose step uses dispatch method with planning-decompose template', async () => {
+    const ctx = new TestableContext({ complexity: 'low' });
+
+    await planningWorkflow(ctx);
+
+    const decomposeCall = ctx.calls.find((c) => c.stepId === 'decompose');
+    expect(decomposeCall).toBeDefined();
+    expect(decomposeCall!.method).toBe('dispatch');
+    expect(decomposeCall!.template).toBe('planning-decompose');
+  });
+
+  test('review runs after spec-tests and before decompose', async () => {
+    const ctx = new TestableContext({ complexity: 'low' });
+
+    await planningWorkflow(ctx);
+
+    const stepOrder = llmSteps(ctx);
+    const specTestsIdx = stepOrder.indexOf('spec-tests');
+    const reviewIdx = stepOrder.indexOf('review');
+    const decomposeIdx = stepOrder.indexOf('decompose');
+
+    expect(specTestsIdx).toBeLessThan(reviewIdx);
+    expect(reviewIdx).toBeLessThan(decomposeIdx);
+  });
+
+  test('review step is present in all complexity levels', async () => {
+    for (const complexity of ['low', 'medium', 'high']) {
+      const ctx = new TestableContext({ complexity });
+      await planningWorkflow(ctx);
+
+      const stepIds = ctx.calls.map((c) => c.stepId);
+      expect(stepIds).toContain('review');
+      expect(stepIds).toContain('decompose');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Integration test via WorkflowRuntime
 // ---------------------------------------------------------------------------
 
@@ -558,7 +644,11 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
     vi.clearAllMocks();
   });
 
+  let runtimeInstance: InstanceType<typeof WorkflowRuntime> | null = null;
+
   afterEach(() => {
+    runtimeInstance?.stopReconciler();
+    runtimeInstance = null;
     db.close();
     if (existsSync(notesDir)) {
       rmSync(notesDir, { recursive: true, force: true });
@@ -567,6 +657,7 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
 
   test('runtime.start() creates workflow_runs row and resolves agents to completion', async () => {
     const runtime = new WorkflowRuntime({ db, config, embedder });
+    runtimeInstance = runtime;
     runtime.register('planning', planningWorkflow);
 
     const runId = await runtime.start('planning', {
@@ -578,8 +669,8 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
 
     // The workflow will block on first dispatch waiting for agent resolution.
     // Get the active context and resolve agents as they appear.
-    const resolveAllAgents = async () => {
-      const maxSteps = 20;
+    const resolveAllSteps = async () => {
+      const maxSteps = 30;
       let steps = 0;
       while (steps < maxSteps) {
         const running = runtime.activeRuns.get(runId);
@@ -590,12 +681,20 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
           running.ctx.resolveAgent(agent.stepId, `output for ${agent.stepId}`);
           steps++;
         }
-        // Yield to let the workflow advance
+
+        // Resolve assisted steps (e.g., review) that wait for signals
+        const status = running.ctx.toRun().status;
+        const currentStep = running.ctx.toRun().currentStep;
+        if (status === 'paused' && currentStep) {
+          runtime.signal(runId, currentStep, undefined);
+          steps++;
+        }
+
         await new Promise((r) => setTimeout(r, 5));
       }
     };
 
-    await resolveAllAgents();
+    await resolveAllSteps();
 
     // Wait for the workflow to complete
     await vi.waitFor(() => {
@@ -653,12 +752,13 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
       );
 
     const runtime = new WorkflowRuntime({ db, config, embedder });
+    runtimeInstance = runtime;
     runtime.register('planning', planningWorkflow);
     await runtime.hydrate();
 
-    // Resolve remaining agents (spec-tests)
-    const resolveAllAgents = async () => {
-      const maxSteps = 20;
+    // Resolve remaining steps (spec-tests, review, decompose)
+    const resolveAllSteps = async () => {
+      const maxSteps = 30;
       let steps = 0;
       while (steps < maxSteps) {
         const running = runtime.activeRuns.get(runId);
@@ -669,11 +769,19 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
           running.ctx.resolveAgent(agent.stepId, `output for ${agent.stepId}`);
           steps++;
         }
+
+        const status = running.ctx.toRun().status;
+        const currentStep = running.ctx.toRun().currentStep;
+        if (status === 'paused' && currentStep) {
+          runtime.signal(runId, currentStep, undefined);
+          steps++;
+        }
+
         await new Promise((r) => setTimeout(r, 5));
       }
     };
 
-    await resolveAllAgents();
+    await resolveAllSteps();
 
     await vi.waitFor(() => {
       const row = db.rawDb
@@ -682,9 +790,9 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
       expect(row.status).toBe('completed');
     });
 
-    // Verify design and critic were NOT re-dispatched (check that createTask
-    // was only called for the 1 remaining step: spec-tests)
+    // Verify design and critic were NOT re-dispatched (createTask called for:
+    // spec-tests + decompose dispatch steps, plus completion's implementation task)
     const { createTask } = await import('../../../../src/modules/pm/data/task-ops.js');
-    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask).toHaveBeenCalledTimes(3);
   });
 });

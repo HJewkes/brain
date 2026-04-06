@@ -3,10 +3,26 @@ import { getSharedInstance, closeSharedInstance } from '../services/brain-servic
 import type { BrainServiceClass } from '../services/brain-service.js';
 import { createBrainMcpServer } from './mcp.js';
 import type { ResolveOptions } from '../services/config.js';
-import {
-  WorkflowChannel,
-  WORKFLOW_CHANNEL_INSTRUCTIONS,
-} from '../modules/workflow/runtime/channel.js';
+import { WorkflowChannel } from '../modules/workflow/runtime/channel.js';
+
+// Polling-first instructions: brain_workflow_events is the reliable path.
+// notifications/claude/channel is broken (GitHub #40729, #36802, #41733).
+// sendResourceListChanged() fires as a hint to trigger an immediate poll.
+const WORKFLOW_CHANNEL_INSTRUCTIONS = `
+Events from the brain workflow engine arrive via polling — NOT passive channel tags.
+
+To monitor workflow progress:
+1. Call brain_workflow_events periodically (every 30-60s) or after resource list change notifications.
+2. Pass the "cursor" from each response as "since" in the next call for incremental updates.
+3. On resource list change notification: re-poll brain_workflow_events immediately.
+
+Event types returned by brain_workflow_events:
+- status="running": workflow active, check currentStep
+- status="complete": all steps done, review results with brain_workflow_status
+- status="failed": check the error field, use brain_workflow_signal to retry
+
+Assisted steps: use brain_workflow_signal with action "complete" when your input is ready.
+`.trim();
 import type { SseClients } from '../commands/serve-http.js';
 import { broadcast } from '../commands/serve-http.js';
 
@@ -27,6 +43,9 @@ async function initV2Runtime(
     embedder: svc.embedder,
     channelPush: (event: string, meta: Record<string, string>) => {
       channel.push(event, meta);
+      // Standard MCP resource notification — reliable alternative to broken claude/channel.
+      // Signals coordinator to re-poll brain_workflow_events.
+      server.server.sendResourceListChanged().catch(() => {});
       if (sseClients?.size) {
         try {
           broadcast(sseClients, 'workflow', { event, ...meta });
