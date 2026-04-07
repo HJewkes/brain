@@ -6,6 +6,7 @@ import type {
   FrictionSignal,
   TokenTotals,
   SessionEvent,
+  PrLink,
 } from '../types.js';
 
 interface EventData {
@@ -27,6 +28,16 @@ interface EventData {
   count?: number;
   message?: string;
   projectDir?: string;
+  taskId?: string;
+  pr_url?: string;
+  filePath?: string;
+  name?: string;
+}
+
+export function parsePrUrl(url: string): { number: number; repo: string; url: string } | null {
+  const m = url.match(/https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+  if (!m) return null;
+  return { repo: m[1], number: parseInt(m[2], 10), url };
 }
 
 export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionAnalytics | null {
@@ -55,6 +66,11 @@ export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionA
     cacheCreationTokens: 0,
     cacheReadTokens: 0,
   };
+  const taskRefSet = new Set<string>();
+  const prLinks: PrLink[] = [];
+  const filesTouched = new Map<string, Set<string>>();
+  const filesWritten: string[] = [];
+  const skillUsage = new Map<string, number>();
 
   let userTurns = 0;
   let assistantTurns = 0;
@@ -62,6 +78,7 @@ export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionA
   let hookEventCount = 0;
   let hookPreventionCount = 0;
   let sidechainCount = 0;
+  let planPresent = false;
   let model: string | null = null;
   let gitBranch: string | null = null;
   let projectDir = '';
@@ -141,6 +158,35 @@ export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionA
         if (data.model) model = data.model;
         if (data.branch) gitBranch = data.branch;
         break;
+      case 'task_ref':
+        if (data.taskId) taskRefSet.add(data.taskId);
+        break;
+      case 'pr_created': {
+        const pr = data.pr_url ? parsePrUrl(data.pr_url) : null;
+        if (pr) prLinks.push(pr);
+        break;
+      }
+      case 'file_touch': {
+        const fp = data.filePath ?? '';
+        if (fp) {
+          const tools = filesTouched.get(fp) ?? new Set<string>();
+          const tool = data.toolName ?? 'unknown';
+          tools.add(tool);
+          filesTouched.set(fp, tools);
+          if (tool === 'Write') filesWritten.push(fp);
+        }
+        break;
+      }
+      case 'skill_use': {
+        const skillName = data.name ?? '';
+        if (skillName) {
+          skillUsage.set(skillName, (skillUsage.get(skillName) ?? 0) + (data.count ?? 1));
+        }
+        break;
+      }
+      case 'plan_present':
+        planPresent = true;
+        break;
     }
   }
 
@@ -180,13 +226,13 @@ export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionA
     capturedViaHooks: true,
     capturedViaJsonl: false,
 
-    // Extended signals — defaults for hook-captured sessions
+    // Extended signals — populated from captured events
     slug: null,
-    prLinks: [],
-    filesTouched: new Map(),
-    filesWritten: [],
+    prLinks,
+    filesTouched,
+    filesWritten,
     modelCounts: new Map(),
-    taskRefs: [],
+    taskRefs: Array.from(taskRefSet),
     compactionTimestamps: [],
     compactionSummaries: [],
     compactionByteOffsets: [],
@@ -195,8 +241,8 @@ export function aggregateSessionEvents(db: BrainDB, sessionId: string): SessionA
     userTexts: [],
     logicalParentUuid: null,
     thinkingBlockCount: 0,
-    skillUsage: new Map(),
-    planPresent: false,
+    skillUsage,
+    planPresent,
     permissionMode: null,
     serviceTier: null,
     gitCommandCount: 0,
