@@ -71,3 +71,9 @@ export type {
   ClaudeResponseCardProps,
   ConversationTurnProps,
 } from './organisms.js';
+export { SessionReplayPanel } from './SessionReplayPanel.js';
+export type {
+  SessionReplayPanelProps,
+  ReplayEvent,
+  ReplayEventKind,
+} from './SessionReplayPanel.js';
