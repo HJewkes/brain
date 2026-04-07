@@ -12,7 +12,7 @@ import type { EvalCorpus, CorpusNote } from '../fixtures/corpus-types.js';
 export interface EvalEnvironment {
   dbPath: string;
   notesDir: string;
-  cleanup: () => void;
+  cleanup: () => void | Promise<void>;
   db: BrainDB;
   embedder: LocalEmbedder;
   search: (query: string, k?: number) => Promise<SearchResult[]>;
@@ -204,7 +204,8 @@ export async function setupEvalEnvironment(
     return results;
   };
 
-  const cleanup = (): void => {
+  const cleanup = async (): Promise<void> => {
+    await embedder.dispose?.();
     db.close();
     rmSync(tempDir, { recursive: true, force: true });
   };

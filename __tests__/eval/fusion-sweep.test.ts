@@ -28,8 +28,8 @@ describe('fusion weight sweep — DISCOVERY (log, no hard assertions)', () => {
     env = await setupEvalEnvironment(corpus);
   }, 120_000);
 
-  afterAll(() => {
-    env.cleanup();
+  afterAll(async () => {
+    await env?.cleanup();
   });
 
   const sweepResults: Array<{

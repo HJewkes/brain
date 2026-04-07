@@ -147,7 +147,7 @@ export class WorkflowRuntime {
   async hydrate(): Promise<void> {
     const rawDb = this.db.rawDb;
     const rows = rawDb
-      .prepare(`SELECT * FROM workflow_runs WHERE status IN ('running', 'paused')`)
+      .prepare(`SELECT * FROM workflow_runs WHERE status = 'running'`)
       .all() as WorkflowRunRow[];
 
     for (const row of rows) {

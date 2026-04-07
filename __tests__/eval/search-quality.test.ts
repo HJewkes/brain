@@ -121,8 +121,9 @@ describe('OpenViking-inspired search quality benchmarks', { timeout: 120_000 }, 
     }
   });
 
-  afterAll(() => {
-    env.db.close();
+  afterAll(async () => {
+    await env?.embedder?.dispose?.();
+    env?.db?.close();
     rmSync(env.tempDir, { recursive: true, force: true });
   });
 

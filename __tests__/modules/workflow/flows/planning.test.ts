@@ -791,8 +791,8 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
     });
 
     // Verify design and critic were NOT re-dispatched (createTask called for:
-    // spec-tests + decompose dispatch steps, plus completion's implementation task)
+    // spec-tests + decompose dispatch steps; assisted steps no longer create tasks)
     const { createTask } = await import('../../../../src/modules/pm/data/task-ops.js');
-    expect(createTask).toHaveBeenCalledTimes(3);
+    expect(createTask).toHaveBeenCalledTimes(2);
   });
 });

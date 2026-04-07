@@ -32,8 +32,8 @@ describe('relevance threshold calibration', () => {
     }
   }, 120_000);
 
-  afterAll(() => {
-    env.cleanup();
+  afterAll(async () => {
+    await env?.cleanup();
   });
 
   test('off-topic score distribution', () => {

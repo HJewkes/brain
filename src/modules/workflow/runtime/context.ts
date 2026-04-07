@@ -139,7 +139,7 @@ export class WorkflowContext {
     return this._iterations[stepId] ?? 0;
   }
 
-  async dispatch(stepId: string, template: string): Promise<StepResult> {
+  async dispatch(stepId: string, template: string, taskId?: string): Promise<StepResult> {
     const iterKey = `${stepId}:${this._iterations[stepId] ?? 0}`;
 
     const cached = this._stepResults[iterKey];
@@ -148,7 +148,7 @@ export class WorkflowContext {
       return cached;
     }
 
-    return this.dispatchWithRetry(stepId, template, iterKey);
+    return this.dispatchWithRetry(stepId, template, iterKey, taskId);
   }
 
   async seed(stepId: string, fn: () => Promise<SeedResult>): Promise<StepResult> {
@@ -197,11 +197,12 @@ export class WorkflowContext {
   private async dispatchWithRetry(
     stepId: string,
     template: string,
-    iterKey: string
+    iterKey: string,
+    existingTaskId?: string
   ): Promise<StepResult> {
     const retryCount = this._retries.get(iterKey) ?? 0;
 
-    const taskId = await this.createStepTask(stepId);
+    const taskId = existingTaskId ?? (await this.createStepTask(stepId));
     const rendered = await this.renderTemplate(taskId, template);
 
     this._currentStep = stepId;
@@ -224,7 +225,7 @@ export class WorkflowContext {
           taskId: agent.taskId,
           attempt: String(retryCount + 2),
         });
-        return this.dispatchWithRetry(stepId, template, iterKey);
+        return this.dispatchWithRetry(stepId, template, iterKey, existingTaskId);
       }
 
       this.channel?.('step_failed', {
@@ -268,9 +269,17 @@ export class WorkflowContext {
     const cached = this._stepResults[stepId];
     if (cached) return cached;
 
-    const taskId = await this.createStepTask(stepId);
+    // Assisted steps don't need a real PM task — use the workflow's parent
+    // task context or a synthetic ID for template rendering.
+    const taskId = `assisted:${stepId}`;
 
-    const rendered = await this.renderTemplate(taskId, template);
+    let rendered: string;
+    try {
+      rendered = await this.renderTemplate(taskId, template);
+    } catch {
+      // Template rendering may fail without a real task — fall back to raw template name
+      rendered = template;
+    }
 
     this._currentStep = stepId;
     this._status = 'paused';

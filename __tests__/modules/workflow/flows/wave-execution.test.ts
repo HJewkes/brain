@@ -61,7 +61,7 @@ class TestableContext implements WorkflowContextInterface {
     return this.iterations[stepId] ?? 0;
   }
 
-  async dispatch(stepId: string, template: string): Promise<StepResult> {
+  async dispatch(stepId: string, template: string, _taskId?: string): Promise<StepResult> {
     const iter = this.iterations[stepId] ?? 0;
     this.calls.push({ method: 'dispatch', stepId, template });
     this.iterations[stepId] = iter + 1;
@@ -138,8 +138,8 @@ describe('waveExecutionWorkflow', () => {
   test('compute-waves seed calls computeWaves and stores structure', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
     vi.mocked(computeWaves).mockReturnValue([
-      { wave: 0, taskIds: ['TST-01.01', 'TST-01.02'] },
-      { wave: 1, taskIds: ['TST-01.03'] },
+      { wave: 0, taskIds: ['TST-1.01', 'TST-1.02'] },
+      { wave: 1, taskIds: ['TST-1.03'] },
     ]);
 
     const { execSync } = await import('node:child_process');
@@ -161,8 +161,8 @@ describe('waveExecutionWorkflow', () => {
   test('sequential dispatch per wave with correct step IDs', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
     vi.mocked(computeWaves).mockReturnValue([
-      { wave: 0, taskIds: ['TST-01.01', 'TST-01.02'] },
-      { wave: 1, taskIds: ['TST-01.03'] },
+      { wave: 0, taskIds: ['TST-1.01', 'TST-1.02'] },
+      { wave: 1, taskIds: ['TST-1.03'] },
     ]);
 
     const { execSync } = await import('node:child_process');
@@ -174,9 +174,9 @@ describe('waveExecutionWorkflow', () => {
 
     const dispatchCalls = ctx.calls.filter((c) => c.method === 'dispatch');
     expect(dispatchCalls.map((c) => c.stepId)).toEqual([
-      'wave-0-task-TST-01.01',
-      'wave-0-task-TST-01.02',
-      'wave-1-task-TST-01.03',
+      'wave-0-task-TST-1.01',
+      'wave-0-task-TST-1.02',
+      'wave-1-task-TST-1.03',
     ]);
 
     // All dispatches use the default template
@@ -185,7 +185,7 @@ describe('waveExecutionWorkflow', () => {
 
   test('custom template is passed to dispatch', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
-    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-01.01'] }]);
+    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-1.01'] }]);
 
     const { execSync } = await import('node:child_process');
     vi.mocked(execSync).mockReturnValue(Buffer.from(''));
@@ -201,8 +201,8 @@ describe('waveExecutionWorkflow', () => {
   test('gate check runs after each wave', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
     vi.mocked(computeWaves).mockReturnValue([
-      { wave: 0, taskIds: ['TST-01.01'] },
-      { wave: 1, taskIds: ['TST-01.02'] },
+      { wave: 0, taskIds: ['TST-1.01'] },
+      { wave: 1, taskIds: ['TST-1.02'] },
     ]);
 
     const { execSync } = await import('node:child_process');
@@ -222,7 +222,7 @@ describe('waveExecutionWorkflow', () => {
 
   test('gate check failure triggers assisted intervention', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
-    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-01.01'] }]);
+    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-1.01'] }]);
 
     const { execSync } = await import('node:child_process');
     vi.mocked(execSync).mockImplementation(() => {
@@ -241,7 +241,7 @@ describe('waveExecutionWorkflow', () => {
 
   test('gate check pass does not trigger intervention', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
-    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-01.01'] }]);
+    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-1.01'] }]);
 
     const { execSync } = await import('node:child_process');
     vi.mocked(execSync).mockReturnValue(Buffer.from(''));
@@ -273,7 +273,7 @@ describe('waveExecutionWorkflow', () => {
   test('wipLimit trims tasks per wave', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
     vi.mocked(computeWaves).mockReturnValue([
-      { wave: 0, taskIds: ['TST-01.01', 'TST-01.02', 'TST-01.03', 'TST-01.04'] },
+      { wave: 0, taskIds: ['TST-1.01', 'TST-1.02', 'TST-1.03', 'TST-1.04'] },
     ]);
 
     const { execSync } = await import('node:child_process');
@@ -286,20 +286,20 @@ describe('waveExecutionWorkflow', () => {
     const dispatchCalls = ctx.calls.filter((c) => c.method === 'dispatch');
     expect(dispatchCalls).toHaveLength(2);
     expect(dispatchCalls.map((c) => c.stepId)).toEqual([
-      'wave-0-task-TST-01.01',
-      'wave-0-task-TST-01.02',
+      'wave-0-task-TST-1.01',
+      'wave-0-task-TST-1.02',
     ]);
   });
 
   test('failed dispatch increments failedCount in summary', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
-    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-01.01', 'TST-01.02'] }]);
+    vi.mocked(computeWaves).mockReturnValue([{ wave: 0, taskIds: ['TST-1.01', 'TST-1.02'] }]);
 
     const { execSync } = await import('node:child_process');
     vi.mocked(execSync).mockReturnValue(Buffer.from(''));
 
     const ctx = new TestableContext();
-    ctx.configureFailure('wave-0-task-TST-01.02');
+    ctx.configureFailure('wave-0-task-TST-1.02');
 
     await waveExecutionWorkflow(ctx);
 
@@ -310,8 +310,8 @@ describe('waveExecutionWorkflow', () => {
   test('summary reports correct counts across multiple waves', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
     vi.mocked(computeWaves).mockReturnValue([
-      { wave: 0, taskIds: ['TST-01.01'] },
-      { wave: 1, taskIds: ['TST-01.02', 'TST-01.03'] },
+      { wave: 0, taskIds: ['TST-1.01'] },
+      { wave: 1, taskIds: ['TST-1.02', 'TST-1.03'] },
     ]);
 
     const { execSync } = await import('node:child_process');
@@ -328,9 +328,9 @@ describe('waveExecutionWorkflow', () => {
   test('wave ordering ensures wave 1 tasks run after wave 0', async () => {
     const { computeWaves } = await import('../../../../src/modules/pm/engine/dependency.js');
     vi.mocked(computeWaves).mockReturnValue([
-      { wave: 0, taskIds: ['TST-01.01'] },
-      { wave: 1, taskIds: ['TST-01.02'] },
-      { wave: 2, taskIds: ['TST-01.03'] },
+      { wave: 0, taskIds: ['TST-1.01'] },
+      { wave: 1, taskIds: ['TST-1.02'] },
+      { wave: 2, taskIds: ['TST-1.03'] },
     ]);
 
     const { execSync } = await import('node:child_process');
@@ -346,11 +346,11 @@ describe('waveExecutionWorkflow', () => {
       .map((c) => c.stepId);
 
     expect(nonSummarySteps).toEqual([
-      'wave-0-task-TST-01.01',
+      'wave-0-task-TST-1.01',
       'gate-wave-0',
-      'wave-1-task-TST-01.02',
+      'wave-1-task-TST-1.02',
       'gate-wave-1',
-      'wave-2-task-TST-01.03',
+      'wave-2-task-TST-1.03',
       'gate-wave-2',
     ]);
   });

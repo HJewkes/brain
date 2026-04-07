@@ -2,7 +2,7 @@
   "mcpServers": {
     "brain": {
       "command": "npx",
-      "args": ["tsx", "src/cli.ts", "serve", "--v2"],
+      "args": ["tsx", "src/cli.ts", "serve", "--mcp"],
       "cwd": "/Users/hjewkes/Documents/projects/brain",
       "env": {
         "PATH": "/Users/hjewkes/.local/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin"

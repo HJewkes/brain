@@ -25,8 +25,8 @@ beforeAll(async () => {
   sharedResults = await runEvalSuite(corpus, sharedEnv, { k: K });
 }, 120_000);
 
-afterAll(() => {
-  sharedEnv.cleanup();
+afterAll(async () => {
+  await sharedEnv?.cleanup();
 });
 
 describe('RAGAS retrieval metrics', () => {

@@ -56,8 +56,9 @@ export interface WorkflowContext {
   /** Read a workflow parameter. */
   param(key: string): string | undefined;
 
-  /** Dispatch an agent step. Memoized — returns cached result on re-invocation. */
-  dispatch(stepId: string, template: string): Promise<StepResult>;
+  /** Dispatch an agent step. Memoized — returns cached result on re-invocation.
+   *  Pass taskId to dispatch against an existing PM task instead of creating a new one. */
+  dispatch(stepId: string, template: string, taskId?: string): Promise<StepResult>;
 
   /** Run a deterministic seed step (no LLM). Memoized — returns cached result on re-invocation. */
   seed(stepId: string, fn: () => Promise<SeedResult>): Promise<StepResult>;
