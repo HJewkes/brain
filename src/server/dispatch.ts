@@ -9,7 +9,7 @@ import type { Embedder } from '../types.js';
 import type { RoutingResult } from '../modules/pm/engine/routing.js';
 import type { PullResult } from '../modules/agents/task-pull.js';
 import { pullNextTask } from '../modules/agents/task-pull.js';
-import { getTask } from '../modules/pm/data/task-ops.js';
+import { getTask, updateTaskStatus } from '../modules/pm/data/task-ops.js';
 import { buildWorkerDispatchFromPull } from '../modules/agents/coordinator.js';
 import { generateClaim, isClaimStale } from '../modules/pm/engine/claims.js';
 import { getPmNotes } from '../modules/pm/data/queries.js';
@@ -147,6 +147,11 @@ export async function dispatchTask(
   }
 
   updateAgentStatus(svc.db, agentId, 'active', { pid: proc.pid });
+
+  // Transition task to in-progress so agent-done handler can mark it done
+  // (claimed → in-progress is valid; in-progress → done is valid)
+  updateTaskStatus(svc.db, svc.config, svc.embedder, taskId, 'in-progress').catch(() => {});
+
   setupProcessTracking(svc, proc, agentId, mcpConfigPath);
   proc.unref();
 
