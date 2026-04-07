@@ -13,6 +13,13 @@ vi.mock('../../../src/services/brain-db.js', () => ({
 
 vi.mock('../../../src/modules/sessions/data/session-ops.js', () => ({
   updateSessionNoteMeta: vi.fn(),
+  listSessions: vi.fn().mockReturnValue([]),
+}));
+
+vi.mock('../../../src/modules/sessions/analytics/scorer.js', () => ({
+  scoreSessionQuality: vi.fn().mockReturnValue({ overall: 70 }),
+  computeReferenceDistribution: vi.fn().mockReturnValue(null),
+  compareToReference: vi.fn(),
 }));
 
 vi.mock('../../../src/modules/sessions/engine/aggregate.js', () => ({

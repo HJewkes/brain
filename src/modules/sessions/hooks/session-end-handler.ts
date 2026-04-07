@@ -2,9 +2,14 @@ import type { HookHandler, HookInput, HookConfig, HookResult } from '../../../ho
 import { hookAllow } from '../../../hooks/types.js';
 import { loadConfig, resolveInstance } from '../../../services/config.js';
 import { BrainDB } from '../../../services/brain-db.js';
-import { updateSessionNoteMeta } from '../data/session-ops.js';
+import { updateSessionNoteMeta, listSessions } from '../data/session-ops.js';
 import { aggregateSessionEvents } from '../engine/aggregate.js';
 import { exportSessionSpans } from '../integrations/span-exporter.js';
+import {
+  scoreSessionQuality,
+  computeReferenceDistribution,
+  compareToReference,
+} from '../analytics/scorer.js';
 
 type Outcome = 'success' | 'partial' | 'abandoned' | 'unknown';
 
@@ -60,6 +65,32 @@ export const sessionEndHandler: HookHandler = {
 
       // Export spans to Phoenix if endpoint is configured — fire-and-forget
       exportSessionSpans(analytics);
+
+      // Score current session and run regression check against reference sessions
+      const score = scoreSessionQuality(analytics);
+      if (score.overall != null) {
+        const refSessions = listSessions(db, { reference: true });
+        if (refSessions.length < 3) {
+          console.info(
+            `[sessions:end] Regression check skipped: ${refSessions.length} reference session(s) available (need 3+)`
+          );
+        } else {
+          const refScores = refSessions
+            .map((s) => {
+              // db is non-null here: assigned before this block in the try branch
+              const a = aggregateSessionEvents(db!, s.session_id);
+              return a ? scoreSessionQuality(a) : null;
+            })
+            .filter((s): s is ReturnType<typeof scoreSessionQuality> => s !== null);
+          const distribution = computeReferenceDistribution(refScores);
+          if (distribution) {
+            const report = compareToReference(score, distribution);
+            if (report.regressed) {
+              console.warn(`[sessions:end] ${report.message}`);
+            }
+          }
+        }
+      }
 
       // Write interim values — commitSession (priority 20) may overwrite
       // with richer data from full JSONL analysis and task link resolution
