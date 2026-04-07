@@ -84,6 +84,21 @@ export const waveExecutionWorkflow: WorkflowFn = async (ctx) => {
     // Dispatch each task in the wave sequentially
     for (const taskId of wave.taskIds) {
       const stepId = `wave-${wave.wave}-task-${taskId}`;
+
+      // Skip tasks already completed (e.g., from a prior run before restart)
+      if (ctx.db) {
+        try {
+          const { getTask: getTaskStatus } = await import('../../pm/data/task-ops.js');
+          const taskResult = getTaskStatus(ctx.db, taskId);
+          if (taskResult.ok && taskResult.data.status === 'done') {
+            completedCount++;
+            continue;
+          }
+        } catch {
+          // DB access may fail in test contexts — proceed with dispatch
+        }
+      }
+
       try {
         await ctx.dispatch(stepId, template, taskId);
         completedCount++;

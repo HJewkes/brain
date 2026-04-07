@@ -21,8 +21,23 @@ import { replaceFrontmatterField } from '../utils.js';
 import { indexSingleFile } from '../services/indexing.js';
 import { allocateWorktree } from '../modules/agents/worktree.js';
 import type { AllocateWorktreeResult } from '../modules/agents/worktree.js';
-import { createAgent, updateAgentStatus, setAgentContext } from '../modules/agents/data.js';
+import {
+  createAgent,
+  updateAgentStatus,
+  setAgentContext,
+  listAgents,
+} from '../modules/agents/data.js';
+import type { AgentStatus } from '../modules/agents/types.js';
 import { parseCompletionMessage, handleCompletion } from '../modules/agents/completion-protocol.js';
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // --- Types ---
 
@@ -187,11 +202,27 @@ async function resolveExplicitTask(
   }
 
   const task = result.data;
+
+  // Dedup: if an active agent with a live process already exists for this task, reject
+  const activeAgents = listAgents(svc.db, { status: 'active' as AgentStatus });
+  const existing = activeAgents.find((a) => a.brain_task === taskId);
+  if (existing) {
+    const pid = (existing as unknown as Record<string, unknown>).pid as number | undefined;
+    if (pid && isAlive(pid)) {
+      throw new Error(`Task ${taskId} already has an active agent (id=${existing.id}, pid=${pid})`);
+    }
+  }
+
+  if (task.status === 'done' || task.status === 'cancelled' || task.status === 'pruned') {
+    throw new Error(`Task ${taskId} has terminal status "${task.status}" — skipping dispatch`);
+  }
   if (task.status === 'claimed' && task.claimed_at && !isClaimStale(task.claimed_at)) {
     throw new Error(`Task ${taskId} has an active claim (claimed at ${task.claimed_at})`);
   }
-  if (task.status !== 'pending' && task.status !== 'claimed') {
-    throw new Error(`Task ${taskId} has status "${task.status}" — expected pending or claimed`);
+  if (task.status !== 'pending' && task.status !== 'claimed' && task.status !== 'in-progress') {
+    throw new Error(
+      `Task ${taskId} has status "${task.status}" — expected pending, claimed, or in-progress`
+    );
   }
 
   await claimTask(svc.db, svc.embedder, taskId);
