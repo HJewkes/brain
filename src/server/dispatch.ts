@@ -374,7 +374,6 @@ function spawnClaude(opts: SpawnOptions): ChildProcess {
     opts.model,
     '--permission-mode',
     'bypassPermissions',
-    '--no-session-persistence',
     '--session-id',
     opts.sessionId,
     '--append-system-prompt',
