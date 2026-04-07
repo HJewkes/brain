@@ -1,4 +1,7 @@
+import type { BrainDB } from '../../../services/brain-db.js';
+import type { BrainConfig } from '../../../types.js';
 import type { SessionMetadata } from '../types.js';
+import { listSessions } from '../data/session-ops.js';
 
 export interface CrossSessionAnalytics {
   byCategory: Array<{
@@ -18,6 +21,16 @@ export interface CrossSessionAnalytics {
     durationTrend: 'improving' | 'stable' | 'degrading';
     sessionsPerDay: number;
   };
+}
+
+export interface TrajectoryPoint {
+  category: string;
+  sessions: number;
+  meanScore: number;
+  stdDev: number;
+  meanToolCallsPerTask: number;
+  meanErrorRate: number;
+  trend: 'improving' | 'stable' | 'degrading';
 }
 
 function extractBranchCategory(branch: string): string {
@@ -121,4 +134,161 @@ export function computeCrossSessionAnalytics(sessions: SessionMetadata[]): Cross
     byBranch,
     trends: { errorRateTrend, durationTrend, sessionsPerDay },
   };
+}
+
+// ---------------------------------------------------------------------------
+// byTaskType: per-PM-category trajectory points
+// ---------------------------------------------------------------------------
+
+const REFERENCE_TOOLS_PER_COMMIT = 20;
+const FRICTION_DENSITY_SCALE = 5;
+
+function clamp(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function scoreFromMetadata(s: SessionMetadata): number {
+  const commitCount = s.commits?.length ?? 0;
+  const toolCalls = s.tool_calls ?? 0;
+  const errorRate = s.error_rate ?? 0;
+  const frictionCount =
+    s.analyticsExt?.friction_categories?.reduce((sum, c) => sum + c.count, 0) ?? 0;
+
+  const efficiency =
+    toolCalls > 0 && commitCount > 0
+      ? clamp(REFERENCE_TOOLS_PER_COMMIT / (toolCalls / commitCount))
+      : 0;
+  const reliability = clamp(1 - errorRate);
+  const assurance =
+    toolCalls > 0 ? clamp(1 - (frictionCount / toolCalls) * FRICTION_DENSITY_SCALE) : 1;
+
+  // Steadiness defaults to 1.0 (no retry data in metadata); weights match scorer.ts
+  return Math.round((efficiency * 0.35 + reliability * 0.3 + assurance * 0.2 + 0.15) * 100);
+}
+
+function avg(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function stddev(values: number[]): number {
+  if (values.length < 2) return 0;
+  const mean = avg(values);
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
+
+function buildTaskCategoryMap(db: BrainDB): Map<string, string> {
+  const map = new Map<string, string>();
+  try {
+    const noteIds = db.getModuleNoteIds({ module: 'pm', type: 'task' });
+    if (noteIds.length === 0) return map;
+    const notes = db.getNotesByIds(noteIds);
+    for (const [, note] of notes) {
+      if (!note.metadata) continue;
+      const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+      if (meta.display_id && meta.category) {
+        map.set(meta.display_id as string, meta.category as string);
+      }
+    }
+  } catch {
+    // Best-effort; return partial map
+  }
+  return map;
+}
+
+function dominantCategory(session: SessionMetadata, categoryMap: Map<string, string>): string {
+  const taskIds = [...(session.tasks_worked ?? []), ...(session.tasks_completed ?? [])];
+  if (taskIds.length === 0) return 'unknown';
+
+  const counts = new Map<string, number>();
+  for (const id of taskIds) {
+    const cat = categoryMap.get(id) ?? 'unknown';
+    counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+
+  let best = 'unknown';
+  let bestCount = 0;
+  for (const [cat, count] of counts) {
+    if (count > bestCount) {
+      best = cat;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Compute per-PM-category trajectory points for sessions in the last `days` days.
+ */
+export function byTaskType(
+  db: BrainDB,
+  _config: BrainConfig,
+  opts: { days: number }
+): TrajectoryPoint[] {
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - opts.days);
+
+  const sessions = listSessions(db, { since: sinceDate.toISOString() });
+
+  const sorted = [...sessions].sort(
+    (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
+  );
+
+  const taskCategoryMap = buildTaskCategoryMap(db);
+
+  const groups = new Map<string, SessionMetadata[]>();
+  for (const s of sorted) {
+    const cat = dominantCategory(s, taskCategoryMap);
+    const list = groups.get(cat) ?? [];
+    list.push(s);
+    groups.set(cat, list);
+  }
+
+  const points: TrajectoryPoint[] = [];
+
+  for (const [category, group] of groups) {
+    const scores = group.map(scoreFromMetadata);
+    const meanScore = avg(scores);
+    const sd = stddev(scores);
+
+    const meanToolCallsPerTask = avg(
+      group.map((s) => {
+        const taskCount = (s.tasks_worked?.length ?? 0) + (s.tasks_completed?.length ?? 0);
+        return taskCount > 0 ? (s.tool_calls ?? 0) / taskCount : 0;
+      })
+    );
+    const meanErrorRate = avg(group.map((s) => s.error_rate ?? 0));
+
+    // Trend: compare older half vs recent half (higher score = better)
+    const mid = Math.floor(group.length / 2);
+    const older = group.slice(0, Math.max(mid, 1));
+    const recent = group.slice(Math.max(mid, 1));
+
+    const olderScore = avg(older.map(scoreFromMetadata));
+    const recentScore = avg(recent.map(scoreFromMetadata));
+
+    let trend: 'improving' | 'stable' | 'degrading';
+    if (olderScore === 0 && recentScore === 0) {
+      trend = 'stable';
+    } else {
+      const base = Math.max(olderScore, 0.001);
+      const change = (recentScore - olderScore) / base;
+      if (change > 0.1) trend = 'improving';
+      else if (change < -0.1) trend = 'degrading';
+      else trend = 'stable';
+    }
+
+    points.push({
+      category,
+      sessions: group.length,
+      meanScore,
+      stdDev: sd,
+      meanToolCallsPerTask,
+      meanErrorRate,
+      trend,
+    });
+  }
+
+  return points.sort((a, b) => b.sessions - a.sessions);
 }

@@ -1,100 +1,68 @@
 import { Command } from '@commander-js/extra-typings';
 import { withDb } from '../../../services/brain-service.js';
-import { listSessions } from '../data/session-ops.js';
-import { parseSinceDate } from '../utils.js';
-import type { SessionListFilters } from '../types.js';
+import { byTaskType } from '../analytics/cross-session.js';
+import type { TrajectoryPoint } from '../analytics/cross-session.js';
 
-interface AnalyticsSummary {
-  sessionCount: number;
-  totalTurns: number;
-  totalToolCalls: number;
-  totalErrors: number;
-  avgErrorRate: number;
-  avgDurationMinutes: number;
-  totalTokensInput: number;
-  totalTokensOutput: number;
-  topTools: Array<{ name: string; count: number }>;
-  frictionSignals: number;
+const TREND_SYMBOL: Record<string, string> = {
+  improving: '↑',
+  stable: '→',
+  degrading: '↓',
+};
+
+function printTable(points: TrajectoryPoint[]): void {
+  if (points.length === 0) {
+    process.stdout.write('No session data found for the given period.\n');
+    return;
+  }
+
+  const header =
+    `${'CATEGORY'.padEnd(20)} ` +
+    `${'SESSIONS'.padStart(8)} ` +
+    `${'MEAN SCORE'.padStart(10)} ` +
+    `${'STD DEV'.padStart(8)} ` +
+    `${'TOOLS/TASK'.padStart(10)} ` +
+    `${'ERR RATE'.padStart(9)} ` +
+    `${'TREND'.padStart(10)}\n`;
+
+  process.stdout.write('Session Analytics by Task Category\n');
+  process.stdout.write('='.repeat(79) + '\n');
+  process.stdout.write(header);
+  process.stdout.write('-'.repeat(79) + '\n');
+
+  for (const p of points) {
+    const trendLabel = `${TREND_SYMBOL[p.trend]} ${p.trend}`;
+    process.stdout.write(
+      `${p.category.padEnd(20)} ` +
+        `${String(p.sessions).padStart(8)} ` +
+        `${p.meanScore.toFixed(1).padStart(10)} ` +
+        `${p.stdDev.toFixed(1).padStart(8)} ` +
+        `${p.meanToolCallsPerTask.toFixed(1).padStart(10)} ` +
+        `${(p.meanErrorRate * 100).toFixed(1).padStart(8)}% ` +
+        `${trendLabel.padStart(10)}\n`
+    );
+  }
 }
 
 export function createSessionAnalyticsCommand(): Command {
   return new Command('analytics')
-    .description('Session analytics summary')
-    .option('--project <prefix>', 'Filter by PM project')
-    .option('--project-dir <dir>', 'Filter by directory')
-    .option('--since <date>', 'Sessions after date')
-    .option('--limit <n>', 'Max sessions to analyze', '100')
-    .option('--json', 'Output JSON')
-    .action(
-      async (opts: {
-        project?: string;
-        projectDir?: string;
-        since?: string;
-        limit?: string;
-        json?: boolean;
-      }) => {
-        await withDb(async (svc) => {
-          const filters: SessionListFilters = {};
-          if (opts.project) filters.project = opts.project;
-          if (opts.projectDir) filters.projectDir = opts.projectDir;
-          if (opts.since) filters.since = parseSinceDate(opts.since).toISOString();
+    .description('Session analytics by task category')
+    .option('--category <cat>', 'Filter to a specific task category')
+    .option('--days <n>', 'Number of days to look back', '90')
+    .option('--json', 'Output JSON array')
+    .action(async (opts: { category?: string; days?: string; json?: boolean }) => {
+      await withDb(async (svc) => {
+        const days = parseInt(opts.days ?? '90', 10);
+        let points = byTaskType(svc.db, svc.config, { days });
 
-          const sessions = listSessions(svc.db, filters);
-          const limit = parseInt(opts.limit ?? '100', 10);
-          const limited = sessions.slice(0, limit);
+        if (opts.category) {
+          points = points.filter((p) => p.category === opts.category);
+        }
 
-          const summary: AnalyticsSummary = {
-            sessionCount: limited.length,
-            totalTurns: 0,
-            totalToolCalls: 0,
-            totalErrors: 0,
-            avgErrorRate: 0,
-            avgDurationMinutes: 0,
-            totalTokensInput: 0,
-            totalTokensOutput: 0,
-            topTools: [],
-            frictionSignals: 0,
-          };
-
-          let totalDuration = 0;
-          let totalErrorRate = 0;
-
-          for (const s of limited) {
-            summary.totalTurns += s.total_turns ?? 0;
-            summary.totalToolCalls += s.tool_calls ?? 0;
-            summary.totalErrors += s.error_count ?? 0;
-            totalErrorRate += s.error_rate ?? 0;
-            totalDuration += s.duration_minutes ?? 0;
-            summary.totalTokensInput += s.tokens_input ?? 0;
-            summary.totalTokensOutput += s.tokens_output ?? 0;
-
-            if (s.analyticsExt?.friction_categories) {
-              for (const f of s.analyticsExt.friction_categories) {
-                summary.frictionSignals += f.count;
-              }
-            }
-          }
-
-          if (limited.length > 0) {
-            summary.avgErrorRate = totalErrorRate / limited.length;
-            summary.avgDurationMinutes = totalDuration / limited.length;
-          }
-
-          if (opts.json) {
-            process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
-          } else {
-            process.stdout.write(`Sessions: ${summary.sessionCount}\n`);
-            process.stdout.write(`Total turns: ${summary.totalTurns}\n`);
-            process.stdout.write(`Total tool calls: ${summary.totalToolCalls}\n`);
-            process.stdout.write(`Total errors: ${summary.totalErrors}\n`);
-            process.stdout.write(`Avg error rate: ${(summary.avgErrorRate * 100).toFixed(1)}%\n`);
-            process.stdout.write(`Avg duration: ${summary.avgDurationMinutes.toFixed(0)}m\n`);
-            process.stdout.write(
-              `Tokens: ${summary.totalTokensInput} in / ${summary.totalTokensOutput} out\n`
-            );
-            process.stdout.write(`Friction signals: ${summary.frictionSignals}\n`);
-          }
-        });
-      }
-    );
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(points, null, 2) + '\n');
+        } else {
+          printTable(points);
+        }
+      });
+    });
 }
