@@ -15,6 +15,7 @@ import { createSessionReferenceCommand } from './commands/reference.js';
 import { createSessionTrajectoryCommand } from './commands/trajectory.js';
 import { createSessionAnalyzeCommand } from './commands/analyze.js';
 import { createSessionSkillStatsCommand } from './commands/skill-stats.js';
+import { createSessionMarkCommand, createSessionUnmarkCommand } from './commands/mark.js';
 import { sessionRestoreHandler } from './hooks/session-restore-handler.js';
 import { sessionBriefingHandler } from './hooks/session-briefing-handler.js';
 import { sessionCaptureHandler } from './hooks/session-capture-handler.js';
@@ -373,6 +374,8 @@ export const sessionsModule: BrainModule = {
     sessionCmd.addCommand(createSessionTrajectoryCommand());
     sessionCmd.addCommand(createSessionAnalyzeCommand());
     sessionCmd.addCommand(createSessionSkillStatsCommand());
+    sessionCmd.addCommand(createSessionMarkCommand());
+    sessionCmd.addCommand(createSessionUnmarkCommand());
 
     ctx.registerCommand(sessionCmd);
   },
