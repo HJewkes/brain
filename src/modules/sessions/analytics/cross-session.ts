@@ -224,10 +224,11 @@ function dominantCategory(session: SessionMetadata, categoryMap: Map<string, str
 export function byTaskType(
   db: BrainDB,
   _config: BrainConfig,
-  opts: { days: number }
+  opts: { days?: number } = {}
 ): TrajectoryPoint[] {
+  const days = opts.days ?? 90;
   const sinceDate = new Date();
-  sinceDate.setDate(sinceDate.getDate() - opts.days);
+  sinceDate.setDate(sinceDate.getDate() - days);
 
   const sessions = listSessions(db, { since: sinceDate.toISOString() });
 
