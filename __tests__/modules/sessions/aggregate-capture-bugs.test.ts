@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import type { BrainDB } from '../../../src/services/brain-db.js';
-import { aggregateSessionEvents, parsePrUrl } from '../../../src/modules/sessions/engine/aggregate.js';
+import {
+  aggregateSessionEvents,
+  parsePrUrl,
+} from '../../../src/modules/sessions/engine/aggregate.js';
 import { randomUUID } from 'node:crypto';
-
-type RawDb = {
-  exec: (sql: string) => void;
-  prepare: (sql: string) => { run: (...args: unknown[]) => void };
-};
 
 function wrapDb(raw: Database.Database): BrainDB {
   return { db: raw, close: () => raw.close() } as unknown as BrainDB;
@@ -18,12 +16,12 @@ function insertEvent(
   sessionId: string,
   eventType: string,
   data: Record<string, unknown>,
-  timestamp = '2026-04-01T10:00:00Z',
+  timestamp = '2026-04-01T10:00:00Z'
 ): void {
   raw
     .prepare(
       `INSERT INTO session_events (session_id, event_type, category, data, timestamp, data_hash)
-       VALUES (?, ?, NULL, ?, ?, ?)`,
+       VALUES (?, ?, NULL, ?, ?, ?)`
     )
     .run(sessionId, eventType, JSON.stringify(data), timestamp, randomUUID());
 }
