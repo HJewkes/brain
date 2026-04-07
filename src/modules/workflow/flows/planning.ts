@@ -1,7 +1,7 @@
 /**
  * Planning workflow — produces design artifacts for a feature.
  *
- * Steps: seed → research → interview → design ⇄ critic → spec-tests
+ * Steps: seed → research → interview → design ⇄ critic → spec-tests → review (assisted) → decompose
  *
  * Outputs (written to .plans/<planId>/):
  *   - pre-existing-context.md (seed)
@@ -93,6 +93,12 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
 
   // Spec tests validate the acceptance criteria
   await ctx.dispatch('spec-tests', 'planning-spectests');
+
+  // Coordinator-assisted review — presents design summary to user for approval
+  await ctx.assisted('review', 'planning-review');
+
+  // Decompose approved design into PM tasks with wave dependencies
+  await ctx.dispatch('decompose', 'planning-decompose');
 
   // Completion phase — ingest plan artifacts into brain and create implementation task
   if (ctx.db && ctx.config && ctx.embedder) {
