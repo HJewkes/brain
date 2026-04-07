@@ -13,6 +13,8 @@ import { createSessionStatsCommand } from './commands/stats.js';
 import { createSessionBriefingCommand } from './commands/briefing.js';
 import { createSessionReferenceCommand } from './commands/reference.js';
 import { createSessionTrajectoryCommand } from './commands/trajectory.js';
+import { createSessionAnalyzeCommand } from './commands/analyze.js';
+import { createSessionSkillStatsCommand } from './commands/skill-stats.js';
 import { sessionRestoreHandler } from './hooks/session-restore-handler.js';
 import { sessionBriefingHandler } from './hooks/session-briefing-handler.js';
 import { sessionCaptureHandler } from './hooks/session-capture-handler.js';
@@ -369,6 +371,8 @@ export const sessionsModule: BrainModule = {
     sessionCmd.addCommand(createSessionBriefingCommand());
     sessionCmd.addCommand(createSessionReferenceCommand());
     sessionCmd.addCommand(createSessionTrajectoryCommand());
+    sessionCmd.addCommand(createSessionAnalyzeCommand());
+    sessionCmd.addCommand(createSessionSkillStatsCommand());
 
     ctx.registerCommand(sessionCmd);
   },
