@@ -206,6 +206,8 @@ export function listSessions(db: BrainDB, filters?: SessionListFilters): Session
       if (filters.projectDir && meta.project_dir !== filters.projectDir) continue;
       if (filters.project && meta.project !== filters.project) continue;
       if (filters.since && (meta.started_at as string) < filters.since) continue;
+      if (filters.reference !== undefined && Boolean(meta.is_reference) !== filters.reference)
+        continue;
     }
 
     results.push(noteToSessionMetadata(meta));
@@ -352,7 +354,36 @@ function noteToSessionMetadata(meta: Record<string, unknown>): SessionMetadata {
     files_written: meta.files_written as string[] | undefined,
     segment_count: meta.segment_count as number | undefined,
     instance_id: meta.instance_id as string | undefined,
+    is_reference: meta.is_reference as boolean | undefined,
   };
+}
+
+export function markSessionReference(
+  db: BrainDB,
+  displayId: string,
+  isReference: boolean
+): Result<SessionMetadata> {
+  const noteIds = db.getModuleNoteIds({ module: 'sessions', type: 'session' });
+  const notes = db.getNotesByIds(noteIds);
+
+  for (const [, note] of notes) {
+    if (!note.metadata) continue;
+    const meta = JSON.parse(note.metadata) as Record<string, unknown>;
+    if (meta.display_id !== displayId) continue;
+
+    if (isReference) {
+      meta.is_reference = true;
+    } else {
+      delete meta.is_reference;
+    }
+    meta.modified = new Date().toISOString().slice(0, 10);
+
+    const updated = { ...note, metadata: JSON.stringify(meta) };
+    db.upsertNote(updated);
+    return ok(noteToSessionMetadata(meta));
+  }
+
+  return fail('NOT_FOUND', `Session ${displayId} not found`);
 }
 
 // --- Structural Events ---

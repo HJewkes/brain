@@ -1,5 +1,30 @@
 import type { SessionAnalytics } from '../types.js';
 
+export interface ReferenceDistribution {
+  /** Number of reference sessions used to compute this distribution */
+  sampleSize: number;
+  /** Mean quality score across reference sessions */
+  meanOverall: number;
+  /** Standard deviation of overall scores */
+  stddevOverall: number;
+  /** Mean per-dimension scores */
+  meanEfficiency: number;
+  meanReliability: number;
+  meanAssurance: number;
+  meanSteadiness: number;
+}
+
+export interface DivergenceReport {
+  /** z-score of the candidate session's overall score vs reference distribution */
+  zScore: number;
+  /** Whether the candidate score is significantly below the reference mean */
+  regressed: boolean;
+  /** Human-readable explanation */
+  message: string;
+  referenceDistribution: ReferenceDistribution;
+  candidateScore: SessionQualityScore;
+}
+
 export interface SessionQualityScore {
   /** Composite quality score 0–100 (higher = better) */
   overall: number;
@@ -128,5 +153,68 @@ export function scoreSessionQuality(analytics: SessionAnalytics): SessionQuality
       retryCount,
       hookPreventionCount: analytics.hookPreventionCount,
     },
+  };
+}
+
+/**
+ * Compute the reference distribution from a set of pre-scored reference sessions.
+ * Returns null when fewer than 2 samples are available (z-score undefined).
+ */
+export function computeReferenceDistribution(
+  scores: SessionQualityScore[]
+): ReferenceDistribution | null {
+  if (scores.length < 2) return null;
+
+  const n = scores.length;
+  const mean = (values: number[]) => values.reduce((s, v) => s + v, 0) / n;
+  const overalls = scores.map((s) => s.overall);
+  const meanOverall = mean(overalls);
+  const variance = overalls.reduce((s, v) => s + (v - meanOverall) ** 2, 0) / (n - 1);
+  const stddevOverall = Math.sqrt(variance);
+
+  return {
+    sampleSize: n,
+    meanOverall,
+    stddevOverall,
+    meanEfficiency: mean(scores.map((s) => s.efficiency)),
+    meanReliability: mean(scores.map((s) => s.reliability)),
+    meanAssurance: mean(scores.map((s) => s.assurance)),
+    meanSteadiness: mean(scores.map((s) => s.steadiness)),
+  };
+}
+
+/**
+ * Threshold: a session is flagged as regressed when its overall score falls
+ * more than REGRESSION_Z_THRESHOLD standard deviations below the reference mean.
+ */
+const REGRESSION_Z_THRESHOLD = -1.5;
+
+/**
+ * Compare a candidate session score against a reference distribution.
+ * Returns a divergence report suitable for CI gate evaluation.
+ */
+export function compareToReference(
+  candidate: SessionQualityScore,
+  distribution: ReferenceDistribution
+): DivergenceReport {
+  const zScore =
+    distribution.stddevOverall > 0
+      ? (candidate.overall - distribution.meanOverall) / distribution.stddevOverall
+      : candidate.overall >= distribution.meanOverall
+        ? 0
+        : -Infinity;
+
+  const regressed = zScore < REGRESSION_Z_THRESHOLD;
+
+  const message = regressed
+    ? `Session quality regressed: score ${candidate.overall} is ${Math.abs(zScore).toFixed(2)}σ below reference mean ${distribution.meanOverall.toFixed(1)} (threshold ${Math.abs(REGRESSION_Z_THRESHOLD)}σ)`
+    : `Session quality within reference bounds: score ${candidate.overall}, z=${zScore.toFixed(2)}`;
+
+  return {
+    zScore,
+    regressed,
+    message,
+    referenceDistribution: distribution,
+    candidateScore: candidate,
   };
 }
