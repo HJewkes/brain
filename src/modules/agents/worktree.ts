@@ -59,6 +59,13 @@ export function allocateWorktree(
   projectRoot: string,
   opts: AllocateWorktreeOptions
 ): AllocateWorktreeResult {
+  if (!opts.workstream) {
+    throw new Error(
+      `Cannot allocate worktree for task ${opts.taskId}: workstream is empty. ` +
+        `Ensure the task belongs to a workstream before dispatching with worktree isolation.`
+    );
+  }
+
   const budget = opts.budget ?? DEFAULT_BUDGET;
   const basePath = opts.basePath ?? DEFAULT_BASE_PATH;
 
@@ -139,12 +146,16 @@ export function releaseWorktree(db: unknown, projectRoot: string, taskId: string
       stdio: 'pipe',
     });
   } catch {
-    // Force remove if normal remove fails (dirty worktree)
-    execFileSync('git', ['worktree', 'remove', '--force', allocation.worktree_path], {
-      cwd: projectRoot,
-      encoding: 'utf-8',
-      stdio: 'pipe',
-    });
+    try {
+      // Force remove if normal remove fails (dirty worktree)
+      execFileSync('git', ['worktree', 'remove', '--force', allocation.worktree_path], {
+        cwd: projectRoot,
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+    } catch {
+      // Worktree directory already gone — proceed with DB cleanup
+    }
   }
 
   try {

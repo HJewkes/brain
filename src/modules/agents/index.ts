@@ -63,8 +63,9 @@ const agentDoneHandler: HookHandler = {
         `<agent-done agent_id="${result.agentId ?? 'unknown'}" status="${result.status}">` +
           `${result.message}</agent-done>`
       );
-    } catch {
-      // Never block on agent-done
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[agents:agent-done] hook error: ${msg}\n`);
       return hookAllow();
     }
   },

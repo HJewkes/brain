@@ -9,6 +9,7 @@ import { reviewWorkflow } from '../../../../src/modules/workflow/flows/review.js
 import { brainstormingWorkflow } from '../../../../src/modules/workflow/flows/brainstorming.js';
 import { prLifecycleWorkflow } from '../../../../src/modules/workflow/flows/pr-lifecycle.js';
 import { uxPrototypeWorkflow } from '../../../../src/modules/workflow/flows/ux-prototype.js';
+import { singleStepWorkflow } from '../../../../src/modules/workflow/flows/single-step.js';
 
 // ---------------------------------------------------------------------------
 // Shared TestableContext
@@ -69,6 +70,21 @@ class TestableContext implements WorkflowContextInterface {
     return {
       stepId,
       taskId: `TST-${stepId}`,
+      agentId: null,
+      signal: null,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
+  async seed(
+    stepId: string,
+    fn: () => Promise<{ data: Record<string, string>; output?: string }>
+  ): Promise<StepResult> {
+    this.calls.push({ method: 'dispatch', stepId, template: '' });
+    await fn();
+    return {
+      stepId,
+      taskId: `seed:${stepId}`,
       agentId: null,
       signal: null,
       completedAt: new Date().toISOString(),
@@ -324,5 +340,47 @@ describe('uxPrototypeWorkflow', () => {
 
     const iterateCount = steps(ctx).filter((s) => s === 'iterate').length;
     expect(iterateCount).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Single-step workflow
+// ---------------------------------------------------------------------------
+
+describe('singleStepWorkflow', () => {
+  test('dispatches the named template as a single step', async () => {
+    const ctx = new TestableContext({ template: 'planning-decompose' });
+
+    await singleStepWorkflow(ctx);
+
+    expect(steps(ctx)).toEqual(['planning-decompose']);
+    expect(ctx.calls[0]).toEqual({
+      method: 'dispatch',
+      stepId: 'planning-decompose',
+      template: 'planning-decompose',
+    });
+  });
+
+  test('uses custom stepId when provided', async () => {
+    const ctx = new TestableContext({ template: 'planning-decompose', stepId: 'my-decompose' });
+
+    await singleStepWorkflow(ctx);
+
+    expect(steps(ctx)).toEqual(['my-decompose']);
+    expect(ctx.calls[0].template).toBe('planning-decompose');
+  });
+
+  test('sanitises template name for stepId when stepId not provided', async () => {
+    const ctx = new TestableContext({ template: 'some.weird/template' });
+
+    await singleStepWorkflow(ctx);
+
+    expect(ctx.calls[0].stepId).toBe('some-weird-template');
+  });
+
+  test('throws when template param is missing', async () => {
+    const ctx = new TestableContext({});
+
+    await expect(singleStepWorkflow(ctx)).rejects.toThrow('requires a "template"');
   });
 });

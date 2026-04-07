@@ -184,6 +184,16 @@ describe('worktree lifecycle', () => {
       ).toThrow('Worktree budget exhausted: 2/2');
     });
 
+    it('throws when workstream is empty', () => {
+      expect(() =>
+        allocateWorktree(db, '/repo', {
+          taskId: 'VNM-09.01',
+          workstream: '',
+          claimToken: 'tok-1',
+        })
+      ).toThrow('workstream is empty');
+    });
+
     it('uses default basePath and budget when not supplied', () => {
       const result = allocateWorktree(db, '/repo', {
         taskId: 'VNM-09.01',

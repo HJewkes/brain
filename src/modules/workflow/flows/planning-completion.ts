@@ -96,9 +96,7 @@ async function ingestArtifact(
 }
 
 /** Ingest all plan artifacts and return their note IDs. */
-async function ingestAllArtifacts(
-  params: CompletionParams
-): Promise<Map<string, string>> {
+async function ingestAllArtifacts(params: CompletionParams): Promise<Map<string, string>> {
   const noteIds = new Map<string, string>();
   for (const artifact of PLAN_ARTIFACTS) {
     const noteId = await ingestArtifact(params, artifact);

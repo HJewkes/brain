@@ -502,6 +502,16 @@ describe('AC-10: planningWorkflow low complexity runs to completion', () => {
       brief: 'Test AC-10 low complexity',
     });
 
+    // Resolve dispatch agents up to the assisted review step
+    await resolveAllAgents(runtime, runId);
+
+    // The workflow pauses at the assisted review step — signal it to continue
+    await vi.waitFor(() => {
+      expect(runtime.getStatus(runId)?.status).toBe('paused');
+    });
+    runtime.signal(runId, 'review', { signal: 'approved' });
+
+    // Resolve the remaining dispatch agent (decompose)
     await resolveAllAgents(runtime, runId);
 
     await vi.waitFor(() => {
@@ -512,6 +522,8 @@ describe('AC-10: planningWorkflow low complexity runs to completion', () => {
     expect(status.stepResults['design:0']).toBeDefined();
     expect(status.stepResults['critic:0']).toBeDefined();
     expect(status.stepResults['spec-tests:0']).toBeDefined();
+    expect(status.stepResults['review']).toBeDefined();
+    expect(status.stepResults['decompose:0']).toBeDefined();
   });
 });
 

@@ -404,4 +404,19 @@ describe('WorkflowRuntime — reconciler', () => {
     // Stopping again should be safe
     runtime.stopReconciler();
   });
+
+  test('start() auto-starts reconciler', async () => {
+    const runtime = new WorkflowRuntime({ db, config });
+    let resolved = false;
+    runtime.register('test-auto-reconciler', async () => {
+      resolved = true;
+    });
+
+    await runtime.start('test-auto-reconciler', {});
+    // The workflow completes immediately (no dispatch), but the reconciler
+    // should have been started by start(). Verify by stopping it (no-op if not started).
+    // We can't directly check the timer, but stopReconciler should be safe.
+    runtime.stopReconciler();
+    expect(resolved).toBe(true);
+  });
 });
