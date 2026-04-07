@@ -4,6 +4,7 @@ import { loadConfig, resolveInstance } from '../../../services/config.js';
 import { BrainDB } from '../../../services/brain-db.js';
 import { updateSessionNoteMeta } from '../data/session-ops.js';
 import { aggregateSessionEvents } from '../engine/aggregate.js';
+import { exportSessionSpans } from '../integrations/span-exporter.js';
 
 type Outcome = 'success' | 'partial' | 'abandoned' | 'unknown';
 
@@ -56,6 +57,9 @@ export const sessionEndHandler: HookHandler = {
 
       const outcome = classifyOutcome(analytics);
       const endedAt = new Date().toISOString();
+
+      // Export spans to Phoenix if endpoint is configured — fire-and-forget
+      exportSessionSpans(analytics);
 
       // Write interim values — commitSession (priority 20) may overwrite
       // with richer data from full JSONL analysis and task link resolution

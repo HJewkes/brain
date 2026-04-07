@@ -19,6 +19,10 @@ vi.mock('../../../src/modules/sessions/engine/aggregate.js', () => ({
   aggregateSessionEvents: vi.fn(),
 }));
 
+vi.mock('../../../src/modules/sessions/integrations/span-exporter.js', () => ({
+  exportSessionSpans: vi.fn(),
+}));
+
 import { loadConfig, resolveInstance } from '../../../src/services/config.js';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { updateSessionNoteMeta } from '../../../src/modules/sessions/data/session-ops.js';
