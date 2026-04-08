@@ -22,6 +22,8 @@ import { createTask } from '../../pm/data/task-ops.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
 import { dispatchTask } from '../../../server/dispatch.js';
 import { captureStepOutput } from '../engine/output-capture.js';
+import { classifyWorkflowTurnComplexity } from '../../pm/engine/routing.js';
+import { setAgentContext } from '../../agents/data.js';
 
 // Re-export the interface for use by runtime.ts
 export type { WorkflowContext as WorkflowContextInterface } from './types.js';
@@ -209,7 +211,8 @@ export class WorkflowContext {
     this._activeAgent = null;
     this.persist();
 
-    const agent = await this.spawnAgent(taskId, rendered);
+    const stepModel = classifyWorkflowTurnComplexity(template, this.iteration(stepId));
+    const agent = await this.spawnAgent(taskId, rendered, stepModel);
     this._activeAgent = { pid: agent.pid, taskId: agent.taskId, agentId: agent.agentId, stepId };
     this.persist();
 
@@ -435,7 +438,8 @@ export class WorkflowContext {
 
   private async spawnAgent(
     taskId: string,
-    _rendered: string
+    _rendered: string,
+    routedModel?: 'opus' | 'sonnet' | 'haiku'
   ): Promise<{ pid: number; taskId: string; agentId: string }> {
     // Use BrainServiceClass-based dispatch when available.
     // For now, use the server dispatch infrastructure directly.
@@ -449,14 +453,25 @@ export class WorkflowContext {
     // that we don't want inside the runtime.
     const svc = this.buildServiceShim();
 
+    // routedModel comes from classifyWorkflowTurnComplexity; fall back to
+    // the workflow-level default for unknown/unclassified templates.
+    const model = routedModel ?? this.model;
+
     const result = await dispatch(svc, {
       taskId,
-      model: this.model,
+      model,
       maxBudgetUsd: this.maxBudgetUsd,
     });
 
     if ('dryRun' in result) {
       throw new Error('dispatchTask returned dry-run result unexpectedly');
+    }
+
+    // Store routing metadata so session analytics can track model usage (best-effort)
+    try {
+      setAgentContext(svc.db, result.agentId, 'model_routed_to', model);
+    } catch {
+      /* non-critical: DB may not have agents table in all contexts */
     }
 
     return { pid: result.pid, taskId: result.taskId, agentId: result.agentId };
