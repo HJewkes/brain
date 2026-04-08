@@ -26,7 +26,7 @@ export interface WorkflowRun {
   status: WorkflowStatus;
   currentStep: string | null;
   stepResults: Record<string, StepResult>;
-  activeAgent: { pid: number; taskId: string; stepId: string } | null;
+  activeAgent: { pid: number; taskId: string; agentId?: string; stepId: string } | null;
   startedAt: string;
   completedAt: string | null;
   error: string | null;

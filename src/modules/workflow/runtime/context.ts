@@ -60,7 +60,7 @@ export class WorkflowContext {
   private _status: WorkflowStatus;
   private _currentStep: string | null;
   private _stepResults: Record<string, StepResult>;
-  private _activeAgent: { pid: number; taskId: string; stepId: string } | null;
+  private _activeAgent: { pid: number; taskId: string; agentId?: string; stepId: string } | null;
   private _context: Record<string, string>;
   private _iterations: Record<string, number> = {};
   private _startedAt: string;
@@ -127,7 +127,7 @@ export class WorkflowContext {
     return this._embedder;
   }
 
-  get activeAgent(): { pid: number; taskId: string; stepId: string } | null {
+  get activeAgent(): { pid: number; taskId: string; agentId?: string; stepId: string } | null {
     return this._activeAgent;
   }
 
@@ -210,7 +210,7 @@ export class WorkflowContext {
     this.persist();
 
     const agent = await this.spawnAgent(taskId, rendered);
-    this._activeAgent = { pid: agent.pid, taskId: agent.taskId, stepId };
+    this._activeAgent = { pid: agent.pid, taskId: agent.taskId, agentId: agent.agentId, stepId };
     this.persist();
 
     let output: string;
@@ -330,7 +330,7 @@ export class WorkflowContext {
   }
 
   /** Handle agent death detected by reconciler. Rejects with AgentDeathError for retry logic. */
-  handleAgentDeath(agent: { pid: number; taskId: string; stepId: string }): void {
+  handleAgentDeath(agent: { pid: number; taskId: string; agentId?: string; stepId: string }): void {
     const iterKey = this.findActiveAgentKey(agent.stepId);
     if (!iterKey) return;
 

@@ -3,7 +3,7 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { WorkflowFn, WorkflowRun, StepResult } from './types.js';
 import { WorkflowContext } from './context.js';
-import { findAgentByTask, getAgentContext } from '../../agents/data.js';
+import { findAgentByTask, getAgentContext, getAgent } from '../../agents/data.js';
 import { parseSignals } from './signals.js';
 import { releaseWorkflowTasks } from './failure-cleanup.js';
 
@@ -180,7 +180,9 @@ export class WorkflowRuntime {
   private resolveStaleAgent(run: WorkflowRun): void {
     if (!run.activeAgent) return;
 
-    const agent = findAgentByTask(this.db, run.activeAgent.taskId);
+    const agent = run.activeAgent.agentId
+      ? getAgent(this.db, run.activeAgent.agentId)
+      : findAgentByTask(this.db, run.activeAgent.taskId);
     if (!agent) {
       run.activeAgent = null;
       this.persistRun(run);
@@ -299,7 +301,10 @@ export class WorkflowRuntime {
       if (!isProcessAlive(agent.pid)) {
         // Check if the agent actually completed successfully before declaring death.
         // The PID disappears on normal exit too — don't confuse success with failure.
-        const agentRecord = findAgentByTask(this.db, agent.taskId);
+        // Use agentId for precise lookup when available; fall back to taskId for old runs.
+        const agentRecord = agent.agentId
+          ? getAgent(this.db, agent.agentId)
+          : findAgentByTask(this.db, agent.taskId);
         if (agentRecord?.status === 'completed') {
           const output = getAgentOutput(this.db, agentRecord.id, agentRecord.summary);
           workflow.ctx.resolveAgent(agent.stepId, output);

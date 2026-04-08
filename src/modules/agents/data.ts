@@ -56,9 +56,13 @@ export function createAgent(db: unknown, input: CreateAgentInput): string {
 }
 
 export function getAgent(db: unknown, id: string): AgentRecord | null {
-  const raw = toRaw(db);
-  const row = raw.prepare('SELECT * FROM agents WHERE id = ?').get(id);
-  return row ? (row as AgentRecord) : null;
+  try {
+    const raw = toRaw(db);
+    const row = raw.prepare('SELECT * FROM agents WHERE id = ?').get(id);
+    return row ? (row as AgentRecord) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function listAgents(db: unknown, filter?: { status?: AgentStatus }): AgentRecord[] {
@@ -170,11 +174,13 @@ export function getAgentContext(
   return ctx;
 }
 
-/** Find an agent by PM task display_id. */
+/** Find the most recent agent by PM task display_id. */
 export function findAgentByTask(db: unknown, taskDisplayId: string): AgentRecord | null {
   try {
     const raw = toRaw(db);
-    const row = raw.prepare('SELECT * FROM agents WHERE brain_task = ?').get(taskDisplayId);
+    const row = raw
+      .prepare('SELECT * FROM agents WHERE brain_task = ? ORDER BY rowid DESC LIMIT 1')
+      .get(taskDisplayId);
     return row ? (row as AgentRecord) : null;
   } catch {
     return null;
