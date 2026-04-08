@@ -1,4 +1,4 @@
-# Research Brief: VNM-48.147 (Consolidated: parallel dispatch + delivery lifecycle)
+# Research Brief: VNM-48.154 (Consolidated: parallel dispatch + delivery lifecycle)
 
 Plan: 8bc71b60 | Project: VNM
 
