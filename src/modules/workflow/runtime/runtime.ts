@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
-import type { WorkflowFn, WorkflowRun, StepResult } from './types.js';
+import type { WorkflowFn, WorkflowRun, AgentSlot, StepResult } from './types.js';
 import { WorkflowContext } from './context.js';
 import { findAgentByTask, getAgentContext, getAgent } from '../../agents/data.js';
 import { parseSignals } from './signals.js';
@@ -43,6 +43,22 @@ function getAgentOutput(db: BrainDB, agentId: string, summary: string | null): s
   return fullOutput ?? summary ?? '';
 }
 
+/**
+ * Migrate old scalar active_agent rows to the new Record<string, AgentSlot> format.
+ * Old format: { pid, taskId, agentId?, stepId }
+ * New format: { [stepId]: { pid, taskId, agentId?, stepId } }
+ */
+function parseActiveAgents(raw: string | null): Record<string, AgentSlot> {
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  // Old scalar format has a top-level `pid` field
+  if (typeof parsed.pid === 'number' && typeof parsed.stepId === 'string') {
+    const slot = parsed as unknown as AgentSlot;
+    return { [slot.stepId]: slot };
+  }
+  return parsed as Record<string, AgentSlot>;
+}
+
 function deserializeRun(row: WorkflowRunRow): WorkflowRun {
   return {
     id: row.id,
@@ -51,9 +67,7 @@ function deserializeRun(row: WorkflowRunRow): WorkflowRun {
     status: row.status as WorkflowRun['status'],
     currentStep: row.current_step,
     stepResults: JSON.parse(row.step_results) as Record<string, StepResult>,
-    activeAgent: row.active_agent
-      ? (JSON.parse(row.active_agent) as { pid: number; taskId: string; stepId: string })
-      : null,
+    activeAgents: parseActiveAgents(row.active_agent),
     startedAt: row.started_at,
     completedAt: row.completed_at,
     error: row.error,
@@ -128,7 +142,7 @@ export class WorkflowRuntime {
       status: 'running',
       currentStep: null,
       stepResults: {},
-      activeAgent: null,
+      activeAgents: {},
       startedAt: now,
       completedAt: null,
       error: null,
@@ -182,50 +196,55 @@ export class WorkflowRuntime {
   }
 
   /**
-   * Check if the active agent completed or died while the runtime was down.
+   * Check if any active agents completed or died while the runtime was down.
    * Mutates the run in-place so the hydrated context picks up the result.
    */
   private resolveStaleAgent(run: WorkflowRun): void {
-    if (!run.activeAgent) return;
+    const slots = Object.entries(run.activeAgents);
+    if (slots.length === 0) return;
 
-    const agent = run.activeAgent.agentId
-      ? getAgent(this.db, run.activeAgent.agentId)
-      : findAgentByTask(this.db, run.activeAgent.taskId);
-    if (!agent) {
-      run.activeAgent = null;
-      this.persistRun(run);
-      return;
+    let changed = false;
+    for (const [stepId, slot] of slots) {
+      const agent = slot.agentId
+        ? getAgent(this.db, slot.agentId)
+        : findAgentByTask(this.db, slot.taskId);
+      if (!agent) {
+        delete run.activeAgents[stepId];
+        changed = true;
+        continue;
+      }
+
+      if (agent.status === 'completed') {
+        const iter = this.currentIteration(run, stepId);
+        const iterKey = `${stepId}:${iter}`;
+        const output = getAgentOutput(this.db, agent.id, agent.summary);
+
+        run.stepResults[iterKey] = {
+          stepId,
+          taskId: slot.taskId,
+          agentId: agent.id,
+          signal: parseSignals(stepId, run.workflowName, output),
+          completedAt: agent.completed_at ?? new Date().toISOString(),
+          output,
+        };
+        delete run.activeAgents[stepId];
+        changed = true;
+
+        this.channelPush?.('step_complete', {
+          workflow: run.id,
+          step: stepId,
+          signal: run.stepResults[iterKey].signal ?? '',
+          taskId: run.stepResults[iterKey].taskId,
+        });
+      } else if (agent.status === 'failed' || agent.status === 'abandoned') {
+        delete run.activeAgents[stepId];
+        changed = true;
+      }
+      // If agent is still active/pending, leave slot in place —
+      // the reconciler will monitor it after hydration.
     }
 
-    if (agent.status === 'completed') {
-      const stepId = run.activeAgent.stepId;
-      const iter = this.currentIteration(run, stepId);
-      const iterKey = `${stepId}:${iter}`;
-      const output = getAgentOutput(this.db, agent.id, agent.summary);
-
-      run.stepResults[iterKey] = {
-        stepId,
-        taskId: run.activeAgent.taskId,
-        agentId: agent.id,
-        signal: parseSignals(stepId, run.workflowName, output),
-        completedAt: agent.completed_at ?? new Date().toISOString(),
-        output,
-      };
-      run.activeAgent = null;
-      this.persistRun(run);
-
-      this.channelPush?.('step_complete', {
-        workflow: run.id,
-        step: stepId,
-        signal: run.stepResults[iterKey].signal ?? '',
-        taskId: run.stepResults[iterKey].taskId,
-      });
-    } else if (agent.status === 'failed' || agent.status === 'abandoned') {
-      run.activeAgent = null;
-      this.persistRun(run);
-    }
-    // If agent is still active/pending, leave activeAgent in place —
-    // the reconciler will monitor it after hydration.
+    if (changed) this.persistRun(run);
   }
 
   private currentIteration(run: WorkflowRun, stepId: string): number {
@@ -243,6 +262,7 @@ export class WorkflowRuntime {
 
   private persistRun(run: WorkflowRun): void {
     const rawDb = this.db.rawDb;
+    const hasSlots = Object.keys(run.activeAgents).length > 0;
     rawDb
       .prepare(
         `UPDATE workflow_runs SET status = ?, current_step = ?, step_results = ?,
@@ -252,7 +272,7 @@ export class WorkflowRuntime {
         run.status,
         run.currentStep,
         JSON.stringify(run.stepResults),
-        run.activeAgent ? JSON.stringify(run.activeAgent) : null,
+        hasSlots ? JSON.stringify(run.activeAgents) : null,
         run.completedAt,
         run.error,
         run.id
@@ -303,28 +323,29 @@ export class WorkflowRuntime {
 
   private reconcile(): void {
     for (const [_runId, workflow] of this.active) {
-      const agent = workflow.ctx.activeAgent;
-      if (!agent) continue;
+      const slots = Object.values(workflow.ctx.activeAgents);
 
-      // Check DB status first — handles both normal completion and PID reuse.
-      // A dead process may have its PID reused by the OS; checking the DB first
-      // lets us resolve the agent correctly regardless of PID state.
-      // Use agentId for precise lookup when available; fall back to taskId for old runs.
-      const agentRecord = agent.agentId
-        ? getAgent(this.db, agent.agentId)
-        : findAgentByTask(this.db, agent.taskId);
+      for (const agent of slots) {
+        // Check DB status first — handles both normal completion and PID reuse.
+        // A dead process may have its PID reused by the OS; checking the DB first
+        // lets us resolve the agent correctly regardless of PID state.
+        // Use agentId for precise lookup when available; fall back to taskId for old runs.
+        const agentRecord = agent.agentId
+          ? getAgent(this.db, agent.agentId)
+          : findAgentByTask(this.db, agent.taskId);
 
-      if (agentRecord?.status === 'completed') {
-        // Agent completed — resolve even if PID appears alive (handles PID reuse after exit)
-        const output = getAgentOutput(this.db, agentRecord.id, agentRecord.summary);
-        workflow.ctx.resolveAgent(agent.stepId, output);
-      } else if (!isProcessAlive(agent.pid)) {
-        // Process is dead and agent is not marked completed — treat as death.
-        // This covers: failed, abandoned, or still 'active' (handleProcessExit
-        // may have run but didn't mark success).
-        workflow.ctx.handleAgentDeath(agent);
+        if (agentRecord?.status === 'completed') {
+          // Agent completed — resolve even if PID appears alive (handles PID reuse after exit)
+          const output = getAgentOutput(this.db, agentRecord.id, agentRecord.summary);
+          workflow.ctx.resolveAgent(agent.stepId, output);
+        } else if (!isProcessAlive(agent.pid)) {
+          // Process is dead and agent is not marked completed — treat as death.
+          // This covers: failed, abandoned, or still 'active' (handleProcessExit
+          // may have run but didn't mark success).
+          workflow.ctx.handleAgentDeath(agent);
+        }
+        // PID alive and not completed in DB — keep waiting
       }
-      // PID alive and not completed in DB — keep waiting
     }
   }
 

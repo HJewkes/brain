@@ -12,6 +12,7 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type {
   WorkflowRun,
+  AgentSlot,
   StepResult,
   SeedResult,
   WorkflowStatus,
@@ -62,7 +63,7 @@ export class WorkflowContext {
   private _status: WorkflowStatus;
   private _currentStep: string | null;
   private _stepResults: Record<string, StepResult>;
-  private _activeAgent: { pid: number; taskId: string; agentId?: string; stepId: string } | null;
+  private _activeAgents: Record<string, AgentSlot>;
   private _context: Record<string, string>;
   private _iterations: Record<string, number> = {};
   private _startedAt: string;
@@ -92,7 +93,7 @@ export class WorkflowContext {
     this._status = run.status;
     this._currentStep = run.currentStep;
     this._stepResults = { ...run.stepResults };
-    this._activeAgent = run.activeAgent ? { ...run.activeAgent } : null;
+    this._activeAgents = run.activeAgents ? { ...run.activeAgents } : {};
     this._context = { ...run.context };
     this._startedAt = run.startedAt;
     this._completedAt = run.completedAt;
@@ -102,7 +103,7 @@ export class WorkflowContext {
     this._embedder = options?.embedder;
     this.channel = channelPush;
     this.model = options?.model ?? 'sonnet';
-    this.maxBudgetUsd = options?.maxBudgetUsd ?? 2.0;
+    this.maxBudgetUsd = options?.maxBudgetUsd ?? 5.0;
 
     this.rebuildIterationCounts();
   }
@@ -129,8 +130,15 @@ export class WorkflowContext {
     return this._embedder;
   }
 
-  get activeAgent(): { pid: number; taskId: string; agentId?: string; stepId: string } | null {
-    return this._activeAgent;
+  /** All active agent slots keyed by stepId. */
+  get activeAgents(): Record<string, AgentSlot> {
+    return this._activeAgents;
+  }
+
+  /** Convenience — first active slot or null (for reconciler single-agent polling). */
+  get activeAgent(): AgentSlot | null {
+    const values = Object.values(this._activeAgents);
+    return values.length > 0 ? (values[0] ?? null) : null;
   }
 
   param(key: string): string | undefined {
@@ -208,12 +216,17 @@ export class WorkflowContext {
     const rendered = await this.renderTemplate(taskId, template);
 
     this._currentStep = stepId;
-    this._activeAgent = null;
+    delete this._activeAgents[stepId];
     this.persist();
 
     const stepModel = classifyWorkflowTurnComplexity(template, this.iteration(stepId));
     const agent = await this.spawnAgent(taskId, rendered, stepModel);
-    this._activeAgent = { pid: agent.pid, taskId: agent.taskId, agentId: agent.agentId, stepId };
+    this._activeAgents[stepId] = {
+      pid: agent.pid,
+      taskId: agent.taskId,
+      agentId: agent.agentId,
+      stepId,
+    };
     this.persist();
 
     let output: string;
@@ -253,7 +266,7 @@ export class WorkflowContext {
 
     this._stepResults[iterKey] = stepResult;
     this._iterations[stepId] = (this._iterations[stepId] ?? 0) + 1;
-    this._activeAgent = null;
+    delete this._activeAgents[stepId];
     this.persist();
 
     this.writeStepOutput(stepId, output);
@@ -342,12 +355,14 @@ export class WorkflowContext {
       waitpoint.reject(new AgentDeathError(agent.pid, agent.taskId, agent.stepId));
       this.agentWaitpoints.delete(iterKey);
     }
-    this._activeAgent = null;
+    delete this._activeAgents[agent.stepId];
     this.persist();
   }
 
   /** Serialize current state back to a WorkflowRun (for status queries). */
   toRun(): WorkflowRun {
+    const activeAgents = { ...this._activeAgents };
+    const slots = Object.values(activeAgents);
     return {
       id: this.runId,
       workflowName: this.workflowName,
@@ -355,7 +370,8 @@ export class WorkflowContext {
       status: this._status,
       currentStep: this._currentStep,
       stepResults: { ...this._stepResults },
-      activeAgent: this._activeAgent ? { ...this._activeAgent } : null,
+      activeAgents,
+      activeAgent: slots.length > 0 ? { ...slots[0]! } : null,
       startedAt: this._startedAt,
       completedAt: this._completedAt,
       error: this._error,
@@ -384,7 +400,7 @@ export class WorkflowContext {
         this._status,
         this._currentStep,
         JSON.stringify(this._stepResults),
-        this._activeAgent ? JSON.stringify(this._activeAgent) : null,
+        Object.keys(this._activeAgents).length > 0 ? JSON.stringify(this._activeAgents) : null,
         this._startedAt,
         this._completedAt,
         this._error

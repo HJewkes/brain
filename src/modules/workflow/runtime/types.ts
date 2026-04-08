@@ -18,6 +18,13 @@ export interface StepResult {
   output?: string;
 }
 
+export interface AgentSlot {
+  pid: number;
+  taskId: string;
+  agentId?: string;
+  stepId: string;
+}
+
 export interface WorkflowRun {
   id: string;
   workflowName: string;
@@ -26,7 +33,10 @@ export interface WorkflowRun {
   status: WorkflowStatus;
   currentStep: string | null;
   stepResults: Record<string, StepResult>;
-  activeAgent: { pid: number; taskId: string; agentId?: string; stepId: string } | null;
+  /** Active agent slots keyed by stepId. JSON-serializable for DB persistence. */
+  activeAgents: Record<string, AgentSlot>;
+  /** @deprecated Compat accessor — first slot value or null. Set by toRun(). */
+  activeAgent?: AgentSlot | null;
   startedAt: string;
   completedAt: string | null;
   error: string | null;
