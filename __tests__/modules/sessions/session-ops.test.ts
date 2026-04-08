@@ -14,6 +14,7 @@ import {
   updateSessionStatus,
   getSessionsForTask,
   linkSessionToTask,
+  markSessionReference,
 } from '../../../src/modules/sessions/data/session-ops.js';
 
 let db: BrainDB;
@@ -379,5 +380,95 @@ describe('linkSessionToTask', () => {
   it('fails for nonexistent session', () => {
     const result = linkSessionToTask(db, 'SNS-999', 'VNM-08.01');
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('markSessionReference', () => {
+  it('marks a session as reference', async () => {
+    const created = await createSession(db, config, embedder, {
+      session_id: 'ref-1',
+      project_dir: '/test',
+      status: 'completed',
+      started_at: '2026-01-01T10:00:00Z',
+    });
+    if (!created.ok) throw new Error('Failed to create session');
+
+    const result = markSessionReference(db, created.data.display_id, true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.is_reference).toBe(true);
+
+    const session = getSession(db, created.data.display_id);
+    expect(session!.is_reference).toBe(true);
+  });
+
+  it('unmarks a reference session', async () => {
+    const created = await createSession(db, config, embedder, {
+      session_id: 'ref-2',
+      project_dir: '/test',
+      status: 'completed',
+      started_at: '2026-01-01T11:00:00Z',
+    });
+    if (!created.ok) throw new Error('Failed to create session');
+
+    markSessionReference(db, created.data.display_id, true);
+    const result = markSessionReference(db, created.data.display_id, false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.is_reference).toBeUndefined();
+
+    const session = getSession(db, created.data.display_id);
+    expect(session!.is_reference).toBeUndefined();
+  });
+
+  it('fails for a non-existent session', () => {
+    const result = markSessionReference(db, 'SNS-999', true);
+    expect(result.ok).toBe(false);
+  });
+
+  it('listSessions filters by reference=true', async () => {
+    const s1 = await createSession(db, config, embedder, {
+      session_id: 'ref-filter-1',
+      project_dir: '/test',
+      status: 'completed',
+      started_at: '2026-01-02T10:00:00Z',
+    });
+    const s2 = await createSession(db, config, embedder, {
+      session_id: 'ref-filter-2',
+      project_dir: '/test',
+      status: 'completed',
+      started_at: '2026-01-02T11:00:00Z',
+    });
+    if (!s1.ok || !s2.ok) throw new Error('Failed to create sessions');
+
+    markSessionReference(db, s1.data.display_id, true);
+
+    const refs = listSessions(db, { reference: true });
+    const ids = refs.map((s) => s.display_id);
+    expect(ids).toContain(s1.data.display_id);
+    expect(ids).not.toContain(s2.data.display_id);
+  });
+
+  it('listSessions with reference=false excludes reference sessions', async () => {
+    const s1 = await createSession(db, config, embedder, {
+      session_id: 'ref-filter-3',
+      project_dir: '/test',
+      status: 'completed',
+      started_at: '2026-01-03T10:00:00Z',
+    });
+    const s2 = await createSession(db, config, embedder, {
+      session_id: 'ref-filter-4',
+      project_dir: '/test',
+      status: 'completed',
+      started_at: '2026-01-03T11:00:00Z',
+    });
+    if (!s1.ok || !s2.ok) throw new Error('Failed to create sessions');
+
+    markSessionReference(db, s1.data.display_id, true);
+
+    const nonRefs = listSessions(db, { reference: false });
+    const ids = nonRefs.map((s) => s.display_id);
+    expect(ids).not.toContain(s1.data.display_id);
+    expect(ids).toContain(s2.data.display_id);
   });
 });

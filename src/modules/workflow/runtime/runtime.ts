@@ -3,7 +3,7 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { WorkflowFn, WorkflowRun, StepResult } from './types.js';
 import { WorkflowContext } from './context.js';
-import { findAgentByTask, getAgentContext } from '../../agents/data.js';
+import { findAgentByTask, getAgentContext, getAgent } from '../../agents/data.js';
 import { parseSignals } from './signals.js';
 import { releaseWorkflowTasks } from './failure-cleanup.js';
 
@@ -180,7 +180,9 @@ export class WorkflowRuntime {
   private resolveStaleAgent(run: WorkflowRun): void {
     if (!run.activeAgent) return;
 
-    const agent = findAgentByTask(this.db, run.activeAgent.taskId);
+    const agent = run.activeAgent.agentId
+      ? getAgent(this.db, run.activeAgent.agentId)
+      : findAgentByTask(this.db, run.activeAgent.taskId);
     if (!agent) {
       run.activeAgent = null;
       this.persistRun(run);
@@ -296,20 +298,25 @@ export class WorkflowRuntime {
       const agent = workflow.ctx.activeAgent;
       if (!agent) continue;
 
-      if (!isProcessAlive(agent.pid)) {
-        // Check if the agent actually completed successfully before declaring death.
-        // The PID disappears on normal exit too — don't confuse success with failure.
-        const agentRecord = findAgentByTask(this.db, agent.taskId);
-        if (agentRecord?.status === 'completed') {
-          const output = getAgentOutput(this.db, agentRecord.id, agentRecord.summary);
-          workflow.ctx.resolveAgent(agent.stepId, output);
-        } else {
-          // Process is dead and agent is not marked completed — treat as death.
-          // This covers: failed, abandoned, or still 'active' (handleProcessExit
-          // may have run but didn't mark success).
-          workflow.ctx.handleAgentDeath(agent);
-        }
+      // Check DB status first — handles both normal completion and PID reuse.
+      // A dead process may have its PID reused by the OS; checking the DB first
+      // lets us resolve the agent correctly regardless of PID state.
+      // Use agentId for precise lookup when available; fall back to taskId for old runs.
+      const agentRecord = agent.agentId
+        ? getAgent(this.db, agent.agentId)
+        : findAgentByTask(this.db, agent.taskId);
+
+      if (agentRecord?.status === 'completed') {
+        // Agent completed — resolve even if PID appears alive (handles PID reuse after exit)
+        const output = getAgentOutput(this.db, agentRecord.id, agentRecord.summary);
+        workflow.ctx.resolveAgent(agent.stepId, output);
+      } else if (!isProcessAlive(agent.pid)) {
+        // Process is dead and agent is not marked completed — treat as death.
+        // This covers: failed, abandoned, or still 'active' (handleProcessExit
+        // may have run but didn't mark success).
+        workflow.ctx.handleAgentDeath(agent);
       }
+      // PID alive and not completed in DB — keep waiting
     }
   }
 

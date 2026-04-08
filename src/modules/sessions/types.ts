@@ -40,6 +40,7 @@ export interface SessionMetadata {
   segment_count?: number;
   instance_id?: string;
   analyticsExt?: SessionAnalyticsExt;
+  is_reference?: boolean;
 }
 
 export interface SessionAnalyticsExt {
@@ -95,6 +96,7 @@ export interface SessionListFilters {
   project?: string;
   since?: string;
   taskId?: string;
+  reference?: boolean;
 }
 
 export interface SessionEvent {

@@ -1,8 +1,15 @@
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
 import { formatError } from '../errors.js';
 import { estimateCost } from '../data/cost.js';
+import { getPmNotes } from '../data/queries.js';
+import { replaceFrontmatterField } from '../../../utils.js';
+import { indexSingleFile } from '../../../services/indexing.js';
 import type { ActivityRecord } from '../../../types.js';
+import type { BrainDB } from '../../../services/brain-db.js';
+import type { Embedder } from '../../../types.js';
 
 function filterActivities(
   activities: ActivityRecord[],
@@ -209,5 +216,125 @@ export function createAuditCommands(): Command {
       });
     });
 
+  cmd
+    .command('cleanup')
+    .description('Cancel planning stubs, release orphaned claims, flag anomalies')
+    .option('--project <p>', 'Filter by project')
+    .option('--dry-run', 'Preview without making changes')
+    .option('--claim-ttl <hours>', 'Max claim age in hours (default 4)', parseInt, 4)
+    .option('--json', 'Output JSON')
+    .action(async (opts) => {
+      await withBrain(async (svc) => {
+        const results = await runCleanup(svc.db, svc.embedder, {
+          project: opts.project,
+          dryRun: !!opts.dryRun,
+          claimTtlHours: opts.claimTtl,
+        });
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(results, null, 2) + '\n');
+        } else {
+          const prefix = opts.dryRun ? '[DRY RUN] ' : '';
+          process.stdout.write(`${prefix}Planning stubs cancelled: ${results.planningStubs}\n`);
+          process.stdout.write(`${prefix}Orphaned claims released: ${results.orphanedClaims}\n`);
+          if (results.anomalies.length > 0) {
+            process.stdout.write(`\nAnomalies:\n`);
+            for (const a of results.anomalies) {
+              process.stdout.write(`  ${a}\n`);
+            }
+          }
+        }
+      });
+    });
+
   return cmd;
+}
+
+interface CleanupResults {
+  planningStubs: number;
+  orphanedClaims: number;
+  anomalies: string[];
+}
+
+async function runCleanup(
+  db: BrainDB,
+  embedder: Embedder,
+  opts: { project?: string; dryRun: boolean; claimTtlHours: number }
+): Promise<CleanupResults> {
+  const today = new Date().toISOString().slice(0, 10);
+  const claimCutoff = Date.now() - opts.claimTtlHours * 60 * 60 * 1000;
+  let planningStubs = 0;
+  let orphanedClaims = 0;
+  const anomalies: string[] = [];
+
+  // Find planning stub tasks
+  const allTasks = getPmNotes(db, 'task', {});
+  for (const note of allTasks) {
+    const meta = JSON.parse(note.metadata!) as Record<string, unknown>;
+
+    if (opts.project && meta.project !== opts.project) continue;
+
+    const title = meta.title as string;
+    const status = meta.status as string;
+    const displayId = meta.display_id as string;
+
+    // Cancel planning stubs
+    if (title?.startsWith('[planning]') && (status === 'pending' || status === 'claimed')) {
+      if (!opts.dryRun) {
+        await cancelTask(db, embedder, note, today, 'planning-stub-cleanup');
+      }
+      planningStubs++;
+      continue;
+    }
+
+    // Release orphaned claims
+    if (status === 'claimed') {
+      const claimedAt = meta.claimed_at as string | undefined;
+      if (claimedAt) {
+        const claimTime = new Date(claimedAt).getTime();
+        if (claimTime < claimCutoff) {
+          if (!opts.dryRun) {
+            await transitionTask(db, embedder, note, 'pending', today);
+          }
+          orphanedClaims++;
+          anomalies.push(`Released stale claim: ${displayId} (claimed ${claimedAt})`);
+        }
+      }
+    }
+  }
+
+  return { planningStubs, orphanedClaims, anomalies };
+}
+
+async function cancelTask(
+  db: BrainDB,
+  embedder: Embedder,
+  note: { id: string; filePath: string; metadata: string | null },
+  today: string,
+  reason: string
+): Promise<void> {
+  if (!existsSync(note.filePath)) return;
+  let content = readFileSync(note.filePath, 'utf-8');
+  content = replaceFrontmatterField(content, 'status', 'cancelled');
+  content = replaceFrontmatterField(content, 'modified', today);
+  content = replaceFrontmatterField(content, 'cancelled_reason', reason);
+  writeFileSync(note.filePath, content, 'utf-8');
+  const hash = createHash('sha256').update(content).digest('hex');
+  await indexSingleFile(db, embedder, note.filePath, content, hash, Date.now());
+}
+
+async function transitionTask(
+  db: BrainDB,
+  embedder: Embedder,
+  note: { id: string; filePath: string; metadata: string | null },
+  newStatus: string,
+  today: string
+): Promise<void> {
+  if (!existsSync(note.filePath)) return;
+  let content = readFileSync(note.filePath, 'utf-8');
+  content = replaceFrontmatterField(content, 'status', newStatus);
+  content = replaceFrontmatterField(content, 'modified', today);
+  writeFileSync(note.filePath, content, 'utf-8');
+  const hash = createHash('sha256').update(content).digest('hex');
+  await indexSingleFile(db, embedder, note.filePath, content, hash, Date.now());
 }

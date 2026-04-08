@@ -16,7 +16,7 @@ import { resolveProject, getPmNotes } from '../modules/pm/data/queries.js';
 import { readTaskBody } from '../modules/pm/engine/dispatch.js';
 import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
-import { getAgent, listAgents } from '../modules/agents/data.js';
+import { getAgent, listAgents, getAgentContext } from '../modules/agents/data.js';
 import { dispatchTask } from './dispatch.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 
@@ -629,6 +629,82 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
       const active = listAgents(svc.db, { status: 'active' as AgentStatus });
       const pending = listAgents(svc.db, { status: 'pending' as AgentStatus });
       return textResult([...active, ...pending]);
+    }
+  );
+
+  server.tool(
+    'brain_agent_activity',
+    'Live activity feed for an active agent: recent tool calls, errors, files touched, and progress indicators from session events captured by hooks.',
+    {
+      agentId: z.string().describe('Agent UUID'),
+      limit: z.number().optional().describe('Max events to return (default 30)'),
+    },
+    async ({ agentId, limit }) => {
+      const agent = getAgent(svc.db, agentId);
+      if (!agent) return errorResult(`Agent "${agentId}" not found`);
+
+      const sessionId = getAgentContext(svc.db, agentId, 'session_id') as string | undefined;
+
+      if (!sessionId) {
+        return textResult({
+          agent: { id: agent.id, status: agent.status, task: agent.brain_task },
+          events: [],
+          message: 'No session ID linked — hooks may not have fired yet',
+        });
+      }
+
+      const rawDb = svc.db.rawDb;
+      const events = rawDb
+        .prepare(
+          `SELECT event_type, category, data, timestamp
+           FROM session_events
+           WHERE session_id = ?
+           ORDER BY timestamp DESC
+           LIMIT ?`
+        )
+        .all(sessionId, limit ?? 30) as Array<{
+        event_type: string;
+        category: string | null;
+        data: string;
+        timestamp: string;
+      }>;
+
+      const toolCalls = events.filter((e) => e.event_type.startsWith('tool:'));
+      const errors = events.filter((e) => e.event_type === 'error' || e.category === 'error');
+
+      const filesSet = new Set<string>();
+      for (const e of events) {
+        if (e.event_type === 'file_touch') {
+          try {
+            const d = JSON.parse(e.data) as { filePath?: string };
+            if (d.filePath) filesSet.add(d.filePath);
+          } catch {
+            /* skip */
+          }
+        }
+      }
+
+      return textResult({
+        agent: {
+          id: agent.id,
+          status: agent.status,
+          task: agent.brain_task,
+          pid: (agent as unknown as Record<string, unknown>).pid,
+        },
+        sessionId,
+        summary: {
+          totalEvents: events.length,
+          toolCalls: toolCalls.length,
+          errors: errors.length,
+          filesTouched: filesSet.size,
+        },
+        recentEvents: events.slice(0, 15).map((e) => ({
+          type: e.event_type,
+          timestamp: e.timestamp,
+          data: JSON.parse(e.data),
+        })),
+        filesTouched: [...filesSet].slice(0, 20),
+      });
     }
   );
 }

@@ -30,8 +30,8 @@ describe('chunk size sweep — DISCOVERY (log, no hard assertions)', () => {
         env = await setupEvalEnvironment(corpus, { chunkSize: config.size });
       }, 120_000);
 
-      afterAll(() => {
-        env.cleanup();
+      afterAll(async () => {
+        await env?.cleanup();
       });
 
       test('compute and log metrics', async () => {

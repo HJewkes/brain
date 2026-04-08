@@ -113,3 +113,46 @@ export function computeRouting(category: TaskCategory, mode: TaskMode): RoutingR
 export function isAgentDispatchable(mode: TaskMode): boolean {
   return mode === 'agent';
 }
+
+// --- Workflow turn complexity routing ---
+
+// Templates requiring strong reasoning: design, critique, implementation
+const COMPLEX_WORKFLOW_TEMPLATES = new Set([
+  'planning-design',
+  'planning-critic',
+  'brainstorm-design',
+  'implementation-compact',
+]);
+
+// Formulaic templates: generate from spec, apply fixups, write docs, ops tasks
+const SIMPLE_WORKFLOW_TEMPLATES = new Set([
+  'planning-spectests',
+  'review-fixup',
+  'ops',
+  'brainstorm-write-doc',
+]);
+
+/**
+ * Classify a workflow dispatch turn's model requirement.
+ *
+ * Complex templates (design, critique) need opus; formulaic templates
+ * (spec-test gen, fixups) can run on haiku; everything else uses sonnet.
+ * Retry iterations (iterationCount > 0) step down one tier since prior
+ * step outputs provide additional context.
+ */
+export function classifyWorkflowTurnComplexity(
+  templateName: string,
+  iterationCount: number
+): 'opus' | 'sonnet' | 'haiku' {
+  const base: 'opus' | 'sonnet' | 'haiku' = COMPLEX_WORKFLOW_TEMPLATES.has(templateName)
+    ? 'opus'
+    : SIMPLE_WORKFLOW_TEMPLATES.has(templateName)
+      ? 'haiku'
+      : 'sonnet';
+
+  if (iterationCount > 0) {
+    // Step down one tier on retries — prior context reduces required reasoning
+    return base === 'opus' ? 'sonnet' : 'haiku';
+  }
+  return base;
+}

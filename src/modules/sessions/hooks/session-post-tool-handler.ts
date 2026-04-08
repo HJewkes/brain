@@ -28,6 +28,8 @@ export const sessionPostToolHandler: HookHandler = {
       db = new BrainDB(config.dbPath);
 
       detectPrCreation(db, input, sessionId);
+      detectFileTouch(db, input, sessionId);
+      detectSkillUse(db, input, sessionId);
       writeStatusCache(db, sessionId);
     } catch {
       // Observational — never block
@@ -60,6 +62,40 @@ function detectPrCreation(db: BrainDB, input: HookInput, sessionId: string): voi
 
   // Auto-create a review task for this PR
   tryCreateReviewTask(prUrl, sessionId);
+}
+
+function detectFileTouch(db: BrainDB, input: HookInput, sessionId: string): void {
+  const toolName = (input.parsed.tool_name ?? input.parsed.tool ?? '') as string;
+  if (toolName !== 'Write' && toolName !== 'Edit') return;
+
+  const inp = input.parsed.input as Record<string, unknown> | undefined;
+  const filePath = (inp?.file_path ?? inp?.path) as string | undefined;
+  if (!filePath) return;
+
+  captureSessionEvent(db, {
+    session_id: sessionId,
+    event_type: 'file_touch',
+    category: 'files',
+    data: { filePath, toolName },
+    timestamp: new Date().toISOString(),
+  });
+}
+
+function detectSkillUse(db: BrainDB, input: HookInput, sessionId: string): void {
+  const toolName = (input.parsed.tool_name ?? input.parsed.tool ?? '') as string;
+  if (toolName !== 'Skill') return;
+
+  const inp = input.parsed.input as Record<string, unknown> | undefined;
+  const skillName = (inp?.skill ?? inp?.name) as string | undefined;
+  if (!skillName) return;
+
+  captureSessionEvent(db, {
+    session_id: sessionId,
+    event_type: 'skill_use',
+    category: 'skills',
+    data: { skillName, count: 1 },
+    timestamp: new Date().toISOString(),
+  });
 }
 
 /**

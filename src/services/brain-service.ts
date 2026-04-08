@@ -21,7 +21,12 @@ import {
   listSessions,
   getSessionsForTask,
 } from '../modules/sessions/data/session-ops.js';
-import type { SessionMetadata, SegmentMetadata, TokenSnapshot } from '../modules/sessions/types.js';
+import type {
+  SessionMetadata,
+  SegmentMetadata,
+  TokenSnapshot,
+  SessionEvent,
+} from '../modules/sessions/types.js';
 import type {
   ConversationTurn,
   StructuredEventsOutput,
@@ -296,6 +301,23 @@ export class BrainServiceClass {
         operations: JSON.parse(r.operations) as string[],
         lastTouchedAt: r.last_touched_at,
       }));
+    } catch {
+      return [];
+    }
+  }
+
+  sessionEvents(displayId: string): SessionEvent[] {
+    try {
+      const session = getSession(this.db, displayId);
+      if (!session) return [];
+      const rawDb = (
+        this.db as unknown as {
+          db: { prepare: (sql: string) => { all: (...args: unknown[]) => SessionEvent[] } };
+        }
+      ).db;
+      return rawDb
+        .prepare('SELECT * FROM session_events WHERE session_id = ? ORDER BY timestamp ASC')
+        .all(session.session_id);
     } catch {
       return [];
     }

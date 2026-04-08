@@ -17,6 +17,7 @@ import {
   updateTask,
   updateTaskStatus,
   deleteTask,
+  migrateTask,
 } from '../data/task-ops.js';
 import type { ListMode, EnrichedTaskFields } from '../data/task-ops.js';
 import {
@@ -914,6 +915,44 @@ export function createTaskCommands(): Command {
           return;
         }
         outputResult(metaResult.data, !!opts.json);
+      });
+    });
+
+  cmd
+    .command('migrate')
+    .description('Move a task to a different workstream')
+    .argument('<id>', 'Task display ID (e.g. VNM-53.99)')
+    .argument('<target>', 'Target workstream number or display ID (e.g. 48 or VNM-48)')
+    .option('--json', 'Output JSON')
+    .action(async (id, target, opts) => {
+      await withBrain(async (svc) => {
+        const wsResult = resolveWorkstreamFilter(target);
+        if (!wsResult.ok) {
+          process.stderr.write(formatError(wsResult.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const result = await migrateTask(
+          svc.db,
+          svc.config,
+          svc.embedder,
+          id.toUpperCase(),
+          wsResult.data
+        );
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(result.data, null, 2) + '\n');
+        } else {
+          process.stdout.write(
+            `Migrated ${id.toUpperCase()} → ${result.data.display_id} (workstream ${wsResult.data})\n`
+          );
+        }
       });
     });
 

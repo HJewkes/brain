@@ -190,6 +190,18 @@ export function createHttpHandler(
       return;
     }
 
+    const eventsMatch = path.match(/^\/api\/sessions\/([^/]+)\/events$/);
+    if (eventsMatch && req.method === 'GET') {
+      const displayId = eventsMatch[1];
+      const session = service.sessionGet(displayId);
+      if (!session) {
+        notFound(res);
+        return;
+      }
+      json(res, service.sessionEvents(displayId));
+      return;
+    }
+
     const turnsMatch = path.match(/^\/api\/sessions\/([^/]+)\/turns$/);
     if (turnsMatch && req.method === 'GET') {
       const displayId = turnsMatch[1];

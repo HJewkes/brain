@@ -11,6 +11,11 @@ import { createSessionCommitCommand } from './commands/session-commit.js';
 import { createSessionRestoreCommand } from './commands/restore.js';
 import { createSessionStatsCommand } from './commands/stats.js';
 import { createSessionBriefingCommand } from './commands/briefing.js';
+import { createSessionReferenceCommand } from './commands/reference.js';
+import { createSessionTrajectoryCommand } from './commands/trajectory.js';
+import { createSessionAnalyzeCommand } from './commands/analyze.js';
+import { createSessionSkillStatsCommand } from './commands/skill-stats.js';
+import { createSessionMarkCommand, createSessionUnmarkCommand } from './commands/mark.js';
 import { sessionRestoreHandler } from './hooks/session-restore-handler.js';
 import { sessionBriefingHandler } from './hooks/session-briefing-handler.js';
 import { sessionCaptureHandler } from './hooks/session-capture-handler.js';
@@ -19,6 +24,7 @@ import { sessionCompactHandler } from './hooks/session-compact-handler.js';
 import { sessionEndHandler } from './hooks/session-end-handler.js';
 import { sessionCommitHandler } from './hooks/session-commit-handler.js';
 import { sessionPreCompactHandler } from './hooks/session-pre-compact-handler.js';
+import { sessionAnalysisHandler } from './hooks/session-analysis-handler.js';
 
 const SESSION_NOTE_TYPE: ModuleNoteType = {
   name: 'session',
@@ -220,6 +226,7 @@ export const sessionsModule: BrainModule = {
     ctx.registerHookHandler(sessionPreCompactHandler);
     ctx.registerHookHandler(sessionEndHandler);
     ctx.registerHookHandler(sessionCommitHandler);
+    ctx.registerHookHandler(sessionAnalysisHandler);
 
     // Migration v1: json_extract indexes for session frontmatter queries
     ctx.registerMigration({
@@ -363,6 +370,12 @@ export const sessionsModule: BrainModule = {
     sessionCmd.addCommand(createSessionRestoreCommand());
     sessionCmd.addCommand(createSessionStatsCommand());
     sessionCmd.addCommand(createSessionBriefingCommand());
+    sessionCmd.addCommand(createSessionReferenceCommand());
+    sessionCmd.addCommand(createSessionTrajectoryCommand());
+    sessionCmd.addCommand(createSessionAnalyzeCommand());
+    sessionCmd.addCommand(createSessionSkillStatsCommand());
+    sessionCmd.addCommand(createSessionMarkCommand());
+    sessionCmd.addCommand(createSessionUnmarkCommand());
 
     ctx.registerCommand(sessionCmd);
   },

@@ -27,8 +27,8 @@ beforeAll(async () => {
   results = await runEvalSuite(corpus, env, { k: K });
 }, 120_000);
 
-afterAll(() => {
-  env.cleanup();
+afterAll(async () => {
+  await env?.cleanup();
 });
 
 describe('dogfood: retrieval quality on brain domain content', () => {

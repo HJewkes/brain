@@ -16,8 +16,8 @@ describe('graph expansion', () => {
     env = await setupEvalEnvironment(corpus);
   }, 120_000);
 
-  afterAll(() => {
-    env.cleanup();
+  afterAll(async () => {
+    await env?.cleanup();
   });
 
   describe('VBT cluster traversal', () => {

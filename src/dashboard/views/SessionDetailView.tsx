@@ -20,6 +20,7 @@ import type {
   MiniStatusOutcome,
   TurnSummaryCardProps,
 } from '../components/session/index.js';
+import { SessionReplayPanel } from '../components/session/SessionReplayPanel.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -145,10 +146,12 @@ function buildSummaryProps(
 // Sub-components: Header — built with the shared DetailTopbar molecule
 // ---------------------------------------------------------------------------
 
-function SessionHeader({ data, searchQuery, onSearchChange }: {
+function SessionHeader({ data, searchQuery, onSearchChange, viewMode, onViewModeChange }: {
   data: SessionDetailData;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  viewMode: SessionViewMode;
+  onViewModeChange: (mode: SessionViewMode) => void;
 }) {
   const { session } = data;
   const sessionStatusColor = statusColor(session.status);
@@ -160,17 +163,68 @@ function SessionHeader({ data, searchQuery, onSearchChange }: {
   ];
 
   return (
-    <DetailTopbar
-      title={session.displayId}
-      backLabel="Sessions"
-      onBack={() => { window.location.hash = '#sessions'; }}
-      badge={{ label: session.status, color: sessionStatusColor }}
-      metadata={metadata}
-      searchQuery={searchQuery}
-      onSearchChange={onSearchChange}
-    />
+    <View>
+      <DetailTopbar
+        title={session.displayId}
+        backLabel="Sessions"
+        onBack={() => { window.location.hash = '#sessions'; }}
+        badge={{ label: session.status, color: sessionStatusColor }}
+        metadata={metadata}
+        searchQuery={viewMode === 'conversation' ? searchQuery : undefined}
+        onSearchChange={viewMode === 'conversation' ? onSearchChange : undefined}
+      />
+      <View style={tabS.tabBar}>
+        <Pressable
+          style={[tabS.tab, viewMode === 'conversation' && tabS.tabActive]}
+          onPress={() => onViewModeChange('conversation')}
+        >
+          <Text style={[tabS.tabText, viewMode === 'conversation' && tabS.tabTextActive]}>
+            Conversation
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[tabS.tab, viewMode === 'replay' && tabS.tabActive]}
+          onPress={() => onViewModeChange('replay')}
+        >
+          <Text style={[tabS.tabText, viewMode === 'replay' && tabS.tabTextActive]}>
+            Replay
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
+
+const tabS = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row' as const,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    backgroundColor: C.surface1,
+    paddingHorizontal: 16,
+    gap: 0,
+  },
+  tab: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginBottom: -1,
+  },
+  tabActive: {
+    borderBottomColor: C.brand,
+  },
+  tabText: {
+    fontSize: 12,
+    fontFamily: "'Space Grotesk', sans-serif",
+    fontWeight: '500' as const,
+    color: C.textTertiary,
+  },
+  tabTextActive: {
+    color: C.brand,
+    fontWeight: '600' as const,
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Sub-components: Expanded tool call rows (uses ToolCallRow molecule)
@@ -261,6 +315,8 @@ function SubagentPanel({ subagents, onClose }: {
 // Main view
 // ---------------------------------------------------------------------------
 
+type SessionViewMode = 'conversation' | 'replay';
+
 export function SessionDetailView({ sessionId, dashboard: _dashboard }: SessionDetailViewProps) {
   const [data, setData] = useState<SessionDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -268,6 +324,7 @@ export function SessionDetailView({ sessionId, dashboard: _dashboard }: SessionD
   const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showSubagents, setShowSubagents] = useState(false);
+  const [viewMode, setViewMode] = useState<SessionViewMode>('conversation');
   const timelineRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -341,8 +398,17 @@ export function SessionDetailView({ sessionId, dashboard: _dashboard }: SessionD
 
   return (
     <View style={s.root}>
-      <SessionHeader data={data} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-      <TimeSyncProvider
+      <SessionHeader
+        data={data}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
+      {viewMode === 'replay' && (
+        <SessionReplayPanel data={data} />
+      )}
+      {viewMode === 'conversation' && <TimeSyncProvider
         initialTimestamp={data.session.startedAt}
         timelineRef={timelineRef as unknown as React.RefObject<HTMLElement | null>}
       >
@@ -390,7 +456,7 @@ export function SessionDetailView({ sessionId, dashboard: _dashboard }: SessionD
             <SessionSidebar data={data} />
           </ScrollView>
         </View>
-      </TimeSyncProvider>
+      </TimeSyncProvider>}
       {showSubagents && (
         <SubagentPanel subagents={data.subagents} onClose={() => setShowSubagents(false)} />
       )}

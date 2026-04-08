@@ -19,4 +19,11 @@ export class LocalEmbedder implements Embedder {
     });
     return output.tolist() as number[][];
   }
+
+  async dispose(): Promise<void> {
+    if (this.extractor) {
+      await this.extractor.dispose();
+      this.extractor = null;
+    }
+  }
 }

@@ -4,6 +4,7 @@ export interface Embedder {
   embed(texts: string[]): Promise<number[][]>;
   readonly model: string;
   readonly dimensions: number;
+  dispose?(): Promise<void>;
 }
 
 // === Note Types ===

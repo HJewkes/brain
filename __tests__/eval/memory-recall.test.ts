@@ -120,8 +120,9 @@ describe('LoCoMo-style memory recall benchmark', { timeout: 120_000 }, () => {
     env = await setupRecallEnvironment(memoryRecallDataset);
   });
 
-  afterAll(() => {
-    env.db.close();
+  afterAll(async () => {
+    await env?.embedder?.dispose?.();
+    env?.db?.close();
     rmSync(env.tempDir, { recursive: true, force: true });
   });
 

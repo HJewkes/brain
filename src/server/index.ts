@@ -72,17 +72,35 @@ async function initV2Runtime(
   return runtime;
 }
 
+const log = (msg: string) => process.stderr.write(`[brain-mcp] ${msg}\n`);
+
 /** Start MCP-only server (no HTTP). Used by `brain serve --mcp`. */
 export async function startMcpServer(resolveOpts?: ResolveOptions): Promise<void> {
+  process.on('uncaughtException', (err) => {
+    log(`uncaughtException: ${err.stack ?? err}`);
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (err) => {
+    log(`unhandledRejection: ${err}`);
+  });
+
+  log('starting');
   const svc = await getSharedInstance(resolveOpts);
+  log('service created');
   const server = createBrainMcpServer(svc, {
     channelInstructions: WORKFLOW_CHANNEL_INSTRUCTIONS,
   });
-
-  const runtime = await initV2Runtime(svc, server);
+  log('mcp server created');
 
   const transport = new StdioServerTransport();
+  log('transport created');
   await server.connect(transport);
+  log('transport connected');
+
+  // Init runtime AFTER transport is connected — hydrate() resumes paused
+  // workflows which may fire channel notifications immediately.
+  const runtime = await initV2Runtime(svc, server);
+  log('runtime ready');
 
   const shutdown = () => {
     runtime.stopReconciler();

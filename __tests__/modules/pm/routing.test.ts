@@ -1,5 +1,9 @@
 import { describe, test, expect } from 'vitest';
-import { computeRouting, isAgentDispatchable } from '../../../src/modules/pm/engine/routing.js';
+import {
+  computeRouting,
+  isAgentDispatchable,
+  classifyWorkflowTurnComplexity,
+} from '../../../src/modules/pm/engine/routing.js';
 import type { RoutingResult } from '../../../src/modules/pm/engine/routing.js';
 import type { TaskCategory } from '../../../src/modules/pm/types.js';
 
@@ -148,6 +152,53 @@ describe('computeRouting', () => {
     const b = computeRouting('implementation', 'agent');
     expect(a).toEqual(b);
     expect(a).not.toBe(b);
+  });
+});
+
+describe('classifyWorkflowTurnComplexity', () => {
+  test('complex templates use opus on first iteration', () => {
+    for (const t of [
+      'planning-design',
+      'planning-critic',
+      'brainstorm-design',
+      'implementation-compact',
+    ]) {
+      expect(classifyWorkflowTurnComplexity(t, 0)).toBe('opus');
+    }
+  });
+
+  test('simple/formulaic templates use haiku on first iteration', () => {
+    for (const t of ['planning-spectests', 'review-fixup', 'ops', 'brainstorm-write-doc']) {
+      expect(classifyWorkflowTurnComplexity(t, 0)).toBe('haiku');
+    }
+  });
+
+  test('routine templates use sonnet on first iteration', () => {
+    for (const t of [
+      'planning-research',
+      'review-agent',
+      'brainstorm-explore',
+      'planning-decompose',
+    ]) {
+      expect(classifyWorkflowTurnComplexity(t, 0)).toBe('sonnet');
+    }
+  });
+
+  test('unknown templates fall back to sonnet', () => {
+    expect(classifyWorkflowTurnComplexity('unknown-template', 0)).toBe('sonnet');
+  });
+
+  test('complex templates step down to sonnet on retries', () => {
+    expect(classifyWorkflowTurnComplexity('planning-design', 1)).toBe('sonnet');
+    expect(classifyWorkflowTurnComplexity('planning-critic', 2)).toBe('sonnet');
+  });
+
+  test('sonnet templates step down to haiku on retries', () => {
+    expect(classifyWorkflowTurnComplexity('planning-research', 1)).toBe('haiku');
+  });
+
+  test('haiku templates stay at haiku on retries', () => {
+    expect(classifyWorkflowTurnComplexity('planning-spectests', 1)).toBe('haiku');
   });
 });
 
