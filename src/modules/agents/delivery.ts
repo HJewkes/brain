@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { execFileSync } from 'node:child_process';
 
 export type DeliveryStatus =
   | 'in-progress'
@@ -37,6 +38,11 @@ interface RecordDeliveryOpts {
   delivered_at?: string;
   retry_count?: number;
   session_id?: string;
+}
+
+export interface PrResult {
+  number: number;
+  url: string;
 }
 
 function ensureTable(db: Database.Database): void {
@@ -126,7 +132,75 @@ export function getDelivery(db: Database.Database, agentId: string): DeliveryRec
   );
 }
 
-// Stubs for push/PR operations — implemented in VNM-48.264
+export function getDeliveryForTask(db: Database.Database, taskId: string): DeliveryRecord | null {
+  try {
+    ensureTable(db);
+  } catch {
+    return null;
+  }
+  return (
+    (db
+      .prepare('SELECT * FROM delivery_states WHERE task_id = ? ORDER BY created_at DESC LIMIT 1')
+      .get(taskId) as DeliveryRecord | undefined) ?? null
+  );
+}
+
+export function requireGh(): void {
+  try {
+    execFileSync('gh', ['auth', 'status'], { stdio: 'pipe', timeout: 5000 });
+  } catch {
+    throw new Error('GitHub CLI not authenticated. Run: gh auth login');
+  }
+}
+
+export function pushBranch(branch: string, projectDir: string): void {
+  execFileSync('git', ['push', '-u', 'origin', branch], {
+    cwd: projectDir,
+    encoding: 'utf-8',
+    stdio: 'pipe',
+    timeout: 10_000,
+  });
+}
+
+export function createPr(branch: string, title: string, projectDir: string): PrResult {
+  // Check for existing PR first (idempotent)
+  try {
+    const existing = execFileSync('gh', ['pr', 'view', branch, '--json', 'number,url'], {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    const data = JSON.parse(existing) as { number: number; url: string };
+    if (data.number) return { number: data.number, url: data.url };
+  } catch {
+    // No existing PR — create one
+  }
+
+  const output = execFileSync(
+    'gh',
+    ['pr', 'create', '--head', branch, '--title', title, '--body', '', '--base', 'main'],
+    { cwd: projectDir, encoding: 'utf-8', stdio: 'pipe' }
+  );
+
+  // gh pr create outputs the PR URL on stdout
+  const url = output.trim();
+  const match = /\/pull\/(\d+)$/.exec(url);
+  const number = match ? parseInt(match[1], 10) : 0;
+  return { number, url };
+}
+
+export function updateDeliveryStatus(
+  db: Database.Database,
+  agentId: string,
+  status: DeliveryStatus,
+  opts: Pick<RecordDeliveryOpts, 'pr_merged_at' | 'delivered_at'> = {}
+): void {
+  recordDelivery(db, agentId, { status, ...opts });
+}
+
+// Legacy stubs — retained for backward compatibility with existing callers.
+// These were placeholders before VNM-48.264 and will be removed once all
+// callers are migrated to the new API (initiateDelivery, pushBranch, etc.).
 
 export function initiateTaskDelivery(..._args: unknown[]): never {
   throw new Error('Not implemented');
@@ -158,4 +232,35 @@ export function autoMergePR(..._args: unknown[]): never {
 
 export function completeTaskDelivery(..._args: unknown[]): never {
   throw new Error('Not implemented');
+}
+
+export function initiateDelivery(
+  db: Database.Database,
+  agentId: string,
+  taskId: string,
+  branch: string,
+  projectDir: string
+): DeliveryRecord {
+  requireGh();
+
+  recordDelivery(db, agentId, { status: 'in-progress', task_id: taskId, branch });
+
+  try {
+    pushBranch(branch, projectDir);
+  } catch (err) {
+    recordDelivery(db, agentId, { status: 'push-failed' });
+    throw err;
+  }
+  recordDelivery(db, agentId, { status: 'pushed' });
+
+  let pr: PrResult;
+  try {
+    pr = createPr(branch, taskId, projectDir);
+  } catch (err) {
+    recordDelivery(db, agentId, { status: 'pr-failed' });
+    throw err;
+  }
+  recordDelivery(db, agentId, { status: 'pr-open', pr_number: pr.number, pr_url: pr.url });
+
+  return getDelivery(db, agentId)!;
 }
