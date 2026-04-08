@@ -641,6 +641,123 @@ export async function updateTask(
   return ok(taskMetaFromRecord(refreshedMeta));
 }
 
+export async function migrateTask(
+  db: BrainDB,
+  config: BrainConfig,
+  embedder: Embedder,
+  displayId: string,
+  targetWorkstream: number
+): Promise<Result<TaskMetadata>> {
+  const notes = getPmNotes(db, 'task', { display_id: displayId });
+  if (notes.length === 0) {
+    return fail('NOT_FOUND', `Task "${displayId}" not found`);
+  }
+
+  const taskNote = notes[0];
+  const meta = JSON.parse(taskNote.metadata!) as Record<string, unknown>;
+  const project = meta.project as string;
+  const oldWorkstream = meta.workstream as number;
+
+  if (oldWorkstream === targetWorkstream) {
+    return fail('INVALID_INPUT', `Task is already in workstream ${targetWorkstream}`);
+  }
+
+  const targetWsDisplayId = formatDisplayId(project, targetWorkstream);
+  const targetWsNotes = getPmNotes(db, 'workstream', { display_id: targetWsDisplayId });
+  if (targetWsNotes.length === 0) {
+    return fail('NOT_FOUND', `Target workstream "${targetWsDisplayId}" not found`);
+  }
+
+  // Read the original file body (strip frontmatter)
+  const oldContent = readFileSync(taskNote.filePath, 'utf-8');
+  const bodyMatch = oldContent.match(/^---[\s\S]*?---\s*([\s\S]*)$/);
+  const body = bodyMatch ? bodyMatch[1].trim() : '';
+
+  // Assign new number in target workstream
+  const newNumber = nextTaskNumber(db, project, targetWorkstream);
+  const newDisplayId = formatDisplayId(project, targetWorkstream, newNumber);
+  const newNoteId = `${newDisplayId.toLowerCase()}-task`;
+  const newFilePath = taskFilePath(config, project, newDisplayId);
+
+  // Build new frontmatter by patching the key fields
+  let newContent = oldContent;
+  newContent = replaceFrontmatterField(newContent, 'id', newNoteId);
+  newContent = replaceFrontmatterField(newContent, 'workstream', String(targetWorkstream));
+  newContent = replaceFrontmatterField(newContent, 'display_id', newDisplayId);
+  newContent = replaceFrontmatterField(newContent, 'number', String(newNumber));
+  newContent = replaceFrontmatterField(
+    newContent,
+    'modified',
+    new Date().toISOString().slice(0, 10)
+  );
+
+  // Write new file
+  const newDir = dirname(newFilePath);
+  if (!existsSync(newDir)) {
+    mkdirSync(newDir, { recursive: true });
+  }
+  writeFileSync(newFilePath, newContent, 'utf-8');
+
+  // Index new file
+  const hash = createHash('sha256').update(newContent).digest('hex');
+  const newNoteIdResult = await indexSingleFile(db, embedder, newFilePath, newContent, hash, Date.now());
+
+  // Copy relations from old note to new (except parent)
+  const oldRelationsFrom = db.getRelationsFrom(taskNote.id);
+  const oldRelationsTo = db.getRelationsTo(taskNote.id);
+
+  const newRelations: Relation[] = [];
+
+  // Add new parent relation
+  newRelations.push({
+    sourceId: targetWsNotes[0].id,
+    targetId: newNoteIdResult,
+    type: 'parent',
+  });
+
+  // Copy outgoing relations (depends_on, references, related)
+  for (const rel of oldRelationsFrom) {
+    if (rel.type === 'parent') continue;
+    newRelations.push({ sourceId: newNoteIdResult, targetId: rel.targetId, type: rel.type });
+  }
+
+  if (newRelations.length > 0) {
+    db.upsertRelations(newNoteIdResult, newRelations);
+  }
+
+  // Repoint incoming relations (things that depend on this task)
+  for (const rel of oldRelationsTo) {
+    if (rel.type === 'parent') continue;
+    db.upsertRelations(rel.sourceId, [
+      { sourceId: rel.sourceId, targetId: newNoteIdResult, type: rel.type },
+    ]);
+  }
+
+  // Delete old note and file
+  db.deleteNote(taskNote.id);
+  if (existsSync(taskNote.filePath)) {
+    unlinkSync(taskNote.filePath);
+  }
+
+  // Clean up old content dir if it exists
+  const oldParsed = parseDisplayId(displayId);
+  if (oldParsed) {
+    const oldContentDir = taskContentDirPath(config, oldParsed.prefix, displayId);
+    if (existsSync(oldContentDir)) {
+      const newContentDir = taskContentDirPath(config, project, newDisplayId);
+      if (!existsSync(newContentDir)) {
+        mkdirSync(newContentDir, { recursive: true });
+      }
+      // Move content dir contents would be ideal but just note the new location
+      rmSync(oldContentDir, { recursive: true, force: true });
+    }
+  }
+
+  const refreshedNote = db.getNoteById(newNoteIdResult);
+  const refreshedMeta = JSON.parse(refreshedNote!.metadata!) as Record<string, unknown>;
+  return ok(taskMetaFromRecord(refreshedMeta));
+}
+
 export async function deleteTask(
   db: BrainDB,
   config: BrainConfig,
