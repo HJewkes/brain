@@ -1,4 +1,4 @@
-# Research Brief: VNM-48.162 (Consolidated: parallel dispatch + delivery lifecycle)
+# Research Brief: VNM-48.168 (Consolidated: parallel dispatch + delivery lifecycle)
 
 Plan: 8bc71b60 | Project: VNM
 
@@ -330,3 +330,18 @@ Spec tests specify `.worktrees/{workstream}` paths. Two options:
 **Option B** (update spec tests): Use `.worktrees/{taskId}` — enables true intra-workstream parallelism. Requires changing AC-01 test assertion from `.worktrees/48` to `.worktrees/VNM-48.103`. This matches the stated goal (VNM-48.154 task description requires per-task worktrees for true parallelism).
 
 **Decision**: Option B. Update spec tests to per-task paths. The implementation agent should update `delivery.test.ts` AC-01 assertion as part of implementation.
+
+---
+
+## VNM-48.168 Additional Findings
+
+### Stale Agent Record on Retry (commit a191f6d)
+
+A recent reconciler fix (`Fix reconciler using stale agent record on task retry`) revealed a critical race condition relevant to the delivery reconciler:
+
+- **Root cause**: `findAgentByTask(db, taskId)` returned an indeterminate row when multiple agent records existed for the same task (e.g., after a task retry). The reconciler could pick up the old, stale agent record and mis-classify a successfully-completed retry agent as dead.
+- **Fix applied**: `findAgentByTask` now orders by `rowid DESC LIMIT 1` (returns most recent agent for a task). The workflow runtime now also stores `agentId` in `activeAgent` tracking and uses `getAgent(agentId)` for precise lookup, with `findAgentByTask` as fallback for old DB rows.
+
+**Implication for delivery reconciler design**: The delivery reconciler must use `agentId` (not `taskId`) as the primary lookup key. The `delivery_states` table already has `agent_id TEXT PRIMARY KEY` — this is correct. When calling `cleanupAfterMerge(db, agent, projectDir)`, the `agent` parameter must be the specific retry agent (most recent), not any agent for that task. The implementation of `getDelivery(db, agentId)` must be agent-scoped, not task-scoped, to avoid cross-retry contamination.
+
+**Corollary**: If a task is retried and re-dispatched (e.g., due to CI failure or conflict), a new delivery record must be inserted with the new `agent_id` rather than updating the old delivery record. Old delivery records for prior agents should be archived (status `redispatched`) rather than deleted, for observability.
