@@ -146,7 +146,12 @@ export class BrainServiceClass {
     try {
       const filters: Record<string, unknown> = {};
       if (opts?.status) filters['status'] = opts.status;
-      if (opts?.workstream) filters['workstream_display_id'] = opts.workstream;
+      if (opts?.workstream) {
+        const wsNum = Number(opts.workstream);
+        if (!isNaN(wsNum)) {
+          filters['workstream'] = wsNum;
+        }
+      }
       const notes = getPmNotes(this.db, 'task', Object.keys(filters).length ? filters : undefined);
       return notes.map((n) => JSON.parse(n.metadata!) as TaskMetadata);
     } catch {
