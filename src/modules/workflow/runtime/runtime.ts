@@ -94,6 +94,14 @@ export class WorkflowRuntime {
     this.registry.set(name, fn);
   }
 
+  hasWorkflow(name: string): boolean {
+    return this.registry.has(name);
+  }
+
+  registeredWorkflows(): string[] {
+    return [...this.registry.keys()];
+  }
+
   async start(
     name: string,
     params: Record<string, string>,
