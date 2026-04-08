@@ -1,6 +1,7 @@
 # Design: Parallel Agent Dispatch with Work Delivery Lifecycle
 
-**Task**: VNM-48.137 | **Plan**: 8bc71b60 | **Date**: 2026-04-08
+**Task**: VNM-48.152 (consolidated from VNM-48.137, VNM-48.132, VNM-48.124, VNM-48.115)
+**Plan**: 8bc71b60 | **Date**: 2026-04-08
 
 Consolidates VNM-48.60 (parallel agent dispatch) and VNM-48.86 (work delivery lifecycle) into a unified system where N agents execute concurrently within a workstream, each on isolated per-task worktrees, with an automated delivery pipeline that handles push, PR, CI, merge, and cleanup.
 
