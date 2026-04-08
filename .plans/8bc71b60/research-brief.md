@@ -1,4 +1,4 @@
-# Research Brief: VNM-48.132 (Consolidated: parallel dispatch + delivery lifecycle)
+# Research Brief: VNM-48.147 (Consolidated: parallel dispatch + delivery lifecycle)
 
 Plan: 8bc71b60 | Project: VNM
 
@@ -145,7 +145,7 @@ File exists — review needed but likely handles rebase-on-conflict logic.
    - PM task field: `type: 'implementation' | 'research' | 'planning'`
    - Agent context flag set at dispatch time
 
-2. **Worktree path collision for parallel tasks in same workstream**: Current path scheme uses workstream ID. Per-task paths (`.worktrees/{taskId}`) avoid collision but make cleanup tracking harder. Recommendation needed.
+2. **Worktree path collision for parallel tasks in same workstream**: Current path scheme uses workstream ID. Per-task paths (`.worktrees/{taskId}`) avoid collision but make cleanup tracking harder. **Critical contradiction**: spec test `delivery.test.ts:58` expects `.worktrees/48` (workstream-based path: `expect(result.worktreePath).toMatch(/\.worktrees\/48$/)`) — but two concurrent tasks in workstream 48 would share the same physical directory and corrupt each other. Either the spec test is a simplification (and must be corrected to `.worktrees/{workstream}/{taskId}`), or per-task isolation uses a different scheme. Recommendation needed before implementation.
 
 3. **Budget calibration**: With per-task worktrees, budget should scale with WIP limit. Should budget = WIP limit, or should it be separately configurable?
 
