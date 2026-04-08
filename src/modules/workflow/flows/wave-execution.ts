@@ -79,9 +79,11 @@ export const waveExecutionWorkflow: WorkflowFn = async (ctx) => {
   // Step 2-3: Execute each wave, then gate check
   let completedCount = 0;
   let failedCount = 0;
+  const failures: string[] = [];
 
   for (const wave of waveStructure) {
     // Dispatch each task in the wave sequentially
+    // TODO: parallelize once runtime supports multiple concurrent active agents (VNM-48.59)
     for (const taskId of wave.taskIds) {
       const stepId = `wave-${wave.wave}-task-${taskId}`;
 
@@ -102,8 +104,10 @@ export const waveExecutionWorkflow: WorkflowFn = async (ctx) => {
       try {
         await ctx.dispatch(stepId, template, taskId);
         completedCount++;
-      } catch {
+      } catch (err) {
         failedCount++;
+        const msg = err instanceof Error ? err.message : String(err);
+        failures.push(`${taskId}: ${msg}`);
       }
     }
 
@@ -146,16 +150,24 @@ export const waveExecutionWorkflow: WorkflowFn = async (ctx) => {
   }
 
   // Step 4: Summary
+  const summaryLines = [
+    `Wave execution complete.`,
+    `Waves: ${waveStructure.length}`,
+    `Completed: ${completedCount}`,
+    `Failed: ${failedCount}`,
+  ];
+  if (failures.length > 0) {
+    summaryLines.push('', 'Failures:');
+    for (const f of failures) {
+      summaryLines.push(`  - ${f}`);
+    }
+  }
+
   await ctx.seed('summary', async () => ({
     data: {
       completedTasks: String(completedCount),
       failedTasks: String(failedCount),
     },
-    output: [
-      `Wave execution complete.`,
-      `Waves: ${waveStructure.length}`,
-      `Completed: ${completedCount}`,
-      `Failed: ${failedCount}`,
-    ].join('\n'),
+    output: summaryLines.join('\n'),
   }));
 };

@@ -483,6 +483,12 @@ async function handleProcessExit(
     /* non-JSON output */
   }
 
+  // Store full agent output BEFORE marking status — the reconciler may poll between
+  // these two writes; ensuring full_output is present avoids empty signal parsing.
+  if (result?.result) {
+    setAgentContext(svc.db, agentId, 'full_output', result.result);
+  }
+
   if (code === 0 && result) {
     const completion = parseCompletionMessage(result.result ?? '');
     if (completion) {
@@ -500,11 +506,6 @@ async function handleProcessExit(
       exit_reason: `exit_code_${code}`,
       summary: Buffer.concat(stderrChunks).toString('utf-8').slice(0, 500),
     });
-  }
-
-  // Store full agent output for signal parsing (critic verdicts, etc.)
-  if (result?.result) {
-    setAgentContext(svc.db, agentId, 'full_output', result.result);
   }
 
   if (result) {
