@@ -5,7 +5,8 @@ import { ok, fail } from '../errors.js';
 const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending: ['claimed', 'blocked', 'cancelled', 'pruned', 'skipped'],
   claimed: ['in-progress', 'pending', 'cancelled'],
-  'in-progress': ['done', 'blocked', 'cancelled', 'pending'],
+  'in-progress': ['pending-merge', 'done', 'blocked', 'cancelled', 'pending'],
+  'pending-merge': ['done', 'in-progress', 'cancelled'],
   done: ['pending'],
   blocked: ['pending', 'cancelled', 'pruned'],
   cancelled: [],

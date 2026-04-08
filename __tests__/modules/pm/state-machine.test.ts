@@ -323,8 +323,18 @@ describe('allowedTransitions', () => {
     expect(allowedTransitions('claimed')).toEqual(['in-progress', 'pending', 'cancelled']);
   });
 
-  test('in-progress returns [done, blocked, cancelled, pending]', () => {
-    expect(allowedTransitions('in-progress')).toEqual(['done', 'blocked', 'cancelled', 'pending']);
+  test('in-progress returns [pending-merge, done, blocked, cancelled, pending]', () => {
+    expect(allowedTransitions('in-progress')).toEqual([
+      'pending-merge',
+      'done',
+      'blocked',
+      'cancelled',
+      'pending',
+    ]);
+  });
+
+  test('pending-merge returns [done, in-progress, cancelled]', () => {
+    expect(allowedTransitions('pending-merge')).toEqual(['done', 'in-progress', 'cancelled']);
   });
 
   test('done returns [pending]', () => {
