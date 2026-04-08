@@ -1,4 +1,4 @@
-# Research Brief: VNM-48.144 (Consolidated: parallel dispatch + delivery lifecycle)
+# Research Brief: VNM-48.162 (Consolidated: parallel dispatch + delivery lifecycle)
 
 Plan: 8bc71b60 | Project: VNM
 
@@ -252,3 +252,81 @@ Wire `BackpressureController` into the coordinator's dispatch loop:
 4. **Worktree preservation**: Is it acceptable to keep the physical worktree directory alive through the full delivery pipeline (push → PR → CI → merge)? For long CI runs, this could be 30+ minutes of idle disk usage per task.
 
 5. **Reconciler scheduling**: Should `reconcileDeliveries` run as a Claude Code cron hook, a launchd job, or should the coordinator agent poll it in its main loop? The coordinator loop approach is simplest but requires the coordinator to stay alive.
+
+---
+
+## VNM-48.154 Additional Findings
+
+### Spec Test API Clarifications (`delivery.test.ts`)
+
+**Two parallel query interfaces** for delivery state:
+- `getDeliveryStatus(db, taskId)` — queried by task ID (used in delivery.test.ts)
+- `getDelivery(db, agentId)` — queried by agent ID (used in delivery-reconciler.test.ts)
+
+Both must be exported from `delivery.ts`. The `delivery_states` table needs an index on `task_id` for the first interface, or a join through `agents` on `brain_task = taskId`.
+
+**Worktree path scheme discrepancy**: `delivery.test.ts` line 53-58 specifies `allocateDeliveryWorktree` returns `worktreePath` matching `.worktrees/48` (workstream-based, not task-based). This contradicts R1 which recommended task-based paths. The spec tests are not yet authoritative since no implementation exists. Decision required (see R9 below).
+
+**`initiateTaskDelivery` return shape** (from tests):
+```ts
+{ taskId: string; status: 'in_progress'; stage: string; timestamp: string }
+```
+
+**`releaseDeliveryWorktree` return shape**:
+```ts
+{ dbReleased: true; physicalCleaned: false; cleanupCommand: string }
+```
+Physical cleanup is explicitly NOT automatic — `cleanupCommand` is a string (e.g., `git worktree remove --force <path>`) for the reconciler to invoke.
+
+### Schema Gap: V3 Migration in Tests
+
+`delivery-reconciler.test.ts` applies only V1+V2 migrations but calls `recordDelivery` and `getDelivery`. This means tests are incomplete — they will fail at the SQL level when the `delivery_states` table doesn't exist. Fix: add `agentsMigrationV3.up(db)` to the `setupDb()` helper in the test.
+
+### WorkflowContext Single-Slot Confirmed (`context.ts`)
+
+`WorkflowContext._activeAgent` is a scalar (null | Slot). Lines 65, 95, 211, 256, 345 all treat it as a single value. DB column `active_agent TEXT | null` stores one JSON object.
+
+Migration path for parallelism:
+- `_activeAgent: Slot | null` → `_activeAgents: Map<string, Slot>` (keyed by stepId)
+- DB: `active_agent TEXT` → `active_agents TEXT` (JSON object `{[stepId]: Slot}`)
+- `reconcile()` inner loop: `workflow.ctx.activeAgent` → `for (const agent of workflow.ctx.activeAgents.values())`
+
+### `cleanupAfterMerge` Exact Signature
+
+```ts
+cleanupAfterMerge(db, agent, projectDir)
+// agent is a raw SELECT * FROM agents row
+// is a no-op when agent.brain_task is null
+```
+
+### `pending-merge` Status Missing
+
+Neither `state-machine.ts` nor `pm/types.ts` currently contain `pending-merge`. Must be added to the valid status set as part of delivery implementation.
+
+### R8: `delivery_states` Table Must Include `task_id`
+
+```sql
+CREATE TABLE IF NOT EXISTS delivery_states (
+  agent_id     TEXT PRIMARY KEY REFERENCES agents(id),
+  task_id      TEXT,
+  status       TEXT NOT NULL DEFAULT 'in_progress'
+               CHECK(status IN ('in_progress','push-failed','pr-failed','pr-open','merged','delivered')),
+  pr_number    INTEGER,
+  pr_url       TEXT,
+  pr_merged_at TEXT,
+  delivered_at TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_delivery_states_task_id ON delivery_states(task_id);
+```
+
+### R9: Per-Workstream vs Per-Task Worktrees — Decision Required
+
+Spec tests specify `.worktrees/{workstream}` paths. Two options:
+
+**Option A** (follow spec tests): Keep per-workstream paths — serializes execution within a workstream. Simple cleanup.
+
+**Option B** (update spec tests): Use `.worktrees/{taskId}` — enables true intra-workstream parallelism. Requires changing AC-01 test assertion from `.worktrees/48` to `.worktrees/VNM-48.103`. This matches the stated goal (VNM-48.154 task description requires per-task worktrees for true parallelism).
+
+**Decision**: Option B. Update spec tests to per-task paths. The implementation agent should update `delivery.test.ts` AC-01 assertion as part of implementation.
