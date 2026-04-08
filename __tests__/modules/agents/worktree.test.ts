@@ -65,7 +65,7 @@ describe('worktree lifecycle', () => {
 
       expect(result.reused).toBe(false);
       expect(result.branch).toBe('agent/vnm-09/VNM-09.01');
-      expect(result.worktreePath).toContain('vnm-09');
+      expect(result.worktreePath).toContain('VNM-09.01');
 
       const allocs = getWorktreeAllocations(db);
       expect(allocs).toHaveLength(1);
@@ -91,7 +91,7 @@ describe('worktree lifecycle', () => {
       );
     });
 
-    it('reuses existing worktree for same workstream', () => {
+    it('gives each task its own isolated worktree path (no reuse)', () => {
       // First allocation
       allocateWorktree(db, '/repo', {
         taskId: 'VNM-09.01',
@@ -100,8 +100,6 @@ describe('worktree lifecycle', () => {
         basePath: '.worktrees',
         budget: 3,
       });
-
-      vi.clearAllMocks();
 
       // Second allocation for same workstream
       const result = allocateWorktree(db, '/repo', {
@@ -112,45 +110,42 @@ describe('worktree lifecycle', () => {
         budget: 3,
       });
 
-      expect(result.reused).toBe(true);
-      // git worktree add should NOT be called again
-      expect(mockExecFileSync).not.toHaveBeenCalled();
-      // Two allocations exist (different task_ids sharing the same worktree)
+      expect(result.reused).toBe(false);
+      expect(result.worktreePath).toContain('VNM-09.02');
+      // Two allocations exist, each with its own unique worktree path
       const allocs = getWorktreeAllocations(db);
       expect(allocs).toHaveLength(2);
       expect(allocs.map((a) => a.task_id)).toContain('VNM-09.01');
       expect(allocs.map((a) => a.task_id)).toContain('VNM-09.02');
-      // Both share the same worktree path
-      expect(allocs[0].worktree_path).toBe(allocs[1].worktree_path);
+      // Each task has its own path
+      expect(allocs[0].worktree_path).not.toBe(allocs[1].worktree_path);
     });
 
-    it('cleans up stale DB records and creates fresh worktree when directory is gone', () => {
+    it('cleans up stale DB records before checking budget', () => {
       // First allocation creates a worktree
       allocateWorktree(db, '/repo', {
         taskId: 'VNM-09.01',
         workstream: 'vnm-09',
         claimToken: 'tok-1',
         basePath: '.worktrees',
-        budget: 3,
+        budget: 1,
       });
 
       vi.clearAllMocks();
-      // Simulate the worktree directory being deleted externally
+      // Simulate the worktree directory being deleted externally — stale record
       mockExistsSync.mockReturnValue(false);
 
+      // Budget is 1, but after cleanup the stale record is removed, so allocation succeeds
       const result = allocateWorktree(db, '/repo', {
         taskId: 'VNM-09.02',
         workstream: 'vnm-09',
         claimToken: 'tok-2',
         basePath: '.worktrees',
-        budget: 3,
+        budget: 1,
       });
 
       expect(result.reused).toBe(false);
-      // Should have called git branch -D (cleanup) + git worktree add
-      const calls = mockExecFileSync.mock.calls.map((c) => (c as string[][])[1]);
-      expect(calls.some((args) => args.includes('branch') && args.includes('-D'))).toBe(true);
-      expect(calls.some((args) => args.includes('worktree') && args.includes('add'))).toBe(true);
+      expect(result.worktreePath).toContain('VNM-09.02');
       // Stale record for VNM-09.01 should be gone, only VNM-09.02 remains
       const allocs = getWorktreeAllocations(db);
       expect(allocs).toHaveLength(1);
@@ -324,10 +319,10 @@ describe('worktree lifecycle', () => {
         budget: 5,
       });
 
-      // First path exists, second does not
+      // First path (VNM-09.01) exists, second (VNM-09.02) does not
       mockExistsSync.mockImplementation((p: unknown) => {
         const path = p as string;
-        return path.includes('ws-1');
+        return path.includes('VNM-09.01');
       });
 
       const removed = cleanupStaleAllocations(db, '/repo');

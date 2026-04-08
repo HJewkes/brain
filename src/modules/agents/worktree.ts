@@ -51,8 +51,9 @@ export function findGitRoot(): string {
 
 /**
  * Allocate a git worktree for a task.
- * Reuses an existing worktree for the same workstream if one exists.
- * Enforces budget limit before creating a new worktree.
+ * Each task gets its own isolated path (.worktrees/{taskId}).
+ * Cleans up stale allocations before checking budget.
+ * Budget should be set to BackpressureController.computeEffectiveWip().effectiveWip.
  */
 export function allocateWorktree(
   db: unknown,
@@ -69,37 +70,16 @@ export function allocateWorktree(
   const budget = opts.budget ?? DEFAULT_BUDGET;
   const basePath = opts.basePath ?? DEFAULT_BASE_PATH;
 
-  const allocations = getWorktreeAllocations(db);
+  // Clean up stale allocations before checking budget
+  cleanupStaleAllocations(db, projectRoot);
 
-  const existing = allocations.find((a) => a.workstream === opts.workstream);
-  if (existing) {
-    const resolvedPath = resolve(projectRoot, existing.worktree_path);
-    if (existsSync(resolvedPath)) {
-      // Reuse existing physical worktree for the same workstream
-      const input: AllocateWorktreeInput = {
-        task_id: opts.taskId,
-        workstream: opts.workstream,
-        worktree_path: existing.worktree_path,
-        branch: existing.branch,
-        claim_token: opts.claimToken,
-      };
-      dbAllocate(db, input);
-      return { worktreePath: existing.worktree_path, branch: existing.branch, reused: true };
-    }
-    // Worktree directory is gone — clean up stale DB records for this workstream
-    for (const a of allocations.filter((a) => a.workstream === opts.workstream)) {
-      dbRelease(db, a.task_id);
-    }
-  }
-
-  // Re-check budget after cleaning stale records
   const currentAllocations = getWorktreeAllocations(db);
   if (currentAllocations.length >= budget) {
     throw new Error(`Worktree budget exhausted: ${currentAllocations.length}/${budget} allocated`);
   }
 
   const branch = `agent/${opts.workstream}/${opts.taskId}`;
-  const worktreePath = resolve(projectRoot, basePath, opts.workstream);
+  const worktreePath = resolve(projectRoot, basePath, opts.taskId);
 
   // Clean up stale branch if it exists from a prior run
   try {
