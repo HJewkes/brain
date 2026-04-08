@@ -45,6 +45,49 @@ export interface IndexResult {
   indexedNoteIds: string[];
 }
 
+export function extractL0(body: string): string | null {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  // Skip leading headings to find first prose paragraph
+  const lines = trimmed.split('\n');
+  let proseStart = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line && !line.startsWith('#')) {
+      proseStart = i;
+      break;
+    }
+  }
+  if (proseStart === -1) return null;
+  // Collect contiguous non-empty, non-heading lines as the first paragraph
+  const paraLines: string[] = [];
+  for (let i = proseStart; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('#')) break;
+    paraLines.push(line);
+  }
+  const paragraph = paraLines.join(' ');
+  // Extract first 1-2 sentences (up to second sentence-ending punctuation)
+  const sentenceEnd = /[.!?]/g;
+  let count = 0;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = sentenceEnd.exec(paragraph)) !== null) {
+    count++;
+    lastIndex = match.index + 1;
+    if (count >= 2) break;
+  }
+  if (count === 0) return paragraph.slice(0, 200).trim() || null;
+  return paragraph.slice(0, lastIndex).trim();
+}
+
+export function extractL1(body: string): string | null {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  if (trimmed.length <= 500) return trimmed;
+  return trimmed.slice(0, 500).trim();
+}
+
 export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): NoteRecord {
   const fm = parsed.frontmatter;
 
@@ -73,8 +116,8 @@ export function frontmatterToRecord(parsed: ReturnType<typeof parseMarkdown>): N
     module: fm.module ?? null,
     moduleInstance: fm['module-instance'] ?? null,
     contentDir: fm['content-dir'] ?? null,
-    l0Abstract: null,
-    l1Overview: null,
+    l0Abstract: extractL0(parsed.content) ?? null,
+    l1Overview: extractL1(parsed.content) ?? null,
   };
 }
 

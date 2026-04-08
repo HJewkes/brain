@@ -4,6 +4,8 @@ import { BrainDB } from '../../src/services/brain-db.js';
 import {
   slugify,
   frontmatterToRecord,
+  extractL0,
+  extractL1,
   rawChunksToChunks,
   chunkId,
   inboxItemToMarkdown,
@@ -96,6 +98,8 @@ describe('frontmatterToRecord', () => {
     expect(record.modifiedAt).toContain('2026-02-01');
     expect(record.lastReviewed).toContain('2026-01-20');
     expect(record.reviewInterval).toBe('90d');
+    expect(record.l0Abstract).toBe('Some text here.');
+    expect(record.l1Overview).toBe('## Content\n\nSome text here.');
   });
 
   it('handles missing optional fields', () => {
@@ -119,6 +123,8 @@ describe('frontmatterToRecord', () => {
     expect(record.summary).toBeNull();
     expect(record.confidence).toBeNull();
     expect(record.status).toBe('current');
+    expect(record.l0Abstract).toBe('Content.');
+    expect(record.l1Overview).toBe('Content.');
   });
 
   it('frontmatterToRecord stores raw frontmatter as metadata for non-module notes', () => {
@@ -137,6 +143,7 @@ describe('frontmatterToRecord', () => {
         'architecture-layer': [1, 3],
         'enforcement-strength': 'deterministic',
       },
+      content: 'Some architecture content.',
       chunks: [],
       links: [],
     };
@@ -146,6 +153,49 @@ describe('frontmatterToRecord', () => {
     const meta = JSON.parse(record.metadata!);
     expect(meta['architecture-layer']).toEqual([1, 3]);
     expect(meta['enforcement-strength']).toBe('deterministic');
+  });
+});
+
+describe('extractL0', () => {
+  it('extracts first 1-2 sentences from body', () => {
+    expect(extractL0('First sentence. Second sentence. Third.')).toBe(
+      'First sentence. Second sentence.'
+    );
+  });
+
+  it('skips leading headings to find prose', () => {
+    expect(extractL0('# Heading\n\nFirst sentence. Second.')).toBe('First sentence. Second.');
+  });
+
+  it('returns up to 200 chars when no sentence-ending punctuation', () => {
+    expect(extractL0('No punctuation here')).toBe('No punctuation here');
+  });
+
+  it('returns null for empty body', () => {
+    expect(extractL0('')).toBeNull();
+  });
+
+  it('returns null for heading-only body', () => {
+    expect(extractL0('# Just a heading\n## Another heading')).toBeNull();
+  });
+
+  it('joins multi-line paragraph into single string', () => {
+    expect(extractL0('Line one.\nLine two. Done.')).toBe('Line one. Line two.');
+  });
+});
+
+describe('extractL1', () => {
+  it('returns full body when under 500 chars', () => {
+    expect(extractL1('Short body.')).toBe('Short body.');
+  });
+
+  it('truncates to 500 chars for long body', () => {
+    const long = 'A'.repeat(600);
+    expect(extractL1(long)).toHaveLength(500);
+  });
+
+  it('returns null for empty body', () => {
+    expect(extractL1('')).toBeNull();
   });
 });
 
