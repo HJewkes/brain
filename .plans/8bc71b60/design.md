@@ -1,6 +1,6 @@
 # Design: Parallel Agent Dispatch with Work Delivery Lifecycle
 
-**Task**: VNM-48.161 (consolidated from VNM-48.60 + VNM-48.86, prior: VNM-48.152, VNM-48.137, VNM-48.132, VNM-48.124, VNM-48.115)
+**Task**: VNM-48.176 (consolidated from VNM-48.60 + VNM-48.86, prior: VNM-48.161, VNM-48.152, VNM-48.137, VNM-48.132, VNM-48.124, VNM-48.115)
 **Plan**: 8bc71b60 | **Date**: 2026-04-08
 
 Consolidates VNM-48.60 (parallel agent dispatch) and VNM-48.86 (work delivery lifecycle) into a unified system where N agents execute concurrently within a workstream, each on isolated per-task worktrees, with an automated delivery pipeline that handles push, PR, CI, merge, and cleanup.
@@ -485,10 +485,49 @@ Task eligible
 
 ---
 
-## 14. Open Questions for Review
+## 14. Decision Log
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D1 | Per-task worktree paths (`.worktrees/{taskId}`) | Eliminates one-worktree-per-workstream bottleneck; taskId is unique |
+| D2 | Branch-based delivery trigger (`agent/` prefix + worktree isolation) | Zero schema change; routing already identifies implementation tasks |
+| D3 | `pending-merge` as PM task status | Wave gates need "code done" vs "code merged"; prevents premature advancement |
+| D4 | Reconciler as periodic poll (not event-driven) | GitHub has no webhook push to CLI; 60s polling is simple and sufficient |
+| D5 | Rebase-first conflict resolution (max 2 attempts) | Most parallel PR conflicts are trivial; auto-rebase handles >90% |
+| D6 | `pending-merge` counts against WIP | Prevents over-dispatch when merge queue backs up; worktree budget = effective WIP |
+| D7 | FIFO merge order in reconciler | Oldest PR most likely clean against main; reduces cascade conflicts |
+| D8 | Delivery state in DB table, not agent context | Enables efficient reconciler queries by status; survives process restarts |
+
+---
+
+## 15. Implementation Phases
+
+### Phase 1: Foundation (3 tasks)
+1. V3 migration — `delivery_states` table in `schema.ts`
+2. Per-task worktree — modify `allocateWorktree` path scheme, remove workstream reuse
+3. `pending-merge` status — add to state machine transitions and `isValidTaskStatus`
+
+### Phase 2: Delivery Pipeline (3 tasks)
+4. `delivery.ts` — `initiateDelivery`, `recordDelivery`, `getDelivery`, `updateDeliveryStatus`, `pushTaskBranch`, `createTaskPR`
+5. Agent-done integration — modify `handleAgentDone` to trigger delivery for worktree tasks
+6. `delivery-reconciler.ts` — `reconcileDeliveries`, `cleanupAfterMerge`, `ReconcilerReport`
+
+### Phase 3: Wiring (3 tasks)
+7. Backpressure wiring — connect `BackpressureController` to dispatch guard and reconciler
+8. Wave gate — implement `isWaveComplete` with `pending-merge` awareness
+9. Multi-agent runtime — replace `activeAgent` scalar with map, update reconciler loop
+
+### Phase 4: Wave Parallelism (1 task)
+10. Parallel wave dispatch — replace sequential loop in `wave-execution.ts`
+
+---
+
+## 16. Open Questions for Review
 
 1. **Worktree preservation**: Keep physical worktree alive through full delivery (push → CI → merge), or clean up after push and reconstruct if rebase needed? Current design keeps it alive for simplicity.
 
 2. **GitHub merge queue**: Should the design auto-detect merge queue availability and switch strategies? Current design treats it as optional with fallback to sequential rebase.
 
 3. **Review gating**: Which task types require human review before merge? Current design uses a `requiresReview` flag set at dispatch time based on task risk classification.
+
+4. **Budget calibration**: With per-task worktrees, should budget = WIP limit, or separately configurable? Current design ties them together.
