@@ -1,6 +1,6 @@
 # Design: Parallel Agent Dispatch with Work Delivery Lifecycle
 
-**Task**: VNM-48.152 (consolidated from VNM-48.137, VNM-48.132, VNM-48.124, VNM-48.115)
+**Task**: VNM-48.161 (consolidated from VNM-48.60 + VNM-48.86, prior: VNM-48.152, VNM-48.137, VNM-48.132, VNM-48.124, VNM-48.115)
 **Plan**: 8bc71b60 | **Date**: 2026-04-08
 
 Consolidates VNM-48.60 (parallel agent dispatch) and VNM-48.86 (work delivery lifecycle) into a unified system where N agents execute concurrently within a workstream, each on isolated per-task worktrees, with an automated delivery pipeline that handles push, PR, CI, merge, and cleanup.
@@ -134,20 +134,26 @@ in_progress ──► push-failed
 CREATE TABLE IF NOT EXISTS delivery_states (
   agent_id     TEXT PRIMARY KEY REFERENCES agents(id),
   task_id      TEXT NOT NULL,
+  branch       TEXT NOT NULL,
   status       TEXT NOT NULL DEFAULT 'in_progress'
                CHECK(status IN (
-                 'in_progress','pushed','push-failed',
-                 'pr-open','pr-failed','conflicted','rebasing',
+                 'in_progress','pushed','push_failed',
+                 'pr_open','pr_failed','conflicted','rebasing',
                  'merged','delivered','redispatched'
                )),
   pr_number    INTEGER,
   pr_url       TEXT,
   pr_merged_at TEXT,
   delivered_at TEXT,
+  retry_count  INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX idx_delivery_status ON delivery_states(status);
+CREATE INDEX idx_delivery_task ON delivery_states(task_id);
 ```
+
+> **Note**: Status values use underscores (`push_failed`, `pr_open`) for consistency with SQLite conventions and the existing codebase style. The `retry_count` tracks rebase/push retry attempts per delivery — max 2 before redispatch.
 
 ### PM Task Status: Add `pending-merge`
 
