@@ -37,7 +37,7 @@ export interface ArchiveResult {
   orphanedChildren: string[];
 }
 
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 export class BrainDB {
   private db: Database.Database;
@@ -99,6 +99,7 @@ export class BrainDB {
     this.applyMigration(currentVersion, 9, () => this.migrateToV9());
     this.applyMigration(currentVersion, 10, () => this.migrateToV10());
     this.applyMigration(currentVersion, 11, () => this.migrateToV11());
+    this.applyMigration(currentVersion, 12, () => this.migrateToV12());
 
     const dims = this.getMetaValue('embedding_dimensions');
     if (dims) {
@@ -296,9 +297,21 @@ export class BrainDB {
       ${this.noteAccessDDL()}
       ${this.activitiesDDL()}
       ${this.moduleIndexesDDL()}
+      ${this.sessionsDDL()}
 
       CREATE INDEX IF NOT EXISTS idx_notes_embed_status ON notes(embed_status);
       CREATE INDEX IF NOT EXISTS idx_notes_activity_type ON notes(activity_type);
+    `;
+  }
+
+  private sessionsDDL(): string {
+    return `
+      CREATE TABLE IF NOT EXISTS sessions (
+        session_id   TEXT PRIMARY KEY,
+        display_id   TEXT NOT NULL,
+        is_reference INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_sessions_is_reference ON sessions(is_reference) WHERE is_reference = 1;
     `;
   }
 
@@ -377,6 +390,10 @@ export class BrainDB {
     if (!noteColNames.has('l1_overview')) {
       this.db.exec('ALTER TABLE notes ADD COLUMN l1_overview TEXT DEFAULT NULL');
     }
+  }
+
+  private migrateToV12(): void {
+    this.db.exec(this.sessionsDDL());
   }
 
   private migrateToV8(): void {
