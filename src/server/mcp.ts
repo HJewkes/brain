@@ -748,6 +748,28 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
       try {
         const runtime = getV2Runtime(svc);
         if (!runtime) return errorResult('Workflow runtime not initialized');
+
+        if (!runtime.hasWorkflow(workflowId)) {
+          const known = runtime.registeredWorkflows();
+          return errorResult(
+            `Unknown workflow "${workflowId}". Registered workflows: ${known.join(', ') || '(none)'}`
+          );
+        }
+
+        // Validate required context per workflow type
+        if (workflowId === 'planning' && !context?.brief) {
+          return errorResult('Planning workflow requires context.brief describing what to build.');
+        }
+
+        // Validate project/workstream exist
+        const wsDisplayId = `${project}-${String(workstream).padStart(2, '0')}`;
+        const wsNote = svc.db.getNoteById(`${wsDisplayId.toLowerCase()}-workstream`);
+        if (!wsNote) {
+          return errorResult(
+            `Workstream ${wsDisplayId} not found. Check that project "${project}" and workstream ${workstream} exist.`
+          );
+        }
+
         if (dryRun) {
           return textResult({ workflowId, project, workstream, context, dryRun: true });
         }
