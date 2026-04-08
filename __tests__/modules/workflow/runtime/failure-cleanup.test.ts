@@ -16,7 +16,7 @@ function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
     status: 'failed',
     currentStep: null,
     stepResults: {},
-    activeAgent: null,
+    activeAgents: {},
     startedAt: '2026-01-01T00:00:00Z',
     completedAt: null,
     error: null,
@@ -65,7 +65,7 @@ describe('releaseWorkflowTasks', () => {
     vi.mocked(updateTaskStatus).mockClear();
 
     const run = makeRun({
-      activeAgent: { pid: 12345, taskId: 'TST-01.003', stepId: 'spec-tests' },
+      activeAgents: { 'spec-tests': { pid: 12345, taskId: 'TST-01.003', stepId: 'spec-tests' } },
     });
 
     const released = await releaseWorkflowTasks(db, config, embedder, run);
@@ -110,7 +110,7 @@ describe('releaseWorkflowTasks', () => {
           completedAt: '2026-01-01T00:00:00Z',
         },
       },
-      activeAgent: { pid: 12345, taskId: 'TST-01.001', stepId: 'design' },
+      activeAgents: { design: { pid: 12345, taskId: 'TST-01.001', stepId: 'design' } },
     });
 
     const released = await releaseWorkflowTasks(db, config, embedder, run);

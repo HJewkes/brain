@@ -70,7 +70,7 @@ function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
     status: overrides.status ?? 'running',
     currentStep: overrides.currentStep ?? null,
     stepResults: overrides.stepResults ?? {},
-    activeAgent: overrides.activeAgent ?? null,
+    activeAgents: overrides.activeAgents ?? {},
     startedAt: overrides.startedAt ?? new Date().toISOString(),
     completedAt: overrides.completedAt ?? null,
     error: overrides.error ?? null,
