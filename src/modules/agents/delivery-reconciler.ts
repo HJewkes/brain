@@ -15,9 +15,14 @@ interface PrViewResult {
 }
 
 export function reconcileDeliveries(db: Database.Database, _projectPath: string): void {
-  const rows = db
-    .prepare("SELECT * FROM delivery_states WHERE status = 'pr-open'")
-    .all() as DeliveryRecord[];
+  let rows: DeliveryRecord[];
+  try {
+    rows = db
+      .prepare("SELECT * FROM delivery_states WHERE status = 'pr-open'")
+      .all() as DeliveryRecord[];
+  } catch {
+    return; // Table may not exist yet
+  }
 
   for (const row of rows) {
     if (!row.pr_number) continue;

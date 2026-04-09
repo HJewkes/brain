@@ -45,33 +45,11 @@ export interface PrResult {
   url: string;
 }
 
-function ensureTable(db: Database.Database): void {
-  (db as unknown as { exec(sql: string): void }).exec(`
-    CREATE TABLE IF NOT EXISTS delivery_states (
-      agent_id     TEXT PRIMARY KEY REFERENCES agents(id),
-      task_id      TEXT,
-      branch       TEXT,
-      status       TEXT NOT NULL DEFAULT 'in-progress',
-      pr_number    INTEGER,
-      pr_url       TEXT,
-      pr_merged_at TEXT,
-      delivered_at TEXT,
-      retry_count  INTEGER NOT NULL DEFAULT 0,
-      session_id   TEXT,
-      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_delivery_status ON delivery_states(status);
-    CREATE INDEX IF NOT EXISTS idx_delivery_task ON delivery_states(task_id);
-  `);
-}
-
 export function recordDelivery(
   db: Database.Database,
   agentId: string,
   opts: RecordDeliveryOpts
 ): void {
-  ensureTable(db);
   const now = new Date().toISOString();
   const existing = db.prepare('SELECT * FROM delivery_states WHERE agent_id = ?').get(agentId) as
     | DeliveryRecord
@@ -121,28 +99,26 @@ export function recordDelivery(
 
 export function getDelivery(db: Database.Database, agentId: string): DeliveryRecord | null {
   try {
-    ensureTable(db);
+    return (
+      (db.prepare('SELECT * FROM delivery_states WHERE agent_id = ?').get(agentId) as
+        | DeliveryRecord
+        | undefined) ?? null
+    );
   } catch {
     return null;
   }
-  return (
-    (db.prepare('SELECT * FROM delivery_states WHERE agent_id = ?').get(agentId) as
-      | DeliveryRecord
-      | undefined) ?? null
-  );
 }
 
 export function getDeliveryForTask(db: Database.Database, taskId: string): DeliveryRecord | null {
   try {
-    ensureTable(db);
+    return (
+      (db
+        .prepare('SELECT * FROM delivery_states WHERE task_id = ? ORDER BY created_at DESC LIMIT 1')
+        .get(taskId) as DeliveryRecord | undefined) ?? null
+    );
   } catch {
     return null;
   }
-  return (
-    (db
-      .prepare('SELECT * FROM delivery_states WHERE task_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(taskId) as DeliveryRecord | undefined) ?? null
-  );
 }
 
 export function requireGh(): void {
@@ -196,42 +172,6 @@ export function updateDeliveryStatus(
   opts: Pick<RecordDeliveryOpts, 'pr_merged_at' | 'delivered_at'> = {}
 ): void {
   recordDelivery(db, agentId, { status, ...opts });
-}
-
-// Legacy stubs — retained for backward compatibility with existing callers.
-// These were placeholders before VNM-48.264 and will be removed once all
-// callers are migrated to the new API (initiateDelivery, pushBranch, etc.).
-
-export function initiateTaskDelivery(..._args: unknown[]): never {
-  throw new Error('Not implemented');
-}
-
-export function getDeliveryStatus(..._args: unknown[]): never {
-  throw new Error('Not implemented');
-}
-
-export function allocateDeliveryWorktree(..._args: unknown[]): never {
-  throw new Error('Not implemented');
-}
-
-export function releaseDeliveryWorktree(..._args: unknown[]): never {
-  throw new Error('Not implemented');
-}
-
-export function pushTaskBranch(..._args: unknown[]): never {
-  throw new Error('Not implemented');
-}
-
-export function createTaskPR(..._args: unknown[]): never {
-  throw new Error('Not implemented');
-}
-
-export function autoMergePR(..._args: unknown[]): never {
-  throw new Error('Not implemented');
-}
-
-export function completeTaskDelivery(..._args: unknown[]): never {
-  throw new Error('Not implemented');
 }
 
 export function initiateDelivery(

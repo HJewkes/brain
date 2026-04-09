@@ -17,7 +17,7 @@ import { readTaskBody } from '../modules/pm/engine/dispatch.js';
 import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents, getAgentContext } from '../modules/agents/data.js';
-import { dispatchTask } from './dispatch.js';
+import { dispatchTask, resolveProjectDir } from './dispatch.js';
 import { OrchestrationService } from './orchestration.js';
 import { BackpressureController } from '../modules/agents/backpressure.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
@@ -626,7 +626,7 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
     async ({ workstream, wipLimit }) => {
       try {
         const backpressure = new BackpressureController(wipLimit ?? 3);
-        const orch = new OrchestrationService(svc.db, backpressure, '');
+        const orch = new OrchestrationService(svc.db, backpressure, resolveProjectDir(svc));
         // Fire-and-forget: waves take minutes; MCP tool returns immediately
         orch.executeWorkstream(svc, workstream).catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
@@ -851,19 +851,15 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
           done: stepEntries.length,
           pruned: 0,
           skipped: 0,
-          active: status.activeAgent ? 1 : 0,
+          active: Object.keys(status.activeAgents ?? {}).length,
           pending: 0,
         },
-        activeAgents: status.activeAgent
-          ? [
-              {
-                stepId: status.activeAgent.stepId,
-                taskId: status.activeAgent.taskId,
-                pid: status.activeAgent.pid,
-                alive: isAlive(status.activeAgent.pid),
-              },
-            ]
-          : [],
+        activeAgents: Object.values(status.activeAgents ?? {}).map((slot) => ({
+          stepId: slot.stepId,
+          taskId: slot.taskId,
+          pid: slot.pid,
+          alive: isAlive(slot.pid),
+        })),
         runtimeVersion: 'v2',
       });
     }

@@ -105,6 +105,11 @@ export function isTerminalStatus(status: TaskStatus): boolean {
   return TRANSITIONS[status].length === 0;
 }
 
+/** Task is actively being worked on (in-progress or awaiting merge). */
+export function isActiveStatus(status: TaskStatus): boolean {
+  return status === 'in-progress' || status === 'pending-merge';
+}
+
 export function allowedTransitions(from: TaskStatus): TaskStatus[] {
   return [...TRANSITIONS[from]];
 }

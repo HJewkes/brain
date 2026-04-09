@@ -5,7 +5,11 @@ import {
   bootstrapBackpressure,
 } from '../../../src/modules/agents/backpressure.js';
 import { recordDelivery } from '../../../src/modules/agents/delivery.js';
-import { agentsMigrationV1, agentsMigrationV2 } from '../../../src/modules/agents/schema.js';
+import {
+  agentsMigrationV1,
+  agentsMigrationV2,
+  agentsMigrationV3,
+} from '../../../src/modules/agents/schema.js';
 import { createAgent } from '../../../src/modules/agents/data.js';
 
 describe('BackpressureController', () => {
@@ -98,6 +102,7 @@ describe('bootstrapBackpressure', () => {
     const d = new Database(':memory:');
     agentsMigrationV1.up(d);
     agentsMigrationV2.up(d);
+    agentsMigrationV3.up(d);
     return d;
   }
 

@@ -224,8 +224,6 @@ export async function spawnFixAgent(db: BrainDB, delivery: DeliveryRecord): Prom
       'json',
       '--model',
       'claude-sonnet-4-6',
-      '--permission-mode',
-      'bypassPermissions',
       '--session-id',
       sessionId,
       '--allowed-tools',
@@ -233,7 +231,7 @@ export async function spawnFixAgent(db: BrainDB, delivery: DeliveryRecord): Prom
       '--mcp-config',
       mcpConfigPath,
       '--max-budget-usd',
-      '2.0',
+      '5.0',
     ],
     {
       cwd: worktree.path,

@@ -11,6 +11,7 @@ const STALE_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours
 const POLL_INITIAL = 10_000; // 10s
 const POLL_MAX = 60_000; // 60s
 const POLL_BACKOFF = 1.5;
+const MAX_FIX_ATTEMPTS = 3;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -67,6 +68,7 @@ export async function monitorDelivery(
 
   const startedAt = Date.now();
   let pollInterval = POLL_INITIAL;
+  let fixAttempts = 0;
 
   while (true) {
     await sleep(pollInterval);
@@ -113,7 +115,8 @@ export async function monitorDelivery(
       const rebased = await rebaseInIsolation(delivery.branch, projectDir);
       if (rebased) continue;
 
-      if (brainDb) {
+      if (brainDb && fixAttempts < MAX_FIX_ATTEMPTS) {
+        fixAttempts++;
         const fixed = await spawnFixAgent(brainDb, delivery);
         if (fixed) continue;
       }
@@ -124,7 +127,8 @@ export async function monitorDelivery(
 
     // CI failed — spawn fix agent
     if (!pr.checksPass) {
-      if (brainDb) {
+      if (brainDb && fixAttempts < MAX_FIX_ATTEMPTS) {
+        fixAttempts++;
         const fixed = await spawnFixAgent(brainDb, delivery);
         if (fixed) continue;
       }

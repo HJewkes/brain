@@ -61,10 +61,10 @@ export const agentsMigrationV3: ModuleMigration = {
         agent_id     TEXT PRIMARY KEY REFERENCES agents(id),
         task_id      TEXT NOT NULL,
         branch       TEXT NOT NULL,
-        status       TEXT NOT NULL DEFAULT 'in_progress'
+        status       TEXT NOT NULL DEFAULT 'in-progress'
                      CHECK(status IN (
-                       'in_progress','pushed','push_failed',
-                       'pr_open','pr_failed','conflicted',
+                       'in-progress','pushed','push-failed',
+                       'pr-open','pr-failed','conflicted',
                        'merged','delivered','stalled','redispatched'
                      )),
         pr_number    INTEGER,
