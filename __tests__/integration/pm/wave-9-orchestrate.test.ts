@@ -55,7 +55,7 @@ describe('V8: Orchestrator Dry Run', () => {
       expect(result.isolation).toBe('worktree');
       expect(result.agentType).toBe('general-purpose');
       expect(result.verify).toBe(true);
-      expect(result.concurrency).toBe('sequential-within-workstream');
+      expect(result.concurrency).toBe('parallel');
     });
 
     it('routes research task to sonnet with Explore', () => {
@@ -75,7 +75,7 @@ describe('V8: Orchestrator Dry Run', () => {
       const result: RoutingResult = computeRouting('implementation', 'assisted');
 
       expect(result.model).toBe('sonnet');
-      expect(result.isolation).toBe('none');
+      expect(result.isolation).toBe('worktree');
       expect(result.verify).toBe(false);
       expect(result.concurrency).toBe('parallel');
     });
@@ -193,15 +193,15 @@ describe('V8: Orchestrator Dry Run', () => {
       expect(bundle.task.project).toBe('TEST');
       expect(bundle.task.category).toBe('implementation');
 
-      // Default mode is 'auto' which is non-dispatchable
+      // Default mode is 'auto' which is now agent-dispatchable
       expect(bundle.task.mode).toBe('auto');
-      expect(isAgentDispatchable(bundle.task.mode)).toBe(false);
+      expect(isAgentDispatchable(bundle.task.mode)).toBe(true);
 
       const defaultRouting = computeRouting(bundle.task.category, bundle.task.mode);
-      expect(defaultRouting.model).toBe('sonnet');
-      expect(defaultRouting.isolation).toBe('none');
+      expect(defaultRouting.model).toBe('opus');
+      expect(defaultRouting.isolation).toBe('worktree');
 
-      // Override to agent mode to get full routing
+      // Explicit agent mode gets the same routing
       const agentRouting = computeRouting(bundle.task.category, 'agent');
       expect(agentRouting.model).toBe('opus');
       expect(agentRouting.isolation).toBe('worktree');
