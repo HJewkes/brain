@@ -319,15 +319,10 @@ function maybeAllocateWorktree(
   taskId: string,
   pullResult: PullResult
 ): AllocateWorktreeResult | undefined {
-  if (routing.isolation !== 'worktree') return undefined;
+  if (routing.isolation === 'none') return undefined;
 
-  const workstream = pullResult.dispatchContext.context?.workstream?.displayId;
-  if (!workstream) {
-    process.stderr.write(
-      `[dispatch] task ${taskId} has no workstream — cannot allocate worktree, running in project dir\n`
-    );
-    return undefined;
-  }
+  const workstream =
+    pullResult.dispatchContext.context?.workstream?.displayId ?? taskId.replace(/\.\d+$/, '');
 
   try {
     const result = allocateWorktree(db, projectDir, {
