@@ -111,7 +111,7 @@ export function computeRouting(category: TaskCategory, mode: TaskMode): RoutingR
 }
 
 export function isAgentDispatchable(mode: TaskMode): boolean {
-  return mode === 'agent';
+  return mode === 'agent' || mode === 'auto' || mode === 'interactive';
 }
 
 // --- Workflow turn complexity routing ---
