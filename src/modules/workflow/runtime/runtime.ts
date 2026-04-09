@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { WorkflowFn, WorkflowRun, AgentSlot, StepResult } from './types.js';
@@ -386,6 +388,7 @@ export class WorkflowRuntime {
   }
 
   private onComplete(runId: string): void {
+    this.cleanupPlanDir(runId);
     this.active.delete(runId);
     try {
       const rawDb = this.db.rawDb;
@@ -411,12 +414,29 @@ export class WorkflowRuntime {
       .run(now, errMsg, runId);
 
     this.releaseStuckTasks(runId);
+    this.cleanupPlanDir(runId);
     this.active.delete(runId);
 
     this.channelPush?.('step_failed', {
       workflow: runId,
       error: errMsg,
     });
+  }
+
+  /** Remove ephemeral .plans/{planId} directory after workflow ends. */
+  private cleanupPlanDir(runId: string): void {
+    try {
+      const running = this.active.get(runId);
+      if (!running) return;
+      const ctx = running.ctx;
+      const planId = ctx.param('planId') ?? runId.slice(0, 8);
+      const planDir = resolve(ctx.projectDir, '.plans', planId);
+      if (existsSync(planDir)) {
+        rmSync(planDir, { recursive: true, force: true });
+      }
+    } catch {
+      // Non-fatal — stale plan dirs are harmless
+    }
   }
 
   /** Release any claimed tasks from a failed workflow so they don't stay stuck. */
