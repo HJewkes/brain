@@ -181,7 +181,7 @@ describe('Wave 10: Demo Workflow Integration', () => {
   it('routing computation maps each category to correct profile', () => {
     const design = computeRouting('design', 'agent');
     expect(design.model).toBe('opus');
-    expect(design.isolation).toBe('none');
+    expect(design.isolation).toBe('worktree');
 
     const impl = computeRouting('implementation', 'agent');
     expect(impl.model).toBe('opus');
@@ -190,11 +190,11 @@ describe('Wave 10: Demo Workflow Integration', () => {
 
     const testing = computeRouting('testing', 'agent');
     expect(testing.model).toBe('haiku');
-    expect(testing.isolation).toBe('none');
+    expect(testing.isolation).toBe('worktree');
 
     const docs = computeRouting('documentation', 'agent');
     expect(docs.model).toBe('sonnet');
-    expect(docs.isolation).toBe('none');
+    expect(docs.isolation).toBe('worktree');
 
     // Non-agent mode returns default profile
     const manual = computeRouting('implementation', 'human');
