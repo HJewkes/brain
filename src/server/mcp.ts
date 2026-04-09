@@ -18,6 +18,8 @@ import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents, getAgentContext } from '../modules/agents/data.js';
 import { dispatchTask } from './dispatch.js';
+import { OrchestrationService } from './orchestration.js';
+import { BackpressureController } from '../modules/agents/backpressure.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
@@ -601,13 +603,40 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
         .optional()
         .describe('Task display ID (e.g. VNM-46.17). Omit to auto-pull next eligible.'),
       model: z.string().optional().describe('Model override: opus, sonnet, haiku'),
-      maxBudgetUsd: z.number().optional().describe('Cost cap per session (default 2.00)'),
+      maxBudgetUsd: z.number().optional().describe('Cost cap per session (default 5.00)'),
       dryRun: z.boolean().optional().describe('Preview prompt without spawning'),
     },
     async ({ taskId, model, maxBudgetUsd, dryRun }) => {
       try {
         const result = await dispatchTask(svc, { taskId, model, maxBudgetUsd, dryRun });
         return textResult(result);
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  server.tool(
+    'brain_agent_dispatch_workstream',
+    'Execute all pending tasks in a workstream in dependency-ordered waves. Dispatches agents concurrently within each wave (up to WIP limit), then gates on the next wave. Runs in background — returns immediately.',
+    {
+      workstream: z.string().describe('Workstream display ID (e.g. VNM-48)'),
+      wipLimit: z.number().optional().describe('Max concurrent agents (default 3)'),
+    },
+    async ({ workstream, wipLimit }) => {
+      try {
+        const backpressure = new BackpressureController(wipLimit ?? 3);
+        const orch = new OrchestrationService(svc.db, backpressure, '');
+        // Fire-and-forget: waves take minutes; MCP tool returns immediately
+        orch.executeWorkstream(svc, workstream).catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`[orchestration] workstream ${workstream} error: ${msg}\n`);
+        });
+        return textResult({
+          workstream,
+          status: 'started',
+          message: 'Dispatch running in background',
+        });
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
@@ -741,7 +770,7 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
             'Optional: brainNotes (comma-separated slugs), files (comma-separated paths), priorContext, interviewAnswers.'
         ),
       model: z.string().optional().describe('Model override for dispatched agents'),
-      maxBudgetUsd: z.number().optional().describe('Cost cap per agent session (default 2.00)'),
+      maxBudgetUsd: z.number().optional().describe('Cost cap per agent session (default 5.00)'),
       dryRun: z.boolean().optional().describe('Preview without spawning agents'),
     },
     async ({ workflowId, project, workstream, context, model, maxBudgetUsd, dryRun }) => {

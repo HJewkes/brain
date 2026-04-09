@@ -2,8 +2,13 @@ import type Database from 'better-sqlite3';
 import type { BrainDB } from '../services/brain-db.js';
 import type { BackpressureController } from '../modules/agents/backpressure.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
+import type { BrainServiceClass } from '../services/brain-service.js';
 import { monitorDelivery, type DeliveryOutcome } from '../modules/agents/delivery-monitor.js';
 import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/delivery.js';
+import { computeWaves } from '../modules/pm/engine/dependency.js';
+import { listTasks } from '../modules/pm/data/task-ops.js';
+import { DispatchLoop } from '../modules/agents/dispatch-loop.js';
+import { dispatchTask, resolveProjectDir, type DispatchResult } from './dispatch.js';
 
 /** Recovery statuses: deliveries that need a monitor restarted after process restart. */
 const RECOVERY_STATUSES = ['pr-open', 'push-failed', 'conflicted'] as const;
@@ -75,6 +80,65 @@ export class OrchestrationService {
     return [...this.activeMonitors.keys()]
       .map((taskId) => getDeliveryForTask(this.rawDb, taskId))
       .filter((d): d is DeliveryRecord => d !== null);
+  }
+
+  /**
+   * Execute all pending tasks in a workstream in dependency-ordered waves.
+   *
+   * Computes waves for the workstream, then runs them sequentially. Tasks within
+   * each wave are dispatched concurrently (up to the WIP limit). Resolves when
+   * all waves have completed — every task's delivery monitor has finished.
+   */
+  async executeWorkstream(svc: BrainServiceClass, workstreamDisplayId: string): Promise<void> {
+    const match = workstreamDisplayId.match(/^([A-Z]+)-(\d+)$/);
+    if (!match) {
+      throw new Error(`Invalid workstream display ID: ${workstreamDisplayId}`);
+    }
+    const prefix = match[1];
+    const wsNumber = parseInt(match[2], 10);
+
+    const tasksResult = listTasks(svc.db, prefix, { workstream: wsNumber });
+    if (!tasksResult.ok) {
+      throw new Error(`Failed to list tasks: ${tasksResult.error.message}`);
+    }
+    const wsTaskIds = new Set(tasksResult.data.map((t) => t.display_id));
+
+    if (wsTaskIds.size === 0) {
+      process.stderr.write(`[orchestration] no tasks in workstream ${workstreamDisplayId}\n`);
+      return;
+    }
+
+    const allWaves = computeWaves(svc.db, prefix);
+    const waves = allWaves
+      .map((wave) => ({ ...wave, taskIds: wave.taskIds.filter((id) => wsTaskIds.has(id)) }))
+      .filter((wave) => wave.taskIds.length > 0);
+
+    if (waves.length === 0) {
+      process.stderr.write(`[orchestration] no pending waves for ${workstreamDisplayId}\n`);
+      return;
+    }
+
+    const projectDir = resolveProjectDir(svc);
+    const loop = new DispatchLoop(
+      svc.db,
+      this.backpressure,
+      async (taskId) => {
+        const result = await dispatchTask(svc, { taskId });
+        const r = result as DispatchResult;
+        return { agentId: r.agentId, taskId: r.taskId, branch: r.branch };
+      },
+      projectDir
+    );
+
+    process.stderr.write(
+      `[orchestration] executing workstream ${workstreamDisplayId}: ${waves.length} wave(s)\n`
+    );
+    for (const wave of waves) {
+      process.stderr.write(`[orchestration] wave ${wave.wave}: [${wave.taskIds.join(', ')}]\n`);
+      await loop.executeWave(wave);
+      process.stderr.write(`[orchestration] wave ${wave.wave} complete\n`);
+    }
+    process.stderr.write(`[orchestration] workstream ${workstreamDisplayId} dispatch complete\n`);
   }
 
   /**
