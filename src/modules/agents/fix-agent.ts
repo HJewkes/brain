@@ -7,6 +7,7 @@ import type { BrainDB } from '../../services/brain-db.js';
 import type { DeliveryRecord } from './delivery.js';
 import { getSessionBySessionId } from '../sessions/data/session-ops.js';
 import { findGitRoot } from './worktree.js';
+import { renderTemplate } from '../workflow/engine/templates.js';
 
 interface FixWorktree {
   path: string;
@@ -203,14 +204,26 @@ export async function spawnFixAgent(db: BrainDB, delivery: DeliveryRecord): Prom
   const ciLog = getCiFailureLog(delivery.pr_number);
   const conflictDiff = getConflictDiff(worktree.path);
 
-  const prompt = buildFixPrompt({
-    taskId: delivery.task_id,
-    sessionSummary,
-    ciLog,
-    conflictDiff,
-    prUrl: delivery.pr_url,
-    branch: delivery.branch,
+  const templateResult = renderTemplate('fix-agent', {
+    TASK_ID: delivery.task_id ?? '(unknown)',
+    BRANCH_NAME: delivery.branch,
+    PR_URL: delivery.pr_url ?? '(no PR)',
+    WORKTREE_PATH: worktree.path,
+    SESSION_SUMMARY: sessionSummary || '(no session context available)',
+    CI_FAILURES: ciLog ? `### CI Failures\n${ciLog}` : '',
+    CONFLICT_FILES: conflictDiff ? `### Files Changed on Branch (potential conflict sources)\n${conflictDiff}` : '',
   });
+
+  const prompt = templateResult.ok
+    ? templateResult.data
+    : buildFixPrompt({
+        taskId: delivery.task_id,
+        sessionSummary,
+        ciLog,
+        conflictDiff,
+        prUrl: delivery.pr_url,
+        branch: delivery.branch,
+      });
 
   const agentId = randomUUID();
   const sessionId = randomUUID();

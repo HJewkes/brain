@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { BrainDB } from '../../../services/brain-db.js';
+import { getRawDb } from '../../../utils/db.js';
 import type { BrainConfig, Embedder, NoteRecord } from '../../../types.js';
 import type {
   SessionMetadata,
@@ -388,16 +389,6 @@ export function markSessionReference(
 
 // --- Structural Events ---
 
-type RawDb = {
-  prepare: (sql: string) => {
-    run: (...args: unknown[]) => void;
-    all: (...args: unknown[]) => unknown[];
-  };
-};
-
-function getRawDb(db: BrainDB): RawDb {
-  return (db as unknown as { db: RawDb }).db;
-}
 
 export function upsertStructuralEvent(db: BrainDB, event: StructuralEvent): void {
   getRawDb(db)

@@ -119,9 +119,13 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
   server.tool(
     'brain_pm_task_list',
     'List PM tasks, optionally filtered by workstream or status',
-    { workstream: z.string().optional(), status: z.string().optional() },
-    async ({ workstream, status }) => {
-      const tasks = svc.pmTaskList({ workstream, status });
+    {
+      workstream: z.string().optional().describe('Workstream filter (number or display ID like VNM-48)'),
+      status: z.string().optional(),
+      limit: z.number().optional().describe('Max results (default 100)'),
+    },
+    async ({ workstream, status, limit }) => {
+      const tasks = svc.pmTaskList({ workstream, status, limit });
       return textResult(tasks);
     }
   );

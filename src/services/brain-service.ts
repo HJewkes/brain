@@ -13,6 +13,7 @@ import { search as runSearch } from './search.js';
 import { collectAuditReport, collectDashboardData } from '../commands/audit.js';
 import type { AuditReport, DashboardData, DashboardSession } from '../commands/audit.js';
 import { getPmNotes, getEligibleTasks } from '../modules/pm/data/queries.js';
+import { resolveWorkstreamFilter } from '../modules/pm/ids.js';
 import type { TaskMetadata, ProjectMetadata } from '../modules/pm/types.js';
 import { listAgents } from '../modules/agents/data.js';
 import type { AgentRecord, AgentStatus } from '../modules/agents/types.js';
@@ -142,18 +143,20 @@ export class BrainServiceClass {
     }
   }
 
-  pmTaskList(opts?: { workstream?: string; status?: string }): TaskMetadata[] {
+  pmTaskList(opts?: { workstream?: string; status?: string; limit?: number }): TaskMetadata[] {
     try {
       const filters: Record<string, unknown> = {};
       if (opts?.status) filters['status'] = opts.status;
       if (opts?.workstream) {
-        const wsNum = Number(opts.workstream);
-        if (!isNaN(wsNum)) {
-          filters['workstream'] = wsNum;
+        const resolved = resolveWorkstreamFilter(opts.workstream);
+        if (resolved.ok) {
+          filters['workstream'] = resolved.data;
         }
       }
       const notes = getPmNotes(this.db, 'task', Object.keys(filters).length ? filters : undefined);
-      return notes.map((n) => JSON.parse(n.metadata!) as TaskMetadata);
+      const tasks = notes.map((n) => JSON.parse(n.metadata!) as TaskMetadata);
+      const limit = opts?.limit ?? 100;
+      return tasks.slice(0, limit);
     } catch {
       return [];
     }

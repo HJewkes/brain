@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { BrainDB } from '../../services/brain-db.js';
 import type { WaveAssignment } from '../pm/engine/dependency.js';
 import type { BackpressureController } from './backpressure.js';
+import { getRawDb, sleep } from '../../utils/db.js';
 import { countActiveAgents, getAgent } from './data.js';
 import { getDeliveryForTask, initiateDelivery } from './delivery.js';
 import { releaseWorktree } from './worktree.js';
@@ -9,15 +10,6 @@ import { monitorDelivery } from './delivery-monitor.js';
 
 const AGENT_POLL_INTERVAL = 5_000; // 5s
 const WIP_POLL_INTERVAL = 10_000; // 10s
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function getRawDb(db: BrainDB | Database.Database): Database.Database {
-  if ('rawDb' in db) return (db as BrainDB).rawDb;
-  return db as Database.Database;
-}
 
 export interface ConcurrencyCheck {
   allowed: boolean;

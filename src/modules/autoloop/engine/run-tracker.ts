@@ -1,10 +1,6 @@
-import type Database from 'better-sqlite3';
 import type { BrainDB } from '../../../services/brain-db.js';
+import { getRawDb } from '../../../utils/db.js';
 import type { AutoloopReport, AutoloopType } from '../types.js';
-
-function getRawDb(db: BrainDB): Database.Database {
-  return (db as unknown as { db: Database.Database }).db;
-}
 
 export function recordAutoloopRun(db: BrainDB, report: AutoloopReport): void {
   try {
