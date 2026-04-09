@@ -13,6 +13,7 @@ import { SessionDetailView } from './views/SessionDetailView.js';
 import { SpecimenView } from './views/SpecimenView.js';
 import { SpecimenGlobalView } from './views/SpecimenGlobalView.js';
 import { SpecimenUnifiedView } from './views/SpecimenUnifiedView.js';
+import { SessionReplayView } from './views/SessionReplayView.js';
 import { CommandPalette } from './components/shared/CommandPalette.js';
 import { AppSidebar } from './components/shared/AppSidebar.js';
 import { palette, sp } from './tokens.js';
@@ -21,7 +22,7 @@ import { palette, sp } from './tokens.js';
 // Types
 // ---------------------------------------------------------------------------
 
-type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task' | 'session' | 'specimen' | 'specimen-global' | 'specimen-unified';
+type ViewId = 'overview' | 'kanban' | 'productivity' | 'agents' | 'sessions' | 'graph' | 'quality' | 'task' | 'session' | 'session-replay' | 'specimen' | 'specimen-global' | 'specimen-unified';
 
 interface NavItem {
   id: ViewId;
@@ -59,7 +60,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'quality', label: 'Quality', icon: '◆', hash: '#quality' },
 ];
 
-const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task', 'session', 'specimen', 'specimen-global', 'specimen-unified']);
+const VALID_VIEWS = new Set<string>([...NAV_ITEMS.map(n => n.id), 'task', 'session', 'session-replay', 'specimen', 'specimen-global', 'specimen-unified']);
 
 function parseHash(hash: string): HashLocation {
   // Format: #view?param=value&param2=value2
@@ -116,7 +117,7 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
   const taskIdParam = location.params.get('id') ?? undefined;
   const agentParam = location.params.get('agent') ?? undefined;
   const sessionParam = location.params.get('session') ?? undefined;
-  const sessionIdParam = activeView === 'session' ? (location.params.get('id') ?? undefined) : undefined;
+  const sessionIdParam = activeView === 'session' || activeView === 'session-replay' ? (location.params.get('id') ?? undefined) : undefined;
 
   return (
     <View style={styles.root}>
@@ -133,7 +134,7 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
       />
 
       <View style={styles.main}>
-        <View style={activeView === 'session' || activeView === 'specimen' || activeView === 'specimen-global' || activeView === 'specimen-unified' ? styles.contentFullBleed : styles.content}>
+        <View style={activeView === 'session' || activeView === 'session-replay' || activeView === 'specimen' || activeView === 'specimen-global' || activeView === 'specimen-unified' ? styles.contentFullBleed : styles.content}>
           {activeView === 'overview' && (
             <OverviewView audit={audit} status={status} dashboard={dashboard} />
           )}
@@ -160,6 +161,9 @@ export function App({ audit, status, dashboard, liveMode, sseConnected, lastRefr
           )}
           {activeView === 'session' && (
             <SessionDetailView sessionId={sessionIdParam ?? ''} dashboard={dashboard} />
+          )}
+          {activeView === 'session-replay' && (
+            <SessionReplayView sessionId={sessionIdParam ?? ''} />
           )}
           {activeView === 'specimen' && (
             <SpecimenView />
