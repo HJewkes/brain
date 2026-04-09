@@ -52,7 +52,7 @@ export function AppSidebar({
       {/* Nav items */}
       <View style={styles.navList}>
         {navItems.map((item) => {
-          const effectiveActive = active === 'session' ? 'sessions' : active;
+          const effectiveActive = active === 'session' || active === 'session-replay' ? 'sessions' : active;
           const isActive = item.id === effectiveActive;
           return (
             <Pressable
