@@ -25,7 +25,21 @@ vi.mock('../../src/modules/pm/data/task-ops.js', () => ({
 vi.mock('../../src/modules/agents/dispatch-loop.js', () => {
   return {
     DispatchLoop: vi.fn().mockImplementation(() => ({
-      executeWave: vi.fn(() => Promise.resolve([])),
+      executeWave: vi.fn(() =>
+        Promise.resolve({
+          settled: [],
+          review: {
+            wave: 1,
+            taskCount: 0,
+            branches: [],
+            conflicts: [],
+            hasConflicts: false,
+            typecheckPassed: null,
+            lintPassed: null,
+            summary: 'CLEAN',
+          },
+        })
+      ),
     })),
   };
 });
@@ -227,7 +241,17 @@ describe('OrchestrationService', () => {
         { wave: 2, taskIds: ['VNM-48.103'] },
       ]);
 
-      const executeWaveFn = vi.fn(() => Promise.resolve([]));
+      const cleanReview = {
+        wave: 1,
+        taskCount: 0,
+        branches: [],
+        conflicts: [],
+        hasConflicts: false,
+        typecheckPassed: null,
+        lintPassed: null,
+        summary: 'CLEAN',
+      };
+      const executeWaveFn = vi.fn(() => Promise.resolve({ settled: [], review: cleanReview }));
       (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
         executeWave: executeWaveFn,
       }));
@@ -250,7 +274,17 @@ describe('OrchestrationService', () => {
         { wave: 1, taskIds: ['VNM-48.101', 'VNM-47.001'] }, // VNM-47.001 is another workstream
       ]);
 
-      const executeWaveFn = vi.fn(() => Promise.resolve([]));
+      const cleanReview = {
+        wave: 1,
+        taskCount: 0,
+        branches: [],
+        conflicts: [],
+        hasConflicts: false,
+        typecheckPassed: null,
+        lintPassed: null,
+        summary: 'CLEAN',
+      };
+      const executeWaveFn = vi.fn(() => Promise.resolve({ settled: [], review: cleanReview }));
       (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
         executeWave: executeWaveFn,
       }));

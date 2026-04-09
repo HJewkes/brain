@@ -9,7 +9,7 @@ import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/deliv
 import { computeWaves } from '../modules/pm/engine/dependency.js';
 import { listTasks } from '../modules/pm/data/task-ops.js';
 import { DispatchLoop } from '../modules/agents/dispatch-loop.js';
-import { reviewWave, type WaveReviewResult } from '../modules/agents/wave-review.js';
+import type { WaveReviewResult } from '../modules/agents/wave-review.js';
 import { dispatchTask, resolveProjectDir, type DispatchResult } from './dispatch.js';
 
 /** Recovery statuses: deliveries that need a monitor restarted after process restart. */
@@ -140,12 +140,8 @@ export class OrchestrationService {
     );
     for (const wave of waves) {
       process.stderr.write(`[orchestration] wave ${wave.wave}: [${wave.taskIds.join(', ')}]\n`);
-      await loop.executeWave(wave);
-      process.stderr.write(`[orchestration] wave ${wave.wave} complete, reviewing...\n`);
-
-      const review = reviewWave(this.rawDb, wave.wave, wave.taskIds, projectDir);
+      const { review } = await loop.executeWave(wave);
       waveReviews.push(review);
-      process.stderr.write(`[orchestration] wave ${wave.wave} review:\n${review.summary}\n`);
 
       if (review.hasConflicts) {
         process.stderr.write(

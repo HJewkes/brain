@@ -45,6 +45,19 @@ vi.mock('../../src/modules/agents/worktree.js', () => ({
   findGitRoot: vi.fn(() => '/tmp/test-project'),
 }));
 
+vi.mock('../../src/modules/agents/wave-review.js', () => ({
+  reviewWave: vi.fn(() => ({
+    wave: 1,
+    taskCount: 0,
+    branches: [],
+    conflicts: [],
+    hasConflicts: false,
+    typecheckPassed: null,
+    lintPassed: null,
+    summary: 'Status: CLEAN',
+  })),
+}));
+
 import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
 
 const mockMonitorDelivery = monitorDelivery as ReturnType<typeof vi.fn>;
@@ -177,10 +190,10 @@ describe('parallel dispatch integration', () => {
     };
 
     const loop = new DispatchLoop(db, bp, spawnFn, '/tmp/test');
-    const results = await loop.executeWave({ wave: 1, taskIds });
+    const { settled } = await loop.executeWave({ wave: 1, taskIds });
 
-    expect(results).toHaveLength(3);
-    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    expect(settled).toHaveLength(3);
+    expect(settled.every((r) => r.status === 'fulfilled')).toBe(true);
 
     // All 3 agents created
     const agents = db.prepare('SELECT * FROM agents').all() as Record<string, unknown>[];
@@ -215,13 +228,13 @@ describe('parallel dispatch integration', () => {
     // Dispatch 4 tasks — should be gated by WIP=2
     // Note: with mocked sleep, WIP polling resolves immediately,
     // so this tests the logic path rather than actual concurrency timing
-    const results = await loop.executeWave({
+    const { settled } = await loop.executeWave({
       wave: 1,
       taskIds: ['t1', 't2', 't3', 't4'],
     });
 
-    expect(results).toHaveLength(4);
-    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    expect(settled).toHaveLength(4);
+    expect(settled.every((r) => r.status === 'fulfilled')).toBe(true);
   });
 
   it('handles mixed success and failure in a wave', async () => {
@@ -238,14 +251,14 @@ describe('parallel dispatch integration', () => {
     };
 
     const loop = new DispatchLoop(db, bp, spawnFn, '/tmp/test');
-    const results = await loop.executeWave({
+    const { settled } = await loop.executeWave({
       wave: 1,
       taskIds: ['t1', 't2', 't3'],
     });
 
     // All should settle (Promise.allSettled), none should be rejected
-    expect(results).toHaveLength(3);
-    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    expect(settled).toHaveLength(3);
+    expect(settled.every((r) => r.status === 'fulfilled')).toBe(true);
 
     // t1 and t3 should have agents, t2 should not (spawn failed)
     const agents = db.prepare('SELECT * FROM agents').all() as Record<string, unknown>[];

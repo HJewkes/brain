@@ -7,6 +7,7 @@ import { countActiveAgents, getAgent } from './data.js';
 import { getDeliveryForTask, initiateDelivery } from './delivery.js';
 import { releaseWorktree } from './worktree.js';
 import { monitorDelivery } from './delivery-monitor.js';
+import { reviewWave, type WaveReviewResult } from './wave-review.js';
 
 const AGENT_POLL_INTERVAL = 5_000; // 5s
 const WIP_POLL_INTERVAL = 10_000; // 10s
@@ -20,6 +21,11 @@ export interface SpawnResult {
   agentId: string;
   taskId: string;
   branch?: string;
+}
+
+export interface WaveExecutionResult {
+  settled: PromiseSettledResult<void>[];
+  review: WaveReviewResult;
 }
 
 /** Inject the spawn function to avoid circular server ↔ modules dependency. */
@@ -149,9 +155,12 @@ export class DispatchLoop {
   /**
    * Execute all tasks in a wave with a sliding window that respects the WIP limit.
    * Launches up to N tasks concurrently, waits for one to finish before launching
-   * the next. Resolves only when all tasks in the wave are complete.
+   * the next. After all tasks complete, runs a post-wave review to detect
+   * file-level conflicts and validate the merged view with typecheck/lint.
+   *
+   * When `review.hasConflicts` is true, the caller should pause before the next wave.
    */
-  async executeWave(wave: WaveAssignment): Promise<PromiseSettledResult<void>[]> {
+  async executeWave(wave: WaveAssignment): Promise<WaveExecutionResult> {
     const { effectiveWip } = this.backpressure.computeEffectiveWip();
     const allPromises: Promise<void>[] = [];
     let inflight = 0;
@@ -169,6 +178,11 @@ export class DispatchLoop {
       inflight++;
     }
 
-    return Promise.allSettled(allPromises);
+    const settled = await Promise.allSettled(allPromises);
+
+    const review = reviewWave(this.rawDb, wave.wave, wave.taskIds, this.projectDir);
+    process.stderr.write(`[dispatch-loop] wave ${wave.wave} review:\n${review.summary}\n`);
+
+    return { settled, review };
   }
 }
