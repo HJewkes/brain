@@ -192,7 +192,7 @@ export function computeWaves(db: BrainDB, prefix: string): WaveAssignment[] {
   const tasks = getProjectTasks(db, prefix);
   const graph = buildDependencyGraph(db, prefix);
 
-  // Exclude done and cancelled tasks
+  // Exclude done, cancelled, and pruned tasks; pending-merge is in-flight and stays active
   const activeTasks = tasks.filter(
     (t) => t.status !== 'done' && t.status !== 'cancelled' && t.status !== 'pruned'
   );
