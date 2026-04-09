@@ -9,6 +9,7 @@ import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/deliv
 import { computeWaves } from '../modules/pm/engine/dependency.js';
 import { listTasks } from '../modules/pm/data/task-ops.js';
 import { DispatchLoop } from '../modules/agents/dispatch-loop.js';
+import { reviewWave, type WaveReviewResult } from '../modules/agents/wave-review.js';
 import { dispatchTask, resolveProjectDir, type DispatchResult } from './dispatch.js';
 
 /** Recovery statuses: deliveries that need a monitor restarted after process restart. */
@@ -36,6 +37,7 @@ function getInFlightDeliveries(rawDb: Database.Database): DeliveryRecord[] {
 export class OrchestrationService {
   private readonly activeMonitors = new Map<string, Promise<DeliveryOutcome>>();
   private readonly rawDb: Database.Database;
+  private lastWaveReviews: WaveReviewResult[] = [];
 
   constructor(
     db: BrainDB | Database.Database,
@@ -76,6 +78,11 @@ export class OrchestrationService {
     return [...this.activeMonitors.keys()]
       .map((taskId) => getDeliveryForTask(this.rawDb, taskId))
       .filter((d): d is DeliveryRecord => d !== null);
+  }
+
+  /** Returns wave review results from the most recent executeWorkstream run. */
+  getWaveReviews(): WaveReviewResult[] {
+    return this.lastWaveReviews;
   }
 
   /**
@@ -126,14 +133,28 @@ export class OrchestrationService {
       projectDir
     );
 
+    const waveReviews: WaveReviewResult[] = [];
+
     process.stderr.write(
       `[orchestration] executing workstream ${workstreamDisplayId}: ${waves.length} wave(s)\n`
     );
     for (const wave of waves) {
       process.stderr.write(`[orchestration] wave ${wave.wave}: [${wave.taskIds.join(', ')}]\n`);
       await loop.executeWave(wave);
-      process.stderr.write(`[orchestration] wave ${wave.wave} complete\n`);
+      process.stderr.write(`[orchestration] wave ${wave.wave} complete, reviewing...\n`);
+
+      const review = reviewWave(this.rawDb, wave.wave, wave.taskIds, projectDir);
+      waveReviews.push(review);
+      process.stderr.write(`[orchestration] wave ${wave.wave} review:\n${review.summary}\n`);
+
+      if (review.hasConflicts) {
+        process.stderr.write(
+          `[orchestration] wave ${wave.wave} has conflicts — pausing workstream dispatch\n`
+        );
+        break;
+      }
     }
+    this.lastWaveReviews = waveReviews;
     process.stderr.write(`[orchestration] workstream ${workstreamDisplayId} dispatch complete\n`);
   }
 
