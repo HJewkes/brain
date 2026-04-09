@@ -126,7 +126,8 @@ export class OrchestrationService {
       svc.db,
       this.backpressure,
       async (taskId) => {
-        const result = await dispatchTask(svc, { taskId });
+        const { effectiveWip } = this.backpressure.computeEffectiveWip();
+        const result = await dispatchTask(svc, { taskId, worktreeBudget: effectiveWip });
         const r = result as DispatchResult;
         return { agentId: r.agentId, taskId: r.taskId, branch: r.branch };
       },

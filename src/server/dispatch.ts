@@ -47,6 +47,7 @@ export interface DispatchOptions {
   maxBudgetUsd?: number;
   dryRun?: boolean;
   promptOverride?: string;
+  worktreeBudget?: number;
 }
 
 export interface DispatchResult {
@@ -106,7 +107,14 @@ export async function dispatchTask(
     return { taskId, prompt, routing, model, dryRun: true as const };
   }
 
-  const worktreeResult = maybeAllocateWorktree(svc.db, projectDir, routing, taskId, pullResult);
+  const worktreeResult = maybeAllocateWorktree(
+    svc.db,
+    projectDir,
+    routing,
+    taskId,
+    pullResult,
+    opts.worktreeBudget
+  );
 
   const agentId = createAgent(svc.db, {
     name: workerDispatch?.description || `headless-${taskId}`,
@@ -324,7 +332,8 @@ function maybeAllocateWorktree(
   projectDir: string,
   routing: RoutingResult,
   taskId: string,
-  pullResult: PullResult
+  pullResult: PullResult,
+  budget?: number
 ): AllocateWorktreeResult | undefined {
   if (routing.isolation === 'none') return undefined;
 
@@ -335,6 +344,7 @@ function maybeAllocateWorktree(
     taskId,
     workstream,
     claimToken: pullResult.claimToken,
+    budget,
   });
   if (result?.worktreePath && !existsSync(result.worktreePath)) {
     throw new Error(

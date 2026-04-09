@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { cpSync, existsSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import {
   allocateWorktree as dbAllocate,
@@ -97,6 +97,13 @@ export function allocateWorktree(
     encoding: 'utf-8',
     stdio: 'pipe',
   });
+
+  // Copy .claude/ settings so hooks (agent-done, session capture) fire in worktrees
+  const claudeDir = resolve(projectRoot, '.claude');
+  const targetClaudeDir = resolve(worktreePath, '.claude');
+  if (existsSync(claudeDir) && !existsSync(targetClaudeDir)) {
+    cpSync(claudeDir, targetClaudeDir, { recursive: true });
+  }
 
   const input: AllocateWorktreeInput = {
     task_id: opts.taskId,

@@ -26,14 +26,15 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
-  return { ...actual, existsSync: vi.fn() };
+  return { ...actual, existsSync: vi.fn(), cpSync: vi.fn() };
 });
 
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, cpSync } from 'node:fs';
 
 const mockExecFileSync = execFileSync as ReturnType<typeof vi.fn>;
 const mockExistsSync = existsSync as ReturnType<typeof vi.fn>;
+const mockCpSync = cpSync as ReturnType<typeof vi.fn>;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -187,6 +188,44 @@ describe('worktree lifecycle', () => {
           claimToken: 'tok-1',
         })
       ).toThrow('workstream is empty');
+    });
+
+    it('copies .claude directory into worktree for hook discovery', () => {
+      // .claude exists in project root, does not exist in worktree yet
+      mockExistsSync.mockImplementation((p: unknown) => {
+        const path = p as string;
+        if (path === '/repo/.claude') return true;
+        if (path.endsWith('.claude')) return false;
+        return true;
+      });
+
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.05',
+        workstream: 'vnm-09',
+        claimToken: 'tok-5',
+        budget: 3,
+      });
+
+      expect(mockCpSync).toHaveBeenCalledWith('/repo/.claude', expect.stringContaining('.claude'), {
+        recursive: true,
+      });
+    });
+
+    it('skips .claude copy when source does not exist', () => {
+      mockExistsSync.mockImplementation((p: unknown) => {
+        const path = p as string;
+        if (path.endsWith('.claude')) return false;
+        return true;
+      });
+
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.06',
+        workstream: 'vnm-09',
+        claimToken: 'tok-6',
+        budget: 3,
+      });
+
+      expect(mockCpSync).not.toHaveBeenCalled();
     });
 
     it('uses default basePath and budget when not supplied', () => {

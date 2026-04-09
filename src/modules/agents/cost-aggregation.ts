@@ -91,7 +91,11 @@ export function getAgentCostEntries(
 
   return entries.filter((e) => {
     if (opts?.since && e.createdAt < opts.since) return false;
-    if (opts?.until && e.createdAt > opts.until) return false;
+    if (opts?.until) {
+      // If until is date-only (YYYY-MM-DD), include the entire day
+      const bound = opts.until.length === 10 ? opts.until + 'T23:59:59.999Z' : opts.until;
+      if (e.createdAt > bound) return false;
+    }
     return true;
   });
 }
@@ -183,7 +187,8 @@ export function checkBudgetAlerts(
   const dailySpend = todayEntries.reduce((s, e) => s + e.costUsd, 0);
 
   const weekStart = new Date(now);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+  const dow = weekStart.getDay();
+  weekStart.setDate(weekStart.getDate() - dow + (dow === 0 ? -6 : 1));
   weekStart.setHours(0, 0, 0, 0);
   const weekEntries = entries.filter((e) => new Date(e.createdAt) >= weekStart);
   const weeklySpend = weekEntries.reduce((s, e) => s + e.costUsd, 0);

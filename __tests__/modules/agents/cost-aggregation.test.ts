@@ -145,4 +145,37 @@ describe('checkBudgetAlerts', () => {
     const dailyAlerts = alerts.filter((a) => a.period === 'daily');
     expect(dailyAlerts).toHaveLength(0);
   });
+
+  it('includes current-week entries on Sunday', () => {
+    // Find next Sunday from today
+    const sunday = new Date(today);
+    sunday.setDate(sunday.getDate() + ((7 - sunday.getDay()) % 7) || 7);
+    sunday.setHours(12, 0, 0, 0);
+    // Monday of that week
+    const monday = new Date(sunday);
+    monday.setDate(monday.getDate() - 6);
+    monday.setHours(10, 0, 0, 0);
+
+    const entries = [entry({ createdAt: monday.toISOString(), costUsd: 20.0 })];
+    const thresholds: BudgetThresholds = { weeklyWarnUsd: 15.0 };
+    // Mock Date.now to return Sunday
+    const origNow = Date.now;
+    Date.now = () => sunday.getTime();
+    const OrigDate = globalThis.Date;
+    const MockDate = class extends OrigDate {
+      constructor(...args: unknown[]) {
+        if (args.length === 0) super(sunday.getTime());
+        else super(...(args as [number]));
+      }
+    } as DateConstructor;
+    globalThis.Date = MockDate;
+
+    try {
+      const alerts = checkBudgetAlerts(entries, thresholds);
+      expect(alerts.some((a) => a.period === 'weekly')).toBe(true);
+    } finally {
+      globalThis.Date = OrigDate;
+      Date.now = origNow;
+    }
+  });
 });

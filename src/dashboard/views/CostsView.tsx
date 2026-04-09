@@ -93,31 +93,28 @@ function CostTable({
 
 function CostBar({ items, total }: { items: Array<{ label: string; value: number }>; total: number }) {
   if (items.length === 0 || total === 0) return null;
+  const visible = items
+    .map((item, i) => ({ ...item, color: barColors[i % barColors.length], pct: (item.value / total) * 100 }))
+    .filter((item) => item.value > 0);
 
   return (
     <View style={s.barContainer}>
       <View style={s.barTrack}>
-        {items.map((item, i) => {
-          const pct = (item.value / total) * 100;
-          if (pct < 1) return null;
-          return (
-            <View
-              key={i}
-              style={[
-                s.barSegment,
-                { width: `${pct}%` as unknown as number },
-                { backgroundColor: barColors[i % barColors.length] },
-              ]}
-            />
-          );
-        })}
+        {visible.filter((v) => v.pct >= 1).map((item, i) => (
+          <View
+            key={i}
+            style={[
+              s.barSegment,
+              { width: `${item.pct}%` as unknown as number },
+              { backgroundColor: item.color },
+            ]}
+          />
+        ))}
       </View>
       <View style={s.barLegend}>
-        {items.filter((item) => item.value > 0).map((item, i) => (
+        {visible.map((item, i) => (
           <View key={i} style={s.legendItem}>
-            <View
-              style={[s.legendDot, { backgroundColor: barColors[i % barColors.length] }]}
-            />
+            <View style={[s.legendDot, { backgroundColor: item.color }]} />
             <Text style={s.legendLabel}>
               {item.label} ({fmtUsd(item.value)})
             </Text>

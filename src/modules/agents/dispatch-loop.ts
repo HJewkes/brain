@@ -168,7 +168,6 @@ export class DispatchLoop {
     for (const taskId of wave.taskIds) {
       while (inflight >= effectiveWip) {
         await this.waitForWipSlot();
-        inflight = countActiveAgents(this.rawDb);
       }
 
       const p = this.dispatchAndDeliver(taskId).finally(() => {
