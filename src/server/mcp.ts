@@ -120,7 +120,10 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
     'brain_pm_task_list',
     'List PM tasks, optionally filtered by workstream or status',
     {
-      workstream: z.string().optional().describe('Workstream filter (number or display ID like VNM-48)'),
+      workstream: z
+        .string()
+        .optional()
+        .describe('Workstream filter (number or display ID like VNM-48)'),
       status: z.string().optional(),
       limit: z.number().optional().describe('Max results (default 100)'),
     },

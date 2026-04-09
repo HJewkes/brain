@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../../src/utils/db.js', () => ({
   getRawDb: vi.fn((db: unknown) => {
-    if (db && typeof db === 'object' && 'rawDb' in db) return (db as any).rawDb;
+    if (db && typeof db === 'object' && 'rawDb' in db) return (db as Record<string, unknown>).rawDb;
     return db;
   }),
   sleep: vi.fn(() => Promise.resolve()),
@@ -43,7 +43,7 @@ const mockInitiateDelivery = initiateDelivery as ReturnType<typeof vi.fn>;
 const mockReleaseWorktree = releaseWorktree as ReturnType<typeof vi.fn>;
 const mockMonitorDelivery = monitorDelivery as ReturnType<typeof vi.fn>;
 
-const fakeDb = {} as any;
+const fakeDb = {} as unknown;
 const projectDir = '/tmp/test-project';
 
 function makeBackpressure(effectiveWip = 3) {
@@ -62,14 +62,14 @@ describe('checkDispatchConcurrency', () => {
   it('allows dispatch when active < WIP limit', () => {
     mockCountActive.mockReturnValue(1);
     const bp = makeBackpressure(3);
-    const result = checkDispatchConcurrency(fakeDb, bp as any);
+    const result = checkDispatchConcurrency(fakeDb, bp as unknown);
     expect(result).toEqual({ allowed: true, reason: 'nominal' });
   });
 
   it('blocks dispatch when active >= WIP limit', () => {
     mockCountActive.mockReturnValue(3);
     const bp = makeBackpressure(3);
-    const result = checkDispatchConcurrency(fakeDb, bp as any);
+    const result = checkDispatchConcurrency(fakeDb, bp as unknown);
     expect(result.allowed).toBe(false);
     expect(result.reason).toContain('WIP limit');
   });
@@ -89,7 +89,7 @@ describe('DispatchLoop', () => {
   afterEach(() => vi.restoreAllMocks());
 
   function makeLoop() {
-    return new DispatchLoop(fakeDb, bp as any, spawnFn, projectDir);
+    return new DispatchLoop(fakeDb, bp as unknown, spawnFn, projectDir);
   }
 
   describe('dispatchAndDeliver', () => {
@@ -157,9 +157,7 @@ describe('DispatchLoop', () => {
 
     it('waits for WIP slot before spawning', async () => {
       // First check: full, second check: available
-      mockCountActive
-        .mockReturnValueOnce(3)
-        .mockReturnValueOnce(1);
+      mockCountActive.mockReturnValueOnce(3).mockReturnValueOnce(1);
       spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'b1' });
       mockGetAgent.mockReturnValueOnce({ status: 'completed' });
       mockGetDelivery.mockReturnValue(null);

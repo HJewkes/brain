@@ -13,15 +13,23 @@ import {
   agentsMigrationV2,
   agentsMigrationV3,
 } from '../../src/modules/agents/schema.js';
-import { createAgent, updateAgentStatus, getAgent, countActiveAgents } from '../../src/modules/agents/data.js';
+import {
+  createAgent,
+  updateAgentStatus,
+  countActiveAgents,
+} from '../../src/modules/agents/data.js';
 import { recordDelivery, getDeliveryForTask } from '../../src/modules/agents/delivery.js';
-import { DispatchLoop, checkDispatchConcurrency, type SpawnResult } from '../../src/modules/agents/dispatch-loop.js';
+import {
+  DispatchLoop,
+  checkDispatchConcurrency,
+  type SpawnResult,
+} from '../../src/modules/agents/dispatch-loop.js';
 import { BackpressureController } from '../../src/modules/agents/backpressure.js';
 
 // Mock external I/O but keep data.js and delivery.js real against the DB
 vi.mock('../../src/utils/db.js', () => ({
   getRawDb: vi.fn((db: unknown) => {
-    if (db && typeof db === 'object' && 'rawDb' in db) return (db as any).rawDb;
+    if (db && typeof db === 'object' && 'rawDb' in db) return (db as Record<string, unknown>).rawDb;
     return db;
   }),
   sleep: vi.fn(() => Promise.resolve()),
@@ -143,7 +151,9 @@ describe('parallel dispatch integration', () => {
     await loop.dispatchAndDeliver('VNM-48.101');
 
     // Agent should be completed in DB
-    const agents = db.prepare('SELECT * FROM agents WHERE brain_task = ?').all('VNM-48.101') as any[];
+    const agents = db
+      .prepare('SELECT * FROM agents WHERE brain_task = ?')
+      .all('VNM-48.101') as Record<string, unknown>[];
     expect(agents).toHaveLength(1);
     expect(agents[0].status).toBe('completed');
 
@@ -173,9 +183,9 @@ describe('parallel dispatch integration', () => {
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
 
     // All 3 agents created
-    const agents = db.prepare('SELECT * FROM agents').all() as any[];
+    const agents = db.prepare('SELECT * FROM agents').all() as Record<string, unknown>[];
     expect(agents).toHaveLength(3);
-    expect(agents.every((a: any) => a.status === 'completed')).toBe(true);
+    expect(agents.every((a: Record<string, unknown>) => a.status === 'completed')).toBe(true);
 
     // All 3 deliveries created
     for (const taskId of taskIds) {
@@ -238,7 +248,7 @@ describe('parallel dispatch integration', () => {
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
 
     // t1 and t3 should have agents, t2 should not (spawn failed)
-    const agents = db.prepare('SELECT * FROM agents').all() as any[];
+    const agents = db.prepare('SELECT * FROM agents').all() as Record<string, unknown>[];
     expect(agents).toHaveLength(2);
   });
 
@@ -268,7 +278,7 @@ describe('parallel dispatch integration', () => {
     expect(waveOrder).toEqual([1, 2]);
 
     // All 3 agents created
-    const agents = db.prepare('SELECT * FROM agents').all() as any[];
+    const agents = db.prepare('SELECT * FROM agents').all() as Record<string, unknown>[];
     expect(agents).toHaveLength(3);
   });
 

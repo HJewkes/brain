@@ -211,7 +211,9 @@ export async function spawnFixAgent(db: BrainDB, delivery: DeliveryRecord): Prom
     WORKTREE_PATH: worktree.path,
     SESSION_SUMMARY: sessionSummary || '(no session context available)',
     CI_FAILURES: ciLog ? `### CI Failures\n${ciLog}` : '',
-    CONFLICT_FILES: conflictDiff ? `### Files Changed on Branch (potential conflict sources)\n${conflictDiff}` : '',
+    CONFLICT_FILES: conflictDiff
+      ? `### Files Changed on Branch (potential conflict sources)\n${conflictDiff}`
+      : '',
   });
 
   const prompt = templateResult.ok

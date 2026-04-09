@@ -4,7 +4,7 @@ import type { DeliveryRecord } from '../../../src/modules/agents/delivery.js';
 // Mock all external dependencies
 vi.mock('../../../src/utils/db.js', () => ({
   getRawDb: vi.fn((db: unknown) => {
-    if (db && typeof db === 'object' && 'rawDb' in db) return (db as any).rawDb;
+    if (db && typeof db === 'object' && 'rawDb' in db) return (db as Record<string, unknown>).rawDb;
     return db;
   }),
   sleep: vi.fn(() => Promise.resolve()),
@@ -58,7 +58,7 @@ function makeDelivery(overrides: Partial<DeliveryRecord> = {}): DeliveryRecord {
 }
 
 // Use a raw object as the "db" — getRawDb mock returns it as-is
-const fakeDb = {} as any;
+const fakeDb = {} as unknown;
 const projectDir = '/tmp/test-project';
 
 describe('monitorDelivery', () => {
@@ -96,8 +96,18 @@ describe('monitorDelivery', () => {
 
     const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
     expect(result).toBe('merged');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(fakeDb, 'agent-1', 'merged', expect.objectContaining({ pr_merged_at: expect.any(String) }));
-    expect(mockUpdateStatus).toHaveBeenCalledWith(fakeDb, 'agent-1', 'delivered', expect.objectContaining({ delivered_at: expect.any(String) }));
+    expect(mockUpdateStatus).toHaveBeenCalledWith(
+      fakeDb,
+      'agent-1',
+      'merged',
+      expect.objectContaining({ pr_merged_at: expect.any(String) })
+    );
+    expect(mockUpdateStatus).toHaveBeenCalledWith(
+      fakeDb,
+      'agent-1',
+      'delivered',
+      expect.objectContaining({ delivered_at: expect.any(String) })
+    );
   });
 
   it('returns stalled when PR is closed without merge', async () => {
@@ -132,12 +142,20 @@ describe('monitorDelivery', () => {
   it('retries when merge fails then succeeds on next poll', async () => {
     // First poll: merge fails
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: true, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: true,
+      state: 'open',
     });
     mockMergePr.mockReturnValueOnce({ merged: false });
     // Second poll: merged externally
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: true, state: 'merged',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: true,
+      state: 'merged',
     });
 
     const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
@@ -148,12 +166,20 @@ describe('monitorDelivery', () => {
   it('escalates conflict: rebase succeeds → continues to merge', async () => {
     // First poll: conflict
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: false, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: false,
+      state: 'open',
     });
     mockRebase.mockResolvedValueOnce(true);
     // Second poll after rebase: mergeable
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: true, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: true,
+      state: 'open',
     });
     mockMergePr.mockReturnValueOnce({ merged: true, taskId: 't', prNumber: 42 });
 
@@ -163,16 +189,24 @@ describe('monitorDelivery', () => {
   });
 
   it('escalates conflict: rebase fails → fix agent succeeds → merge', async () => {
-    const brainDb = { rawDb: fakeDb } as any;
+    const brainDb = { rawDb: fakeDb } as unknown;
     // First poll: conflict, rebase fails, fix succeeds
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: false, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: false,
+      state: 'open',
     });
     mockRebase.mockResolvedValueOnce(false);
     mockFixAgent.mockResolvedValueOnce(true);
     // Second poll: now mergeable
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: true, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: true,
+      state: 'open',
     });
     mockMergePr.mockReturnValueOnce({ merged: true, taskId: 't', prNumber: 42 });
 
@@ -182,9 +216,13 @@ describe('monitorDelivery', () => {
   });
 
   it('escalates conflict: rebase fails, fix fails → redispatched', async () => {
-    const brainDb = { rawDb: fakeDb } as any;
+    const brainDb = { rawDb: fakeDb } as unknown;
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: false, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: false,
+      state: 'open',
     });
     mockRebase.mockResolvedValueOnce(false);
     mockFixAgent.mockResolvedValueOnce(false);
@@ -196,7 +234,11 @@ describe('monitorDelivery', () => {
 
   it('skips fix agent when db is raw (not BrainDB) and redispatches directly', async () => {
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: false, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: false,
+      state: 'open',
     });
     mockRebase.mockResolvedValueOnce(false);
 
@@ -206,15 +248,23 @@ describe('monitorDelivery', () => {
   });
 
   it('CI failure: fix agent succeeds → continues to merge', async () => {
-    const brainDb = { rawDb: fakeDb } as any;
+    const brainDb = { rawDb: fakeDb } as unknown;
     // First poll: CI fails, fix agent repairs it
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: false, mergeable: true, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
     });
     mockFixAgent.mockResolvedValueOnce(true);
     // Second poll: CI passes now
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: true, mergeable: true, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: true,
+      state: 'open',
     });
     mockMergePr.mockReturnValueOnce({ merged: true, taskId: 't', prNumber: 42 });
 
@@ -224,9 +274,13 @@ describe('monitorDelivery', () => {
   });
 
   it('CI failure: fix agent fails → redispatched', async () => {
-    const brainDb = { rawDb: fakeDb } as any;
+    const brainDb = { rawDb: fakeDb } as unknown;
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: false, mergeable: true, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
     });
     mockFixAgent.mockResolvedValueOnce(false);
 
@@ -235,19 +289,27 @@ describe('monitorDelivery', () => {
   });
 
   it('respects MAX_FIX_ATTEMPTS (3) before redispatching', async () => {
-    const brainDb = { rawDb: fakeDb } as any;
+    const brainDb = { rawDb: fakeDb } as unknown;
     const delivery = makeDelivery();
 
     // 3 polls with CI failure, fix agent returns true each time (keeps trying)
     for (let i = 0; i < 3; i++) {
       mockGetPr.mockReturnValueOnce({
-        number: 42, branch: 'b', checksPass: false, mergeable: true, state: 'open',
+        number: 42,
+        branch: 'b',
+        checksPass: false,
+        mergeable: true,
+        state: 'open',
       });
       mockFixAgent.mockResolvedValueOnce(true);
     }
     // 4th poll: still failing, no more fix attempts → redispatch
     mockGetPr.mockReturnValueOnce({
-      number: 42, branch: 'b', checksPass: false, mergeable: true, state: 'open',
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
     });
 
     const result = await monitorDelivery(brainDb, delivery, projectDir);

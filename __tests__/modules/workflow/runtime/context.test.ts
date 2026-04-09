@@ -182,22 +182,20 @@ describe('WorkflowContext — memoization', () => {
 });
 
 describe('WorkflowContext — dispatch flow', () => {
-  test('dispatch() creates a PM task before spawning agent', async () => {
+  test('dispatch() uses synthetic task ID when no explicit taskId provided', async () => {
     const run = makeRun();
     const ctx = new WorkflowContext(run, db, config, undefined, { embedder });
 
-    // dispatch will block on waitForAgent, so we need to resolve it
     const dispatchPromise = ctx.dispatch('design', 'design-template');
 
-    // Let the microtasks run so the agent is spawned
     await vi.waitFor(() => {
       expect(ctx.activeAgent).not.toBeNull();
     });
 
+    // Should use a synthetic ID, not create a real PM task
     const { createTask } = await import('../../../../src/modules/pm/data/task-ops.js');
-    expect(createTask).toHaveBeenCalledOnce();
+    expect(createTask).not.toHaveBeenCalled();
 
-    // Resolve the agent to complete the dispatch
     ctx.resolveAgent('design', 'agent output');
     await dispatchPromise;
   });

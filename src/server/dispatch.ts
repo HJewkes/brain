@@ -237,7 +237,7 @@ async function resolveExplicitTask(
 
   const brief = formatDispatchBrief(dispatchContext);
   const claim = getTask(svc.db, taskId);
-  const claimToken = dryRun ? '' : (claim.ok ? (claim.data.claim_token ?? '') : '');
+  const claimToken = dryRun ? '' : claim.ok ? (claim.data.claim_token ?? '') : '';
 
   return { taskId, claimToken, dispatchContext, brief };
 }

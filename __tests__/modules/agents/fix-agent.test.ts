@@ -49,15 +49,19 @@ function makeDelivery(overrides: Partial<DeliveryRecord> = {}): DeliveryRecord {
   };
 }
 
-function makeMockProcess(exitCode = 0): EventEmitter & { stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> } } {
-  const proc = new EventEmitter() as any;
+function makeMockProcess(
+  exitCode = 0
+): EventEmitter & { stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> } } {
+  const proc = new EventEmitter() as EventEmitter & {
+    stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+  };
   proc.stdin = { write: vi.fn(), end: vi.fn() };
   // Auto-emit exit on next tick so tests resolve
   setTimeout(() => proc.emit('exit', exitCode), 0);
   return proc;
 }
 
-const fakeDb = { rawDb: {} } as any;
+const fakeDb = { rawDb: {} } as unknown;
 
 describe('spawnFixAgent', () => {
   beforeEach(() => {
@@ -151,7 +155,9 @@ describe('spawnFixAgent', () => {
   });
 
   it('returns false on spawn error', async () => {
-    const proc = new EventEmitter() as any;
+    const proc = new EventEmitter() as EventEmitter & {
+      stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+    };
     proc.stdin = { write: vi.fn(), end: vi.fn() };
     setTimeout(() => proc.emit('error', new Error('ENOENT')), 0);
     mockSpawn.mockReturnValue(proc);
@@ -182,9 +188,7 @@ describe('spawnFixAgent', () => {
     mockExistsSync.mockImplementation((p: string) => p.includes('.local/bin/claude'));
     mockExecFileSync.mockImplementation((cmd: string, args: string[]) => {
       if (cmd === 'gh' && args?.includes('checks')) {
-        return JSON.stringify([
-          { name: 'test', state: 'FAILURE', description: 'Tests failed' },
-        ]);
+        return JSON.stringify([{ name: 'test', state: 'FAILURE', description: 'Tests failed' }]);
       }
       if (cmd === 'git' && args?.includes('diff')) return 'src/foo.ts';
       if (cmd === 'which') return '/usr/local/bin/claude';

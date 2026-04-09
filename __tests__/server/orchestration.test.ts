@@ -98,7 +98,7 @@ describe('OrchestrationService', () => {
                ('a2', 't2', 'b2', 'push-failed', '2026-01-01', '2026-01-01')
       `);
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
       await svc.recover();
 
       expect(mockMonitorDelivery).toHaveBeenCalledTimes(2);
@@ -115,14 +115,14 @@ describe('OrchestrationService', () => {
                ('a3', 't3', 'b3', 'stalled', '2026-01-01', '2026-01-01')
       `);
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
       await svc.recover();
 
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
     });
 
     it('recovers zero deliveries on empty table', async () => {
-      const svc = new OrchestrationService(db, bp as any, projectDir);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
       await svc.recover();
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
     });
@@ -132,8 +132,8 @@ describe('OrchestrationService', () => {
     it('deduplicates by taskId', () => {
       mockMonitorDelivery.mockReturnValue(new Promise(() => {})); // never resolves
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      const delivery = { agent_id: 'a1', task_id: 't1', branch: 'b1' } as any;
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      const delivery = { agent_id: 'a1', task_id: 't1', branch: 'b1' } as unknown;
 
       svc.startMonitor(delivery);
       svc.startMonitor(delivery); // same taskId
@@ -149,8 +149,8 @@ describe('OrchestrationService', () => {
         })
       );
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      const delivery = { agent_id: 'a1', task_id: 't1', branch: 'b1' } as any;
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      const delivery = { agent_id: 'a1', task_id: 't1', branch: 'b1' } as unknown;
 
       svc.startMonitor(delivery);
       expect(mockMonitorDelivery).toHaveBeenCalledTimes(1);
@@ -166,8 +166,8 @@ describe('OrchestrationService', () => {
     });
 
     it('ignores deliveries without taskId', () => {
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      svc.startMonitor({ agent_id: 'a1', task_id: null } as any);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      svc.startMonitor({ agent_id: 'a1', task_id: null } as unknown);
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
     });
   });
@@ -177,8 +177,8 @@ describe('OrchestrationService', () => {
       mockMonitorDelivery.mockReturnValue(new Promise(() => {}));
       mockGetDelivery.mockReturnValue({ agent_id: 'a1', task_id: 't1' });
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      svc.startMonitor({ agent_id: 'a1', task_id: 't1', branch: 'b1' } as any);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      svc.startMonitor({ agent_id: 'a1', task_id: 't1', branch: 'b1' } as unknown);
 
       const active = svc.listActiveDeliveries();
       expect(active).toHaveLength(1);
@@ -189,8 +189,8 @@ describe('OrchestrationService', () => {
       mockMonitorDelivery.mockReturnValue(new Promise(() => {}));
       mockGetDelivery.mockReturnValue(null);
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      svc.startMonitor({ agent_id: 'a1', task_id: 't1', branch: 'b1' } as any);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      svc.startMonitor({ agent_id: 'a1', task_id: 't1', branch: 'b1' } as unknown);
 
       expect(svc.listActiveDeliveries()).toHaveLength(0);
     });
@@ -198,8 +198,8 @@ describe('OrchestrationService', () => {
 
   describe('executeWorkstream', () => {
     it('throws on invalid workstream display ID', async () => {
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      await expect(svc.executeWorkstream({} as any, 'invalid')).rejects.toThrow(
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await expect(svc.executeWorkstream({} as unknown, 'invalid')).rejects.toThrow(
         'Invalid workstream display ID'
       );
     });
@@ -207,8 +207,8 @@ describe('OrchestrationService', () => {
     it('returns early when workstream has no tasks', async () => {
       mockListTasks.mockReturnValue({ ok: true, data: [] });
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      await svc.executeWorkstream({} as any, 'VNM-48');
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.executeWorkstream({} as unknown, 'VNM-48');
 
       expect(mockComputeWaves).not.toHaveBeenCalled();
     });
@@ -232,8 +232,8 @@ describe('OrchestrationService', () => {
         executeWave: executeWaveFn,
       }));
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      await svc.executeWorkstream({ db } as any, 'VNM-48');
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.executeWorkstream({ db } as unknown, 'VNM-48');
 
       expect(executeWaveFn).toHaveBeenCalledTimes(2);
       // First wave has 2 tasks, second has 1
@@ -255,8 +255,8 @@ describe('OrchestrationService', () => {
         executeWave: executeWaveFn,
       }));
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      await svc.executeWorkstream({ db } as any, 'VNM-48');
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.executeWorkstream({ db } as unknown, 'VNM-48');
 
       expect(executeWaveFn.mock.calls[0][0].taskIds).toEqual(['VNM-48.101']);
     });
@@ -267,8 +267,8 @@ describe('OrchestrationService', () => {
         error: { message: 'DB error' },
       });
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      await expect(svc.executeWorkstream({ db } as any, 'VNM-48')).rejects.toThrow(
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await expect(svc.executeWorkstream({ db } as unknown, 'VNM-48')).rejects.toThrow(
         'Failed to list tasks'
       );
     });
@@ -286,8 +286,8 @@ describe('OrchestrationService', () => {
         cancel: mockCancel,
       };
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      svc.migrateInFlightWorkflows(runtime as any);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      svc.migrateInFlightWorkflows(runtime as unknown);
 
       expect(mockCancel).toHaveBeenCalledTimes(2);
       expect(mockCancel).toHaveBeenCalledWith('wf-1', expect.stringContaining('Migrated'));
@@ -300,8 +300,8 @@ describe('OrchestrationService', () => {
         cancel: vi.fn(),
       };
 
-      const svc = new OrchestrationService(db, bp as any, projectDir);
-      svc.migrateInFlightWorkflows(runtime as any);
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      svc.migrateInFlightWorkflows(runtime as unknown);
 
       expect(runtime.cancel).not.toHaveBeenCalled();
     });
