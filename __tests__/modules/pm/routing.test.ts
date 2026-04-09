@@ -16,7 +16,7 @@ describe('computeRouting', () => {
       model: 'opus',
       isolation: 'worktree',
       verify: true,
-      concurrency: 'sequential-within-workstream',
+      concurrency: 'parallel',
     });
   });
 
@@ -31,34 +31,34 @@ describe('computeRouting', () => {
     });
   });
 
-  test('testing + agent → haiku, no worktree', () => {
+  test('testing + agent → haiku, worktree', () => {
     const result = computeRouting('testing', 'agent');
     expect(result).toEqual<RoutingResult>({
       agentType: 'general-purpose',
       model: 'haiku',
-      isolation: 'none',
+      isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
     });
   });
 
-  test('configuration + agent → haiku, no worktree', () => {
+  test('configuration + agent → haiku, worktree', () => {
     const result = computeRouting('configuration', 'agent');
     expect(result).toEqual<RoutingResult>({
       agentType: 'general-purpose',
       model: 'haiku',
-      isolation: 'none',
+      isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
     });
   });
 
-  test('design + agent → opus, no worktree', () => {
+  test('design + agent → opus, worktree', () => {
     const result = computeRouting('design', 'agent');
     expect(result).toEqual<RoutingResult>({
       agentType: 'general-purpose',
       model: 'opus',
-      isolation: 'none',
+      isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
     });
@@ -75,12 +75,12 @@ describe('computeRouting', () => {
     });
   });
 
-  test('documentation + agent → sonnet, no worktree', () => {
+  test('documentation + agent → sonnet, worktree', () => {
     const result = computeRouting('documentation', 'agent');
     expect(result).toEqual<RoutingResult>({
       agentType: 'general-purpose',
       model: 'sonnet',
-      isolation: 'none',
+      isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
     });
@@ -93,7 +93,7 @@ describe('computeRouting', () => {
       model: 'opus',
       isolation: 'worktree',
       verify: true,
-      concurrency: 'sequential-within-workstream',
+      concurrency: 'parallel',
     });
   });
 
@@ -104,15 +104,15 @@ describe('computeRouting', () => {
       model: 'opus',
       isolation: 'worktree',
       verify: true,
-      concurrency: 'sequential-within-workstream',
+      concurrency: 'parallel',
     });
   });
 
-  // Non-agent modes return default routing
+  // Non-agent modes return default routing (worktree by default)
   const nonAgentDefault: RoutingResult = {
     agentType: 'general-purpose',
     model: 'sonnet',
-    isolation: 'none',
+    isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
   };

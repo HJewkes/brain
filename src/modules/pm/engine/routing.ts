@@ -35,7 +35,7 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     model: 'opus',
     isolation: 'worktree',
     verify: true,
-    concurrency: 'sequential-within-workstream',
+    concurrency: 'parallel',
   },
   research: {
     agentType: 'Explore',
@@ -47,21 +47,21 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
   testing: {
     agentType: 'general-purpose',
     model: 'haiku',
-    isolation: 'none',
+    isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
   },
   configuration: {
     agentType: 'general-purpose',
     model: 'haiku',
-    isolation: 'none',
+    isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
   },
   design: {
     agentType: 'general-purpose',
     model: 'opus',
-    isolation: 'none',
+    isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
   },
@@ -75,7 +75,7 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
   documentation: {
     agentType: 'general-purpose',
     model: 'sonnet',
-    isolation: 'none',
+    isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
   },
@@ -84,21 +84,21 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     model: 'opus',
     isolation: 'worktree',
     verify: true,
-    concurrency: 'sequential-within-workstream',
+    concurrency: 'parallel',
   },
   migration: {
     agentType: 'general-purpose',
     model: 'opus',
     isolation: 'worktree',
     verify: true,
-    concurrency: 'sequential-within-workstream',
+    concurrency: 'parallel',
   },
 };
 
 const NON_AGENT_DEFAULT: RoutingResult = {
   agentType: 'general-purpose',
   model: 'sonnet',
-  isolation: 'none',
+  isolation: 'worktree',
   verify: false,
   concurrency: 'parallel',
 };

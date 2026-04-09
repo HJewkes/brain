@@ -111,7 +111,7 @@ describe('buildAgentDispatchContext', () => {
 
     expect(result!.agentDispatchable).toBe(false);
     expect(result!.routing.model).toBe('sonnet');
-    expect(result!.routing.isolation).toBe('none');
+    expect(result!.routing.isolation).toBe('worktree');
   });
 
   it('routes research category to sonnet with Explore agent', () => {
