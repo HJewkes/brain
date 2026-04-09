@@ -272,12 +272,12 @@ function createV6Database(dbPath: string): Database.Database {
 // --- V2: Schema Migration Round-Trip ---
 
 describe('V2: Schema Migration Round-Trip', () => {
-  it('fresh DB has v11 schema', () => {
+  it('fresh DB has v12 schema', () => {
     const dbPath = tmpDbPath();
     const db = new BrainDB(dbPath);
 
     try {
-      expect(db.getMetaValue('schema_version')).toBe('11');
+      expect(db.getMetaValue('schema_version')).toBe('12');
 
       // Verify module columns work by inserting and reading a note with module fields
       db.setEmbeddingModel('mock-embedder', 384);
@@ -364,7 +364,7 @@ describe('V2: Schema Migration Round-Trip', () => {
     // Reopen with BrainDB (triggers migration)
     const db = new BrainDB(dbPath);
     try {
-      expect(db.getMetaValue('schema_version')).toBe('11');
+      expect(db.getMetaValue('schema_version')).toBe('12');
 
       // Existing notes should have null module fields
       const note1 = db.getNoteById('note-1');
