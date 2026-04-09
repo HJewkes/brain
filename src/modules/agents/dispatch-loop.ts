@@ -161,13 +161,14 @@ export class DispatchLoop {
    * When `review.hasConflicts` is true, the caller should pause before the next wave.
    */
   async executeWave(wave: WaveAssignment): Promise<WaveExecutionResult> {
-    const { effectiveWip } = this.backpressure.computeEffectiveWip();
     const allPromises: Promise<void>[] = [];
     let inflight = 0;
 
     for (const taskId of wave.taskIds) {
+      const { effectiveWip } = this.backpressure.computeEffectiveWip();
       while (inflight >= effectiveWip) {
         await this.waitForWipSlot();
+        inflight = countActiveAgents(this.rawDb);
       }
 
       const p = this.dispatchAndDeliver(taskId).finally(() => {

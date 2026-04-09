@@ -1,5 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../services/brain-service.js';
+import { getRawDb } from '../../utils/db.js';
 import { createAgent, getAgent, listAgents, updateAgentStatus, getAgentContext } from './data.js';
 import type { AgentRecord } from './types.js';
 import { createWorktreeCommand } from './worktree-commands.js';
@@ -349,8 +350,7 @@ export function createAgentCommands(): Command {
     .option('--json', 'Output JSON')
     .action(async (opts) => {
       await withDb((svc) => {
-        const rawDb = (svc as unknown as { db: { db?: unknown } }).db;
-        const innerDb = (rawDb as { db?: unknown }).db ?? rawDb;
+        const innerDb = getRawDb(svc.db);
         const entries = getAgentCostEntries(innerDb, {
           since: opts.since,
           until: opts.until,
