@@ -153,25 +153,22 @@ export class DispatchLoop {
    */
   async executeWave(wave: WaveAssignment): Promise<PromiseSettledResult<void>[]> {
     const { effectiveWip } = this.backpressure.computeEffectiveWip();
-    const results: PromiseSettledResult<void>[] = [];
-    const active = new Set<Promise<PromiseSettledResult<void>>>();
+    const allPromises: Promise<void>[] = [];
+    let inflight = 0;
 
     for (const taskId of wave.taskIds) {
-      while (active.size >= effectiveWip) {
-        const settled = await Promise.race(active);
-        results.push(settled);
+      while (inflight >= effectiveWip) {
+        await this.waitForWipSlot();
+        inflight = countActiveAgents(this.rawDb);
       }
 
-      const p = this.dispatchAndDeliver(taskId)
-        .then<PromiseSettledResult<void>>(() => ({ status: 'fulfilled', value: undefined }))
-        .catch<PromiseSettledResult<void>>((reason) => ({ status: 'rejected', reason }))
-        .finally(() => active.delete(p));
-      active.add(p);
+      const p = this.dispatchAndDeliver(taskId).finally(() => {
+        inflight--;
+      });
+      allPromises.push(p);
+      inflight++;
     }
 
-    // Wait for remaining in-flight tasks
-    const remaining = await Promise.all(active);
-    results.push(...remaining);
-    return results;
+    return Promise.allSettled(allPromises);
   }
 }
