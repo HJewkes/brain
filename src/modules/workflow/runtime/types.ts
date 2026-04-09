@@ -3,7 +3,7 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 
-export type WorkflowStatus = 'running' | 'completed' | 'failed' | 'paused';
+export type WorkflowStatus = 'running' | 'completed' | 'failed' | 'paused' | 'cancelled';
 
 export interface StepResult {
   stepId: string;

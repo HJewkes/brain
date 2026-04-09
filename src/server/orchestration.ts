@@ -81,26 +81,16 @@ export class OrchestrationService {
    * Cancel in-flight wave-execution workflows before starting the dispatch loop.
    * Prevents the old workflow runtime and new dispatch loop from competing for
    * the same workstream.
-   *
-   * Note: WorkflowRuntime does not yet expose a cancel() method (VNM-48.273).
-   * This implementation logs running wave-execution workflows for now.
    */
   migrateInFlightWorkflows(runtime: WorkflowRuntime): void {
-    const activeRuns = runtime.activeRuns;
-    const waveRuns: string[] = [];
-
-    for (const [runId] of activeRuns) {
-      const status = runtime.getStatus(runId);
-      if (status?.workflowName === 'wave-execution') {
-        waveRuns.push(runId);
-      }
+    const running = runtime.listRunning().filter((r) => r.workflowName === 'wave-execution');
+    for (const run of running) {
+      runtime.cancel(run.id, 'Migrated to OrchestrationService dispatch loop');
     }
-
-    if (waveRuns.length > 0) {
+    if (running.length > 0) {
       process.stderr.write(
-        `[orchestration] found ${waveRuns.length} wave-execution workflow(s) to migrate: ${waveRuns.join(', ')}\n`
+        `[orchestration] cancelled ${running.length} wave-execution workflow(s): ${running.map((r) => r.id).join(', ')}\n`
       );
-      // Full cancellation will be wired in VNM-48.273 once WorkflowRuntime exposes cancel().
     }
   }
 }

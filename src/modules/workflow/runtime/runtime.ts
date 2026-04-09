@@ -309,6 +309,42 @@ export class WorkflowRuntime {
     return this.active;
   }
 
+  /** List all workflow runs currently in 'running' status from DB. */
+  listRunning(): WorkflowRun[] {
+    const rawDb = this.db.rawDb;
+    try {
+      const rows = rawDb
+        .prepare(`SELECT * FROM workflow_runs WHERE status = 'running'`)
+        .all() as WorkflowRunRow[];
+      return rows.map(deserializeRun);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Cancel a workflow run, marking it cancelled with the given reason.
+   * Releases any claimed tasks and removes from the active map.
+   */
+  cancel(runId: string, reason: string): void {
+    this.releaseStuckTasks(runId);
+    this.active.delete(runId);
+
+    const rawDb = this.db.rawDb;
+    const now = new Date().toISOString();
+    try {
+      rawDb
+        .prepare(
+          `UPDATE workflow_runs SET status = 'cancelled', completed_at = ?, error = ? WHERE id = ?`
+        )
+        .run(now, reason, runId);
+    } catch {
+      // Non-fatal — DB may be closed during shutdown
+    }
+
+    this.channelPush?.('workflow_cancelled', { workflow: runId, reason });
+  }
+
   startReconciler(): void {
     if (this.reconcileTimer) return;
     this.reconcileTimer = setInterval(() => this.reconcile(), 10_000);
