@@ -44,6 +44,7 @@ export interface DispatchContextOptions {
   config?: BrainConfig;
   projectDir?: string;
   scopePatterns?: string[];
+  dryRun?: boolean;
 }
 
 export function buildAgentDispatchContext(

@@ -1,0 +1,309 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import Database from 'better-sqlite3';
+import {
+  agentsMigrationV1,
+  agentsMigrationV2,
+  agentsMigrationV3,
+} from '../../src/modules/agents/schema.js';
+
+vi.mock('../../src/modules/agents/delivery-monitor.js', () => ({
+  monitorDelivery: vi.fn(() => Promise.resolve('merged' as const)),
+}));
+
+vi.mock('../../src/modules/agents/delivery.js', () => ({
+  getDeliveryForTask: vi.fn(),
+}));
+
+vi.mock('../../src/modules/pm/engine/dependency.js', () => ({
+  computeWaves: vi.fn(),
+}));
+
+vi.mock('../../src/modules/pm/data/task-ops.js', () => ({
+  listTasks: vi.fn(),
+}));
+
+vi.mock('../../src/modules/agents/dispatch-loop.js', () => {
+  return {
+    DispatchLoop: vi.fn().mockImplementation(() => ({
+      executeWave: vi.fn(() => Promise.resolve([])),
+    })),
+  };
+});
+
+vi.mock('../../src/server/dispatch.js', () => ({
+  dispatchTask: vi.fn(),
+  resolveProjectDir: vi.fn(() => '/tmp/test-project'),
+}));
+
+import { OrchestrationService } from '../../src/server/orchestration.js';
+import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
+import { getDeliveryForTask } from '../../src/modules/agents/delivery.js';
+import { computeWaves } from '../../src/modules/pm/engine/dependency.js';
+import { listTasks } from '../../src/modules/pm/data/task-ops.js';
+import { DispatchLoop } from '../../src/modules/agents/dispatch-loop.js';
+
+const mockMonitorDelivery = monitorDelivery as ReturnType<typeof vi.fn>;
+const mockGetDelivery = getDeliveryForTask as ReturnType<typeof vi.fn>;
+const mockComputeWaves = computeWaves as ReturnType<typeof vi.fn>;
+const mockListTasks = listTasks as ReturnType<typeof vi.fn>;
+
+const projectDir = '/tmp/test-project';
+
+function setupDb(): Database.Database {
+  const db = new Database(':memory:');
+  agentsMigrationV1.up(db);
+  agentsMigrationV2.up(db);
+  agentsMigrationV3.up(db);
+  return db;
+}
+
+function makeBackpressure() {
+  return {
+    computeEffectiveWip: vi.fn(() => ({ effectiveWip: 3, reason: 'nominal' })),
+    recordMerge: vi.fn(),
+    recordStall: vi.fn(),
+    setMergeQueueDepth: vi.fn(),
+    getState: vi.fn(),
+  };
+}
+
+describe('OrchestrationService', () => {
+  let db: Database.Database;
+  let bp: ReturnType<typeof makeBackpressure>;
+
+  beforeEach(() => {
+    db = setupDb();
+    bp = makeBackpressure();
+  });
+
+  afterEach(() => {
+    db.close();
+    vi.restoreAllMocks();
+  });
+
+  function insertAgent(id: string) {
+    db.prepare(
+      `INSERT INTO agents (id, name, parent, status, created_at, context)
+       VALUES (?, 'test', 'root', 'completed', '2026-01-01', '{}')`
+    ).run(id);
+  }
+
+  describe('recover', () => {
+    it('restarts monitors for in-flight deliveries', async () => {
+      insertAgent('a1');
+      insertAgent('a2');
+      db.exec(`
+        INSERT INTO delivery_states (agent_id, task_id, branch, status, created_at, updated_at)
+        VALUES ('a1', 't1', 'b1', 'pr-open', '2026-01-01', '2026-01-01'),
+               ('a2', 't2', 'b2', 'push-failed', '2026-01-01', '2026-01-01')
+      `);
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await svc.recover();
+
+      expect(mockMonitorDelivery).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips deliveries in non-recoverable states', async () => {
+      insertAgent('a1');
+      insertAgent('a2');
+      insertAgent('a3');
+      db.exec(`
+        INSERT INTO delivery_states (agent_id, task_id, branch, status, created_at, updated_at)
+        VALUES ('a1', 't1', 'b1', 'merged', '2026-01-01', '2026-01-01'),
+               ('a2', 't2', 'b2', 'delivered', '2026-01-01', '2026-01-01'),
+               ('a3', 't3', 'b3', 'stalled', '2026-01-01', '2026-01-01')
+      `);
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await svc.recover();
+
+      expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+
+    it('recovers zero deliveries on empty table', async () => {
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await svc.recover();
+      expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('startMonitor', () => {
+    it('deduplicates by taskId', () => {
+      mockMonitorDelivery.mockReturnValue(new Promise(() => {})); // never resolves
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      const delivery = { agent_id: 'a1', task_id: 't1', branch: 'b1' } as any;
+
+      svc.startMonitor(delivery);
+      svc.startMonitor(delivery); // same taskId
+
+      expect(mockMonitorDelivery).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows new monitor after previous one completes', async () => {
+      let resolveMonitor!: () => void;
+      mockMonitorDelivery.mockReturnValueOnce(
+        new Promise<string>((r) => {
+          resolveMonitor = () => r('merged');
+        })
+      );
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      const delivery = { agent_id: 'a1', task_id: 't1', branch: 'b1' } as any;
+
+      svc.startMonitor(delivery);
+      expect(mockMonitorDelivery).toHaveBeenCalledTimes(1);
+
+      // Resolve first monitor
+      resolveMonitor();
+      await new Promise((r) => setTimeout(r, 10)); // let .finally() run
+
+      // Now a new monitor should be allowed
+      mockMonitorDelivery.mockReturnValueOnce(Promise.resolve('merged'));
+      svc.startMonitor(delivery);
+      expect(mockMonitorDelivery).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores deliveries without taskId', () => {
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      svc.startMonitor({ agent_id: 'a1', task_id: null } as any);
+      expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listActiveDeliveries', () => {
+    it('returns delivery records for active monitors', () => {
+      mockMonitorDelivery.mockReturnValue(new Promise(() => {}));
+      mockGetDelivery.mockReturnValue({ agent_id: 'a1', task_id: 't1' });
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      svc.startMonitor({ agent_id: 'a1', task_id: 't1', branch: 'b1' } as any);
+
+      const active = svc.listActiveDeliveries();
+      expect(active).toHaveLength(1);
+      expect(active[0].task_id).toBe('t1');
+    });
+
+    it('filters out null deliveries', () => {
+      mockMonitorDelivery.mockReturnValue(new Promise(() => {}));
+      mockGetDelivery.mockReturnValue(null);
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      svc.startMonitor({ agent_id: 'a1', task_id: 't1', branch: 'b1' } as any);
+
+      expect(svc.listActiveDeliveries()).toHaveLength(0);
+    });
+  });
+
+  describe('executeWorkstream', () => {
+    it('throws on invalid workstream display ID', async () => {
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await expect(svc.executeWorkstream({} as any, 'invalid')).rejects.toThrow(
+        'Invalid workstream display ID'
+      );
+    });
+
+    it('returns early when workstream has no tasks', async () => {
+      mockListTasks.mockReturnValue({ ok: true, data: [] });
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await svc.executeWorkstream({} as any, 'VNM-48');
+
+      expect(mockComputeWaves).not.toHaveBeenCalled();
+    });
+
+    it('executes waves sequentially', async () => {
+      mockListTasks.mockReturnValue({
+        ok: true,
+        data: [
+          { display_id: 'VNM-48.101' },
+          { display_id: 'VNM-48.102' },
+          { display_id: 'VNM-48.103' },
+        ],
+      });
+      mockComputeWaves.mockReturnValue([
+        { wave: 1, taskIds: ['VNM-48.101', 'VNM-48.102'] },
+        { wave: 2, taskIds: ['VNM-48.103'] },
+      ]);
+
+      const executeWaveFn = vi.fn(() => Promise.resolve([]));
+      (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        executeWave: executeWaveFn,
+      }));
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await svc.executeWorkstream({ db } as any, 'VNM-48');
+
+      expect(executeWaveFn).toHaveBeenCalledTimes(2);
+      // First wave has 2 tasks, second has 1
+      expect(executeWaveFn.mock.calls[0][0].taskIds).toEqual(['VNM-48.101', 'VNM-48.102']);
+      expect(executeWaveFn.mock.calls[1][0].taskIds).toEqual(['VNM-48.103']);
+    });
+
+    it('filters waves to only include tasks from the target workstream', async () => {
+      mockListTasks.mockReturnValue({
+        ok: true,
+        data: [{ display_id: 'VNM-48.101' }],
+      });
+      mockComputeWaves.mockReturnValue([
+        { wave: 1, taskIds: ['VNM-48.101', 'VNM-47.001'] }, // VNM-47.001 is another workstream
+      ]);
+
+      const executeWaveFn = vi.fn(() => Promise.resolve([]));
+      (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        executeWave: executeWaveFn,
+      }));
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await svc.executeWorkstream({ db } as any, 'VNM-48');
+
+      expect(executeWaveFn.mock.calls[0][0].taskIds).toEqual(['VNM-48.101']);
+    });
+
+    it('throws when listTasks fails', async () => {
+      mockListTasks.mockReturnValue({
+        ok: false,
+        error: { message: 'DB error' },
+      });
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      await expect(svc.executeWorkstream({ db } as any, 'VNM-48')).rejects.toThrow(
+        'Failed to list tasks'
+      );
+    });
+  });
+
+  describe('migrateInFlightWorkflows', () => {
+    it('cancels running wave-execution workflows', () => {
+      const mockCancel = vi.fn();
+      const runtime = {
+        listRunning: vi.fn(() => [
+          { id: 'wf-1', workflowName: 'wave-execution' },
+          { id: 'wf-2', workflowName: 'planning' }, // different workflow — not cancelled
+          { id: 'wf-3', workflowName: 'wave-execution' },
+        ]),
+        cancel: mockCancel,
+      };
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      svc.migrateInFlightWorkflows(runtime as any);
+
+      expect(mockCancel).toHaveBeenCalledTimes(2);
+      expect(mockCancel).toHaveBeenCalledWith('wf-1', expect.stringContaining('Migrated'));
+      expect(mockCancel).toHaveBeenCalledWith('wf-3', expect.stringContaining('Migrated'));
+    });
+
+    it('does nothing when no wave-execution workflows are running', () => {
+      const runtime = {
+        listRunning: vi.fn(() => []),
+        cancel: vi.fn(),
+      };
+
+      const svc = new OrchestrationService(db, bp as any, projectDir);
+      svc.migrateInFlightWorkflows(runtime as any);
+
+      expect(runtime.cancel).not.toHaveBeenCalled();
+    });
+  });
+});

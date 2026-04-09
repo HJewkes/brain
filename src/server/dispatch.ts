@@ -88,8 +88,8 @@ export async function dispatchTask(
   const projectDir = resolveProjectDir(svc);
 
   const pullResult = opts.taskId
-    ? await resolveExplicitTask(svc, opts.taskId, projectDir)
-    : await resolveNextTask(svc, projectDir);
+    ? await resolveExplicitTask(svc, opts.taskId, projectDir, opts.dryRun)
+    : await resolveNextTask(svc, projectDir, opts.dryRun);
 
   const workerDispatch = buildWorkerDispatchFromPull(svc.db, pullResult, {
     projectDir,
@@ -194,7 +194,8 @@ export function resolveProjectDir(svc: BrainServiceClass): string {
 async function resolveExplicitTask(
   svc: BrainServiceClass,
   taskId: string,
-  projectDir: string
+  projectDir: string,
+  dryRun?: boolean
 ): Promise<PullResult> {
   const result = getTask(svc.db, taskId);
   if (!result.ok) {
@@ -225,7 +226,9 @@ async function resolveExplicitTask(
     );
   }
 
-  await claimTask(svc.db, svc.embedder, taskId);
+  if (!dryRun) {
+    await claimTask(svc.db, svc.embedder, taskId);
+  }
 
   const dispatchContext = buildAgentDispatchContext(svc.db, taskId, { projectDir });
   if (!dispatchContext) {
@@ -234,13 +237,17 @@ async function resolveExplicitTask(
 
   const brief = formatDispatchBrief(dispatchContext);
   const claim = getTask(svc.db, taskId);
-  const claimToken = claim.ok ? (claim.data.claim_token ?? '') : '';
+  const claimToken = dryRun ? '' : (claim.ok ? (claim.data.claim_token ?? '') : '');
 
   return { taskId, claimToken, dispatchContext, brief };
 }
 
-async function resolveNextTask(svc: BrainServiceClass, projectDir: string): Promise<PullResult> {
-  const result = await pullNextTask(svc.db, svc.config, svc.embedder, { projectDir });
+async function resolveNextTask(
+  svc: BrainServiceClass,
+  projectDir: string,
+  dryRun?: boolean
+): Promise<PullResult> {
+  const result = await pullNextTask(svc.db, svc.config, svc.embedder, { projectDir, dryRun });
   if (!result) {
     throw new Error('No eligible tasks found for dispatch');
   }

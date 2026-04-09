@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { BrainDB } from '../../services/brain-db.js';
+import { getRawDb, sleep } from '../../utils/db.js';
 import { getPrForBranch, mergePr } from './auto-merge.js';
 import { rebaseInIsolation } from './rebase-isolation.js';
 import { spawnFixAgent } from './fix-agent.js';
@@ -12,15 +13,6 @@ const POLL_INITIAL = 10_000; // 10s
 const POLL_MAX = 60_000; // 60s
 const POLL_BACKOFF = 1.5;
 const MAX_FIX_ATTEMPTS = 3;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getRawDb(db: BrainDB | Database.Database): Database.Database {
-  if ('rawDb' in db) return (db as BrainDB).rawDb;
-  return db as Database.Database;
-}
 
 function redispatchTask(rawDb: Database.Database, delivery: DeliveryRecord): void {
   updateDeliveryStatus(rawDb, delivery.agent_id, 'redispatched');

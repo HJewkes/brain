@@ -62,16 +62,19 @@ export async function pullNextTask(
     if (!taskResult.ok) continue;
     if (taskResult.data.status !== 'pending') continue;
 
-    const claim = generateClaim();
-
-    const statusResult = await claimTaskWithToken(
-      db,
-      embedder,
-      taskId,
-      claim.token,
-      claim.claimedAt
-    );
-    if (!statusResult) continue;
+    let claimToken = '';
+    if (!options?.dryRun) {
+      const claim = generateClaim();
+      const statusResult = await claimTaskWithToken(
+        db,
+        embedder,
+        taskId,
+        claim.token,
+        claim.claimedAt
+      );
+      if (!statusResult) continue;
+      claimToken = claim.token;
+    }
 
     const dispatchContext = buildAgentDispatchContext(db, taskId, options);
     if (!dispatchContext) continue;
@@ -80,7 +83,7 @@ export async function pullNextTask(
 
     return {
       taskId,
-      claimToken: claim.token,
+      claimToken,
       dispatchContext,
       brief,
     };

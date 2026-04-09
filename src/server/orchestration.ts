@@ -3,6 +3,7 @@ import type { BrainDB } from '../services/brain-db.js';
 import type { BackpressureController } from '../modules/agents/backpressure.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 import type { BrainServiceClass } from '../services/brain-service.js';
+import { getRawDb } from '../utils/db.js';
 import { monitorDelivery, type DeliveryOutcome } from '../modules/agents/delivery-monitor.js';
 import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/delivery.js';
 import { computeWaves } from '../modules/pm/engine/dependency.js';
@@ -12,11 +13,6 @@ import { dispatchTask, resolveProjectDir, type DispatchResult } from './dispatch
 
 /** Recovery statuses: deliveries that need a monitor restarted after process restart. */
 const RECOVERY_STATUSES = ['pr-open', 'push-failed', 'conflicted'] as const;
-
-function getRawDb(db: BrainDB | Database.Database): Database.Database {
-  if ('rawDb' in db) return (db as BrainDB).rawDb;
-  return db as Database.Database;
-}
 
 function getInFlightDeliveries(rawDb: Database.Database): DeliveryRecord[] {
   try {

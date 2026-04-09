@@ -1,16 +1,12 @@
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
-import type Database from 'better-sqlite3';
 import type { BrainDB } from '../../../services/brain-db.js';
+import { getRawDb } from '../../../utils/db.js';
 import {
   discoverSessions,
   type DiscoveredSession,
   type DiscoveryOptions,
 } from '../../sessions/ingestion/discovery.js';
-
-function getRawDb(db: BrainDB): Database.Database {
-  return (db as unknown as { db: Database.Database }).db;
-}
 
 export interface UnreviewedSession extends DiscoveredSession {
   ageHours: number;
