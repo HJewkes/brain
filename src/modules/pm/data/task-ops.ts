@@ -671,7 +671,7 @@ export async function migrateTask(
   // Read the original file body (strip frontmatter)
   const oldContent = readFileSync(taskNote.filePath, 'utf-8');
   const bodyMatch = oldContent.match(/^---[\s\S]*?---\s*([\s\S]*)$/);
-  const body = bodyMatch ? bodyMatch[1].trim() : '';
+  const _body = bodyMatch ? bodyMatch[1].trim() : '';
 
   // Assign new number in target workstream
   const newNumber = nextTaskNumber(db, project, targetWorkstream);
@@ -700,7 +700,14 @@ export async function migrateTask(
 
   // Index new file
   const hash = createHash('sha256').update(newContent).digest('hex');
-  const newNoteIdResult = await indexSingleFile(db, embedder, newFilePath, newContent, hash, Date.now());
+  const newNoteIdResult = await indexSingleFile(
+    db,
+    embedder,
+    newFilePath,
+    newContent,
+    hash,
+    Date.now()
+  );
 
   // Copy relations from old note to new (except parent)
   const oldRelationsFrom = db.getRelationsFrom(taskNote.id);

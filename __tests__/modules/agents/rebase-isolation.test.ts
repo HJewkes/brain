@@ -69,7 +69,7 @@ describe('rebaseInIsolation', () => {
 
   it('cleans up worktree even when rebase fails', async () => {
     let callCount = 0;
-    mockExec.mockImplementation((_cmd: string, args: string[]) => {
+    mockExec.mockImplementation((_cmd: string, _args: string[]) => {
       callCount++;
       if (callCount === 4) throw new Error('rebase failed');
       return '';

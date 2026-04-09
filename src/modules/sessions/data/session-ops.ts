@@ -389,7 +389,6 @@ export function markSessionReference(
 
 // --- Structural Events ---
 
-
 export function upsertStructuralEvent(db: BrainDB, event: StructuralEvent): void {
   getRawDb(db)
     .prepare(

@@ -19,7 +19,6 @@ import type {
   ChannelPushFn,
 } from './types.js';
 import { parseSignals } from './signals.js';
-import { createTask } from '../../pm/data/task-ops.js';
 import { dispatchTemplate } from '../engine/dispatch.js';
 import { dispatchTask } from '../../../server/dispatch.js';
 import { captureStepOutput } from '../engine/output-capture.js';
@@ -212,7 +211,11 @@ export class WorkflowContext {
   ): Promise<StepResult> {
     const retryCount = this._retries.get(iterKey) ?? 0;
 
-    const taskId = existingTaskId ?? (await this.createStepTask(stepId));
+    // Use the caller's PM task when provided (e.g. wave-execution passes real tasks).
+    // Otherwise use a synthetic ID — workflow steps should not auto-create PM tasks
+    // because they pile up as unclosed zombies when runs fail or are abandoned.
+    const taskId =
+      existingTaskId ?? `workflow:${this.workflowName}:${stepId}:${this.runId.slice(0, 8)}`;
     const rendered = await this.renderTemplate(taskId, template);
 
     this._currentStep = stepId;
@@ -408,27 +411,6 @@ export class WorkflowContext {
   }
 
   // --- Private helpers ---
-
-  private async createStepTask(stepId: string): Promise<string> {
-    const project = this._context.project;
-    const workstream = parseInt(this._context.workstream ?? '1', 10);
-
-    const result = await createTask(this._db, this._config, this._embedder!, {
-      project,
-      workstream,
-      name: `${this.workflowName}:${stepId} (run ${this.runId.slice(0, 8)})`,
-      category: 'implementation',
-      description: this._context.brief
-        ? `${this._context.brief}\n\n(Workflow: ${this.workflowName}, step: ${stepId})`
-        : `Workflow step: ${stepId} for ${this.workflowName}`,
-      mode: 'agent',
-    });
-
-    if (!result.ok) {
-      throw new Error(`Failed to create task for step ${stepId}: ${result.error.message}`);
-    }
-    return result.data.display_id;
-  }
 
   private async renderTemplate(taskId: string, templateName: string): Promise<string> {
     if (!this._embedder) {

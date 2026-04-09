@@ -10,7 +10,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { type as T } from '../../tokens.js';
-import { C, palette, component, semantic } from '../shared/colors.js';
+import { C, palette, component } from '../shared/colors.js';
 import type {
   SessionDetailData,
   SessionTurn,
@@ -55,22 +55,22 @@ export interface ReplayEvent {
 // ---------------------------------------------------------------------------
 
 const KIND_COLOR: Record<ReplayEventKind, string> = {
-  turn:       component.timelineDot.user,
-  tool_ok:    component.timelineDot.ok,
-  tool_err:   component.timelineDot.err,
-  task:       palette.amber.base,
-  agent:      component.timelineDot.agent,
-  friction:   palette.red.light,
+  turn: component.timelineDot.user,
+  tool_ok: component.timelineDot.ok,
+  tool_err: component.timelineDot.err,
+  task: palette.amber.base,
+  agent: component.timelineDot.agent,
+  friction: palette.red.light,
   compaction: component.timelineDot.info,
 };
 
 const KIND_LABEL: Record<ReplayEventKind, string> = {
-  turn:       'TURN',
-  tool_ok:    'TOOL',
-  tool_err:   'ERR',
-  task:       'TASK',
-  agent:      'AGENT',
-  friction:   'FRICTION',
+  turn: 'TURN',
+  tool_ok: 'TOOL',
+  tool_err: 'ERR',
+  task: 'TASK',
+  agent: 'AGENT',
+  friction: 'FRICTION',
   compaction: 'COMPACT',
 };
 
@@ -89,9 +89,7 @@ function buildReplayEvents(data: SessionDetailData): ReplayEvent[] {
       kind: 'turn',
       timestamp: ts,
       title: turn.userMessage ? turn.userMessage.slice(0, 80) : '(empty)',
-      subtitle: turn.assistantResponse
-        ? turn.assistantResponse.slice(0, 60)
-        : undefined,
+      subtitle: turn.assistantResponse ? turn.assistantResponse.slice(0, 60) : undefined,
       payload: { type: 'turn', turn },
     });
 
@@ -190,10 +188,7 @@ function EventRow({ event, index, selected, onSelect }: EventRowProps) {
   const label = KIND_LABEL[event.kind];
 
   return (
-    <Pressable
-      style={[s.eventRow, selected && s.eventRowSelected]}
-      onPress={() => onSelect(event)}
-    >
+    <Pressable style={[s.eventRow, selected && s.eventRowSelected]} onPress={() => onSelect(event)}>
       <View style={s.eventIndex}>
         <Text style={s.eventIndexText}>{index + 1}</Text>
       </View>
@@ -213,7 +208,9 @@ function EventRow({ event, index, selected, onSelect }: EventRowProps) {
           {event.title}
         </Text>
         {event.subtitle ? (
-          <Text style={s.eventSubtitle} numberOfLines={1}>{event.subtitle}</Text>
+          <Text style={s.eventSubtitle} numberOfLines={1}>
+            {event.subtitle}
+          </Text>
         ) : null}
       </View>
     </Pressable>
@@ -233,12 +230,21 @@ interface ContextPaneProps {
   selectedIndex: number;
 }
 
-function ContextPane({ event, allEvents: _allEvents, totalEvents, onPrev, onNext, selectedIndex }: ContextPaneProps) {
+function ContextPane({
+  event,
+  allEvents: _allEvents,
+  totalEvents,
+  onPrev,
+  onNext,
+  selectedIndex,
+}: ContextPaneProps) {
   if (!event) {
     return (
       <View style={s.contextEmpty}>
         <Text style={s.contextEmptyTitle}>Select an event</Text>
-        <Text style={s.contextEmptyHint}>Click any event in the timeline to inspect its full context.</Text>
+        <Text style={s.contextEmptyHint}>
+          Click any event in the timeline to inspect its full context.
+        </Text>
       </View>
     );
   }
@@ -249,7 +255,9 @@ function ContextPane({ event, allEvents: _allEvents, totalEvents, onPrev, onNext
     <View style={s.contextPane}>
       {/* Header */}
       <View style={s.contextHeader}>
-        <View style={[s.contextKindPill, { borderColor: color + '60', backgroundColor: color + '15' }]}>
+        <View
+          style={[s.contextKindPill, { borderColor: color + '60', backgroundColor: color + '15' }]}
+        >
           <Text style={[s.contextKindText, { color }]}>{KIND_LABEL[event.kind]}</Text>
         </View>
         <Text style={s.contextHeaderTs}>{fmtTimestamp(event.timestamp)}</Text>
@@ -257,9 +265,13 @@ function ContextPane({ event, allEvents: _allEvents, totalEvents, onPrev, onNext
           <Pressable style={s.navBtn} onPress={onPrev} disabled={selectedIndex === 0}>
             <Text style={[s.navBtnText, selectedIndex === 0 && s.navBtnDisabled]}>‹</Text>
           </Pressable>
-          <Text style={s.navCount}>{selectedIndex + 1} / {totalEvents}</Text>
+          <Text style={s.navCount}>
+            {selectedIndex + 1} / {totalEvents}
+          </Text>
           <Pressable style={s.navBtn} onPress={onNext} disabled={selectedIndex === totalEvents - 1}>
-            <Text style={[s.navBtnText, selectedIndex === totalEvents - 1 && s.navBtnDisabled]}>›</Text>
+            <Text style={[s.navBtnText, selectedIndex === totalEvents - 1 && s.navBtnDisabled]}>
+              ›
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -290,21 +302,32 @@ function ContextDetail({ event }: { event: ReplayEvent }) {
               <MetaRow label="Input" value={String(turn.tokenUsage.input_tokens)} />
               <MetaRow label="Output" value={String(turn.tokenUsage.output_tokens)} />
               {turn.tokenUsage.cache_read_input_tokens != null && (
-                <MetaRow label="Cache read" value={String(turn.tokenUsage.cache_read_input_tokens)} />
+                <MetaRow
+                  label="Cache read"
+                  value={String(turn.tokenUsage.cache_read_input_tokens)}
+                />
               )}
               {turn.tokenUsage.cache_creation_input_tokens != null && (
-                <MetaRow label="Cache write" value={String(turn.tokenUsage.cache_creation_input_tokens)} />
+                <MetaRow
+                  label="Cache write"
+                  value={String(turn.tokenUsage.cache_creation_input_tokens)}
+                />
               )}
             </View>
           </ContextSection>
         )}
         {turn.toolCalls.length > 0 && (
           <ContextSection label={`Tool Calls (${turn.toolCalls.length})`}>
-            {turn.toolCalls.map(c => (
+            {turn.toolCalls.map((c) => (
               <View key={c.id} style={s.toolCallEntry}>
                 <View style={s.toolCallHeader}>
                   <Text style={s.toolCallName}>{c.toolName}</Text>
-                  <Text style={[s.toolCallOutcome, { color: c.outcome === 'error' ? C.error : C.success }]}>
+                  <Text
+                    style={[
+                      s.toolCallOutcome,
+                      { color: c.outcome === 'error' ? C.error : C.success },
+                    ]}
+                  >
                     {c.outcome}
                   </Text>
                   {c.durationMs != null && (
@@ -312,11 +335,11 @@ function ContextDetail({ event }: { event: ReplayEvent }) {
                   )}
                 </View>
                 {c.inputSummary && (
-                  <Text style={s.toolCallInput} numberOfLines={3}>{c.inputSummary}</Text>
+                  <Text style={s.toolCallInput} numberOfLines={3}>
+                    {c.inputSummary}
+                  </Text>
                 )}
-                {c.errorMessage && (
-                  <Text style={s.toolCallError}>{c.errorMessage}</Text>
-                )}
+                {c.errorMessage && <Text style={s.toolCallError}>{c.errorMessage}</Text>}
               </View>
             ))}
           </ContextSection>
@@ -331,7 +354,9 @@ function ContextDetail({ event }: { event: ReplayEvent }) {
     return (
       <View style={s.detail}>
         <ContextSection label="Tool">
-          <Text style={[s.detailBig, { color: isErr ? C.error : C.textPrimary }]}>{call.toolName}</Text>
+          <Text style={[s.detailBig, { color: isErr ? C.error : C.textPrimary }]}>
+            {call.toolName}
+          </Text>
         </ContextSection>
         <ContextSection label="Input">
           <Text style={s.detailMono}>{call.inputSummary || '(none)'}</Text>
@@ -342,9 +367,7 @@ function ContextDetail({ event }: { event: ReplayEvent }) {
             {call.durationMs != null && (
               <MetaRow label="Duration" value={fmtDuration(call.durationMs)} />
             )}
-            {call.agentId && (
-              <MetaRow label="Agent" value={call.agentId} />
-            )}
+            {call.agentId && <MetaRow label="Agent" value={call.agentId} />}
             <MetaRow label="Turn" value={String(payload.turnIndex)} />
           </View>
         </ContextSection>
@@ -359,10 +382,14 @@ function ContextDetail({ event }: { event: ReplayEvent }) {
 
   if (payload.type === 'task') {
     const { event: ev } = payload;
-    const actionColor = ev.action === 'completed' ? C.success
-      : ev.action === 'blocked' || ev.action === 'abandoned' ? C.error
-      : ev.action === 'started' ? C.brand
-      : C.textSecondary;
+    const actionColor =
+      ev.action === 'completed'
+        ? C.success
+        : ev.action === 'blocked' || ev.action === 'abandoned'
+          ? C.error
+          : ev.action === 'started'
+            ? C.brand
+            : C.textSecondary;
     return (
       <View style={s.detail}>
         <ContextSection label="Task Event">
@@ -383,9 +410,8 @@ function ContextDetail({ event }: { event: ReplayEvent }) {
 
   if (payload.type === 'agent') {
     const { event: ev } = payload;
-    const actionColor = ev.action === 'completed' ? C.success
-      : ev.action === 'failed' ? C.error
-      : C.brand;
+    const actionColor =
+      ev.action === 'completed' ? C.success : ev.action === 'failed' ? C.error : C.brand;
     return (
       <View style={s.detail}>
         <ContextSection label="Agent Event">
@@ -428,7 +454,11 @@ function ContextDetail({ event }: { event: ReplayEvent }) {
           <View style={s.metaGrid}>
             <MetaRow label="Before" value={`${ev.tokensBefore.toLocaleString()} tokens`} />
             <MetaRow label="After" value={`${ev.tokensAfter.toLocaleString()} tokens`} />
-            <MetaRow label="Saved" value={`${saved.toLocaleString()} (${savedPct}%)`} valueColor={C.success} />
+            <MetaRow
+              label="Saved"
+              value={`${saved.toLocaleString()} (${savedPct}%)`}
+              valueColor={C.success}
+            />
             <MetaRow label="Turn" value={String(ev.turnIndex)} />
           </View>
         </ContextSection>
@@ -453,7 +483,15 @@ function ContextSection({ label, children }: { label: string; children: React.Re
   );
 }
 
-function MetaRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+function MetaRow({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
   return (
     <View style={s.metaRow}>
       <Text style={s.metaLabel}>{label}</Text>
@@ -469,7 +507,7 @@ function MetaRow({ label, value, valueColor }: { label: string; value: string; v
 function Legend() {
   return (
     <View style={s.legend}>
-      {(Object.keys(KIND_COLOR) as ReplayEventKind[]).map(kind => (
+      {(Object.keys(KIND_COLOR) as ReplayEventKind[]).map((kind) => (
         <View key={kind} style={s.legendItem}>
           <View style={[s.legendDot, { backgroundColor: KIND_COLOR[kind] }]} />
           <Text style={s.legendLabel}>{KIND_LABEL[kind]}</Text>
@@ -491,13 +529,11 @@ export function SessionReplayPanel({ data }: SessionReplayPanelProps) {
   const events = useMemo(() => buildReplayEvents(data), [data]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const selectedIndex = selectedId != null
-    ? events.findIndex(e => e.id === selectedId)
-    : -1;
+  const selectedIndex = selectedId != null ? events.findIndex((e) => e.id === selectedId) : -1;
   const selectedEvent = selectedIndex >= 0 ? events[selectedIndex] : null;
 
   const handleSelect = useCallback((event: ReplayEvent) => {
-    setSelectedId(prev => prev === event.id ? null : event.id);
+    setSelectedId((prev) => (prev === event.id ? null : event.id));
   }, []);
 
   const handlePrev = useCallback(() => {
@@ -527,9 +563,7 @@ export function SessionReplayPanel({ data }: SessionReplayPanelProps) {
               onSelect={handleSelect}
             />
           ))}
-          {events.length === 0 && (
-            <Text style={s.emptyText}>No events found in this session.</Text>
-          )}
+          {events.length === 0 && <Text style={s.emptyText}>No events found in this session.</Text>}
         </ScrollView>
       </View>
 

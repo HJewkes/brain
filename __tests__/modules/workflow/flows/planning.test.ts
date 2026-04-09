@@ -790,9 +790,8 @@ describe('planningWorkflow — via WorkflowRuntime', () => {
       expect(row.status).toBe('completed');
     });
 
-    // Verify design and critic were NOT re-dispatched (createTask called for:
-    // spec-tests + decompose dispatch steps; assisted steps no longer create tasks)
+    // Workflow steps now use synthetic IDs — no PM tasks should be created
     const { createTask } = await import('../../../../src/modules/pm/data/task-ops.js');
-    expect(createTask).toHaveBeenCalledTimes(2);
+    expect(createTask).not.toHaveBeenCalled();
   });
 });
