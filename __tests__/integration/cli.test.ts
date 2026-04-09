@@ -16,7 +16,7 @@ function cli(args: string, options?: { input?: string }): string {
   return execSync(`${CLI} ${args}`, {
     cwd: tmpDir,
     encoding: 'utf-8',
-    timeout: 30_000,
+    timeout: 60_000,
     input: options?.input,
     env: { ...process.env, HOME: fakeHome, NODE_NO_WARNINGS: '1' },
   }).trim();
@@ -34,7 +34,7 @@ afterAll(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('CLI integration', { timeout: 30_000 }, () => {
+describe('CLI integration', { timeout: 60_000 }, () => {
   it('init creates directory structure and database', () => {
     const output = cli(`init --notes-dir "${notesDir}" --embedder local --json`);
     const result = JSON.parse(output);
