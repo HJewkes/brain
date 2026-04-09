@@ -36,7 +36,11 @@ export type TaskCategory =
   | 'infrastructure'
   | 'configuration'
   | 'design'
-  | 'migration';
+  | 'migration'
+  | 'feature'
+  | 'improvement'
+  | 'refactor'
+  | 'bug';
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
 
 // Note visibility for search scoping
@@ -156,6 +160,10 @@ const VALID_TASK_CATEGORIES = new Set<string>([
   'configuration',
   'design',
   'migration',
+  'feature',
+  'improvement',
+  'refactor',
+  'bug',
 ]);
 
 const VALID_TASK_MODES = new Set<string>([

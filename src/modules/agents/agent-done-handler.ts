@@ -177,6 +177,14 @@ export function handleAgentDone(
 
   const isImplementationAgent = status === 'completed' && !!agent.branch?.startsWith('agent/');
 
+  if (status === 'completed' && agent.brain_task && !agent.branch) {
+    process.stderr.write(
+      `[agent-done] WARNING: agent ${agentId} completed task ${agent.brain_task} without a branch — ` +
+        `commits may have landed on main without PR review. ` +
+        `Check worktree allocation for this task category.\n`
+    );
+  }
+
   if (isImplementationAgent && agent.brain_task) {
     // Initiate delivery (push + PR). Worktree is released only if push succeeds.
     const pushSucceeded = tryInitiateDelivery(db, agentId, agent.brain_task, agent.branch!, cwd);

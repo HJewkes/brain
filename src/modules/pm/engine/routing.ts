@@ -93,6 +93,34 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     verify: true,
     concurrency: 'parallel',
   },
+  feature: {
+    agentType: 'general-purpose',
+    model: 'opus',
+    isolation: 'worktree',
+    verify: true,
+    concurrency: 'parallel',
+  },
+  improvement: {
+    agentType: 'general-purpose',
+    model: 'opus',
+    isolation: 'worktree',
+    verify: true,
+    concurrency: 'parallel',
+  },
+  refactor: {
+    agentType: 'general-purpose',
+    model: 'opus',
+    isolation: 'worktree',
+    verify: true,
+    concurrency: 'parallel',
+  },
+  bug: {
+    agentType: 'general-purpose',
+    model: 'opus',
+    isolation: 'worktree',
+    verify: true,
+    concurrency: 'parallel',
+  },
 };
 
 const NON_AGENT_DEFAULT: RoutingResult = {
@@ -107,7 +135,11 @@ export function computeRouting(category: TaskCategory, mode: TaskMode): RoutingR
   if (!isAgentDispatchable(mode)) {
     return { ...NON_AGENT_DEFAULT };
   }
-  return { ...ROUTING_TABLE[category] };
+  const routing = ROUTING_TABLE[category];
+  if (!routing) {
+    throw new Error(`No routing defined for task category "${category}"`);
+  }
+  return { ...routing };
 }
 
 export function isAgentDispatchable(mode: TaskMode): boolean {
