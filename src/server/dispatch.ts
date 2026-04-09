@@ -331,24 +331,17 @@ function maybeAllocateWorktree(
   const workstream =
     pullResult.dispatchContext.context?.workstream?.displayId ?? taskId.replace(/\.\d+$/, '');
 
-  try {
-    const result = allocateWorktree(db, projectDir, {
-      taskId,
-      workstream,
-      claimToken: pullResult.claimToken,
-    });
-    if (result?.worktreePath && !existsSync(result.worktreePath)) {
-      process.stderr.write(
-        `[dispatch] worktree path ${result.worktreePath} does not exist after allocation, falling back to project dir\n`
-      );
-      return undefined;
-    }
-    return result;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[dispatch] worktree allocation failed for ${taskId}: ${msg}\n`);
-    return undefined;
+  const result = allocateWorktree(db, projectDir, {
+    taskId,
+    workstream,
+    claimToken: pullResult.claimToken,
+  });
+  if (result?.worktreePath && !existsSync(result.worktreePath)) {
+    throw new Error(
+      `Worktree path ${result.worktreePath} does not exist after allocation for ${taskId}`
+    );
   }
+  return result;
 }
 
 function writeMcpConfig(agentId: string, projectDir: string): string {
@@ -432,6 +425,7 @@ function spawnClaude(opts: SpawnOptions): ChildProcess {
       AGENT_WORKTREE_PATH: opts.worktreePath || '',
       BRAIN_PM_TASK: opts.taskId,
       BRAIN_PM_CLAIM_TOKEN: opts.claimToken,
+      BRAIN_PM_SESSION: opts.sessionId,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: true,

@@ -147,12 +147,28 @@ export class DispatchLoop {
   }
 
   /**
-   * Execute all tasks in a wave concurrently, respecting the WIP limit.
-   * Resolves only when all per-task delivery monitors have finished —
-   * this is the implicit wave gate: every task is merged, stalled, or redispatched.
+   * Execute all tasks in a wave with a sliding window that respects the WIP limit.
+   * Launches up to N tasks concurrently, waits for one to finish before launching
+   * the next. Resolves only when all tasks in the wave are complete.
    */
   async executeWave(wave: WaveAssignment): Promise<PromiseSettledResult<void>[]> {
-    const promises = wave.taskIds.map((taskId) => this.dispatchAndDeliver(taskId));
-    return Promise.allSettled(promises);
+    const { effectiveWip } = this.backpressure.computeEffectiveWip();
+    const allPromises: Promise<void>[] = [];
+    let inflight = 0;
+
+    for (const taskId of wave.taskIds) {
+      while (inflight >= effectiveWip) {
+        await this.waitForWipSlot();
+        inflight = countActiveAgents(this.rawDb);
+      }
+
+      const p = this.dispatchAndDeliver(taskId).finally(() => {
+        inflight--;
+      });
+      allPromises.push(p);
+      inflight++;
+    }
+
+    return Promise.allSettled(allPromises);
   }
 }
