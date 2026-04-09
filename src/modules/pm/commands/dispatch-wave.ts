@@ -103,7 +103,7 @@ export function computeDispatchWave(db: BrainDB, prefix: string): DispatchWaveRe
     const summary = buildTaskSummary(db, id, prefix);
     if (status === 'pending') {
       eligible.push(summary);
-    } else if (status === 'in-progress' || status === 'claimed') {
+    } else if (status === 'in-progress' || status === 'claimed' || status === 'pending-merge') {
       inProgress.push(summary);
     }
   }

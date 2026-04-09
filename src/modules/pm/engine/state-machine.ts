@@ -5,7 +5,8 @@ import { ok, fail } from '../errors.js';
 const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending: ['claimed', 'blocked', 'cancelled', 'pruned', 'skipped'],
   claimed: ['in-progress', 'pending', 'cancelled'],
-  'in-progress': ['done', 'blocked', 'cancelled', 'pending'],
+  'in-progress': ['pending-merge', 'done', 'blocked', 'cancelled', 'pending'],
+  'pending-merge': ['done', 'in-progress', 'cancelled'],
   done: ['pending'],
   blocked: ['pending', 'cancelled', 'pruned'],
   cancelled: [],
@@ -102,6 +103,11 @@ export function isTerminalStatus(status: TaskStatus): boolean {
   // (tasks don't auto-transition out of done, cancelled, or pruned)
   if (status === 'done' || status === 'cancelled' || status === 'pruned') return true;
   return TRANSITIONS[status].length === 0;
+}
+
+/** Task is actively being worked on (in-progress or awaiting merge). */
+export function isActiveStatus(status: TaskStatus): boolean {
+  return status === 'in-progress' || status === 'pending-merge';
 }
 
 export function allowedTransitions(from: TaskStatus): TaskStatus[] {

@@ -51,6 +51,7 @@ const AUTO_COMPLETE_TRANSITIONS: Record<string, TaskStatus[]> = {
   pending: ['claimed', 'in-progress', 'done'],
   claimed: ['in-progress', 'done'],
   'in-progress': ['done'],
+  'pending-merge': ['done'],
 };
 
 async function autoCompleteSourceTask(

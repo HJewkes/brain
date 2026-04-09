@@ -200,7 +200,9 @@ export function createProjectCommands(): Command {
           total: tasks.length,
           pending: tasks.filter((t) => t.status === 'pending').length,
           claimed: tasks.filter((t) => t.status === 'claimed').length,
-          inProgress: tasks.filter((t) => t.status === 'in-progress').length,
+          inProgress: tasks.filter(
+            (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+          ).length,
           done: tasks.filter((t) => t.status === 'done').length,
           blocked: tasks.filter((t) => t.status === 'blocked').length,
         };
@@ -361,7 +363,9 @@ export function createPmCommand(): Command {
               total: tasks.length,
               pending: tasks.filter((t) => t.status === 'pending').length,
               claimed: tasks.filter((t) => t.status === 'claimed').length,
-              inProgress: tasks.filter((t) => t.status === 'in-progress').length,
+              inProgress: tasks.filter(
+                (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+              ).length,
               done: tasks.filter((t) => t.status === 'done').length,
               blocked: tasks.filter((t) => t.status === 'blocked').length,
             },
@@ -380,7 +384,9 @@ export function createPmCommand(): Command {
         lines.push(`  Workstreams: ${workstreams.length} (${wsStatus})`);
 
         const pending = tasks.filter((t) => t.status === 'pending').length;
-        const inProgress = tasks.filter((t) => t.status === 'in-progress').length;
+        const inProgress = tasks.filter(
+          (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+        ).length;
         const done = tasks.filter((t) => t.status === 'done').length;
         const blocked = tasks.filter((t) => t.status === 'blocked').length;
         lines.push(

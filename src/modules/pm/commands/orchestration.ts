@@ -559,7 +559,9 @@ export function createOrchestrationCommands(): Command[] {
         const allTasks = allTasksResult.ok ? allTasksResult.data : [];
 
         const eligible = computeEligible(svc.db, prefix);
-        const inProgress = allTasks.filter((t) => t.status === 'in-progress');
+        const inProgress = allTasks.filter(
+          (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+        );
         const blocked = allTasks.filter(
           (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
         );
@@ -635,7 +637,9 @@ export function createOrchestrationCommands(): Command[] {
               display_id: ws.display_id,
               name: ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`,
               pending: wsTasks.filter((t) => t.status === 'pending').length,
-              inProgress: wsTasks.filter((t) => t.status === 'in-progress').length,
+              inProgress: wsTasks.filter(
+                (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+              ).length,
               done: wsTasks.filter((t) => t.status === 'done').length,
               blocked: wsTasks.filter(
                 (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
@@ -724,7 +728,9 @@ export function createOrchestrationCommands(): Command[] {
           for (const ws of workstreams) {
             const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
             const wsDone = wsTasks.filter((t) => t.status === 'done').length;
-            const wsInProgress = wsTasks.filter((t) => t.status === 'in-progress').length;
+            const wsInProgress = wsTasks.filter(
+              (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+            ).length;
             const wsPending = wsTasks.filter((t) => t.status === 'pending').length;
             const wsBlocked = wsTasks.filter((t) => t.status === 'blocked').length;
             const wsName = ws.title?.replace(/^Workstream\s+/i, '') ?? `#${ws.number}`;
@@ -841,7 +847,9 @@ export function createOrchestrationCommands(): Command[] {
           .map((ws) => {
             const wsTasks = allTasks.filter((t) => t.workstream === ws.number);
             const pending = wsTasks.filter((t) => t.status === 'pending').length;
-            const inProgress = wsTasks.filter((t) => t.status === 'in-progress').length;
+            const inProgress = wsTasks.filter(
+              (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+            ).length;
             const done = wsTasks.filter((t) => t.status === 'done').length;
             const blocked = wsTasks.filter(
               (t) => t.status === 'blocked' || t.virtualStates?.includes('+BLOCKED')
@@ -901,7 +909,9 @@ export function createOrchestrationCommands(): Command[] {
           summary: {
             totalTasks: allTasks.length,
             done: allTasks.filter((t) => t.status === 'done').length,
-            inProgress: allTasks.filter((t) => t.status === 'in-progress').length,
+            inProgress: allTasks.filter(
+              (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+            ).length,
             pending: pendingTasks.length,
             eligible: eligible.length,
             activeWorkstreams: wsOverviews.length,

@@ -268,7 +268,9 @@ export function createOrchestrateCommands(): Command {
           const allTasks = tasksResult.ok ? tasksResult.data : [];
 
           const done = allTasks.filter((t) => t.status === 'done');
-          const inProgress = allTasks.filter((t) => t.status === 'in-progress');
+          const inProgress = allTasks.filter(
+            (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+          );
           const pending = allTasks.filter((t) => t.status === 'pending');
           const blocked = allTasks.filter((t) => t.status === 'blocked');
 

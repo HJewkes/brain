@@ -9,6 +9,7 @@ import {
   getAgentContext,
   setAgentContext,
 } from './data.js';
+import { initiateDelivery } from './delivery.js';
 import type { AgentRecord } from './types.js';
 
 /**
@@ -44,17 +45,21 @@ function tryReleaseWorktree(db: Database.Database, agent: AgentRecord): void {
 }
 
 /**
- * Mark the PM task as done by shelling out to the CLI.
+ * Update PM task status by shelling out to the CLI.
  * Returns the number of newly eligible tasks surfaced in stderr output, or 0.
  */
-function tryUpdatePmTask(taskId: string, cwd: string): number {
+function tryUpdatePmTask(taskId: string, cwd: string, targetStatus = 'done'): number {
   try {
-    const output = execFileSync('node', [process.argv[1], 'pm', 'task', 'status', taskId, 'done'], {
-      cwd,
-      encoding: 'utf-8',
-      stdio: 'pipe',
-      timeout: 5000,
-    });
+    const output = execFileSync(
+      'node',
+      [process.argv[1], 'pm', 'task', 'status', taskId, targetStatus],
+      {
+        cwd,
+        encoding: 'utf-8',
+        stdio: 'pipe',
+        timeout: 5000,
+      }
+    );
     const stderrText = typeof output === 'string' ? output : '';
     const match = stderrText.match(/Newly eligible: (.+)/);
     if (match) {
@@ -77,6 +82,27 @@ function tryUpdatePmTask(taskId: string, cwd: string): number {
       return ids.length;
     }
     return 0;
+  }
+}
+
+/**
+ * Initiate delivery for an implementation agent: push branch and open PR.
+ * Returns true if the push succeeded (worktree can be released), false on error.
+ */
+function tryInitiateDelivery(
+  db: Database.Database,
+  agentId: string,
+  taskId: string,
+  branch: string,
+  cwd: string
+): boolean {
+  try {
+    initiateDelivery(db, agentId, taskId, branch, cwd);
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[agent-done] delivery initiation failed for ${taskId}: ${msg}\n`);
+    return false;
   }
 }
 
@@ -110,6 +136,7 @@ export interface AgentDoneResult {
   worktreeReleased: boolean;
   taskUpdated: boolean;
   cascadeCount: number;
+  deliveryInitiated: boolean;
 }
 
 /**
@@ -133,6 +160,7 @@ export function handleAgentDone(
     worktreeReleased: false,
     taskUpdated: false,
     cascadeCount: 0,
+    deliveryInitiated: false,
   };
 
   const agent = getAgent(db, agentId);
@@ -147,21 +175,34 @@ export function handleAgentDone(
   });
   result.updated = true;
 
-  // Release worktree allocation (DB record only)
-  if (agent.brain_task) {
-    tryReleaseWorktree(db, agent);
-    result.worktreeReleased = true;
-  }
+  const isImplementationAgent = status === 'completed' && !!agent.branch?.startsWith('agent/');
 
-  // Update PM task status
-  if (agent.brain_task && status === 'completed') {
-    const cascadeCount = tryUpdatePmTask(agent.brain_task, cwd);
+  if (isImplementationAgent && agent.brain_task) {
+    // Initiate delivery (push + PR). Worktree is released only if push succeeds.
+    const pushSucceeded = tryInitiateDelivery(db, agentId, agent.brain_task, agent.branch!, cwd);
+    result.deliveryInitiated = true;
+    if (pushSucceeded) {
+      tryReleaseWorktree(db, agent);
+      result.worktreeReleased = true;
+    }
+    // Task awaits PR merge — not done yet
+    tryUpdatePmTask(agent.brain_task, cwd, 'pending-merge');
     result.taskUpdated = true;
-    result.cascadeCount = cascadeCount;
-    if (cascadeCount > 0) {
-      process.stderr.write(
-        `Post-merge cascade: ${cascadeCount} task${cascadeCount !== 1 ? 's' : ''} unblocked\n`
-      );
+  } else {
+    // Non-implementation or failed agent: existing behavior
+    if (agent.brain_task) {
+      tryReleaseWorktree(db, agent);
+      result.worktreeReleased = true;
+    }
+    if (agent.brain_task && status === 'completed') {
+      const cascadeCount = tryUpdatePmTask(agent.brain_task, cwd);
+      result.taskUpdated = true;
+      result.cascadeCount = cascadeCount;
+      if (cascadeCount > 0) {
+        process.stderr.write(
+          `Post-merge cascade: ${cascadeCount} task${cascadeCount !== 1 ? 's' : ''} unblocked\n`
+        );
+      }
     }
   }
 
@@ -402,6 +443,7 @@ export function runAgentDoneHook(
     const result = handleAgentDone(db, agentId, parsed, cwd);
     const parts = [`agent=${agentId}`, `status=${result.status}`];
     if (result.updated) parts.push('db-updated');
+    if (result.deliveryInitiated) parts.push('delivery-initiated');
     if (result.worktreeReleased) parts.push('worktree-released');
     if (result.taskUpdated) parts.push('task-updated');
     if (result.cascadeCount > 0) parts.push(`cascade=${result.cascadeCount}`);

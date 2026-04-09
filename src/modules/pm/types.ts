@@ -9,6 +9,7 @@ export type TaskStatus =
   | 'pending'
   | 'claimed'
   | 'in-progress'
+  | 'pending-merge'
   | 'done'
   | 'blocked'
   | 'cancelled'
@@ -170,6 +171,7 @@ const VALID_TASK_STATUSES = new Set<string>([
   'pending',
   'claimed',
   'in-progress',
+  'pending-merge',
   'done',
   'blocked',
   'cancelled',

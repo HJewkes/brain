@@ -92,7 +92,9 @@ export function renderBriefingSummary(briefingJson: Record<string, unknown>): st
 
   const tasks = data.tasks ?? [];
   const done = tasks.filter((t) => t.status === 'done').length;
-  const inProgress = tasks.filter((t) => t.status === 'in-progress').length;
+  const inProgress = tasks.filter(
+    (t) => t.status === 'in-progress' || t.status === 'pending-merge'
+  ).length;
   const eligible = tasks.filter((t) => t.status === 'pending').length;
   const blocked = tasks.filter((t) => t.status === 'blocked').length;
 

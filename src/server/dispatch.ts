@@ -138,7 +138,7 @@ export async function dispatchTask(
     agentId,
     claimToken: pullResult.claimToken,
     mcpConfigPath,
-    maxBudgetUsd: opts.maxBudgetUsd ?? 2.0,
+    maxBudgetUsd: opts.maxBudgetUsd ?? 5.0,
     cwd: worktreeResult?.worktreePath || projectDir,
     worktreePath: worktreeResult?.worktreePath,
     addDir: worktreeResult ? projectDir : undefined,
@@ -184,7 +184,7 @@ export async function dispatchTask(
 
 // --- Helpers ---
 
-function resolveProjectDir(svc: BrainServiceClass): string {
+export function resolveProjectDir(svc: BrainServiceClass): string {
   if (svc.instance.isLocal) {
     return dirname(svc.instance.root);
   }

@@ -13,23 +13,15 @@ export function checkWorkstreamConcurrency(db: BrainDB, taskDisplayId: string): 
     return { allowed: true };
   }
 
-  const result = listTasks(
-    db,
-    parsed.prefix,
-    {
-      workstream: parsed.workstream,
-      status: 'in-progress',
-    },
-    'short'
-  );
+  // Both in-progress and pending-merge count toward WIP
+  for (const status of ['in-progress', 'pending-merge'] as const) {
+    const result = listTasks(db, parsed.prefix, { workstream: parsed.workstream, status }, 'short');
+    if (!result.ok) continue;
 
-  if (!result.ok) {
-    return { allowed: true };
-  }
-
-  const blocking = result.data.find((t) => t.display_id !== taskDisplayId);
-  if (blocking) {
-    return { allowed: false, blockingTask: blocking.display_id };
+    const blocking = result.data.find((t) => t.display_id !== taskDisplayId);
+    if (blocking) {
+      return { allowed: false, blockingTask: blocking.display_id };
+    }
   }
 
   return { allowed: true };

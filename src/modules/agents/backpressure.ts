@@ -1,3 +1,6 @@
+import type Database from 'better-sqlite3';
+import type { DeliveryRecord, DeliveryStatus } from './delivery.js';
+
 export interface BackpressureState {
   mergeQueueDepth: number;
   stallRate: number;
@@ -120,4 +123,44 @@ export class BackpressureController {
       this.state.stallRate = 0;
     }
   }
+}
+
+export interface BackpressureBootstrapConfig {
+  baseWip?: number;
+}
+
+function getRecentDeliveries(db: Database.Database): DeliveryRecord[] {
+  try {
+    return db
+      .prepare(`SELECT * FROM delivery_states WHERE created_at > datetime('now', '-24 hours')`)
+      .all() as DeliveryRecord[];
+  } catch {
+    return [];
+  }
+}
+
+function countDeliveriesByStatus(db: Database.Database, status: DeliveryStatus): number {
+  try {
+    const row = db
+      .prepare(`SELECT COUNT(*) as n FROM delivery_states WHERE status = ?`)
+      .get(status) as { n: number } | undefined;
+    return row?.n ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function bootstrapBackpressure(
+  db: Database.Database,
+  config: BackpressureBootstrapConfig = {}
+): BackpressureController {
+  const baseWip = config.baseWip ?? 3;
+  const ctrl = new BackpressureController(baseWip);
+  const recent = getRecentDeliveries(db);
+  for (const d of recent) {
+    if (d.status === 'delivered') ctrl.recordMerge(true, false);
+    if (d.status === 'redispatched') ctrl.recordMerge(false, true);
+  }
+  ctrl.setMergeQueueDepth(countDeliveriesByStatus(db, 'pr-open'));
+  return ctrl;
 }

@@ -18,8 +18,8 @@ function extractTaskIds(run: WorkflowRun): string[] {
       taskIds.push(result.taskId);
     }
   }
-  if (run.activeAgent?.taskId) {
-    taskIds.push(run.activeAgent.taskId);
+  for (const slot of Object.values(run.activeAgents)) {
+    if (slot.taskId) taskIds.push(slot.taskId);
   }
   return [...new Set(taskIds)];
 }
