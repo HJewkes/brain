@@ -89,6 +89,16 @@ export interface DashboardAgent {
   toolCalls: number;
   errors: number;
   toolDomains: string[];
+  costUsd: number;
+  durationMs: number;
+}
+
+export interface DashboardCostSummary {
+  totalCostUsd: number;
+  totalAgents: number;
+  byPeriod: Array<{ period: string; costUsd: number; agentCount: number }>;
+  byWorkstream: Array<{ workstream: string; costUsd: number; agentCount: number }>;
+  alerts: Array<{ level: string; message: string; period: string }>;
 }
 
 export interface SessionTimelineEvent {
@@ -129,6 +139,7 @@ export interface DashboardData {
   sessions: DashboardSession[];
   stageHistory: DashboardStageTransition[];
   workstreams: Record<string, { name: string; project: string }>;
+  costs?: DashboardCostSummary;
 }
 
 // ---------------------------------------------------------------------------

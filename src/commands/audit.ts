@@ -3,6 +3,14 @@ import type { BrainDB } from '../services/brain-db.js';
 import type { BrainConfig } from '../types.js';
 import { listAgents, getAgentContext } from '../modules/agents/data.js';
 import { getPmNotes as _getPmNotes } from '../modules/pm/data/queries.js';
+import {
+  getAgentCostEntries,
+  summarizeCosts,
+  aggregateByPeriod,
+  aggregateByWorkstream,
+  checkBudgetAlerts,
+  loadBudgetThresholds,
+} from '../modules/agents/cost-aggregation.js';
 
 export interface AuditNotes {
   total: number;
@@ -198,6 +206,8 @@ export interface DashboardAgent {
   toolCalls: number;
   errors: number;
   toolDomains: string[];
+  costUsd: number;
+  durationMs: number;
 }
 
 export interface SessionTimelineEvent {
@@ -232,12 +242,21 @@ export interface DashboardStageTransition {
   timestamp: string;
 }
 
+export interface DashboardCostSummaryLocal {
+  totalCostUsd: number;
+  totalAgents: number;
+  byPeriod: Array<{ period: string; costUsd: number; agentCount: number }>;
+  byWorkstream: Array<{ workstream: string; costUsd: number; agentCount: number }>;
+  alerts: Array<{ level: string; message: string; period: string }>;
+}
+
 export interface DashboardData {
   tasks: DashboardTask[];
   agents: DashboardAgent[];
   sessions: DashboardSession[];
   stageHistory: DashboardStageTransition[];
   workstreams: Record<string, { name: string; project: string }>;
+  costs?: DashboardCostSummaryLocal;
 }
 
 function readNoteBody(filePath: string): string | undefined {
@@ -347,6 +366,9 @@ function collectDashboardAgents(db: BrainDB): DashboardAgent[] {
       const toolCalls = (getAgentContext(rawDb, a.id, 'total_tool_calls') as number) ?? 0;
       const errors = (getAgentContext(rawDb, a.id, 'total_errors') as number) ?? 0;
       const toolDomains = (getAgentContext(rawDb, a.id, 'tool_domains') as string[]) ?? [];
+      const claudeResult = getAgentContext(rawDb, a.id, 'claude_result') as
+        | { total_cost_usd?: number; duration_ms?: number }
+        | undefined;
 
       return {
         id: a.id,
@@ -359,6 +381,8 @@ function collectDashboardAgents(db: BrainDB): DashboardAgent[] {
         toolCalls,
         errors,
         toolDomains,
+        costUsd: claudeResult?.total_cost_usd ?? 0,
+        durationMs: claudeResult?.duration_ms ?? 0,
       };
     });
   } catch {
@@ -461,6 +485,36 @@ function collectStageHistory(db: BrainDB): DashboardStageTransition[] {
   return transitions.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200);
 }
 
+function collectCostSummary(db: BrainDB): DashboardCostSummaryLocal {
+  try {
+    const rawDb = (db as unknown as { db: unknown }).db;
+    const entries = getAgentCostEntries(rawDb);
+    const summary = summarizeCosts(entries);
+    const thresholds = loadBudgetThresholds();
+    const alerts = checkBudgetAlerts(entries, thresholds);
+
+    return {
+      totalCostUsd: summary.totalCostUsd,
+      totalAgents: summary.agentCount,
+      byPeriod: aggregateByPeriod(entries, 'day'),
+      byWorkstream: aggregateByWorkstream(entries),
+      alerts: alerts.map((a) => ({
+        level: a.level,
+        message: a.message,
+        period: a.period,
+      })),
+    };
+  } catch {
+    return {
+      totalCostUsd: 0,
+      totalAgents: 0,
+      byPeriod: [],
+      byWorkstream: [],
+      alerts: [],
+    };
+  }
+}
+
 export function collectDashboardData(db: BrainDB, config?: BrainConfig): DashboardData {
   const notesDir = config?.notesDir ?? '';
   const { tasks, workstreams } = collectDashboardTasks(db);
@@ -470,6 +524,7 @@ export function collectDashboardData(db: BrainDB, config?: BrainConfig): Dashboa
     sessions: collectDashboardSessions(db, notesDir),
     stageHistory: collectStageHistory(db),
     workstreams,
+    costs: collectCostSummary(db),
   };
 }
 

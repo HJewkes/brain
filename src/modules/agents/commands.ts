@@ -7,6 +7,14 @@ import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-conte
 import { updateTaskStatus } from '../pm/data/task-ops.js';
 import { migrateAoAgents } from './migrate-ao.js';
 import type { AgentArtifacts } from './agent-done-handler.js';
+import {
+  getAgentCostEntries,
+  summarizeCosts,
+  aggregateByPeriod,
+  aggregateByWorkstream,
+  checkBudgetAlerts,
+  loadBudgetThresholds,
+} from './cost-aggregation.js';
 
 function padRight(s: string, len: number): string {
   return s.length >= len ? s.substring(0, len) : s + ' '.repeat(len - s.length);
@@ -330,7 +338,92 @@ export function createAgentCommands(): Command {
       });
     });
 
+  // brain agent costs
+  cmd
+    .command('costs')
+    .description('Show agent cost aggregation and budget alerts')
+    .option('--since <date>', 'Start date (ISO format, e.g. 2026-04-01)')
+    .option('--until <date>', 'End date (ISO format)')
+    .option('--period <granularity>', 'Group by day or week', 'day')
+    .option('--by-workstream', 'Group costs by workstream')
+    .option('--json', 'Output JSON')
+    .action(async (opts) => {
+      await withDb((svc) => {
+        const rawDb = (svc as unknown as { db: { db?: unknown } }).db;
+        const innerDb = (rawDb as { db?: unknown }).db ?? rawDb;
+        const entries = getAgentCostEntries(innerDb, {
+          since: opts.since,
+          until: opts.until,
+        });
+        const summary = summarizeCosts(entries);
+        const thresholds = loadBudgetThresholds();
+        const alerts = checkBudgetAlerts(entries, thresholds);
+
+        if (opts.json) {
+          const result: Record<string, unknown> = { summary };
+          if (opts.byWorkstream) {
+            result.byWorkstream = aggregateByWorkstream(entries);
+          } else {
+            result.byPeriod = aggregateByPeriod(entries, opts.period as 'day' | 'week');
+          }
+          if (alerts.length > 0) result.alerts = alerts;
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+          return;
+        }
+
+        // Budget alerts
+        for (const alert of alerts) {
+          const icon = alert.level === 'critical' ? '!!' : '!';
+          process.stderr.write(`[${icon} ${alert.level.toUpperCase()}] ${alert.message}\n`);
+        }
+
+        // Summary header
+        process.stdout.write(
+          `Total: $${summary.totalCostUsd.toFixed(2)} | ` +
+            `${summary.agentCount} agents | ` +
+            `${fmtTokens(summary.totalTokensInput)}in / ${fmtTokens(summary.totalTokensOutput)}out\n\n`
+        );
+
+        if (opts.byWorkstream) {
+          const rows = aggregateByWorkstream(entries);
+          formatCostTable(
+            ['Workstream', 'Cost', 'Agents'],
+            rows.map((r) => [r.workstream, `$${r.costUsd.toFixed(2)}`, String(r.agentCount)])
+          );
+        } else {
+          const rows = aggregateByPeriod(entries, opts.period as 'day' | 'week');
+          formatCostTable(
+            ['Period', 'Cost', 'Agents'],
+            rows.map((r) => [r.period, `$${r.costUsd.toFixed(2)}`, String(r.agentCount)])
+          );
+        }
+      });
+    });
+
   cmd.addCommand(createWorktreeCommand());
 
   return cmd;
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M `;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K `;
+  return `${n} `;
+}
+
+function formatCostTable(headers: string[], rows: string[][]): void {
+  if (rows.length === 0) {
+    process.stdout.write('No cost data found.\n');
+    return;
+  }
+
+  const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+
+  const header = headers.map((h, i) => padRight(h, widths[i])).join('  ');
+  const separator = widths.map((w) => '-'.repeat(w)).join('  ');
+  process.stdout.write(header + '\n' + separator + '\n');
+
+  for (const row of rows) {
+    process.stdout.write(row.map((c, i) => padRight(c, widths[i])).join('  ') + '\n');
+  }
 }
