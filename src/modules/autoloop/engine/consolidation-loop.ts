@@ -1,9 +1,11 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { AutoloopReport, AutoloopBounds } from '../types.js';
+import type { DedupScanResult } from './dedup-scanner.js';
 import { checkBounds, createCounters, loadBounds } from './bounds.js';
 import { scanTaskQuality } from './quality-scanner.js';
 import { enrichUnderSpecifiedTasks } from './task-enricher.js';
+import { scanForDuplicates } from './dedup-scanner.js';
 import { recordAutoloopRun } from './run-tracker.js';
 
 export interface ConsolidationLoopOptions {
@@ -54,6 +56,24 @@ export async function runTaskConsolidationLoop(
       counters.taskModifications += tasksEnriched;
     } catch (err) {
       errors.push(`Enrichment: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Phase 3: Dedup scan
+  let dedupResult: DedupScanResult | undefined;
+  const boundCheck2 = checkBounds(bounds, counters);
+  if (!boundCheck2.exceeded) {
+    try {
+      dedupResult = await scanForDuplicates(db, embedder, {
+        project,
+        workstream: opts?.workstream,
+        status: 'pending',
+      });
+      if (dedupResult.errors.length > 0) {
+        errors.push(...dedupResult.errors);
+      }
+    } catch (err) {
+      errors.push(`Dedup: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

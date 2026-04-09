@@ -250,6 +250,46 @@ export const autoloopModule: BrainModule = {
         });
       });
 
+    autoloopCmd
+      .command('dedup')
+      .description('Detect duplicate/overlapping tasks across workstreams')
+      .option('--project <prefix>', 'Project prefix')
+      .option('--workstream <n>', 'Workstream number')
+      .option('--threshold <n>', 'Similarity threshold (0.0-1.0)', '0.85')
+      .option('--status <status>', 'Task status to scan', 'pending')
+      .option('--json', 'Output as JSON')
+      .action(async (cmdOpts) => {
+        const { withBrain } = await import('../../services/brain-service.js');
+        await withBrain(async (svc) => {
+          const { scanForDuplicates } = await import('./engine/dedup-scanner.js');
+          const result = await scanForDuplicates(svc.db, svc.embedder, {
+            project: cmdOpts.project,
+            workstream: cmdOpts.workstream ? parseInt(cmdOpts.workstream) : undefined,
+            threshold: parseFloat(cmdOpts.threshold),
+            status: cmdOpts.status,
+          });
+
+          if (cmdOpts.json) {
+            process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+          } else {
+            process.stdout.write(
+              `Dedup Scan: ${result.totalScanned} tasks scanned, ${result.pairsFound} duplicate pairs found\n`
+            );
+            for (const pair of result.pairs) {
+              process.stdout.write(
+                `\n  ${pair.taskA} ↔ ${pair.taskB}  (similarity: ${pair.similarity})\n`
+              );
+              process.stdout.write(`    A: ${pair.titleA}\n`);
+              process.stdout.write(`    B: ${pair.titleB}\n`);
+              process.stdout.write(`    → ${pair.suggestion}: ${pair.rationale}\n`);
+            }
+            if (result.errors.length > 0) {
+              process.stdout.write(`\nErrors: ${result.errors.join(', ')}\n`);
+            }
+          }
+        });
+      });
+
     ctx.registerCommand(autoloopCmd);
   },
 };
