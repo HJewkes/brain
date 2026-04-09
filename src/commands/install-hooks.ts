@@ -5,6 +5,12 @@ import { homedir, platform } from 'node:os';
 import { execSync } from 'node:child_process';
 import { loadConfig, resolveInstance, parentResolveOpts } from '../services/config.js';
 import { isJsonFormat } from './format.js';
+import {
+  installSystemPlists,
+  uninstallSystemPlists,
+  watchPlistPath,
+  autoloopPlistPath,
+} from './serve-launchd.js';
 
 const PLIST_LABEL = 'com.brain.index';
 const PLIST_PATH = join(homedir(), 'Library', 'LaunchAgents', `${PLIST_LABEL}.plist`);
@@ -165,6 +171,8 @@ function getStatus(notesDir: string): {
   installed: boolean;
   platform: string;
   logSize: number | null;
+  watchPlist: boolean;
+  autoloopPlist: boolean;
 } {
   const os = platform();
   if (os === 'darwin') {
@@ -179,6 +187,8 @@ function getStatus(notesDir: string): {
       installed: existsSync(PLIST_PATH),
       platform: 'macOS (launchd)',
       logSize,
+      watchPlist: existsSync(watchPlistPath()),
+      autoloopPlist: existsSync(autoloopPlistPath()),
     };
   }
   if (os === 'linux') {
@@ -187,9 +197,11 @@ function getStatus(notesDir: string): {
       installed: existsSync(timerPath),
       platform: 'Linux (systemd)',
       logSize: null,
+      watchPlist: false,
+      autoloopPlist: false,
     };
   }
-  return { installed: false, platform: os, logSize: null };
+  return { installed: false, platform: os, logSize: null, watchPlist: false, autoloopPlist: false };
 }
 
 export const installHooksCommand = new Command('install-hooks')
@@ -197,6 +209,8 @@ export const installHooksCommand = new Command('install-hooks')
   .option('--interval <minutes>', 'processing interval in minutes', '360')
   .option('--uninstall', 'remove scheduled processing')
   .option('--status', 'show current hook status')
+  .option('--system', 'install system plists (WatchPaths index + daily autoloop)')
+  .option('--autoloop-hour <hour>', 'hour for daily autoloop run (0-23)', '3')
   .option('--json', 'output as JSON')
   .action((opts, cmd) => {
     const instance = resolveInstance(parentResolveOpts(cmd));
@@ -216,6 +230,12 @@ export const installHooksCommand = new Command('install-hooks')
           const kb = (status.logSize / 1024).toFixed(1);
           process.stderr.write(`  Log: ${join(config.notesDir, '.brain-hook.log')} (${kb} KB)\n`);
         }
+        process.stderr.write(
+          `  WatchPaths index: ${status.watchPlist ? 'active' : 'not installed'}\n`
+        );
+        process.stderr.write(
+          `  Autoloop schedule: ${status.autoloopPlist ? 'active' : 'not installed'}\n`
+        );
       }
       return;
     }
@@ -223,12 +243,29 @@ export const installHooksCommand = new Command('install-hooks')
     if (opts.uninstall) {
       if (os === 'darwin') {
         uninstallLaunchd();
+        uninstallSystemPlists();
       } else if (os === 'linux') {
         uninstallSystemd();
       } else {
         process.stderr.write(`Unsupported platform: ${os}\n`);
         process.exitCode = 1;
       }
+      return;
+    }
+
+    if (opts.system) {
+      if (os !== 'darwin') {
+        process.stderr.write('--system plists are only supported on macOS.\n');
+        process.exitCode = 1;
+        return;
+      }
+      const hour = parseInt(opts.autoloopHour, 10);
+      if (isNaN(hour) || hour < 0 || hour > 23) {
+        process.stderr.write('Error: --autoloop-hour must be 0-23\n');
+        process.exitCode = 1;
+        return;
+      }
+      installSystemPlists(config.notesDir, { hour, minute: 0 });
       return;
     }
 
