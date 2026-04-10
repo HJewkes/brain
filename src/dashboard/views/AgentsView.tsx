@@ -8,6 +8,7 @@ import { fmtK } from '../utils/formatting.js';
 import { AgentCard } from '../components/AgentCard.js';
 import { Avatar } from '../components/shared/Avatar.js';
 import { statusColor } from '../utils/semantic-colors.js';
+import { CostsView } from './CostsView.js';
 
 interface AgentsViewProps {
   dashboard: DashboardData | null;
@@ -176,7 +177,7 @@ function TopoNode({ agent, role, index: _index, isDimmed }: TopoNodeProps) {
 // ---------------------------------------------------------------------------
 // Toggle bar + main view
 // ---------------------------------------------------------------------------
-type ViewMode = 'status' | 'topology';
+type ViewMode = 'status' | 'topology' | 'costs';
 
 export function AgentsView({ dashboard, initialAgent }: AgentsViewProps) {
   const [mode, setMode] = useState<ViewMode>('status');
@@ -210,6 +211,14 @@ export function AgentsView({ dashboard, initialAgent }: AgentsViewProps) {
               Topology
             </Text>
           </Pressable>
+          <Pressable
+            style={[s.toggleBtn, mode === 'costs' && s.toggleBtnActive]}
+            onPress={() => setMode('costs')}
+          >
+            <Text style={[s.toggleBtnText, mode === 'costs' && s.toggleBtnTextActive]}>
+              Costs
+            </Text>
+          </Pressable>
         </View>
 
         <Pressable
@@ -226,10 +235,15 @@ export function AgentsView({ dashboard, initialAgent }: AgentsViewProps) {
         <Text style={s.hiddenHint}>{historicalCount} historical agent{historicalCount !== 1 ? 's' : ''} hidden</Text>
       )}
 
-      {mode === 'status'
-        ? <StatusCardsView agents={visibleAgents} highlightedAgent={highlightedAgent} dimHistorical={showHistorical} />
-        : <TopologyView agents={visibleAgents} dimHistorical={showHistorical} />
-      }
+      {mode === 'status' && (
+        <StatusCardsView agents={visibleAgents} highlightedAgent={highlightedAgent} dimHistorical={showHistorical} />
+      )}
+      {mode === 'topology' && (
+        <TopologyView agents={visibleAgents} dimHistorical={showHistorical} />
+      )}
+      {mode === 'costs' && (
+        <CostsView dashboard={dashboard} />
+      )}
     </View>
   );
 }

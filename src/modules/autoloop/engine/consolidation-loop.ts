@@ -2,11 +2,13 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { AutoloopReport, AutoloopBounds } from '../types.js';
 import type { DedupScanResult } from './dedup-scanner.js';
+import type { EnrichmentSuggestion } from './task-enricher.js';
 import { checkBounds, createCounters, loadBounds } from './bounds.js';
 import { scanTaskQuality } from './quality-scanner.js';
 import { enrichUnderSpecifiedTasks } from './task-enricher.js';
 import { scanForDuplicates } from './dedup-scanner.js';
 import { recordAutoloopRun } from './run-tracker.js';
+import { writeEnrichmentToTask } from './enrichment-writer.js';
 
 export interface ConsolidationLoopOptions {
   bounds?: Partial<AutoloopBounds>;
@@ -54,6 +56,17 @@ export async function runTaskConsolidationLoop(
       );
       tasksEnriched = enrichment.tasksEnriched;
       counters.taskModifications += tasksEnriched;
+
+      // Write enrichment suggestions back to task descriptions
+      for (const suggestion of enrichment.suggestions) {
+        try {
+          await applyEnrichment(db, embedder, suggestion);
+        } catch (err) {
+          errors.push(
+            `Write-back ${suggestion.taskId}: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
     } catch (err) {
       errors.push(`Enrichment: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -90,6 +103,17 @@ export async function runTaskConsolidationLoop(
   recordAutoloopRun(db, report);
 
   return report;
+}
+
+async function applyEnrichment(
+  db: BrainDB,
+  embedder: Embedder,
+  suggestion: EnrichmentSuggestion
+): Promise<void> {
+  if (suggestion.suggestedAdditions.length === 0 && suggestion.relatedResearch.length === 0) {
+    return;
+  }
+  await writeEnrichmentToTask(db, embedder, suggestion);
 }
 
 function buildReport(

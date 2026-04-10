@@ -60,6 +60,9 @@ export interface AutoloopInsight {
 /** Task readiness assessment from consolidation loop */
 export interface TaskReadinessScore {
   taskId: string;
+  title: string;
+  description: string;
+  category: string;
   overall: number;
   dimensions: {
     hasDescription: boolean;

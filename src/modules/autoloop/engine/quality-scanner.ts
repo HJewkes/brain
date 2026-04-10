@@ -67,6 +67,7 @@ export function scoreTask(task: {
   display_id: string;
   title?: string;
   description?: string;
+  category?: string;
   depends_on?: string[];
   done_when?: string;
   acceptance_criteria?: string[];
@@ -126,6 +127,9 @@ export function scoreTask(task: {
 
   return {
     taskId: task.display_id,
+    title: task.title ?? '',
+    description: task.description ?? '',
+    category: task.category ?? '',
     overall,
     dimensions,
     suggestions,
