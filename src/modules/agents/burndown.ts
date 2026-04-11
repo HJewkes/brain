@@ -133,14 +133,6 @@ export class BurndownOrchestrator {
     return detectStalledTasks(this.db, this.config.projectDir, this.config.stallThresholdMinutes);
   }
 
-  onMerge(success: boolean, hadConflict: boolean): void {
-    this.backpressure.recordMerge(success, hadConflict);
-  }
-
-  onStallRecord(workstream: string): void {
-    this.backpressure.recordStall(workstream);
-  }
-
   private async fillSlots(adjustment: WipAdjustment): Promise<ActiveAgent[]> {
     const spawned: ActiveAgent[] = [];
     let activeCount = countActiveAgents(this.db);

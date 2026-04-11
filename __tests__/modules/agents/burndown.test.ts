@@ -206,79 +206,8 @@ describe('BurndownOrchestrator', () => {
   });
 
   describe('backpressure integration', () => {
-    it('reduces effective WIP when conflict rate is high', async () => {
-      const backpressure = new BackpressureController(4);
-      // Push conflict rate above 30% threshold
-      for (let i = 0; i < 5; i++) {
-        backpressure.recordMerge(true, true);
-      }
-
-      const orchestrator = new BurndownOrchestrator(
-        fakeDb,
-        fakeConfig,
-        fakeEmbedder,
-        { maxWip: 4, projectDir: '/repo' },
-        backpressure
-      );
-
-      mockPullNextTask.mockResolvedValue(null);
-
-      const result = await orchestrator.tick();
-
-      expect(result.effectiveWip).toBeLessThan(4);
-      expect(result.backpressureReason).toContain('conflict rate');
-    });
-
-    it('delegates onMerge to backpressure controller', async () => {
-      const backpressure = new BackpressureController(4);
-      const orchestrator = new BurndownOrchestrator(
-        fakeDb,
-        fakeConfig,
-        fakeEmbedder,
-        { maxWip: 4, projectDir: '/repo' },
-        backpressure
-      );
-
-      // Record enough conflicts to trigger reduction
-      for (let i = 0; i < 5; i++) {
-        orchestrator.onMerge(true, true);
-      }
-
-      mockPullNextTask.mockResolvedValue(null);
-      const result = await orchestrator.tick();
-
-      expect(result.effectiveWip).toBeLessThan(4);
-    });
-
-    it('delegates onStallRecord to backpressure controller', async () => {
-      const backpressure = new BackpressureController(4);
-      const orchestrator = new BurndownOrchestrator(
-        fakeDb,
-        fakeConfig,
-        fakeEmbedder,
-        { maxWip: 4, projectDir: '/repo' },
-        backpressure
-      );
-
-      // Record stalls to exceed 50% stall rate (need stalls > merges)
-      for (let i = 0; i < 5; i++) {
-        orchestrator.onStallRecord('WS-01');
-      }
-      orchestrator.onMerge(true, false);
-
-      mockPullNextTask.mockResolvedValue(null);
-      const result = await orchestrator.tick();
-
-      expect(result.effectiveWip).toBeLessThan(4);
-      expect(result.backpressureReason).toContain('stall rate');
-    });
-
-    it('limits spawning to effective WIP not configured maxWip', async () => {
-      const backpressure = new BackpressureController(4);
-      // Drive effective WIP to 2 via conflicts
-      for (let i = 0; i < 5; i++) {
-        backpressure.recordMerge(true, true);
-      }
+    it('uses backpressure effective WIP for spawning limit', async () => {
+      const backpressure = new BackpressureController(2);
 
       const orchestrator = new BurndownOrchestrator(
         fakeDb,

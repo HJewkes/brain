@@ -26,10 +26,6 @@ vi.mock('../../../src/modules/agents/delivery-monitor.js', () => ({
   monitorDelivery: vi.fn(),
 }));
 
-vi.mock('../../../src/modules/agents/wave-review.js', () => ({
-  reviewWave: vi.fn(),
-}));
-
 import {
   checkDispatchConcurrency,
   DispatchLoop,
@@ -39,7 +35,6 @@ import { countActiveAgents, getAgent } from '../../../src/modules/agents/data.js
 import { getDeliveryForTask, initiateDelivery } from '../../../src/modules/agents/delivery.js';
 import { releaseWorktree } from '../../../src/modules/agents/worktree.js';
 import { monitorDelivery } from '../../../src/modules/agents/delivery-monitor.js';
-import { reviewWave } from '../../../src/modules/agents/wave-review.js';
 
 const mockCountActive = countActiveAgents as ReturnType<typeof vi.fn>;
 const mockGetAgent = getAgent as ReturnType<typeof vi.fn>;
@@ -47,7 +42,6 @@ const mockGetDelivery = getDeliveryForTask as ReturnType<typeof vi.fn>;
 const mockInitiateDelivery = initiateDelivery as ReturnType<typeof vi.fn>;
 const mockReleaseWorktree = releaseWorktree as ReturnType<typeof vi.fn>;
 const mockMonitorDelivery = monitorDelivery as ReturnType<typeof vi.fn>;
-const mockReviewWave = reviewWave as ReturnType<typeof vi.fn>;
 
 const fakeDb = {} as unknown;
 const projectDir = '/tmp/test-project';
@@ -90,17 +84,6 @@ describe('DispatchLoop', () => {
     spawnFn = vi.fn();
     // Default: WIP slot available
     mockCountActive.mockReturnValue(0);
-    // Default: clean wave review
-    mockReviewWave.mockReturnValue({
-      wave: 1,
-      taskCount: 0,
-      branches: [],
-      conflicts: [],
-      hasConflicts: false,
-      typecheckPassed: null,
-      lintPassed: null,
-      summary: 'Status: CLEAN',
-    });
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -229,14 +212,14 @@ describe('DispatchLoop', () => {
   });
 
   describe('executeWave', () => {
-    it('dispatches all tasks in wave and returns review', async () => {
+    it('dispatches all tasks in wave and returns settled results', async () => {
       spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'b1' });
       mockGetAgent.mockReturnValue({ status: 'completed' });
       mockGetDelivery.mockReturnValue(null);
       mockInitiateDelivery.mockReturnValue({ agent_id: 'a1', task_id: 't1' });
       mockMonitorDelivery.mockResolvedValue('merged');
 
-      const { settled, review } = await makeLoop().executeWave({
+      const { settled } = await makeLoop().executeWave({
         wave: 1,
         taskIds: ['t1', 't2'],
       });
@@ -244,8 +227,6 @@ describe('DispatchLoop', () => {
       expect(settled).toHaveLength(2);
       expect(settled.every((r) => r.status === 'fulfilled')).toBe(true);
       expect(spawnFn).toHaveBeenCalledTimes(2);
-      expect(mockReviewWave).toHaveBeenCalledWith(fakeDb, 1, ['t1', 't2'], projectDir);
-      expect(review.hasConflicts).toBe(false);
     });
 
     it('settles all tasks even when some fail', async () => {
@@ -264,33 +245,6 @@ describe('DispatchLoop', () => {
 
       expect(settled).toHaveLength(2);
       expect(settled.every((r) => r.status === 'fulfilled')).toBe(true);
-    });
-
-    it('reports conflicts from wave review', async () => {
-      spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'b1' });
-      mockGetAgent.mockReturnValue({ status: 'completed' });
-      mockGetDelivery.mockReturnValue(null);
-      mockInitiateDelivery.mockReturnValue({ agent_id: 'a1', task_id: 't1' });
-      mockMonitorDelivery.mockResolvedValue('merged');
-      mockReviewWave.mockReturnValue({
-        wave: 1,
-        taskCount: 2,
-        branches: [],
-        conflicts: [{ file: 'src/shared.ts', branches: ['b1', 'b2'], taskIds: ['t1', 't2'] }],
-        hasConflicts: true,
-        typecheckPassed: null,
-        lintPassed: null,
-        summary: 'CONFLICTS\nStatus: BLOCKED',
-      });
-
-      const { review } = await makeLoop().executeWave({
-        wave: 1,
-        taskIds: ['t1', 't2'],
-      });
-
-      expect(review.hasConflicts).toBe(true);
-      expect(review.conflicts).toHaveLength(1);
-      expect(review.summary).toContain('BLOCKED');
     });
   });
 });

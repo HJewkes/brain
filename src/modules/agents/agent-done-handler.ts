@@ -2,15 +2,7 @@ import Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolveInstance, loadConfig } from '../../services/config.js';
-import {
-  getAgent,
-  updateAgentStatus,
-  releaseWorktree as dbReleaseWorktree,
-  getAgentContext,
-  setAgentContext,
-} from './data.js';
-import { initiateDelivery } from './delivery.js';
-import type { AgentRecord } from './types.js';
+import { getAgent, updateAgentStatus, getAgentContext, setAgentContext } from './data.js';
 
 /**
  * Open a writable DB connection for hook context.
@@ -24,23 +16,6 @@ function openDb(cwd: string): Database.Database | null {
     return new Database(config.dbPath);
   } catch {
     return null;
-  }
-}
-
-/**
- * Release worktree allocation in DB for the agent's task.
- * Physical worktree removal is left to cleanup — we only clear the DB record
- * to avoid git operations in a hook that must not fail.
- */
-function tryReleaseWorktree(db: Database.Database, agent: AgentRecord): void {
-  if (!agent.brain_task) return;
-  try {
-    dbReleaseWorktree(db, agent.brain_task);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(
-      `[agent-done] worktree release failed for task ${agent.brain_task}: ${msg}\n`
-    );
   }
 }
 
@@ -86,27 +61,6 @@ function tryUpdatePmTask(taskId: string, cwd: string, targetStatus = 'done'): nu
 }
 
 /**
- * Initiate delivery for an implementation agent: push branch and open PR.
- * Returns true if the push succeeded (worktree can be released), false on error.
- */
-function tryInitiateDelivery(
-  db: Database.Database,
-  agentId: string,
-  taskId: string,
-  branch: string,
-  cwd: string
-): boolean {
-  try {
-    initiateDelivery(db, agentId, taskId, branch, cwd);
-    return true;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[agent-done] delivery initiation failed for ${taskId}: ${msg}\n`);
-    return false;
-  }
-}
-
-/**
  * Fire session commit as a non-blocking side effect.
  */
 function trySessionCommit(cwd: string): void {
@@ -133,10 +87,8 @@ export interface AgentDoneResult {
   agentId: string | null;
   status: 'completed' | 'failed';
   updated: boolean;
-  worktreeReleased: boolean;
   taskUpdated: boolean;
   cascadeCount: number;
-  deliveryInitiated: boolean;
 }
 
 /**
@@ -157,10 +109,8 @@ export function handleAgentDone(
     agentId,
     status,
     updated: false,
-    worktreeReleased: false,
     taskUpdated: false,
     cascadeCount: 0,
-    deliveryInitiated: false,
   };
 
   const agent = getAgent(db, agentId);
@@ -175,7 +125,8 @@ export function handleAgentDone(
   });
   result.updated = true;
 
-  const isImplementationAgent = status === 'completed' && !!agent.branch?.startsWith('agent/');
+  // Delivery (push, PR, merge) and worktree release are owned by the dispatch
+  // loop. The hook only handles status, PM task updates, and observability.
 
   if (status === 'completed' && agent.brain_task && !agent.branch) {
     process.stderr.write(
@@ -185,32 +136,16 @@ export function handleAgentDone(
     );
   }
 
-  if (isImplementationAgent && agent.brain_task) {
-    // Initiate delivery (push + PR). Worktree is released only if push succeeds.
-    const pushSucceeded = tryInitiateDelivery(db, agentId, agent.brain_task, agent.branch!, cwd);
-    result.deliveryInitiated = true;
-    if (pushSucceeded) {
-      tryReleaseWorktree(db, agent);
-      result.worktreeReleased = true;
-    }
-    // Task awaits PR merge — not done yet
-    tryUpdatePmTask(agent.brain_task, cwd, 'pending-merge');
+  if (agent.brain_task && status === 'completed') {
+    const isImplementationAgent = !!agent.branch?.startsWith('agent/');
+    const targetStatus = isImplementationAgent ? 'pending-merge' : 'done';
+    const cascadeCount = tryUpdatePmTask(agent.brain_task, cwd, targetStatus);
     result.taskUpdated = true;
-  } else {
-    // Non-implementation or failed agent: existing behavior
-    if (agent.brain_task) {
-      tryReleaseWorktree(db, agent);
-      result.worktreeReleased = true;
-    }
-    if (agent.brain_task && status === 'completed') {
-      const cascadeCount = tryUpdatePmTask(agent.brain_task, cwd);
-      result.taskUpdated = true;
-      result.cascadeCount = cascadeCount;
-      if (cascadeCount > 0) {
-        process.stderr.write(
-          `Post-merge cascade: ${cascadeCount} task${cascadeCount !== 1 ? 's' : ''} unblocked\n`
-        );
-      }
+    result.cascadeCount = cascadeCount;
+    if (cascadeCount > 0) {
+      process.stderr.write(
+        `Post-merge cascade: ${cascadeCount} task${cascadeCount !== 1 ? 's' : ''} unblocked\n`
+      );
     }
   }
 
@@ -451,8 +386,6 @@ export function runAgentDoneHook(
     const result = handleAgentDone(db, agentId, parsed, cwd);
     const parts = [`agent=${agentId}`, `status=${result.status}`];
     if (result.updated) parts.push('db-updated');
-    if (result.deliveryInitiated) parts.push('delivery-initiated');
-    if (result.worktreeReleased) parts.push('worktree-released');
     if (result.taskUpdated) parts.push('task-updated');
     if (result.cascadeCount > 0) parts.push(`cascade=${result.cascadeCount}`);
 

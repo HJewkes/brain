@@ -135,7 +135,6 @@ describe('handleAgentDone', () => {
     const result = handleAgentDone(db, id, { exit_code: 0 }, '/tmp');
 
     expect(result.updated).toBe(false);
-    expect(result.worktreeReleased).toBe(false);
     expect(result.taskUpdated).toBe(false);
 
     const agent = getAgent(db, id);
@@ -149,7 +148,7 @@ describe('handleAgentDone', () => {
     expect(result.agentId).toBe('nonexistent-id');
   });
 
-  it('releases worktree allocation when brain_task is set', () => {
+  it('does not release worktree — dispatch loop owns worktree lifecycle', () => {
     const id = createAgent(db, {
       name: 'worker',
       parent: 'orch',
@@ -163,24 +162,13 @@ describe('handleAgentDone', () => {
       branch: 'agent/vnm-07/VNM-07.03',
     });
 
-    const result = handleAgentDone(db, id, { exit_code: 0 }, '/tmp');
+    handleAgentDone(db, id, { exit_code: 0 }, '/tmp');
 
-    expect(result.worktreeReleased).toBe(true);
-
-    // Verify the allocation was removed from DB
+    // Worktree allocation should still exist — dispatch loop handles release
     const raw = db
       .prepare('SELECT COUNT(*) as n FROM worktree_allocations WHERE task_id = ?')
       .get('VNM-07.03') as { n: number };
-    expect(raw.n).toBe(0);
-  });
-
-  it('does not release worktree when brain_task is null', () => {
-    const id = createAgent(db, { name: 'worker', parent: 'orch' });
-    updateAgentStatus(db, id, 'active');
-
-    const result = handleAgentDone(db, id, { exit_code: 0 }, '/tmp');
-
-    expect(result.worktreeReleased).toBe(false);
+    expect(raw.n).toBe(1);
   });
 
   it('sets taskUpdated when brain_task is set and status is completed', () => {

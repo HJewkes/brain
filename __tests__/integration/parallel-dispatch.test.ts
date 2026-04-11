@@ -13,11 +13,7 @@ import {
   agentsMigrationV2,
   agentsMigrationV3,
 } from '../../src/modules/agents/schema.js';
-import {
-  createAgent,
-  updateAgentStatus,
-  countActiveAgents,
-} from '../../src/modules/agents/data.js';
+import { createAgent, updateAgentStatus } from '../../src/modules/agents/data.js';
 import { recordDelivery, getDeliveryForTask } from '../../src/modules/agents/delivery.js';
 import {
   DispatchLoop,
@@ -43,19 +39,6 @@ vi.mock('../../src/modules/agents/worktree.js', () => ({
   releaseWorktree: vi.fn(),
   allocateWorktree: vi.fn(),
   findGitRoot: vi.fn(() => '/tmp/test-project'),
-}));
-
-vi.mock('../../src/modules/agents/wave-review.js', () => ({
-  reviewWave: vi.fn(() => ({
-    wave: 1,
-    taskCount: 0,
-    branches: [],
-    conflicts: [],
-    hasConflicts: false,
-    typecheckPassed: null,
-    lintPassed: null,
-    summary: 'Status: CLEAN',
-  })),
 }));
 
 import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
@@ -314,28 +297,13 @@ describe('parallel dispatch integration', () => {
     expect(mockMonitorDelivery).not.toHaveBeenCalled();
   });
 
-  it('backpressure controller reduces effective WIP under pressure', () => {
-    const bp = new BackpressureController(5);
+  it('concurrency check blocks when active agents reach WIP limit', () => {
+    const bp = new BackpressureController(3);
 
-    // Record failures to trigger backpressure
-    bp.recordStall('ws1');
-    bp.recordStall('ws1');
-    bp.recordMerge(false, true); // failed merge with conflict
-    bp.recordMerge(false, true);
-
-    const { effectiveWip } = bp.computeEffectiveWip();
-    // Under pressure, effective WIP should be less than base
-    expect(effectiveWip).toBeLessThanOrEqual(5);
-
-    // Concurrency check should use reduced WIP
-    // Create enough agents to exceed the reduced limit
-    for (let i = 0; i < effectiveWip; i++) {
+    for (let i = 0; i < 3; i++) {
       const id = createAgent(db, { name: `a${i}`, parent: 'test', brain_task: `t${i}` });
       updateAgentStatus(db, id, 'active', { pid: i + 100 });
     }
-
-    const active = countActiveAgents(db);
-    expect(active).toBe(effectiveWip);
 
     const check = checkDispatchConcurrency(db, bp);
     expect(check.allowed).toBe(false);
