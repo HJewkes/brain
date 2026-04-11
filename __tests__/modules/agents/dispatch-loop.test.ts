@@ -246,6 +246,5 @@ describe('DispatchLoop', () => {
       expect(settled).toHaveLength(2);
       expect(settled.every((r) => r.status === 'fulfilled')).toBe(true);
     });
-
   });
 });
