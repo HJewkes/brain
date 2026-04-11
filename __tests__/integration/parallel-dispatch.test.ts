@@ -13,11 +13,7 @@ import {
   agentsMigrationV2,
   agentsMigrationV3,
 } from '../../src/modules/agents/schema.js';
-import {
-  createAgent,
-  updateAgentStatus,
-  countActiveAgents,
-} from '../../src/modules/agents/data.js';
+import { createAgent, updateAgentStatus } from '../../src/modules/agents/data.js';
 import { recordDelivery, getDeliveryForTask } from '../../src/modules/agents/delivery.js';
 import {
   DispatchLoop,
