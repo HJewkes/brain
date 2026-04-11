@@ -16,7 +16,8 @@ import { getPmNotes, getEligibleTasks } from '../modules/pm/data/queries.js';
 import { resolveWorkstreamFilter } from '../modules/pm/ids.js';
 import type { TaskMetadata, ProjectMetadata } from '../modules/pm/types.js';
 import { listAgents } from '../modules/agents/data.js';
-import type { AgentRecord, AgentStatus } from '../modules/agents/types.js';
+import type { ListAgentsFilter } from '../modules/agents/data.js';
+import type { AgentRecord } from '../modules/agents/types.js';
 import {
   getSession,
   listSessions,
@@ -172,10 +173,10 @@ export class BrainServiceClass {
     }
   }
 
-  agentList(opts?: { status?: AgentStatus }): AgentRecord[] {
+  agentList(opts?: ListAgentsFilter): AgentRecord[] {
     try {
       const rawDb = (this.db as unknown as { db: unknown }).db;
-      return listAgents(rawDb, opts?.status ? { status: opts.status } : undefined);
+      return listAgents(rawDb, opts);
     } catch {
       return [];
     }
