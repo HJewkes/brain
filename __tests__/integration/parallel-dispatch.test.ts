@@ -45,19 +45,6 @@ vi.mock('../../src/modules/agents/worktree.js', () => ({
   findGitRoot: vi.fn(() => '/tmp/test-project'),
 }));
 
-vi.mock('../../src/modules/agents/wave-review.js', () => ({
-  reviewWave: vi.fn(() => ({
-    wave: 1,
-    taskCount: 0,
-    branches: [],
-    conflicts: [],
-    hasConflicts: false,
-    typecheckPassed: null,
-    lintPassed: null,
-    summary: 'Status: CLEAN',
-  })),
-}));
-
 import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
 
 const mockMonitorDelivery = monitorDelivery as ReturnType<typeof vi.fn>;

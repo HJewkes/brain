@@ -7,7 +7,6 @@ import { countActiveAgents, getAgent } from './data.js';
 import { getDeliveryForTask, initiateDelivery } from './delivery.js';
 import { releaseWorktree } from './worktree.js';
 import { monitorDelivery } from './delivery-monitor.js';
-import { reviewWave, type WaveReviewResult } from './wave-review.js';
 
 const AGENT_POLL_INTERVAL = 5_000; // 5s
 const WIP_POLL_INTERVAL = 10_000; // 10s
@@ -25,7 +24,6 @@ export interface SpawnResult {
 
 export interface WaveExecutionResult {
   settled: PromiseSettledResult<void>[];
-  review: WaveReviewResult;
 }
 
 /** Inject the spawn function to avoid circular server ↔ modules dependency. */
@@ -86,8 +84,8 @@ export class DispatchLoop {
 
   /**
    * Ensure delivery is initiated for a completed agent.
-   * The agent-done-handler hook may have already done this; this is a fallback.
-   * Returns the delivery record if available, null on failure.
+   * The dispatch loop is the sole owner of delivery — the agent-done hook
+   * only handles status updates and observability.
    */
   /** Terminal delivery statuses that don't need a retry. */
   private static DELIVERED_STATUSES = new Set([
@@ -161,20 +159,17 @@ export class DispatchLoop {
       return;
     }
 
-    // Release worktree only after successful push
-    releaseWorktree(this.rawDb, this.projectDir, taskId);
-
     const outcome = await monitorDelivery(this.rawDb, delivery, this.projectDir);
     process.stderr.write(`[dispatch-loop] ${taskId} delivery outcome: ${outcome}\n`);
+
+    // Release worktree after delivery completes — rebase/fix agents may need it
+    releaseWorktree(this.rawDb, this.projectDir, taskId);
   }
 
   /**
    * Execute all tasks in a wave with a sliding window that respects the WIP limit.
    * Launches up to N tasks concurrently, waits for one to finish before launching
-   * the next. After all tasks complete, runs a post-wave review to detect
-   * file-level conflicts and validate the merged view with typecheck/lint.
-   *
-   * When `review.hasConflicts` is true, the caller should pause before the next wave.
+   * the next.
    */
   async executeWave(wave: WaveAssignment): Promise<WaveExecutionResult> {
     const allPromises: Promise<void>[] = [];
@@ -195,10 +190,8 @@ export class DispatchLoop {
     }
 
     const settled = await Promise.allSettled(allPromises);
+    process.stderr.write(`[dispatch-loop] wave ${wave.wave} complete: ${settled.length} task(s)\n`);
 
-    const review = reviewWave(this.rawDb, wave.wave, wave.taskIds, this.projectDir);
-    process.stderr.write(`[dispatch-loop] wave ${wave.wave} review:\n${review.summary}\n`);
-
-    return { settled, review };
+    return { settled };
   }
 }
