@@ -8,7 +8,11 @@ import type { HookEvent } from '../hooks/types.js';
 import { seekJsonlFile } from '../utils/jsonl-seek.js';
 
 const __dirname_esm = dirname(fileURLToPath(import.meta.url));
-const DASHBOARD_DIR = join(__dirname_esm, '..', '..', 'dist', 'dashboard');
+const DASHBOARD_DIR_RELATIVE = join(__dirname_esm, '..', '..', 'dist', 'dashboard');
+const DASHBOARD_DIR_CWD = join(process.cwd(), 'dist', 'dashboard');
+const DASHBOARD_DIR = existsSync(join(DASHBOARD_DIR_RELATIVE, 'index.html'))
+  ? DASHBOARD_DIR_RELATIVE
+  : DASHBOARD_DIR_CWD;
 
 export type SseClients = Set<ServerResponse>;
 

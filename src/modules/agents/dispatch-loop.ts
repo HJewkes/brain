@@ -89,14 +89,28 @@ export class DispatchLoop {
    * The agent-done-handler hook may have already done this; this is a fallback.
    * Returns the delivery record if available, null on failure.
    */
+  /** Terminal delivery statuses that don't need a retry. */
+  private static DELIVERED_STATUSES = new Set([
+    'pushed',
+    'pr-open',
+    'conflicted',
+    'merged',
+    'delivered',
+    'stalled',
+    'redispatched',
+  ]);
+
   private ensureDelivery(
     agentId: string,
     taskId: string,
     branch: string | undefined
   ): import('./delivery.js').DeliveryRecord | null {
     const existing = getDeliveryForTask(this.rawDb, taskId);
-    if (existing) return existing;
+    if (existing && DispatchLoop.DELIVERED_STATUSES.has(existing.status)) {
+      return existing;
+    }
 
+    // Failed or in-progress record from a prior attempt — retry delivery
     if (!branch) {
       process.stderr.write(`[dispatch-loop] no branch for ${taskId}, cannot initiate delivery\n`);
       return null;
@@ -140,13 +154,15 @@ export class DispatchLoop {
 
     const delivery = this.ensureDelivery(agentId, taskId, branch);
 
-    // Release worktree after push (idempotent — hook may have released it already)
-    releaseWorktree(this.rawDb, this.projectDir, taskId);
-
     if (!delivery) {
-      process.stderr.write(`[dispatch-loop] no delivery record for ${taskId}, skipping monitor\n`);
+      process.stderr.write(
+        `[dispatch-loop] delivery failed for ${taskId} — preserving worktree and branch for manual recovery\n`
+      );
       return;
     }
+
+    // Release worktree only after successful push
+    releaseWorktree(this.rawDb, this.projectDir, taskId);
 
     const outcome = await monitorDelivery(this.rawDb, delivery, this.projectDir);
     process.stderr.write(`[dispatch-loop] ${taskId} delivery outcome: ${outcome}\n`);

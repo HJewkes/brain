@@ -23,6 +23,7 @@ import { allocateWorktree } from '../modules/agents/worktree.js';
 import type { AllocateWorktreeResult } from '../modules/agents/worktree.js';
 import {
   createAgent,
+  getAgent,
   updateAgentStatus,
   setAgentContext,
   listAgents,
@@ -497,14 +498,17 @@ async function handleProcessExit(
 
   if (code === 0 && result) {
     const completion = parseCompletionMessage(result.result ?? '');
-    if (completion) {
+    // Skip handleCompletion (which sets task to 'done') when the agent has a
+    // branch — delivery hasn't happened yet. The dispatch loop will set the
+    // final task status after push + PR via ensureDelivery.
+    const agent = getAgent(svc.db, agentId);
+    const hasBranch = !!agent?.branch?.startsWith('agent/');
+    if (completion && !hasBranch) {
       await handleCompletion(svc.db, svc.config, svc.embedder, completion);
-      updateAgentStatus(svc.db, agentId, 'completed', { summary: completion.summary });
-    } else {
-      updateAgentStatus(svc.db, agentId, 'completed', {
-        summary: 'Completed without protocol message',
-      });
     }
+    updateAgentStatus(svc.db, agentId, 'completed', {
+      summary: completion?.summary ?? 'Completed without protocol message',
+    });
   } else if (code === 143) {
     updateAgentStatus(svc.db, agentId, 'failed', { exit_reason: 'rate_limited' });
   } else {

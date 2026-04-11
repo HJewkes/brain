@@ -177,19 +177,34 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
 
   const sseClients: SseClients = new Set();
 
-  const httpServer = createServer(createHttpHandler(service, sseClients));
-  httpServer.listen(port, () => {
-    process.stderr.write(`Dashboard: http://localhost:${port}\n`);
-    process.stderr.write(`API: http://localhost:${port}/api/dashboard\n`);
-  });
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let httpServer: ReturnType<typeof createServer> | undefined;
 
-  const heartbeat = setInterval(() => {
-    broadcast(sseClients, 'heartbeat', { ts: Date.now() });
-  }, 30_000);
+  if (port > 0) {
+    httpServer = createServer(createHttpHandler(service, sseClients));
+    httpServer.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        process.stderr.write(
+          `Port ${port} in use — running MCP stdio only (dashboard served by another session)\n`
+        );
+        httpServer = undefined;
+      } else {
+        throw err;
+      }
+    });
+    httpServer.listen(port, () => {
+      process.stderr.write(`Dashboard: http://localhost:${port}\n`);
+      process.stderr.write(`API: http://localhost:${port}/api/dashboard\n`);
+    });
+
+    heartbeat = setInterval(() => {
+      broadcast(sseClients, 'heartbeat', { ts: Date.now() });
+    }, 30_000);
+  }
 
   const shutdown = () => {
-    clearInterval(heartbeat);
-    httpServer.close();
+    if (heartbeat) clearInterval(heartbeat);
+    if (httpServer) httpServer.close();
     service.close();
     process.exit(0);
   };

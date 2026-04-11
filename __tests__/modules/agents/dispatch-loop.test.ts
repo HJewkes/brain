@@ -148,10 +148,10 @@ describe('DispatchLoop', () => {
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
     });
 
-    it('uses existing delivery record if agent-done hook already created one', async () => {
+    it('uses existing delivery record if agent-done hook already pushed', async () => {
       spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'b1' });
       mockGetAgent.mockReturnValueOnce({ status: 'completed' });
-      const existing = { agent_id: 'a1', task_id: 't1', branch: 'b1' };
+      const existing = { agent_id: 'a1', task_id: 't1', branch: 'b1', status: 'pr-open' };
       mockGetDelivery.mockReturnValue(existing);
       mockMonitorDelivery.mockResolvedValue('merged');
 
@@ -159,6 +159,25 @@ describe('DispatchLoop', () => {
 
       expect(mockInitiateDelivery).not.toHaveBeenCalled();
       expect(mockMonitorDelivery).toHaveBeenCalledWith(fakeDb, existing, projectDir);
+    });
+
+    it('retries delivery when existing record has push-failed status', async () => {
+      spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'b1' });
+      mockGetAgent.mockReturnValueOnce({ status: 'completed' });
+      mockGetDelivery.mockReturnValue({
+        agent_id: 'a1',
+        task_id: 't1',
+        branch: 'b1',
+        status: 'push-failed',
+      });
+      const retried = { agent_id: 'a1', task_id: 't1', branch: 'b1', status: 'pr-open' };
+      mockInitiateDelivery.mockReturnValue(retried);
+      mockMonitorDelivery.mockResolvedValue('merged');
+
+      await makeLoop().dispatchAndDeliver('t1');
+
+      expect(mockInitiateDelivery).toHaveBeenCalledWith(fakeDb, 'a1', 't1', 'b1', projectDir);
+      expect(mockMonitorDelivery).toHaveBeenCalledWith(fakeDb, retried, projectDir);
     });
 
     it('skips monitoring when no branch and no existing delivery', async () => {
