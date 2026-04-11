@@ -18,10 +18,20 @@ vi.mock('../../../src/modules/sessions/data/session-ops.js', () => ({
   listSessions: vi.fn(),
 }));
 
+vi.mock('../../../src/modules/autoloop/engine/discovery.js', () => ({
+  findUnreviewedSessions: vi.fn(),
+}));
+
+vi.mock('../../../src/modules/autoloop/engine/run-tracker.js', () => ({
+  getLastRunTime: vi.fn(),
+}));
+
 import { getActiveProject } from '../../../src/modules/pm/data/queries.js';
 import { listTasks, getTask } from '../../../src/modules/pm/data/task-ops.js';
 import { computeEligible } from '../../../src/modules/pm/engine/dependency.js';
 import { listSessions } from '../../../src/modules/sessions/data/session-ops.js';
+import { findUnreviewedSessions } from '../../../src/modules/autoloop/engine/discovery.js';
+import { getLastRunTime } from '../../../src/modules/autoloop/engine/run-tracker.js';
 import {
   generateSessionBriefing,
   renderBriefingXml,
@@ -35,6 +45,8 @@ const mockListTasks = listTasks as ReturnType<typeof vi.fn>;
 const mockGetTask = getTask as ReturnType<typeof vi.fn>;
 const mockComputeEligible = computeEligible as ReturnType<typeof vi.fn>;
 const mockListSessions = listSessions as ReturnType<typeof vi.fn>;
+const mockFindUnreviewedSessions = findUnreviewedSessions as ReturnType<typeof vi.fn>;
+const mockGetLastRunTime = getLastRunTime as ReturnType<typeof vi.fn>;
 
 const fakeDb = {} as BrainDB;
 const fakeConfig = {
@@ -59,6 +71,8 @@ describe('generateSessionBriefing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListSessions.mockReturnValue([]);
+    mockFindUnreviewedSessions.mockReturnValue([]);
+    mockGetLastRunTime.mockReturnValue(null);
   });
 
   it('returns no-project suggestion when no active project', () => {
@@ -172,6 +186,61 @@ describe('generateSessionBriefing', () => {
     expect(progress).toBeDefined();
     expect(progress!.items[0]).toContain('2/3');
     expect(progress!.items[0]).toContain('67%');
+  });
+
+  it('suggests autoloop review when 3+ unreviewed sessions', () => {
+    mockGetActiveProject.mockReturnValue('VNM');
+    mockListTasks.mockReturnValue({ ok: true, data: [] });
+    mockComputeEligible.mockReturnValue([]);
+    mockFindUnreviewedSessions.mockReturnValue([
+      { sessionId: 's1', ageHours: 2 },
+      { sessionId: 's2', ageHours: 5 },
+      { sessionId: 's3', ageHours: 10 },
+    ]);
+
+    const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
+    const section = briefing.sections.find((s) => s.heading === 'Autoloop Review');
+    expect(section).toBeDefined();
+    expect(section!.items[0]).toContain('3 sessions completed since last review');
+    expect(section!.items[0]).toContain('brain autoloop review');
+  });
+
+  it('suggests autoloop review when consolidation is stale', () => {
+    mockGetActiveProject.mockReturnValue('VNM');
+    mockListTasks.mockReturnValue({ ok: true, data: [] });
+    mockComputeEligible.mockReturnValue([]);
+    mockFindUnreviewedSessions.mockReturnValue([]);
+    mockGetLastRunTime.mockReturnValue(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000));
+
+    const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
+    const section = briefing.sections.find((s) => s.heading === 'Autoloop Review');
+    expect(section).toBeDefined();
+    expect(section!.items[0]).toContain('10 days since last task consolidation');
+  });
+
+  it('omits autoloop section when thresholds not met', () => {
+    mockGetActiveProject.mockReturnValue('VNM');
+    mockListTasks.mockReturnValue({ ok: true, data: [] });
+    mockComputeEligible.mockReturnValue([]);
+    mockFindUnreviewedSessions.mockReturnValue([{ sessionId: 's1', ageHours: 2 }]);
+    mockGetLastRunTime.mockReturnValue(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000));
+
+    const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
+    const section = briefing.sections.find((s) => s.heading === 'Autoloop Review');
+    expect(section).toBeUndefined();
+  });
+
+  it('handles autoloop check errors gracefully', () => {
+    mockGetActiveProject.mockReturnValue('VNM');
+    mockListTasks.mockReturnValue({ ok: true, data: [] });
+    mockComputeEligible.mockReturnValue([]);
+    mockFindUnreviewedSessions.mockImplementation(() => {
+      throw new Error('table does not exist');
+    });
+
+    const briefing = generateSessionBriefing(fakeDb, fakeConfig, '/proj');
+    const section = briefing.sections.find((s) => s.heading === 'Autoloop Review');
+    expect(section).toBeUndefined();
   });
 });
 
