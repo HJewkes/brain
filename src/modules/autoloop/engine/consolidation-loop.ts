@@ -1,12 +1,13 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
-import type { AutoloopReport, AutoloopBounds } from '../types.js';
+import type { AutoloopReport, AutoloopBounds, AutoloopReportDetails } from '../types.js';
 import type { DedupScanResult } from './dedup-scanner.js';
 import type { EnrichmentSuggestion } from './task-enricher.js';
 import { checkBounds, createCounters, loadBounds } from './bounds.js';
 import { scanTaskQuality } from './quality-scanner.js';
 import { enrichUnderSpecifiedTasks } from './task-enricher.js';
 import { scanForDuplicates } from './dedup-scanner.js';
+import { generateReportNote } from './report-generator.js';
 import { recordAutoloopRun } from './run-tracker.js';
 import { writeEnrichmentToTask } from './enrichment-writer.js';
 
@@ -46,6 +47,7 @@ export async function runTaskConsolidationLoop(
 
   // Phase 2: Enrich under-specified tasks
   let tasksEnriched = 0;
+  const enrichedTaskIds: string[] = [];
   if (qualityReport.underSpecified.length > 0) {
     try {
       const enrichment = await enrichUnderSpecifiedTasks(
@@ -61,6 +63,7 @@ export async function runTaskConsolidationLoop(
       for (const suggestion of enrichment.suggestions) {
         try {
           await applyEnrichment(db, embedder, suggestion);
+          enrichedTaskIds.push(suggestion.taskId);
         } catch (err) {
           errors.push(
             `Write-back ${suggestion.taskId}: ${err instanceof Error ? err.message : String(err)}`
@@ -90,6 +93,8 @@ export async function runTaskConsolidationLoop(
     }
   }
 
+  const details = buildDetails(enrichedTaskIds, dedupResult);
+
   const report = buildReport(
     counters,
     errors.length > 0 ? 'partial' : 'completed',
@@ -99,8 +104,17 @@ export async function runTaskConsolidationLoop(
     0,
     errors
   );
+  report.details = details;
 
-  recordAutoloopRun(db, report);
+  let reportNoteId: string | undefined;
+  try {
+    const generated = await generateReportNote(db, config, embedder, report);
+    reportNoteId = generated.noteId;
+  } catch {
+    // Best-effort report note generation
+  }
+
+  recordAutoloopRun(db, report, reportNoteId);
 
   return report;
 }
@@ -139,5 +153,25 @@ function buildReport(
     notesCreated: counters.notesCreated,
     terminationReason,
     errors,
+  };
+}
+
+function buildDetails(
+  enrichedTaskIds: string[],
+  dedupResult?: DedupScanResult
+): AutoloopReportDetails {
+  return {
+    sessionIds: [],
+    sessionDisplayIds: [],
+    insightsByCategory: {},
+    frictionPatterns: [],
+    duplicatesFound: dedupResult?.pairsFound ?? 0,
+    duplicatePairs: (dedupResult?.pairs ?? []).map((p) => ({
+      taskA: p.taskA,
+      taskB: p.taskB,
+      similarity: p.similarity,
+    })),
+    enrichmentsSuggested: enrichedTaskIds.length,
+    enrichedTaskIds,
   };
 }

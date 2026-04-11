@@ -45,6 +45,20 @@ export interface AutoloopReport {
   notesCreated: number;
   terminationReason?: string;
   errors: string[];
+  /** Detailed breakdown for report note generation */
+  details?: AutoloopReportDetails;
+}
+
+/** Detailed metrics for a structured autoloop report note */
+export interface AutoloopReportDetails {
+  sessionIds: string[];
+  sessionDisplayIds: string[];
+  insightsByCategory: Record<string, number>;
+  frictionPatterns: string[];
+  duplicatesFound: number;
+  duplicatePairs: Array<{ taskA: string; taskB: string; similarity: number }>;
+  enrichmentsSuggested: number;
+  enrichedTaskIds: string[];
 }
 
 /** An extracted insight from session review */
