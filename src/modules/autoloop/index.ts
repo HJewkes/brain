@@ -290,6 +290,37 @@ export const autoloopModule: BrainModule = {
         });
       });
 
+    autoloopCmd
+      .command('history')
+      .description('View recent autoloop run reports')
+      .option('--type <type>', 'Filter by loop type (session-review|task-consolidation)')
+      .option('--limit <n>', 'Number of runs to show', '10')
+      .option('--detail', 'Show full report details')
+      .option('--json', 'Output as JSON')
+      .action(async (cmdOpts) => {
+        const { withDb } = await import('../../services/brain-service.js');
+        await withDb(async (svc) => {
+          const { getRunHistory } = await import('./engine/run-tracker.js');
+          const { formatRunHistory } = await import('./engine/history-formatter.js');
+
+          const runs = getRunHistory(svc.db, {
+            loopType: cmdOpts.type as 'session-review' | 'task-consolidation' | undefined,
+            limit: parseInt(cmdOpts.limit),
+          });
+
+          if (cmdOpts.json) {
+            process.stdout.write(JSON.stringify(runs, null, 2) + '\n');
+            return;
+          }
+
+          const output = formatRunHistory(runs, {
+            detail: cmdOpts.detail ?? false,
+            db: svc.db,
+          });
+          process.stdout.write(output);
+        });
+      });
+
     ctx.registerCommand(autoloopCmd);
   },
 };

@@ -1,11 +1,12 @@
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import type { OllamaClient } from '../../../services/ollama.js';
-import type { AutoloopReport, AutoloopBounds } from '../types.js';
+import type { AutoloopReport, AutoloopBounds, AutoloopReportDetails } from '../types.js';
 import { checkBounds, createCounters, loadBounds } from './bounds.js';
 import { findUnreviewedSessions, readSessionTranscript } from './discovery.js';
 import { extractInsights, type InsightSet } from './insight-extractor.js';
 import { generateInsightNotes } from './note-generator.js';
+import { generateReportNote } from './report-generator.js';
 import { recordAutoloopRun } from './run-tracker.js';
 
 export interface ReviewLoopOptions {
@@ -97,8 +98,8 @@ export async function runSessionReviewLoop(
   }
 
   const totalInsights = insightSets.reduce((n, s) => n + s.insights.length, 0);
+  const details = buildDetails(insightSets, sessionsToReview);
 
-  // Record the run for cooldown tracking
   const report = buildReport(
     counters,
     errors.length > 0 ? 'partial' : 'completed',
@@ -108,8 +109,18 @@ export async function runSessionReviewLoop(
     notesCreated,
     errors
   );
+  report.details = details;
 
-  recordAutoloopRun(db, report);
+  // Generate report note and record run with note ID
+  let reportNoteId: string | undefined;
+  try {
+    const generated = await generateReportNote(db, config, embedder, report);
+    reportNoteId = generated.noteId;
+  } catch {
+    // Best-effort report note generation
+  }
+
+  recordAutoloopRun(db, report, reportNoteId);
 
   return report;
 }
@@ -137,5 +148,33 @@ function buildReport(
     notesCreated,
     terminationReason,
     errors,
+  };
+}
+
+function buildDetails(
+  insightSets: InsightSet[],
+  sessions: Array<{ sessionId: string }>
+): AutoloopReportDetails {
+  const insightsByCategory: Record<string, number> = {};
+  const frictionPatterns: string[] = [];
+
+  for (const set of insightSets) {
+    for (const insight of set.insights) {
+      insightsByCategory[insight.category] = (insightsByCategory[insight.category] ?? 0) + 1;
+      if (insight.category === 'friction') {
+        frictionPatterns.push(insight.title);
+      }
+    }
+  }
+
+  return {
+    sessionIds: sessions.map((s) => s.sessionId),
+    sessionDisplayIds: sessions.map((s) => s.sessionId.slice(0, 8)),
+    insightsByCategory,
+    frictionPatterns,
+    duplicatesFound: 0,
+    duplicatePairs: [],
+    enrichmentsSuggested: 0,
+    enrichedTaskIds: [],
   };
 }
