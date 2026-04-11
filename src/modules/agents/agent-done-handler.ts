@@ -2,14 +2,7 @@ import Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolveInstance, loadConfig } from '../../services/config.js';
-import {
-  getAgent,
-  updateAgentStatus,
-  releaseWorktree as dbReleaseWorktree,
-  getAgentContext,
-  setAgentContext,
-} from './data.js';
-import type { AgentRecord } from './types.js';
+import { getAgent, updateAgentStatus, getAgentContext, setAgentContext } from './data.js';
 
 /**
  * Open a writable DB connection for hook context.
@@ -23,23 +16,6 @@ function openDb(cwd: string): Database.Database | null {
     return new Database(config.dbPath);
   } catch {
     return null;
-  }
-}
-
-/**
- * Release worktree allocation in DB for the agent's task.
- * Physical worktree removal is left to cleanup — we only clear the DB record
- * to avoid git operations in a hook that must not fail.
- */
-function tryReleaseWorktree(db: Database.Database, agent: AgentRecord): void {
-  if (!agent.brain_task) return;
-  try {
-    dbReleaseWorktree(db, agent.brain_task);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(
-      `[agent-done] worktree release failed for task ${agent.brain_task}: ${msg}\n`
-    );
   }
 }
 
