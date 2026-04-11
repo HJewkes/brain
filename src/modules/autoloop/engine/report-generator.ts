@@ -5,6 +5,7 @@ import type { BrainDB } from '../../../services/brain-db.js';
 import type { BrainConfig, Embedder } from '../../../types.js';
 import { indexSingleFile } from '../../../services/indexing.js';
 import type { AutoloopReport } from '../types.js';
+import { formatDuration } from './format-utils.js';
 
 export interface GeneratedReport {
   filePath: string;
@@ -136,14 +137,6 @@ function buildReportMarkdown(report: AutoloopReport): string {
 
 function formatLoopType(loopType: string): string {
   return loopType === 'session-review' ? 'Session Review' : 'Task Consolidation';
-}
-
-function formatDuration(ms: number): string {
-  const secs = Math.round(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  const rem = secs % 60;
-  return rem > 0 ? `${mins}m ${rem}s` : `${mins}m`;
 }
 
 function escapeYaml(text: string): string {

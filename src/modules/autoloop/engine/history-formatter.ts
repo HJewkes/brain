@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { RunRecord } from './run-tracker.js';
+import { formatDuration } from './format-utils.js';
 
 export interface FormatOptions {
   detail: boolean;
@@ -36,7 +37,7 @@ function formatSummaryLine(run: RunRecord): string {
   const duration = run.durationMs ? formatDuration(run.durationMs) : '?';
   const status = run.status;
 
-  return `  ${date}  ${padRight(type, 13)}  ${padRight(status, 10)}  ${duration}`;
+  return `  ${date}  ${type.padEnd(13)}  ${status.padEnd(10)}  ${duration}`;
 }
 
 function formatDetailedRun(run: RunRecord, db: BrainDB): string {
@@ -75,16 +76,4 @@ function readReportNoteContent(db: BrainDB, noteId: string): string | null {
   } catch {
     return null;
   }
-}
-
-function formatDuration(ms: number): string {
-  const secs = Math.round(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  const rem = secs % 60;
-  return rem > 0 ? `${mins}m ${rem}s` : `${mins}m`;
-}
-
-function padRight(str: string, width: number): string {
-  return str.length >= width ? str : str + ' '.repeat(width - str.length);
 }
