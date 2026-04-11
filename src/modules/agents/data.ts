@@ -65,14 +65,48 @@ export function getAgent(db: unknown, id: string): AgentRecord | null {
   }
 }
 
-export function listAgents(db: unknown, filter?: { status?: AgentStatus }): AgentRecord[] {
+export interface ListAgentsFilter {
+  status?: AgentStatus;
+  since?: string;
+  task?: string;
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+}
+
+export function listAgents(db: unknown, filter?: ListAgentsFilter): AgentRecord[] {
   const raw = toRaw(db);
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
   if (filter?.status) {
-    return raw
-      .prepare('SELECT * FROM agents WHERE status = ? ORDER BY created_at DESC')
-      .all(filter.status) as AgentRecord[];
+    conditions.push('status = ?');
+    params.push(filter.status);
   }
-  return raw.prepare('SELECT * FROM agents ORDER BY created_at DESC').all() as AgentRecord[];
+
+  if (filter?.since) {
+    conditions.push('created_at >= ?');
+    params.push(filter.since);
+  }
+
+  if (filter?.task) {
+    conditions.push('brain_task LIKE ?');
+    params.push(`${filter.task}%`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const sort = filter?.sortBy === 'status' ? 'status, created_at DESC' : 'created_at DESC';
+
+  if (filter?.limit != null) {
+    const offset = filter?.offset ?? 0;
+    return raw
+      .prepare(`SELECT * FROM agents ${where} ORDER BY ${sort} LIMIT ? OFFSET ?`)
+      .all(...params, filter.limit, offset) as AgentRecord[];
+  }
+
+  return raw
+    .prepare(`SELECT * FROM agents ${where} ORDER BY ${sort}`)
+    .all(...params) as AgentRecord[];
 }
 
 export function updateAgentStatus(

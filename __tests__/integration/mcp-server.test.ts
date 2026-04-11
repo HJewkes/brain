@@ -297,7 +297,9 @@ describe('MCP server integration (src/server/mcp.ts)', () => {
         name: 'brain_agent_list',
         arguments: { status: 'completed' },
       });
-      expect(service.agentList).toHaveBeenCalledWith({ status: 'completed' });
+      expect(service.agentList).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'completed', limit: 50 })
+      );
     });
 
     it('brain_inbox_add captures to inbox', async () => {

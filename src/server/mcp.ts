@@ -557,10 +557,29 @@ function registerSessionAgentTools(server: McpServer, svc: BrainServiceClass): v
 
   server.tool(
     'brain_agent_list',
-    'List agents, optionally filtered by status',
-    { status: z.string().optional().describe('Filter: pending|active|completed|failed|abandoned') },
-    async ({ status }) => {
-      const agents = svc.agentList(status ? { status: status as AgentStatus } : undefined);
+    'List agents with pagination and filtering. Defaults to last 24h when no status filter.',
+    {
+      status: z.string().optional().describe('Filter: pending|active|completed|failed|abandoned'),
+      since: z
+        .string()
+        .optional()
+        .describe('ISO date — filter by created_at (default: last 24h when no status)'),
+      task: z.string().optional().describe('Filter by brain_task prefix (e.g. "VNM-45")'),
+      limit: z.number().optional().describe('Max results (default 50)'),
+      offset: z.number().optional().describe('Pagination offset (default 0)'),
+      sortBy: z.string().optional().describe('Sort field: created_at (default) or status'),
+    },
+    async ({ status, since, task, limit, offset, sortBy }) => {
+      const effectiveSince =
+        since ?? (!status ? new Date(Date.now() - 86400000).toISOString() : undefined);
+      const agents = svc.agentList({
+        status: status as AgentStatus | undefined,
+        since: effectiveSince,
+        task,
+        limit: limit ?? 50,
+        offset,
+        sortBy,
+      });
       return textResult(agents);
     }
   );
