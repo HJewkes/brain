@@ -60,7 +60,8 @@ export type ActivityType =
   | 'block'
   | 'unblock'
   | 'cancel'
-  | 'reset';
+  | 'reset'
+  | 'session-update';
 
 export interface ProjectCommands {
   build?: string | null;
