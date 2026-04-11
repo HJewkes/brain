@@ -90,8 +90,9 @@ export function listAgents(db: unknown, filter?: ListAgentsFilter): AgentRecord[
   }
 
   if (filter?.task) {
-    conditions.push('brain_task LIKE ?');
-    params.push(`${filter.task}%`);
+    conditions.push("brain_task LIKE ? ESCAPE '\\'");
+    const escaped = filter.task.replace(/[%_\\]/g, '\\$&');
+    params.push(`${escaped}%`);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
