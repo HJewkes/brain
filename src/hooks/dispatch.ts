@@ -8,11 +8,7 @@ import { worktreeIsolationCheck } from './checks/worktree-isolation.js';
 import { workflowResourceCheck } from './checks/workflow-resource.js';
 import { frictionHook } from './checks/friction.js';
 import { loadModules } from '../modules/loader.js';
-import { pmModule } from '../modules/pm/index.js';
-import { workflowModule } from '../modules/workflow/index.js';
-import { sessionsModule } from '../modules/sessions/index.js';
-import { agentsModule } from '../modules/agents/index.js';
-import { codebaseModule } from '../modules/codebase/index.js';
+import { getBuiltinModules } from '../modules/builtins.js';
 import type { HookEvent, HookInput, HookResult } from './types.js';
 
 export const VALID_HOOK_EVENTS = new Set<HookEvent>([
@@ -41,7 +37,7 @@ export function buildRegistry(): HookRegistry {
 
 export async function registerModuleHandlers(registry: HookRegistry): Promise<void> {
   const { registry: moduleRegistry } = await loadModules({
-    modules: [pmModule, workflowModule, sessionsModule, agentsModule, codebaseModule],
+    modules: getBuiltinModules(),
   });
   for (const { handler } of moduleRegistry.getHookHandlers()) {
     registry.register(handler);

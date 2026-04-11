@@ -26,12 +26,7 @@ import { lineageCommand } from './commands/lineage.js';
 import { resetCommand } from './commands/reset.js';
 import { notesCommand } from './commands/notes.js';
 import { loadModules } from './modules/loader.js';
-import { pmModule } from './modules/pm/index.js';
-import { workflowModule } from './modules/workflow/index.js';
-import { sessionsModule } from './modules/sessions/index.js';
-import { agentsModule } from './modules/agents/index.js';
-import { codebaseModule } from './modules/codebase/index.js';
-import { autoloopModule } from './modules/autoloop/index.js';
+import { getBuiltinModules } from './modules/builtins.js';
 import { instancesCommand } from './commands/instances.js';
 import { hookCommand } from './commands/hook.js';
 import { mcpCommand } from './commands/mcp.js';
@@ -86,14 +81,7 @@ program.addCommand(launchCommand);
 
 async function main(): Promise<void> {
   const { registry } = await loadModules({
-    modules: [
-      pmModule,
-      workflowModule,
-      sessionsModule,
-      agentsModule,
-      codebaseModule,
-      autoloopModule,
-    ],
+    modules: getBuiltinModules(),
   });
   for (const { command } of registry.getCommands()) {
     program.addCommand(command);

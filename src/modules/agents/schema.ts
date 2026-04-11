@@ -46,8 +46,14 @@ export const agentsMigrationV2: ModuleMigration = {
   version: 2,
   description: 'Add extensible context JSON column to agents table',
   up: (db) => {
-    const rawDb = db as { exec(sql: string): void };
-    rawDb.exec(`ALTER TABLE agents ADD COLUMN context TEXT NOT NULL DEFAULT '{}'`);
+    const rawDb = db as {
+      exec(sql: string): void;
+      prepare(sql: string): { all(...args: unknown[]): unknown[] };
+    };
+    const cols = rawDb.prepare('PRAGMA table_info(agents)').all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'context')) {
+      rawDb.exec(`ALTER TABLE agents ADD COLUMN context TEXT NOT NULL DEFAULT '{}'`);
+    }
   },
 };
 
