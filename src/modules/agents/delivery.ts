@@ -134,7 +134,7 @@ export function pushBranch(branch: string, projectDir: string): void {
     cwd: projectDir,
     encoding: 'utf-8',
     stdio: 'pipe',
-    timeout: 10_000,
+    timeout: 60_000,
   });
 }
 
