@@ -96,7 +96,6 @@ export async function dispatchTask(
   const workerDispatch = buildWorkerDispatchFromPull(svc.db, pullResult, {
     projectDir,
     teamName: 'headless',
-    templateName: 'worker',
   });
 
   const prompt = opts.promptOverride ?? workerDispatch?.prompt ?? pullResult.brief;
@@ -151,6 +150,7 @@ export async function dispatchTask(
     cwd: worktreeResult?.worktreePath || projectDir,
     worktreePath: worktreeResult?.worktreePath,
     addDir: worktreeResult ? projectDir : undefined,
+    allowedTools: routing.allowedTools,
   });
 
   // Catch spawn errors — logged in setupProcessTracking but we need a handler
@@ -326,6 +326,7 @@ interface SpawnOptions {
   cwd: string;
   worktreePath?: string;
   addDir?: string;
+  allowedTools?: string;
 }
 
 function maybeAllocateWorktree(
@@ -416,7 +417,7 @@ function spawnClaude(opts: SpawnOptions): ChildProcess {
     '--append-system-prompt',
     `On task completion output exactly: DONE ${opts.taskId} <one-line summary>. On failure output exactly: FAILED ${opts.taskId} <reason>.`,
     '--allowed-tools',
-    'Bash,Edit,Read,Write,Glob,Grep',
+    opts.allowedTools || 'Bash,Edit,Read,Write,Glob,Grep',
     '--mcp-config',
     opts.mcpConfigPath,
     '--max-budget-usd',
@@ -494,6 +495,10 @@ async function handleProcessExit(
   // these two writes; ensuring full_output is present avoids empty signal parsing.
   if (result?.result) {
     setAgentContext(svc.db, agentId, 'full_output', result.result);
+    const structured = extractStructuredOutput(result.result);
+    if (structured) {
+      setAgentContext(svc.db, agentId, 'structured_output', structured);
+    }
   }
 
   if (code === 0 && result) {
@@ -527,6 +532,30 @@ async function handleProcessExit(
       session_id: result.session_id,
     });
   }
+}
+
+// --- Structured Output ---
+
+/**
+ * Extract structured JSON output from an agent's response.
+ * Agents emit a JSON block (```json ... ```) near the end of their output.
+ * We find the last JSON code block and parse it.
+ */
+function extractStructuredOutput(output: string): Record<string, unknown> | null {
+  const jsonBlocks = [...output.matchAll(/```json\s*\n([\s\S]*?)```/g)];
+  if (jsonBlocks.length === 0) return null;
+
+  // Take the last JSON block — it's the structured output, not an example in the prompt
+  const lastBlock = jsonBlocks[jsonBlocks.length - 1][1].trim();
+  try {
+    const parsed = JSON.parse(lastBlock);
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Malformed JSON — agent didn't follow the protocol
+  }
+  return null;
 }
 
 // --- Workflow Context ---

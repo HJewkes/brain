@@ -27,7 +27,14 @@ export interface RoutingResult {
   isolation: 'worktree' | 'none';
   verify: boolean;
   concurrency: 'parallel' | 'sequential-within-workstream';
+  /** Agent template name — resolved from templates/agents/<template>.md */
+  template: string;
+  /** Tools the headless agent is allowed to use (comma-separated). MCP tools always included. */
+  allowedTools: string;
 }
+
+const IMPL_TOOLS = 'Bash,Edit,Read,Write,Glob,Grep';
+const RESEARCH_TOOLS = 'Bash,Read,Glob,Grep,WebSearch,WebFetch';
 
 const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
   implementation: {
@@ -36,6 +43,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: true,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   research: {
     agentType: 'Explore',
@@ -43,6 +52,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'none',
     verify: false,
     concurrency: 'parallel',
+    template: 'research',
+    allowedTools: RESEARCH_TOOLS,
   },
   testing: {
     agentType: 'general-purpose',
@@ -50,6 +61,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   configuration: {
     agentType: 'general-purpose',
@@ -57,6 +70,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   design: {
     agentType: 'general-purpose',
@@ -64,6 +79,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   review: {
     agentType: 'Explore',
@@ -71,6 +88,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'none',
     verify: false,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: RESEARCH_TOOLS,
   },
   documentation: {
     agentType: 'general-purpose',
@@ -78,6 +97,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   infrastructure: {
     agentType: 'general-purpose',
@@ -85,6 +106,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: true,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   migration: {
     agentType: 'general-purpose',
@@ -92,6 +115,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: true,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   feature: {
     agentType: 'general-purpose',
@@ -99,6 +124,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: true,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   improvement: {
     agentType: 'general-purpose',
@@ -106,6 +133,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: true,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   refactor: {
     agentType: 'general-purpose',
@@ -113,6 +142,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: true,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
   bug: {
     agentType: 'general-purpose',
@@ -120,6 +151,8 @@ const ROUTING_TABLE: Record<TaskCategory, RoutingResult> = {
     isolation: 'worktree',
     verify: true,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: IMPL_TOOLS,
   },
 };
 
@@ -129,9 +162,21 @@ const NON_AGENT_DEFAULT: RoutingResult = {
   isolation: 'worktree',
   verify: false,
   concurrency: 'parallel',
+  template: 'worker',
+  allowedTools: IMPL_TOOLS,
 };
 
-export function computeRouting(category: TaskCategory, mode: TaskMode): RoutingResult {
+export interface TaskRoutingOverrides {
+  template?: string;
+  model?: 'opus' | 'sonnet' | 'haiku';
+  allowedTools?: string;
+}
+
+export function computeRouting(
+  category: TaskCategory,
+  mode: TaskMode,
+  overrides?: TaskRoutingOverrides
+): RoutingResult {
   if (!isAgentDispatchable(mode)) {
     return { ...NON_AGENT_DEFAULT };
   }
@@ -139,7 +184,11 @@ export function computeRouting(category: TaskCategory, mode: TaskMode): RoutingR
   if (!routing) {
     throw new Error(`No routing defined for task category "${category}"`);
   }
-  return { ...routing };
+  const result = { ...routing };
+  if (overrides?.template) result.template = overrides.template;
+  if (overrides?.model) result.model = overrides.model;
+  if (overrides?.allowedTools) result.allowedTools = overrides.allowedTools;
+  return result;
 }
 
 export function isAgentDispatchable(mode: TaskMode): boolean {
