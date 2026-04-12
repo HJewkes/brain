@@ -10,12 +10,15 @@ import { scanForDuplicates } from './dedup-scanner.js';
 import { generateReportNote } from './report-generator.js';
 import { recordAutoloopRun } from './run-tracker.js';
 import { writeEnrichmentToTask } from './enrichment-writer.js';
+import { filterAlreadyEnriched, recordEnrichment } from './enrichment-tracker.js';
 
 export interface ConsolidationLoopOptions {
   bounds?: Partial<AutoloopBounds>;
   project?: string;
   workstream?: number;
   cwd?: string;
+  /** Cooldown for per-task enrichment idempotency (default: same as bounds.cooldownMs) */
+  enrichmentCooldownMs?: number;
 }
 
 export async function runTaskConsolidationLoop(
@@ -45,25 +48,30 @@ export async function runTaskConsolidationLoop(
     return buildReport(counters, 'partial', 0, 0, 0, 0, errors, boundCheck.reason);
   }
 
-  // Phase 2: Enrich under-specified tasks
+  // Phase 2: Enrich under-specified tasks (skip already-enriched within cooldown)
   let tasksEnriched = 0;
   const enrichedTaskIds: string[] = [];
+  const enrichmentCooldown = opts?.enrichmentCooldownMs ?? bounds.cooldownMs;
+
   if (qualityReport.underSpecified.length > 0) {
+    const eligible = filterAlreadyEnriched(db, qualityReport.underSpecified, enrichmentCooldown);
+
     try {
-      const enrichment = await enrichUnderSpecifiedTasks(
-        db,
-        embedder,
-        qualityReport.underSpecified,
-        { maxTasks: bounds.maxTaskModifications }
-      );
+      const enrichment = await enrichUnderSpecifiedTasks(db, embedder, eligible, {
+        maxTasks: bounds.maxTaskModifications,
+      });
       tasksEnriched = enrichment.tasksEnriched;
       counters.taskModifications += tasksEnriched;
 
-      // Write enrichment suggestions back to task descriptions
       for (const suggestion of enrichment.suggestions) {
         try {
           await applyEnrichment(db, embedder, suggestion);
           enrichedTaskIds.push(suggestion.taskId);
+
+          const task = eligible.find((t) => t.taskId === suggestion.taskId);
+          if (task) {
+            recordEnrichment(db, suggestion.taskId, task.overall);
+          }
         } catch (err) {
           errors.push(
             `Write-back ${suggestion.taskId}: ${err instanceof Error ? err.message : String(err)}`
