@@ -20,7 +20,7 @@ import { getAgent, listAgents, getAgentContext } from '../modules/agents/data.js
 import { dispatchTask, resolveProjectDir } from './dispatch.js';
 import { OrchestrationService } from './orchestration.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
-import { askAdvisor } from './advisor.js';
+import { askAdvisor, reviewAdvisor } from './advisor.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -1002,7 +1002,83 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
 // Advisor tools
 // ---------------------------------------------------------------------------
 
-function registerAdvisorTools(server: McpServer): void {
+// ---------------------------------------------------------------------------
+// Advisor context assembly
+// ---------------------------------------------------------------------------
+
+function assembleReviewContext(
+  svc: BrainServiceClass,
+  opts: { workstream?: string; includeSession?: boolean }
+): string {
+  const sections: string[] = [];
+
+  // 1. PM state: waves, task statuses, recent completions
+  const prefix = resolveProject(svc.db, opts.workstream?.toUpperCase());
+  if (prefix.ok) {
+    const wsFilter = opts.workstream ? { workstream: opts.workstream } : undefined;
+    const allTasks = svc.pmTaskList({ ...wsFilter, limit: 200 });
+    const waves = computeWaves(svc.db, prefix.data);
+
+    const byStatus = new Map<string, number>();
+    for (const t of allTasks) {
+      byStatus.set(t.status, (byStatus.get(t.status) ?? 0) + 1);
+    }
+
+    const statusSummary = Array.from(byStatus.entries())
+      .map(([s, c]) => `${s}: ${c}`)
+      .join(', ');
+    sections.push(`## PM State\nTask counts: ${statusSummary}`);
+
+    if (waves.length > 0) {
+      const waveLines = waves.map((w) => `Wave ${w.wave}: ${w.taskIds.join(', ')}`);
+      sections.push(`### Waves\n${waveLines.join('\n')}`);
+    }
+
+    const inProgress = allTasks.filter((t) => t.status === 'in-progress');
+    if (inProgress.length > 0) {
+      const ipLines = inProgress.map(
+        (t) => `- ${t.display_id}: ${t.title} (claimed: ${t.claimed_at ?? 'unknown'})`
+      );
+      sections.push(`### In-Progress Tasks\n${ipLines.join('\n')}`);
+    }
+
+    const recentDone = allTasks.filter((t) => t.status === 'done').slice(0, 10);
+    if (recentDone.length > 0) {
+      const doneLines = recentDone.map((t) => `- ${t.display_id}: ${t.title}`);
+      sections.push(`### Recently Completed\n${doneLines.join('\n')}`);
+    }
+  }
+
+  // 2. Recent agent outcomes
+  const rawDb = (svc.db as unknown as { db: unknown }).db;
+  const recentAgents = listAgents(rawDb, { limit: 15 });
+  if (recentAgents.length > 0) {
+    const agentLines = recentAgents.map((a) => {
+      const duration =
+        a.started_at && a.completed_at
+          ? `${Math.round((new Date(a.completed_at).getTime() - new Date(a.started_at).getTime()) / 1000)}s`
+          : 'unknown';
+      return `- ${a.name} [${a.status}] task=${a.brain_task ?? 'none'} duration=${duration}${a.exit_reason ? ` exit=${a.exit_reason}` : ''}`;
+    });
+    sections.push(`## Recent Agents\n${agentLines.join('\n')}`);
+  }
+
+  // 3. Session transcript summary (if requested)
+  if (opts.includeSession) {
+    const sessions = svc.sessionList({ limit: 1, status: 'active' });
+    if (sessions.length > 0) {
+      const s = sessions[0];
+      sections.push(
+        `## Current Session\nID: ${s.displayId}, started: ${s.startedAt ?? 'unknown'}, ` +
+          `tools: ${s.toolCalls ?? 0}, errors: ${s.errors ?? 0}`
+      );
+    }
+  }
+
+  return sections.join('\n\n');
+}
+
+function registerAdvisorTools(server: McpServer, svc: BrainServiceClass): void {
   server.tool(
     'brain_advisor_ask',
     'Ask the strategic advisor (Opus) a focused question. Returns concise, actionable advice. The coordinator assembles context; the advisor reasons over it.',
@@ -1023,6 +1099,53 @@ function registerAdvisorTools(server: McpServer): void {
           context,
           maxTokens: max_tokens,
         });
+        return textResult({
+          advice: result.advice,
+          usage: result.usage,
+        });
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  server.tool(
+    'brain_advisor_review',
+    'Request a full strategic review from the advisor (Opus). Automatically assembles PM state, agent outcomes, and session context. Returns structured assessment with action items and risk flags.',
+    {
+      focus: z
+        .string()
+        .optional()
+        .describe(
+          'What aspect to review: "wave_plan", "error_recovery", "completion_check", or free text'
+        ),
+      workstream: z
+        .string()
+        .optional()
+        .describe('Scope PM context to a specific workstream (e.g. "VNM-45")'),
+      include_session: z
+        .boolean()
+        .optional()
+        .describe('Whether to include session transcript summary (default false)'),
+      max_tokens: z.number().optional().describe('Max response tokens (default 1500)'),
+    },
+    async ({ focus, workstream, include_session, max_tokens }) => {
+      try {
+        const context = assembleReviewContext(svc, {
+          workstream,
+          includeSession: include_session ?? false,
+        });
+
+        if (!context.trim()) {
+          return errorResult('No context could be assembled — check that PM data exists');
+        }
+
+        const result = reviewAdvisor({
+          focus,
+          context,
+          maxTokens: max_tokens,
+        });
+
         return textResult({
           advice: result.advice,
           usage: result.usage,
@@ -1062,7 +1185,7 @@ export function createBrainMcpServer(
   registerSessionAgentTools(server, svc);
   registerDispatchTools(server, svc);
   registerWorkflowTools(server, svc);
-  registerAdvisorTools(server);
+  registerAdvisorTools(server, svc);
 
   return server;
 }
