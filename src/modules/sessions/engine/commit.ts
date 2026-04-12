@@ -11,6 +11,8 @@ import { parseSessionFile } from './parser.js';
 import { generateSummaries, generateL2Timeline } from '../ingestion/summarizer.js';
 import { computeSessionAnalyticsExt } from '../analytics/metrics.js';
 import { detectLinks } from '../ingestion/linker.js';
+import { updateTasksFromSessionOutcome } from '../ingestion/task-updater.js';
+import { classifySession } from './classifier.js';
 import { discoverSessions } from '../ingestion/discovery.js';
 import { extractSessionMemories, updateSessionMemoryCount } from './extract-memories.js';
 
@@ -109,6 +111,15 @@ async function commitFromAnalytics(
   for (const taskId of links.tasksWorked) {
     linkSessionToTask(db, result.data.display_id, taskId);
   }
+
+  // Update PM tasks with session outcome context
+  const classification = classifySession(analytics);
+  await updateTasksFromSessionOutcome(db, config, embedder, links, {
+    sessionId: analytics.sessionId,
+    outcome: classification.outcome,
+    summary: l0 || undefined,
+    errorRate: analytics.errorRate,
+  });
 
   // Extract memories from session chunks if LLM available
   if (ollama && !opts?.skipExtraction) {
