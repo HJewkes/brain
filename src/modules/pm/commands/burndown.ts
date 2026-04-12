@@ -1,7 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { withBrain, withDb } from '../../../services/brain-service.js';
 import { BurndownOrchestrator } from '../../agents/burndown.js';
-import { BackpressureController } from '../../agents/backpressure.js';
 import { listTasks } from '../data/task-ops.js';
 import { getActiveProject } from '../data/queries.js';
 import { countActiveAgents } from '../../agents/data.js';
@@ -94,7 +93,6 @@ export function createBurndownCommand(): Command {
           return;
         }
 
-        const backpressure = new BackpressureController(wipLimit);
         const orchestrator = new BurndownOrchestrator(
           svc.db,
           svc.config,
@@ -103,7 +101,7 @@ export function createBurndownCommand(): Command {
             maxWip: wipLimit,
             projectDir: process.cwd(),
           },
-          backpressure
+          wipLimit
         );
 
         orchestrator.setSpawner(async (agent) => {
@@ -266,7 +264,6 @@ async function runDryRun(
   doneTasks: number,
   json: boolean
 ): Promise<void> {
-  const backpressure = new BackpressureController(wipLimit);
   const orchestrator = new BurndownOrchestrator(
     svc.db,
     svc.config,
@@ -275,7 +272,7 @@ async function runDryRun(
       maxWip: wipLimit,
       projectDir: process.cwd(),
     },
-    backpressure
+    wipLimit
   );
 
   orchestrator.setSpawner(async () => {});

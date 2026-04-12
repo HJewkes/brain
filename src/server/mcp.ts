@@ -19,7 +19,6 @@ import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents, getAgentContext } from '../modules/agents/data.js';
 import { dispatchTask, resolveProjectDir } from './dispatch.js';
 import { OrchestrationService } from './orchestration.js';
-import { BackpressureController } from '../modules/agents/backpressure.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 import { askAdvisor } from './advisor.js';
 
@@ -652,8 +651,7 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
     },
     async ({ workstream, wipLimit }) => {
       try {
-        const backpressure = new BackpressureController(wipLimit ?? 3);
-        const orch = new OrchestrationService(svc.db, backpressure, resolveProjectDir(svc));
+        const orch = new OrchestrationService(svc.db, wipLimit ?? 3, resolveProjectDir(svc));
         // Fire-and-forget: waves take minutes; MCP tool returns immediately
         orch.executeWorkstream(svc, workstream).catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);

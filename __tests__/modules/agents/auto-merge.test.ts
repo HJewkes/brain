@@ -198,18 +198,28 @@ describe('auto-merge', () => {
       const result = mergePr(42, { projectDir: '/repo', pullAfterMerge: false });
 
       expect(result.merged).toBe(true);
-      expect(mockExecFileSync).toHaveBeenCalledTimes(1);
-      expect(mockExecFileSync).toHaveBeenCalledWith('gh', expect.any(Array), expect.any(Object));
+      // update-branch API call + merge call = 2
+      expect(mockExecFileSync).toHaveBeenCalledTimes(2);
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'gh',
+        expect.arrayContaining(['pr', 'merge']),
+        expect.any(Object)
+      );
     });
 
     it('does not attempt pull when merge fails', () => {
+      let callCount = 0;
       mockExecFileSync.mockImplementation(() => {
-        throw new Error('gh merge failed');
+        callCount++;
+        // First call is update-branch (succeeds), second is merge (fails)
+        if (callCount >= 2) throw new Error('gh merge failed');
+        return '';
       });
 
       mergePr(42, { projectDir: '/repo' });
 
-      expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+      // update-branch + merge attempt = 2
+      expect(mockExecFileSync).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -1,20 +1,13 @@
 import type Database from 'better-sqlite3';
 import type { BrainDB } from '../../services/brain-db.js';
 import type { WaveAssignment } from '../pm/engine/dependency.js';
-import type { BackpressureController } from './backpressure.js';
 import { getRawDb, sleep } from '../../utils/db.js';
-import { countActiveAgents, getAgent } from './data.js';
+import { getAgent } from './data.js';
 import { getDeliveryForTask, initiateDelivery } from './delivery.js';
 import { releaseWorktree } from './worktree.js';
 import { monitorDelivery } from './delivery-monitor.js';
 
 const AGENT_POLL_INTERVAL = 5_000; // 5s
-const WIP_POLL_INTERVAL = 10_000; // 10s
-
-export interface ConcurrencyCheck {
-  allowed: boolean;
-  reason: string;
-}
 
 export interface SpawnResult {
   agentId: string;
@@ -30,19 +23,31 @@ export interface WaveExecutionResult {
 export type SpawnFn = (taskId: string) => Promise<SpawnResult>;
 
 /**
- * Global WIP check: counts active agents against the effective WIP limit.
- * Replaces per-workstream checkWorkstreamConcurrency for the dispatch loop.
+ * Async semaphore for WIP control. Callers acquire a slot before spawning
+ * an agent and release it when the agent completes — delivery monitoring
+ * runs independently without holding a slot.
  */
-export function checkDispatchConcurrency(
-  db: Database.Database,
-  backpressure: BackpressureController
-): ConcurrencyCheck {
-  const active = countActiveAgents(db);
-  const { effectiveWip } = backpressure.computeEffectiveWip();
-  if (active >= effectiveWip) {
-    return { allowed: false, reason: `WIP limit: ${active}/${effectiveWip}` };
+class Semaphore {
+  private queue: (() => void)[] = [];
+  private count: number;
+
+  constructor(max: number) {
+    this.count = max;
   }
-  return { allowed: true, reason: 'nominal' };
+
+  async acquire(): Promise<void> {
+    if (this.count > 0) {
+      this.count--;
+      return;
+    }
+    return new Promise<void>((resolve) => this.queue.push(resolve));
+  }
+
+  release(): void {
+    const next = this.queue.shift();
+    if (next) next();
+    else this.count++;
+  }
 }
 
 export class DispatchLoop {
@@ -50,24 +55,11 @@ export class DispatchLoop {
 
   constructor(
     db: BrainDB | Database.Database,
-    private readonly backpressure: BackpressureController,
+    private readonly wipLimit: number,
     private readonly spawnAgent: SpawnFn,
     private readonly projectDir: string
   ) {
     this.rawDb = getRawDb(db);
-  }
-
-  private checkWip(): ConcurrencyCheck {
-    return checkDispatchConcurrency(this.rawDb, this.backpressure);
-  }
-
-  private async waitForWipSlot(): Promise<void> {
-    while (true) {
-      const check = this.checkWip();
-      if (check.allowed) return;
-      process.stderr.write(`[dispatch-loop] WIP full (${check.reason}), waiting\n`);
-      await sleep(WIP_POLL_INTERVAL);
-    }
   }
 
   /** Poll the DB until the agent reaches a terminal status. */
@@ -78,15 +70,9 @@ export class DispatchLoop {
       if (!agent) return false;
       if (agent.status === 'completed') return true;
       if (agent.status === 'failed' || agent.status === 'abandoned') return false;
-      // pending or active — keep polling
     }
   }
 
-  /**
-   * Ensure delivery is initiated for a completed agent.
-   * The dispatch loop is the sole owner of delivery — the agent-done hook
-   * only handles status updates and observability.
-   */
   /** Terminal delivery statuses that don't need a retry. */
   private static DELIVERED_STATUSES = new Set([
     'pushed',
@@ -98,6 +84,10 @@ export class DispatchLoop {
     'redispatched',
   ]);
 
+  /**
+   * Push branch and create PR for a completed agent.
+   * Returns the delivery record if successful, null on failure.
+   */
   private ensureDelivery(
     agentId: string,
     taskId: string,
@@ -108,9 +98,8 @@ export class DispatchLoop {
       return existing;
     }
 
-    // Failed or in-progress record from a prior attempt — retry delivery
     if (!branch) {
-      process.stderr.write(`[dispatch-loop] no branch for ${taskId}, cannot initiate delivery\n`);
+      process.stderr.write(`[dispatch-loop] no branch for ${taskId}, cannot deliver\n`);
       return null;
     }
 
@@ -118,78 +107,72 @@ export class DispatchLoop {
       return initiateDelivery(this.rawDb, agentId, taskId, branch, this.projectDir);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[dispatch-loop] delivery initiation failed for ${taskId}: ${msg}\n`);
+      process.stderr.write(`[dispatch-loop] delivery failed for ${taskId}: ${msg}\n`);
       return null;
     }
   }
 
   /**
-   * Full single-task lifecycle: spawn → wait → deliver → release → monitor.
-   *
-   * WIP gate is enforced before spawn. Wave gate is implicit via Promise.allSettled
-   * in executeWave — all per-task monitors must finish before the wave completes.
+   * Deliver a completed agent's work: push branch, create PR, monitor until
+   * merged or stalled, then release the worktree. Runs independently of the
+   * WIP semaphore — delivery monitoring is cheap (polling gh) and should not
+   * block new agent spawns.
    */
-  async dispatchAndDeliver(taskId: string): Promise<void> {
-    await this.waitForWipSlot();
-
-    let spawnResult: SpawnResult;
-    try {
-      spawnResult = await this.spawnAgent(taskId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[dispatch-loop] spawn failed for ${taskId}: ${msg}\n`);
-      return;
-    }
-
-    const { agentId, branch } = spawnResult;
-    const success = await this.waitForAgent(agentId);
-
-    if (!success) {
-      process.stderr.write(`[dispatch-loop] agent ${agentId} failed for task ${taskId}\n`);
-      releaseWorktree(this.rawDb, this.projectDir, taskId);
-      return;
-    }
-
+  private async deliverAndCleanup(
+    agentId: string,
+    taskId: string,
+    branch: string | undefined
+  ): Promise<void> {
     const delivery = this.ensureDelivery(agentId, taskId, branch);
-
     if (!delivery) {
       process.stderr.write(
-        `[dispatch-loop] delivery failed for ${taskId} — preserving worktree and branch for manual recovery\n`
+        `[dispatch-loop] preserving worktree for ${taskId} — manual recovery needed\n`
       );
       return;
     }
 
     const outcome = await monitorDelivery(this.rawDb, delivery, this.projectDir);
-    process.stderr.write(`[dispatch-loop] ${taskId} delivery outcome: ${outcome}\n`);
-
-    // Release worktree after delivery completes — rebase/fix agents may need it
+    process.stderr.write(`[dispatch-loop] ${taskId} delivery: ${outcome}\n`);
     releaseWorktree(this.rawDb, this.projectDir, taskId);
   }
 
   /**
-   * Execute all tasks in a wave with a sliding window that respects the WIP limit.
-   * Launches up to N tasks concurrently, waits for one to finish before launching
-   * the next.
+   * Execute all tasks in a wave. Agent slots are gated by a semaphore —
+   * slots are released when the agent finishes, not when its PR merges.
+   * Delivery monitoring runs in the background without holding a slot.
    */
   async executeWave(wave: WaveAssignment): Promise<WaveExecutionResult> {
-    const allPromises: Promise<void>[] = [];
-    let inflight = 0;
+    const semaphore = new Semaphore(this.wipLimit);
+    const deliveries: Promise<void>[] = [];
 
-    for (const taskId of wave.taskIds) {
-      const { effectiveWip } = this.backpressure.computeEffectiveWip();
-      while (inflight >= effectiveWip) {
-        await this.waitForWipSlot();
-        inflight = countActiveAgents(this.rawDb);
+    const agentTasks = wave.taskIds.map(async (taskId) => {
+      await semaphore.acquire();
+
+      let spawnResult: SpawnResult;
+      try {
+        spawnResult = await this.spawnAgent(taskId);
+      } catch (err) {
+        semaphore.release();
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[dispatch-loop] spawn failed for ${taskId}: ${msg}\n`);
+        return;
       }
 
-      const p = this.dispatchAndDeliver(taskId).finally(() => {
-        inflight--;
-      });
-      allPromises.push(p);
-      inflight++;
-    }
+      const { agentId, branch } = spawnResult;
+      const success = await this.waitForAgent(agentId);
+      semaphore.release();
 
-    const settled = await Promise.allSettled(allPromises);
+      if (!success) {
+        process.stderr.write(`[dispatch-loop] agent ${agentId} failed for ${taskId}\n`);
+        releaseWorktree(this.rawDb, this.projectDir, taskId);
+        return;
+      }
+
+      deliveries.push(this.deliverAndCleanup(agentId, taskId, branch));
+    });
+
+    const settled = await Promise.allSettled(agentTasks);
+    await Promise.allSettled(deliveries);
     process.stderr.write(`[dispatch-loop] wave ${wave.wave} complete: ${settled.length} task(s)\n`);
 
     return { settled };
