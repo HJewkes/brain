@@ -74,6 +74,17 @@ export function mergePr(
   const result: MergeResult = { taskId: '', prNumber, merged: false };
 
   try {
+    // Update branch if behind main — branch protection may require up-to-date status
+    try {
+      execFileSync(
+        'gh',
+        ['api', `repos/{owner}/{repo}/pulls/${prNumber}/update-branch`, '-X', 'PUT'],
+        { cwd: opts.projectDir, encoding: 'utf-8', stdio: 'pipe' }
+      );
+    } catch {
+      // May fail if already up-to-date or feature not enabled — non-fatal
+    }
+
     execFileSync('gh', ['pr', 'merge', String(prNumber), `--${opts.strategy}`, '--delete-branch'], {
       cwd: opts.projectDir,
       encoding: 'utf-8',
