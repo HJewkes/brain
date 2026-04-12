@@ -53,7 +53,7 @@ export function findGitRoot(): string {
  * Allocate a git worktree for a task.
  * Each task gets its own isolated path (.worktrees/{taskId}).
  * Cleans up stale allocations before checking budget.
- * Budget should be set to BackpressureController.computeEffectiveWip().effectiveWip.
+ * Budget should match the WIP limit passed to DispatchLoop.
  */
 export function allocateWorktree(
   db: unknown,

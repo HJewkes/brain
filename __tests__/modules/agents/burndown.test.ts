@@ -17,7 +17,6 @@ vi.mock('../../../src/modules/agents/data.js', () => ({
 }));
 
 import { BurndownOrchestrator } from '../../../src/modules/agents/burndown.js';
-import { BackpressureController } from '../../../src/modules/agents/backpressure.js';
 import { pullNextTask } from '../../../src/modules/agents/task-pull.js';
 import { buildSpawnPrompt } from '../../../src/modules/agents/prompt-builder.js';
 import { detectStalledTasks } from '../../../src/modules/agents/stall-detector.js';
@@ -206,15 +205,13 @@ describe('BurndownOrchestrator', () => {
   });
 
   describe('backpressure integration', () => {
-    it('uses backpressure effective WIP for spawning limit', async () => {
-      const backpressure = new BackpressureController(2);
-
+    it('uses WIP limit for spawning limit', async () => {
       const orchestrator = new BurndownOrchestrator(
         fakeDb,
         fakeConfig,
         fakeEmbedder,
         { maxWip: 4, projectDir: '/repo' },
-        backpressure
+        2
       );
       const spawner = vi.fn();
       orchestrator.setSpawner(spawner);
@@ -229,7 +226,7 @@ describe('BurndownOrchestrator', () => {
         .mockResolvedValueOnce(null);
       mockBuildSpawnPrompt.mockReturnValue('prompt');
 
-      const effectiveWip = backpressure.computeEffectiveWip().effectiveWip;
+      const effectiveWip = 2;
       // Mock active count incrementing per spawn
       const countMock = mockCountActiveAgents;
       for (let i = 0; i <= effectiveWip; i++) {

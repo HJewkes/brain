@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 import type { BrainDB } from '../services/brain-db.js';
-import type { BackpressureController } from '../modules/agents/backpressure.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 import type { BrainServiceClass } from '../services/brain-service.js';
 import { getRawDb } from '../utils/db.js';
@@ -26,25 +25,17 @@ function getInFlightDeliveries(rawDb: Database.Database): DeliveryRecord[] {
   }
 }
 
-/**
- * OrchestrationService manages delivery monitors for brain serve.
- *
- * On startup it recovers in-flight deliveries from delivery_states and
- * restarts their monitors. startMonitor() deduplicates by taskId so
- * concurrent calls are safe.
- */
 export class OrchestrationService {
   private readonly activeMonitors = new Map<string, Promise<DeliveryOutcome>>();
   private readonly rawDb: Database.Database;
   constructor(
     db: BrainDB | Database.Database,
-    private readonly backpressure: BackpressureController,
+    private readonly wipLimit: number,
     private readonly projectDir: string
   ) {
     this.rawDb = getRawDb(db);
   }
 
-  /** On startup: recover in-flight deliveries from DB and respawn monitors. */
   async recover(): Promise<void> {
     const pending = getInFlightDeliveries(this.rawDb);
     for (const delivery of pending) {
@@ -55,10 +46,6 @@ export class OrchestrationService {
     }
   }
 
-  /**
-   * Start a delivery monitor, deduped by taskId.
-   * No-op if a monitor is already running for this task.
-   */
   startMonitor(delivery: DeliveryRecord): void {
     const taskId = delivery.task_id;
     if (!taskId) return;
@@ -70,20 +57,12 @@ export class OrchestrationService {
     this.activeMonitors.set(taskId, promise);
   }
 
-  /** Inspection for dashboard/CLI: returns current delivery state for each active monitor. */
   listActiveDeliveries(): DeliveryRecord[] {
     return [...this.activeMonitors.keys()]
       .map((taskId) => getDeliveryForTask(this.rawDb, taskId))
       .filter((d): d is DeliveryRecord => d !== null);
   }
 
-  /**
-   * Execute all pending tasks in a workstream in dependency-ordered waves.
-   *
-   * Computes waves for the workstream, then runs them sequentially. Tasks within
-   * each wave are dispatched concurrently (up to the WIP limit). Resolves when
-   * all waves have completed — every task's delivery monitor has finished.
-   */
   async executeWorkstream(svc: BrainServiceClass, workstreamDisplayId: string): Promise<void> {
     const match = workstreamDisplayId.match(/^([A-Z]+)-(\d+)$/);
     if (!match) {
@@ -116,10 +95,9 @@ export class OrchestrationService {
     const projectDir = resolveProjectDir(svc);
     const loop = new DispatchLoop(
       svc.db,
-      this.backpressure,
+      this.wipLimit,
       async (taskId) => {
-        const { effectiveWip } = this.backpressure.computeEffectiveWip();
-        const result = await dispatchTask(svc, { taskId, worktreeBudget: effectiveWip });
+        const result = await dispatchTask(svc, { taskId, worktreeBudget: this.wipLimit });
         const r = result as DispatchResult;
         return { agentId: r.agentId, taskId: r.taskId, branch: r.branch };
       },
@@ -136,11 +114,6 @@ export class OrchestrationService {
     process.stderr.write(`[orchestration] workstream ${workstreamDisplayId} dispatch complete\n`);
   }
 
-  /**
-   * Cancel in-flight wave-execution workflows before starting the dispatch loop.
-   * Prevents the old workflow runtime and new dispatch loop from competing for
-   * the same workstream.
-   */
   migrateInFlightWorkflows(runtime: WorkflowRuntime): void {
     const running = runtime.listRunning().filter((r) => r.workflowName === 'wave-execution');
     for (const run of running) {

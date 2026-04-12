@@ -3,12 +3,10 @@ import type { BrainConfig, Embedder } from '../../types.js';
 import type { PullResult } from './task-pull.js';
 import type { StalledTaskInfo } from './stall-detector.js';
 import type { RoutingResult } from '../pm/engine/routing.js';
-import type { WipAdjustment } from './backpressure.js';
 import { pullNextTask } from './task-pull.js';
 import { buildSpawnPrompt } from './prompt-builder.js';
 import { detectStalledTasks } from './stall-detector.js';
 import { countActiveAgents } from './data.js';
-import { BackpressureController } from './backpressure.js';
 
 export interface BurndownConfig {
   maxWip: number;
@@ -56,7 +54,7 @@ export class BurndownOrchestrator {
   private readonly db: BrainDB;
   private readonly brainConfig: BrainConfig;
   private readonly embedder: Embedder;
-  private readonly backpressure: BackpressureController;
+  private readonly wipLimit: number;
   private onSpawn: AgentSpawner = async () => {};
   private onStall: StallHandler = async () => {};
   private eventHooks: BurndownEventHooks = {};
@@ -66,13 +64,13 @@ export class BurndownOrchestrator {
     brainConfig: BrainConfig,
     embedder: Embedder,
     config?: Partial<BurndownConfig>,
-    backpressure?: BackpressureController
+    wipLimit?: number
   ) {
     this.db = db;
     this.brainConfig = brainConfig;
     this.embedder = embedder;
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.backpressure = backpressure ?? new BackpressureController(this.config.maxWip);
+    this.wipLimit = wipLimit ?? this.config.maxWip;
   }
 
   setSpawner(spawner: AgentSpawner): void {
@@ -108,17 +106,16 @@ export class BurndownOrchestrator {
       this.eventHooks.onStallDetected?.(stalledTasks);
     }
 
-    const adjustment = this.backpressure.computeEffectiveWip();
-    const spawned = await this.fillSlots(adjustment);
+    const spawned = await this.fillSlots();
     const activeCount = countActiveAgents(this.db);
 
     const result: TickResult = {
       spawned,
       stalled: stalledTasks,
       activeCount,
-      availableSlots: Math.max(0, adjustment.effectiveWip - activeCount),
-      effectiveWip: adjustment.effectiveWip,
-      backpressureReason: adjustment.reason,
+      availableSlots: Math.max(0, this.wipLimit - activeCount),
+      effectiveWip: this.wipLimit,
+      backpressureReason: 'nominal',
     };
 
     this.eventHooks.onProgress?.(
@@ -133,11 +130,11 @@ export class BurndownOrchestrator {
     return detectStalledTasks(this.db, this.config.projectDir, this.config.stallThresholdMinutes);
   }
 
-  private async fillSlots(adjustment: WipAdjustment): Promise<ActiveAgent[]> {
+  private async fillSlots(): Promise<ActiveAgent[]> {
     const spawned: ActiveAgent[] = [];
     let activeCount = countActiveAgents(this.db);
 
-    while (activeCount < adjustment.effectiveWip) {
+    while (activeCount < this.wipLimit) {
       const pulled = await this.pullAndRoute();
       if (!pulled) break;
 
