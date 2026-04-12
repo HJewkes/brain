@@ -20,7 +20,7 @@ import { getAgent, listAgents, getAgentContext } from '../modules/agents/data.js
 import { dispatchTask, resolveProjectDir } from './dispatch.js';
 import { OrchestrationService } from './orchestration.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
-import { askAdvisor } from './advisor.js';
+import { askAdvisor, reviewAdvisor } from './advisor.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -1002,7 +1002,7 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
 // Advisor tools
 // ---------------------------------------------------------------------------
 
-function registerAdvisorTools(server: McpServer): void {
+function registerAdvisorTools(server: McpServer, svc: BrainServiceClass): void {
   server.tool(
     'brain_advisor_ask',
     'Ask the strategic advisor (Opus) a focused question. Returns concise, actionable advice. The coordinator assembles context; the advisor reasons over it.',
@@ -1025,6 +1025,43 @@ function registerAdvisorTools(server: McpServer): void {
         });
         return textResult({
           advice: result.advice,
+          usage: result.usage,
+        });
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  server.tool(
+    'brain_advisor_review',
+    'Full strategic review: auto-assembles context from PM state, recent agents, brain search, and optionally session transcript, then asks Opus for structured feedback with assessment, action items, risk flags, and recommended next steps.',
+    {
+      focus: z
+        .string()
+        .optional()
+        .describe(
+          'What aspect to review: "wave_plan", "error_recovery", "completion_check", or free text'
+        ),
+      workstream: z
+        .string()
+        .optional()
+        .describe('Scope PM context to a specific workstream (e.g. VNM-45)'),
+      include_session: z
+        .boolean()
+        .optional()
+        .describe('Include current session transcript in context (default false)'),
+    },
+    async ({ focus, workstream, include_session }) => {
+      try {
+        const result = await reviewAdvisor({
+          svc,
+          focus,
+          workstream,
+          includeSession: include_session ?? false,
+        });
+        return textResult({
+          review: result.advice,
           usage: result.usage,
         });
       } catch (err) {
@@ -1062,7 +1099,7 @@ export function createBrainMcpServer(
   registerSessionAgentTools(server, svc);
   registerDispatchTools(server, svc);
   registerWorkflowTools(server, svc);
-  registerAdvisorTools(server);
+  registerAdvisorTools(server, svc);
 
   return server;
 }
