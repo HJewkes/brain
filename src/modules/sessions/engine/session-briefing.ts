@@ -5,6 +5,8 @@ import { getActiveProject } from '../../pm/data/queries.js';
 import { listTasks } from '../../pm/data/task-ops.js';
 import { computeEligible } from '../../pm/engine/dependency.js';
 import { getTask } from '../../pm/data/task-ops.js';
+import { findUnreviewedSessions } from '../../autoloop/engine/discovery.js';
+import { getLastRunTime } from '../../autoloop/engine/run-tracker.js';
 
 export interface BriefingSection {
   heading: string;
@@ -140,6 +142,15 @@ export function generateSessionBriefing(
     items: [`${doneCount}/${totalCount} tasks done (${pct}%)`],
   });
 
+  // 6. Autoloop review suggestion (non-blocking, informational)
+  const autoloopSuggestion = checkAutoloopReviewDue(db);
+  if (autoloopSuggestion) {
+    sections.push({
+      heading: 'Autoloop Review',
+      items: [autoloopSuggestion],
+    });
+  }
+
   return { project, sections, suggestedFocus };
 }
 
@@ -205,4 +216,37 @@ function toTag(heading: string): string {
 function daysAgo(n: number): string {
   const d = new Date(Date.now() - n * 24 * 60 * 60 * 1000);
   return d.toISOString();
+}
+
+const UNREVIEWED_SESSION_THRESHOLD = 3;
+const CONSOLIDATION_STALE_DAYS = 7;
+
+function checkAutoloopReviewDue(db: BrainDB): string | null {
+  try {
+    const unreviewed = findUnreviewedSessions(db, { minAgeHours: 1 });
+    const unreviewedCount = unreviewed.length;
+
+    const lastConsolidation = getLastRunTime(db, 'task-consolidation');
+    const daysSinceConsolidation = lastConsolidation
+      ? Math.floor((Date.now() - lastConsolidation.getTime()) / (24 * 60 * 60 * 1000))
+      : null;
+
+    const parts: string[] = [];
+
+    if (unreviewedCount >= UNREVIEWED_SESSION_THRESHOLD) {
+      parts.push(`${unreviewedCount} sessions completed since last review`);
+    }
+
+    if (daysSinceConsolidation !== null && daysSinceConsolidation >= CONSOLIDATION_STALE_DAYS) {
+      parts.push(`${daysSinceConsolidation} days since last task consolidation`);
+    } else if (daysSinceConsolidation === null && unreviewedCount >= UNREVIEWED_SESSION_THRESHOLD) {
+      parts.push('no prior task consolidation on record');
+    }
+
+    if (parts.length === 0) return null;
+
+    return `${parts.join('; ')} — run \`brain autoloop review\` to process them`;
+  } catch {
+    return null;
+  }
 }

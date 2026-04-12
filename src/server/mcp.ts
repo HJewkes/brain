@@ -21,6 +21,7 @@ import { dispatchTask, resolveProjectDir } from './dispatch.js';
 import { OrchestrationService } from './orchestration.js';
 import { BackpressureController } from '../modules/agents/backpressure.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
+import { askAdvisor } from './advisor.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -999,6 +1000,42 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Advisor tools
+// ---------------------------------------------------------------------------
+
+function registerAdvisorTools(server: McpServer): void {
+  server.tool(
+    'brain_advisor_ask',
+    'Ask the strategic advisor (Opus) a focused question. Returns concise, actionable advice. The coordinator assembles context; the advisor reasons over it.',
+    {
+      question: z.string().describe('The question to ask the advisor'),
+      context: z
+        .string()
+        .optional()
+        .describe(
+          'Optional context the coordinator has assembled (task state, code snippets, constraints)'
+        ),
+      max_tokens: z.number().optional().describe('Max response tokens (default 500)'),
+    },
+    async ({ question, context, max_tokens }) => {
+      try {
+        const result = askAdvisor({
+          question,
+          context,
+          maxTokens: max_tokens,
+        });
+        return textResult({
+          advice: result.advice,
+          usage: result.usage,
+        });
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+}
+
 export interface BrainMcpServerOptions {
   channelInstructions?: string;
 }
@@ -1027,6 +1064,7 @@ export function createBrainMcpServer(
   registerSessionAgentTools(server, svc);
   registerDispatchTools(server, svc);
   registerWorkflowTools(server, svc);
+  registerAdvisorTools(server);
 
   return server;
 }
