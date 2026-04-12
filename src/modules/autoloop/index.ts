@@ -125,6 +125,25 @@ export const autoloopModule: BrainModule = {
       },
     });
 
+    ctx.registerMigration({
+      version: 2,
+      description: 'Create autoloop_enrichments table for idempotent enrichment tracking',
+      up: (db) => {
+        const rawDb = db as { exec(sql: string): void };
+        rawDb.exec(`
+          CREATE TABLE IF NOT EXISTS autoloop_enrichments (
+            task_id         TEXT PRIMARY KEY,
+            enriched_at     TEXT NOT NULL,
+            run_id          INTEGER,
+            readiness_score REAL NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES autoloop_runs(id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_autoloop_enrichments_at
+            ON autoloop_enrichments(enriched_at);
+        `);
+      },
+    });
+
     const autoloopCmd = new Command('autoloop').description(
       'Background agent autoloops for session review and task consolidation'
     );

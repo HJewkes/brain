@@ -62,8 +62,9 @@ describe('autoloop module', () => {
 
     const migrations = registry.getMigrations();
     const autoloopMigrations = migrations.filter((m) => m.module === 'autoloop');
-    expect(autoloopMigrations.length).toBeGreaterThanOrEqual(1);
+    expect(autoloopMigrations.length).toBeGreaterThanOrEqual(2);
     expect(autoloopMigrations[0].migration.version).toBe(1);
+    expect(autoloopMigrations[1].migration.version).toBe(2);
   });
 
   it('sets private visibility', () => {
