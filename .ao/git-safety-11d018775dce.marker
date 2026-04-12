@@ -1,0 +1,17 @@
+git push --force-with-lease`
+5. Rebase success → back to `ci-check` (CI must re-pass after rebase)
+6. Rebase conflict → `merge-failed` after 2 attempts, pause for human intervention
+
+**Conflict prevention:** Per-task worktrees with task-scoped file ownership (`ownership.json` entries injected at dispatch time) means parallel tasks rarely touch the same files.
+
+Future option: GitHub merge queue can be added as an alternative `MergeStrategy` if needed.
+
+---
+
+### 7. Wave-Level Gate Checks
+
+**Change:** Gates wait for all deliveries to reach terminal state, not just agent completion.
+
+```typescript
+async function waitForWaveDeliveries(ctx: WorkflowContext, waveTaskIds: string[]) {
+  const reconciler = new DeliveryReconciler()
