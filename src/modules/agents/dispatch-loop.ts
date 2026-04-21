@@ -88,11 +88,11 @@ export class DispatchLoop {
    * Push branch and create PR for a completed agent.
    * Returns the delivery record if successful, null on failure.
    */
-  private ensureDelivery(
+  private async ensureDelivery(
     agentId: string,
     taskId: string,
     branch: string | undefined
-  ): import('./delivery.js').DeliveryRecord | null {
+  ): Promise<import('./delivery.js').DeliveryRecord | null> {
     const existing = getDeliveryForTask(this.rawDb, taskId);
     if (existing && DispatchLoop.DELIVERED_STATUSES.has(existing.status)) {
       return existing;
@@ -104,7 +104,7 @@ export class DispatchLoop {
     }
 
     try {
-      return initiateDelivery(this.rawDb, agentId, taskId, branch, this.projectDir);
+      return await initiateDelivery(this.rawDb, agentId, taskId, branch, this.projectDir);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[dispatch-loop] delivery failed for ${taskId}: ${msg}\n`);
@@ -123,7 +123,7 @@ export class DispatchLoop {
     taskId: string,
     branch: string | undefined
   ): Promise<void> {
-    const delivery = this.ensureDelivery(agentId, taskId, branch);
+    const delivery = await this.ensureDelivery(agentId, taskId, branch);
     if (!delivery) {
       process.stderr.write(
         `[dispatch-loop] preserving worktree for ${taskId} — manual recovery needed\n`
