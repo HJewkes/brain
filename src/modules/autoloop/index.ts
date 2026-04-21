@@ -125,6 +125,25 @@ export const autoloopModule: BrainModule = {
       },
     });
 
+    ctx.registerMigration({
+      version: 2,
+      description: 'Create autoloop_enrichments table for idempotent enrichment tracking',
+      up: (db) => {
+        const rawDb = db as { exec(sql: string): void };
+        rawDb.exec(`
+          CREATE TABLE IF NOT EXISTS autoloop_enrichments (
+            task_id         TEXT PRIMARY KEY,
+            enriched_at     TEXT NOT NULL,
+            run_id          INTEGER,
+            readiness_score REAL NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES autoloop_runs(id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_autoloop_enrichments_at
+            ON autoloop_enrichments(enriched_at);
+        `);
+      },
+    });
+
     const autoloopCmd = new Command('autoloop').description(
       'Background agent autoloops for session review and task consolidation'
     );
@@ -285,6 +304,48 @@ export const autoloopModule: BrainModule = {
             }
             if (result.errors.length > 0) {
               process.stdout.write(`\nErrors: ${result.errors.join(', ')}\n`);
+            }
+          }
+        });
+      });
+
+    autoloopCmd
+      .command('friction')
+      .description('Aggregate friction patterns across sessions')
+      .option('--min-sessions <n>', 'Minimum sessions for promotion', '3')
+      .option('--threshold <n>', 'Title similarity threshold (0.0-1.0)', '0.7')
+      .option('--project-dir <dir>', 'Project directory for observations')
+      .option('--json', 'Output as JSON')
+      .action(async (cmdOpts) => {
+        const { withBrain } = await import('../../services/brain-service.js');
+        await withBrain(async (svc) => {
+          const { aggregateFrictionPatterns } = await import('./engine/friction-aggregator.js');
+          const result = await aggregateFrictionPatterns(svc.db, svc.config, svc.embedder, {
+            minSessions: parseInt(cmdOpts.minSessions),
+            similarityThreshold: parseFloat(cmdOpts.threshold),
+            projectDir: cmdOpts.projectDir,
+          });
+
+          if (cmdOpts.json) {
+            process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+          } else {
+            process.stdout.write(
+              `Friction Aggregation: ${result.insightsScanned} insights scanned\n`
+            );
+            process.stdout.write(`  Clusters found: ${result.clustersFound}\n`);
+            process.stdout.write(`  Promoted (high impact): ${result.promotedCount}\n`);
+            process.stdout.write(`  Duplicates skipped: ${result.duplicatesSkipped}\n`);
+            process.stdout.write(`  Observations written: ${result.observationsWritten}\n`);
+            if (result.clusters.length > 0) {
+              process.stdout.write('\n  Systemic patterns:\n');
+              for (const cluster of result.clusters) {
+                process.stdout.write(
+                  `    - ${cluster.pattern} (${cluster.sessionCount} sessions)\n`
+                );
+              }
+            }
+            if (result.errors.length > 0) {
+              process.stdout.write(`\n  Errors: ${result.errors.join(', ')}\n`);
             }
           }
         });
