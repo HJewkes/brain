@@ -25,17 +25,27 @@ vi.mock('../../../src/modules/agents/delivery-monitor.js', () => ({
   monitorDelivery: vi.fn(),
 }));
 
-import { DispatchLoop, type SpawnResult } from '../../../src/modules/agents/dispatch-loop.js';
+vi.mock('../../../src/modules/pm/data/task-ops.js', () => ({
+  updateTaskStatus: vi.fn(),
+}));
+
+import {
+  DispatchLoop,
+  type DispatchLoopPmDeps,
+  type SpawnResult,
+} from '../../../src/modules/agents/dispatch-loop.js';
 import { getAgent } from '../../../src/modules/agents/data.js';
 import { getDeliveryForTask, initiateDelivery } from '../../../src/modules/agents/delivery.js';
 import { releaseWorktree } from '../../../src/modules/agents/worktree.js';
 import { monitorDelivery } from '../../../src/modules/agents/delivery-monitor.js';
+import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 
 const mockGetAgent = getAgent as ReturnType<typeof vi.fn>;
 const mockGetDelivery = getDeliveryForTask as ReturnType<typeof vi.fn>;
 const mockInitiateDelivery = initiateDelivery as ReturnType<typeof vi.fn>;
 const mockReleaseWorktree = releaseWorktree as ReturnType<typeof vi.fn>;
 const mockMonitorDelivery = monitorDelivery as ReturnType<typeof vi.fn>;
+const mockUpdateTaskStatus = updateTaskStatus as ReturnType<typeof vi.fn>;
 
 const fakeDb = {} as unknown;
 const projectDir = '/tmp/test-project';
@@ -163,6 +173,118 @@ describe('DispatchLoop', () => {
 
       // No branch → no delivery → worktree preserved (not released in deliver path)
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('advanceTaskStatus', () => {
+    let addInboxItem: ReturnType<typeof vi.fn>;
+    let brainDb: { rawDb: unknown; addInboxItem: ReturnType<typeof vi.fn> };
+    let pmDeps: DispatchLoopPmDeps;
+
+    beforeEach(() => {
+      addInboxItem = vi.fn();
+      brainDb = { rawDb: fakeDb, addInboxItem };
+      pmDeps = {
+        brainDb: brainDb as unknown as DispatchLoopPmDeps['brainDb'],
+        config: {} as DispatchLoopPmDeps['config'],
+        embedder: {} as DispatchLoopPmDeps['embedder'],
+      };
+      mockUpdateTaskStatus.mockResolvedValue({ ok: true, data: {} });
+    });
+
+    function loopWithPmDeps() {
+      return new DispatchLoop(
+        brainDb as unknown as Parameters<typeof DispatchLoop.prototype.constructor>[0],
+        3,
+        spawnFn,
+        projectDir,
+        pmDeps
+      );
+    }
+
+    function stubMergedDelivery(outcome: 'merged' | 'stalled' | 'redispatched') {
+      spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'b1' });
+      mockGetAgent.mockReturnValueOnce({ status: 'completed' });
+      mockGetDelivery.mockReturnValue(null);
+      const record = {
+        agent_id: 'a1',
+        task_id: 't1',
+        branch: 'b1',
+        pr_url: 'https://github.com/owner/repo/pull/7',
+        stall_reason: 'timeout',
+      };
+      mockInitiateDelivery.mockReturnValue(record);
+      mockMonitorDelivery.mockResolvedValue(outcome);
+      // After monitorDelivery completes, dispatch-loop refetches via getDeliveryForTask
+      mockGetDelivery.mockReturnValue(record);
+    }
+
+    it('merged outcome transitions task to done', async () => {
+      stubMergedDelivery('merged');
+      await loopWithPmDeps().executeWave({ wave: 1, taskIds: ['t1'] });
+      expect(mockUpdateTaskStatus).toHaveBeenCalledWith(
+        pmDeps.brainDb,
+        pmDeps.config,
+        pmDeps.embedder,
+        't1',
+        'done'
+      );
+      expect(addInboxItem).not.toHaveBeenCalled();
+    });
+
+    it('stalled outcome transitions task to blocked and creates inbox item', async () => {
+      stubMergedDelivery('stalled');
+      await loopWithPmDeps().executeWave({ wave: 1, taskIds: ['t1'] });
+      expect(mockUpdateTaskStatus).toHaveBeenCalledWith(
+        pmDeps.brainDb,
+        pmDeps.config,
+        pmDeps.embedder,
+        't1',
+        'blocked'
+      );
+      expect(addInboxItem).toHaveBeenCalledTimes(1);
+      const item = addInboxItem.mock.calls[0][0] as {
+        content: string;
+        source: string;
+        sourceUrl: string | null;
+        sourceMeta: string | null;
+      };
+      expect(item.source).toBe('alert');
+      expect(item.content).toContain('t1');
+      expect(item.content).toContain('timeout');
+      expect(item.sourceUrl).toBe('https://github.com/owner/repo/pull/7');
+      expect(item.sourceMeta).toContain('timeout');
+    });
+
+    it('redispatched outcome transitions task to pending', async () => {
+      stubMergedDelivery('redispatched');
+      await loopWithPmDeps().executeWave({ wave: 1, taskIds: ['t1'] });
+      expect(mockUpdateTaskStatus).toHaveBeenCalledWith(
+        pmDeps.brainDb,
+        pmDeps.config,
+        pmDeps.embedder,
+        't1',
+        'pending'
+      );
+      expect(addInboxItem).not.toHaveBeenCalled();
+    });
+
+    it('skips task status update when PM deps are absent', async () => {
+      stubMergedDelivery('merged');
+      await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+      expect(mockUpdateTaskStatus).not.toHaveBeenCalled();
+    });
+
+    it('logs but does not throw when updateTaskStatus returns an error', async () => {
+      stubMergedDelivery('stalled');
+      mockUpdateTaskStatus.mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'INVALID_TRANSITION', message: 'nope' },
+      });
+      await expect(
+        loopWithPmDeps().executeWave({ wave: 1, taskIds: ['t1'] })
+      ).resolves.toMatchObject({ settled: expect.any(Array) });
+      expect(addInboxItem).toHaveBeenCalledTimes(1);
     });
   });
 });

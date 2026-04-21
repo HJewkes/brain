@@ -1,11 +1,15 @@
 import type Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import type { BrainDB } from '../../services/brain-db.js';
+import type { BrainConfig, Embedder, InboxItem } from '../../types.js';
 import type { WaveAssignment } from '../pm/engine/dependency.js';
+import type { TaskStatus } from '../pm/types.js';
 import { getRawDb, sleep } from '../../utils/db.js';
 import { getAgent } from './data.js';
-import { getDeliveryForTask, initiateDelivery } from './delivery.js';
+import { getDeliveryForTask, initiateDelivery, type DeliveryRecord } from './delivery.js';
 import { releaseWorktree } from './worktree.js';
-import { monitorDelivery } from './delivery-monitor.js';
+import { monitorDelivery, type DeliveryOutcome } from './delivery-monitor.js';
+import { updateTaskStatus } from '../pm/data/task-ops.js';
 
 const AGENT_POLL_INTERVAL = 5_000; // 5s
 
@@ -21,6 +25,16 @@ export interface WaveExecutionResult {
 
 /** Inject the spawn function to avoid circular server ↔ modules dependency. */
 export type SpawnFn = (taskId: string) => Promise<SpawnResult>;
+
+function isBrainDb(db: BrainDB | Database.Database): db is BrainDB {
+  return typeof db === 'object' && db !== null && 'rawDb' in db;
+}
+
+const TASK_STATUS_FOR_OUTCOME: Record<DeliveryOutcome, TaskStatus | undefined> = {
+  merged: 'done',
+  stalled: 'blocked',
+  redispatched: 'pending',
+};
 
 /**
  * Async semaphore for WIP control. Callers acquire a slot before spawning
@@ -50,16 +64,27 @@ class Semaphore {
   }
 }
 
+export interface DispatchLoopPmDeps {
+  brainDb: BrainDB;
+  config: BrainConfig;
+  embedder: Embedder;
+}
+
 export class DispatchLoop {
   private readonly rawDb: Database.Database;
+  private readonly brainDb: BrainDB | null;
+  private readonly pmDeps: DispatchLoopPmDeps | null;
 
   constructor(
     db: BrainDB | Database.Database,
     private readonly wipLimit: number,
     private readonly spawnAgent: SpawnFn,
-    private readonly projectDir: string
+    private readonly projectDir: string,
+    pmDeps?: DispatchLoopPmDeps
   ) {
     this.rawDb = getRawDb(db);
+    this.brainDb = pmDeps?.brainDb ?? (isBrainDb(db) ? db : null);
+    this.pmDeps = pmDeps ?? null;
   }
 
   /** Poll the DB until the agent reaches a terminal status. */
@@ -133,7 +158,74 @@ export class DispatchLoop {
 
     const outcome = await monitorDelivery(this.rawDb, delivery, this.projectDir);
     process.stderr.write(`[dispatch-loop] ${taskId} delivery: ${outcome}\n`);
+
+    const refreshed = getDeliveryForTask(this.rawDb, taskId) ?? delivery;
+    await this.advanceTaskStatus(taskId, outcome, refreshed);
+
     releaseWorktree(this.rawDb, this.projectDir, taskId);
+  }
+
+  /**
+   * Translate a delivery outcome into a PM task status transition. On stall,
+   * also drop an inbox notification so the user is alerted with the PR URL
+   * and the reason captured by the delivery monitor.
+   */
+  private async advanceTaskStatus(
+    taskId: string,
+    outcome: DeliveryOutcome,
+    delivery: DeliveryRecord
+  ): Promise<void> {
+    const nextStatus = TASK_STATUS_FOR_OUTCOME[outcome];
+    if (!nextStatus) return;
+
+    if (outcome === 'stalled') {
+      this.notifyStall(taskId, delivery);
+    }
+
+    if (!this.pmDeps) {
+      process.stderr.write(
+        `[dispatch-loop] ${taskId} skipping task status update (no PM deps); outcome=${outcome}\n`
+      );
+      return;
+    }
+
+    try {
+      const result = await updateTaskStatus(
+        this.pmDeps.brainDb,
+        this.pmDeps.config,
+        this.pmDeps.embedder,
+        taskId,
+        nextStatus
+      );
+      if (!result.ok) {
+        process.stderr.write(
+          `[dispatch-loop] ${taskId} updateTaskStatus(${nextStatus}) failed: ${result.error.message}\n`
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[dispatch-loop] ${taskId} advanceTaskStatus error: ${msg}\n`);
+    }
+  }
+
+  private notifyStall(taskId: string, delivery: DeliveryRecord): void {
+    if (!this.brainDb) return;
+    const reason = (delivery as { stall_reason?: string | null }).stall_reason ?? 'unknown';
+    const prUrl = delivery.pr_url;
+    const content =
+      `Delivery stalled for ${taskId}\n` + `Reason: ${reason}\n` + (prUrl ? `PR: ${prUrl}\n` : '');
+    const item: InboxItem = {
+      id: randomUUID(),
+      content,
+      title: `Delivery stalled: ${taskId}`,
+      source: 'alert',
+      sourceUrl: prUrl,
+      sourceMeta: JSON.stringify({ taskId, prUrl, reason }),
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      processedAt: null,
+    };
+    this.brainDb.addInboxItem(item);
   }
 
   /**
