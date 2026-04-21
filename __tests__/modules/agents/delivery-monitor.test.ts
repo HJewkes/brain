@@ -57,8 +57,53 @@ function makeDelivery(overrides: Partial<DeliveryRecord> = {}): DeliveryRecord {
   };
 }
 
-// Use a raw object as the "db" — getRawDb mock returns it as-is
-const fakeDb = {} as unknown;
+interface PreparedQuery {
+  sql: string;
+  getArgs: unknown[][];
+  runArgs: unknown[][];
+}
+
+interface DbMock {
+  prepare: ReturnType<typeof vi.fn>;
+  queries: PreparedQuery[];
+  fixAttemptsInDb: number;
+}
+
+// Minimal better-sqlite3 shim: supports prepare().get() for fix_attempts reads
+// and prepare().run() for fix_attempts / stall_reason writes. Records every
+// SQL executed so tests can assert persistence.
+function makeDbMock(initialFixAttempts = 0): DbMock {
+  const mock: DbMock = {
+    prepare: vi.fn(),
+    queries: [],
+    fixAttemptsInDb: initialFixAttempts,
+  };
+  mock.prepare = vi.fn((sql: string) => {
+    const entry: PreparedQuery = { sql, getArgs: [], runArgs: [] };
+    mock.queries.push(entry);
+    return {
+      get: vi.fn((...args: unknown[]) => {
+        entry.getArgs.push(args);
+        if (sql.includes('SELECT fix_attempts')) {
+          return { fix_attempts: mock.fixAttemptsInDb };
+        }
+        return undefined;
+      }),
+      run: vi.fn((...args: unknown[]) => {
+        entry.runArgs.push(args);
+        if (sql.includes('UPDATE delivery_states') && sql.includes('SET fix_attempts')) {
+          mock.fixAttemptsInDb = args[0] as number;
+        }
+      }),
+    };
+  });
+  return mock;
+}
+
+function findQueries(db: DbMock, needle: string): PreparedQuery[] {
+  return db.queries.filter((q) => q.sql.includes(needle));
+}
+
 const projectDir = '/tmp/test-project';
 
 describe('monitorDelivery', () => {
@@ -71,21 +116,29 @@ describe('monitorDelivery', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns stalled when delivery has no branch', async () => {
+  it('returns stalled with pr-missing reason when delivery has no branch', async () => {
+    const db = makeDbMock();
     const delivery = makeDelivery({ branch: null });
-    const result = await monitorDelivery(fakeDb, delivery, projectDir);
+    const result = await monitorDelivery(db as unknown as object, delivery, projectDir);
     expect(result).toBe('stalled');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(fakeDb, 'agent-1', 'stalled');
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled');
+    const stallWrites = findQueries(db, 'SET stall_reason');
+    expect(stallWrites).toHaveLength(1);
+    expect(stallWrites[0].runArgs[0]).toEqual(['pr-missing', expect.any(String), 'agent-1']);
   });
 
-  it('returns stalled when delivery has no pr_number', async () => {
+  it('returns stalled with pr-missing reason when delivery has no pr_number', async () => {
+    const db = makeDbMock();
     const delivery = makeDelivery({ pr_number: null });
-    const result = await monitorDelivery(fakeDb, delivery, projectDir);
+    const result = await monitorDelivery(db as unknown as object, delivery, projectDir);
     expect(result).toBe('stalled');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(fakeDb, 'agent-1', 'stalled');
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled');
+    const stallWrites = findQueries(db, 'SET stall_reason');
+    expect(stallWrites[0].runArgs[0]).toEqual(['pr-missing', expect.any(String), 'agent-1']);
   });
 
   it('returns merged when PR is already merged externally', async () => {
+    const db = makeDbMock();
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'agent/vnm-48/VNM-48.101',
@@ -94,23 +147,24 @@ describe('monitorDelivery', () => {
       state: 'merged',
     });
 
-    const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
+    const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('merged');
     expect(mockUpdateStatus).toHaveBeenCalledWith(
-      fakeDb,
+      db,
       'agent-1',
       'merged',
       expect.objectContaining({ pr_merged_at: expect.any(String) })
     );
     expect(mockUpdateStatus).toHaveBeenCalledWith(
-      fakeDb,
+      db,
       'agent-1',
       'delivered',
       expect.objectContaining({ delivered_at: expect.any(String) })
     );
   });
 
-  it('returns stalled when PR is closed without merge', async () => {
+  it('returns stalled with pr-closed reason when PR is closed without merge', async () => {
+    const db = makeDbMock();
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'agent/vnm-48/VNM-48.101',
@@ -119,12 +173,15 @@ describe('monitorDelivery', () => {
       state: 'closed',
     });
 
-    const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
+    const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('stalled');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(fakeDb, 'agent-1', 'stalled');
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled');
+    const stallWrites = findQueries(db, 'SET stall_reason');
+    expect(stallWrites[0].runArgs[0]).toEqual(['pr-closed', expect.any(String), 'agent-1']);
   });
 
   it('merges when CI green and PR is mergeable', async () => {
+    const db = makeDbMock();
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'agent/vnm-48/VNM-48.101',
@@ -134,13 +191,13 @@ describe('monitorDelivery', () => {
     });
     mockMergePr.mockReturnValueOnce({ merged: true, taskId: 'VNM-48.101', prNumber: 42 });
 
-    const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
+    const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('merged');
     expect(mockMergePr).toHaveBeenCalledWith(42, { projectDir });
   });
 
   it('retries when merge fails then succeeds on next poll', async () => {
-    // First poll: merge fails
+    const db = makeDbMock();
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -149,7 +206,6 @@ describe('monitorDelivery', () => {
       state: 'open',
     });
     mockMergePr.mockReturnValueOnce({ merged: false });
-    // Second poll: merged externally
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -158,13 +214,13 @@ describe('monitorDelivery', () => {
       state: 'merged',
     });
 
-    const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
+    const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('merged');
     expect(mockMergePr).toHaveBeenCalledTimes(1);
   });
 
   it('escalates conflict: rebase succeeds → continues to merge', async () => {
-    // First poll: conflict
+    const db = makeDbMock();
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -173,7 +229,6 @@ describe('monitorDelivery', () => {
       state: 'open',
     });
     mockRebase.mockResolvedValueOnce(true);
-    // Second poll after rebase: mergeable
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -183,14 +238,14 @@ describe('monitorDelivery', () => {
     });
     mockMergePr.mockReturnValueOnce({ merged: true, taskId: 't', prNumber: 42 });
 
-    const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
+    const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('merged');
     expect(mockRebase).toHaveBeenCalledTimes(1);
   });
 
-  it('escalates conflict: rebase fails → fix agent succeeds → merge', async () => {
-    const brainDb = { rawDb: fakeDb } as unknown;
-    // First poll: conflict, rebase fails, fix succeeds
+  it('escalates conflict: rebase fails → fix agent succeeds → merge, persists fix_attempts', async () => {
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -200,7 +255,6 @@ describe('monitorDelivery', () => {
     });
     mockRebase.mockResolvedValueOnce(false);
     mockFixAgent.mockResolvedValueOnce(true);
-    // Second poll: now mergeable
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -213,10 +267,14 @@ describe('monitorDelivery', () => {
     const result = await monitorDelivery(brainDb, makeDelivery(), projectDir);
     expect(result).toBe('merged');
     expect(mockFixAgent).toHaveBeenCalledTimes(1);
+    const attemptWrites = findQueries(db, 'SET fix_attempts');
+    expect(attemptWrites).toHaveLength(1);
+    expect(attemptWrites[0].runArgs[0][0]).toBe(1);
   });
 
   it('escalates conflict: rebase fails, fix fails → redispatched', async () => {
-    const brainDb = { rawDb: fakeDb } as unknown;
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -229,10 +287,11 @@ describe('monitorDelivery', () => {
 
     const result = await monitorDelivery(brainDb, makeDelivery(), projectDir);
     expect(result).toBe('redispatched');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(fakeDb, 'agent-1', 'redispatched');
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'redispatched');
   });
 
   it('skips fix agent when db is raw (not BrainDB) and redispatches directly', async () => {
+    const db = makeDbMock();
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -242,14 +301,14 @@ describe('monitorDelivery', () => {
     });
     mockRebase.mockResolvedValueOnce(false);
 
-    const result = await monitorDelivery(fakeDb, makeDelivery(), projectDir);
+    const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('redispatched');
     expect(mockFixAgent).not.toHaveBeenCalled();
   });
 
   it('CI failure: fix agent succeeds → continues to merge', async () => {
-    const brainDb = { rawDb: fakeDb } as unknown;
-    // First poll: CI fails, fix agent repairs it
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -258,7 +317,6 @@ describe('monitorDelivery', () => {
       state: 'open',
     });
     mockFixAgent.mockResolvedValueOnce(true);
-    // Second poll: CI passes now
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -274,7 +332,8 @@ describe('monitorDelivery', () => {
   });
 
   it('CI failure: fix agent fails → redispatched', async () => {
-    const brainDb = { rawDb: fakeDb } as unknown;
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -288,11 +347,11 @@ describe('monitorDelivery', () => {
     expect(result).toBe('redispatched');
   });
 
-  it('respects MAX_FIX_ATTEMPTS (3) before redispatching', async () => {
-    const brainDb = { rawDb: fakeDb } as unknown;
+  it('respects MAX_FIX_ATTEMPTS (3) before redispatching and persists each increment', async () => {
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
     const delivery = makeDelivery();
 
-    // 3 polls with CI failure, fix agent returns true each time (keeps trying)
     for (let i = 0; i < 3; i++) {
       mockGetPr.mockReturnValueOnce({
         number: 42,
@@ -303,7 +362,6 @@ describe('monitorDelivery', () => {
       });
       mockFixAgent.mockResolvedValueOnce(true);
     }
-    // 4th poll: still failing, no more fix attempts → redispatch
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -315,23 +373,56 @@ describe('monitorDelivery', () => {
     const result = await monitorDelivery(brainDb, delivery, projectDir);
     expect(result).toBe('redispatched');
     expect(mockFixAgent).toHaveBeenCalledTimes(3);
+    const attemptWrites = findQueries(db, 'SET fix_attempts');
+    expect(attemptWrites).toHaveLength(3);
+    expect(attemptWrites.map((q) => q.runArgs[0][0])).toEqual([1, 2, 3]);
   });
 
-  it('stalls when PR disappears and stale timeout elapses', async () => {
+  it('resumes fix_attempts from DB so prior runs count toward the cap', async () => {
+    // Simulate a restart where 2 fix attempts were already persisted.
+    const db = makeDbMock(2);
+    const brainDb = { rawDb: db } as unknown;
+    const delivery = makeDelivery();
+
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
+    });
+    mockFixAgent.mockResolvedValueOnce(true);
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
+    });
+
+    const result = await monitorDelivery(brainDb, delivery, projectDir);
+    expect(result).toBe('redispatched');
+    expect(mockFixAgent).toHaveBeenCalledTimes(1);
+    const attemptWrites = findQueries(db, 'SET fix_attempts');
+    expect(attemptWrites).toHaveLength(1);
+    expect(attemptWrites[0].runArgs[0][0]).toBe(3);
+  });
+
+  it('stalls with pr-missing when PR disappears and stale timeout elapses', async () => {
+    const db = makeDbMock();
     const delivery = makeDelivery();
     const now = Date.now();
 
-    // First poll: PR not visible
     mockGetPr.mockReturnValueOnce(null);
-    // Advance time past stale timeout (2 hours)
     vi.spyOn(Date, 'now')
       .mockReturnValueOnce(now) // startedAt
       .mockReturnValueOnce(now + 1000) // first check — within timeout
       .mockReturnValueOnce(now + 3 * 60 * 60 * 1000); // second check — past timeout
-    // Second poll: still no PR
     mockGetPr.mockReturnValueOnce(null);
 
-    const result = await monitorDelivery(fakeDb, delivery, projectDir);
+    const result = await monitorDelivery(db as unknown as object, delivery, projectDir);
     expect(result).toBe('stalled');
+    const stallWrites = findQueries(db, 'SET stall_reason');
+    expect(stallWrites[0].runArgs[0]).toEqual(['pr-missing', expect.any(String), 'agent-1']);
   });
 });
