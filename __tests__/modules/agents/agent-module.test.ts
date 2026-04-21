@@ -56,12 +56,13 @@ describe('agents module', () => {
       expect(strategy!.shouldExtract({ id: 'x' } as never)).toBe(false);
     });
 
-    it('registers 3 migrations', () => {
+    it('registers 4 migrations', () => {
       const migrations = registry.getMigrations('agents');
-      expect(migrations).toHaveLength(3);
+      expect(migrations).toHaveLength(4);
       expect(migrations[0].migration.version).toBe(1);
       expect(migrations[1].migration.version).toBe(2);
       expect(migrations[2].migration.version).toBe(3);
+      expect(migrations[3].migration.version).toBe(4);
     });
 
     it('registers hook handlers for pre-tool-use and agent-done', () => {
@@ -118,15 +119,17 @@ describe('agents module', () => {
     it('works with runModuleMigrations', () => {
       const db = new Database(':memory:');
       const applied = runModuleMigrations(registry, db, new Map());
-      expect(applied).toHaveLength(3);
+      expect(applied).toHaveLength(4);
       expect(applied[0].module).toBe('agents');
       expect(applied[0].version).toBe(1);
       expect(applied[1].module).toBe('agents');
       expect(applied[1].version).toBe(2);
       expect(applied[2].module).toBe('agents');
       expect(applied[2].version).toBe(3);
+      expect(applied[3].module).toBe('agents');
+      expect(applied[3].version).toBe(4);
 
-      const reapplied = runModuleMigrations(registry, db, new Map([['agents', 3]]));
+      const reapplied = runModuleMigrations(registry, db, new Map([['agents', 4]]));
       expect(reapplied).toHaveLength(0);
 
       db.close();

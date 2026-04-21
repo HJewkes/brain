@@ -131,6 +131,8 @@ export interface TaskMetadata {
   model_override?: 'opus' | 'sonnet' | 'haiku';
   /** Allowed tools override — comma-separated tool names */
   allowed_tools?: string;
+  /** Review tier override — bypasses computeReviewTier scoring when set */
+  review_tier?: 'ci-only' | 'ai-review' | 'human-review';
 }
 
 export interface DecisionMetadata {

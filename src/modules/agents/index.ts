@@ -1,7 +1,12 @@
 import type { BrainModule } from '../types.js';
 import type { HookHandler, HookInput, HookConfig, HookResult } from '../../hooks/types.js';
 import { hookAllow, hookBlock, hookAllowJson } from '../../hooks/types.js';
-import { agentsMigrationV1, agentsMigrationV2, agentsMigrationV3 } from './schema.js';
+import {
+  agentsMigrationV1,
+  agentsMigrationV2,
+  agentsMigrationV3,
+  agentsMigrationV4,
+} from './schema.js';
 import { createAgentCommands } from './commands.js';
 import { runAgentDoneHook } from './agent-done-handler.js';
 
@@ -123,6 +128,7 @@ export const agentsModule: BrainModule = {
     ctx.registerMigration(agentsMigrationV1);
     ctx.registerMigration(agentsMigrationV2);
     ctx.registerMigration(agentsMigrationV3);
+    ctx.registerMigration(agentsMigrationV4);
 
     ctx.registerHookHandler(worktreeBoundaryCheck);
     ctx.registerHookHandler(agentDoneHandler);
