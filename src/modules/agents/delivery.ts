@@ -172,6 +172,40 @@ export function getDeliveryForTask(db: Database.Database, taskId: string): Deliv
   }
 }
 
+export type HumanSignal = 'approve' | 'needs_fixes';
+
+export const VALID_HUMAN_SIGNALS: ReadonlySet<HumanSignal> = new Set(['approve', 'needs_fixes']);
+
+export function signalDelivery(
+  db: Database.Database,
+  taskId: string,
+  signal: HumanSignal
+): DeliveryRecord | null {
+  if (!VALID_HUMAN_SIGNALS.has(signal)) {
+    throw new Error(`Invalid human signal: ${signal}`);
+  }
+  const delivery = getDeliveryForTask(db, taskId);
+  if (!delivery) return null;
+  db.prepare('UPDATE delivery_states SET human_signal = ?, updated_at = ? WHERE agent_id = ?').run(
+    signal,
+    new Date().toISOString(),
+    delivery.agent_id
+  );
+  return { ...delivery, human_signal: signal };
+}
+
+export function readAndClearHumanSignal(
+  db: Database.Database,
+  agentId: string
+): HumanSignal | null {
+  const row = db
+    .prepare('SELECT human_signal FROM delivery_states WHERE agent_id = ?')
+    .get(agentId) as { human_signal: string | null } | undefined;
+  if (!row?.human_signal) return null;
+  db.prepare('UPDATE delivery_states SET human_signal = NULL WHERE agent_id = ?').run(agentId);
+  return row.human_signal as HumanSignal;
+}
+
 export function requireGh(): void {
   try {
     execFileSync('gh', ['auth', 'status'], { stdio: 'pipe', timeout: 5000 });

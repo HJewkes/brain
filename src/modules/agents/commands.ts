@@ -7,6 +7,7 @@ import { createWorktreeCommand } from './worktree-commands.js';
 import { buildAgentDispatchContext, formatDispatchBrief } from './dispatch-context.js';
 import { updateTaskStatus } from '../pm/data/task-ops.js';
 import { migrateAoAgents } from './migrate-ao.js';
+import { signalDelivery, type HumanSignal } from './delivery.js';
 import type { AgentArtifacts } from './agent-done-handler.js';
 import {
   getAgentCostEntries,
@@ -400,9 +401,42 @@ export function createAgentCommands(): Command {
       });
     });
 
+  // brain agent approve <taskId>
+  cmd
+    .command('approve')
+    .description('Approve a delivery paused for human review')
+    .argument('<task-id>', 'PM task display_id (e.g. VNM-56.30)')
+    .action(async (taskId) => {
+      await runDeliverySignal(taskId, 'approve');
+    });
+
+  // brain agent reject <taskId>
+  cmd
+    .command('reject')
+    .description('Reject a delivery paused for human review (triggers fixup cycle)')
+    .argument('<task-id>', 'PM task display_id (e.g. VNM-56.30)')
+    .action(async (taskId) => {
+      await runDeliverySignal(taskId, 'needs_fixes');
+    });
+
   cmd.addCommand(createWorktreeCommand());
 
   return cmd;
+}
+
+async function runDeliverySignal(taskId: string, signal: HumanSignal): Promise<void> {
+  await withDb((svc) => {
+    const rawDb = getRawDb(svc.db);
+    const delivery = signalDelivery(rawDb, taskId.toUpperCase(), signal);
+    if (!delivery) {
+      process.stderr.write(`Error: No delivery found for task: ${taskId}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(
+      `Signaled ${signal} for ${taskId} (agent ${delivery.agent_id}, status ${delivery.status}).\n`
+    );
+  });
 }
 
 function fmtTokens(n: number): string {

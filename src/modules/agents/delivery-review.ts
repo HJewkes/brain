@@ -5,8 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DeliveryRecord } from './delivery.js';
+import { recordDelivery, readAndClearHumanSignal } from './delivery.js';
 import { parseSignals } from '../workflow/runtime/signals.js';
 import { renderTemplate } from '../workflow/engine/templates.js';
+import { sleep } from '../../utils/db.js';
 
 export type ReviewTier = 'ci-only' | 'ai-review' | 'human-review';
 
@@ -29,16 +31,19 @@ const REVIEW_MODEL = 'claude-sonnet-4-6';
 const RESEARCH_TOOLS = 'Bash,Read,Glob,Grep,WebSearch,WebFetch';
 const FIXUP_TOOLS = 'Bash,Edit,Read,Write,Glob,Grep';
 const REVIEW_BUDGET_USD = '5.0';
+const HUMAN_SIGNAL_POLL_MS = 30_000;
+const HUMAN_REVIEW_MAX_CYCLES = 2;
 
 /**
  * Run the review phase of delivery.
  *
  * - ci-only: no-op, returns immediately approved.
  * - ai-review: dispatches review-agent, parses signals, runs fixup loop up to
- *   MAX_FIXUP_ITERATIONS. De-escalates to merge when risk <= 2 and approved.
- *   Escalates to human-review tier on high_risk or exhausted fixups.
- * - human-review: dispatches review-agent but returns unapproved+escalated so
- *   the caller can route to the human gate (implemented in VNM-56.30).
+ *   MAX_FIXUP_ITERATIONS. Escalates to the human review gate on high_risk or
+ *   exhausted fixups.
+ * - human-review: dispatches review-agent and routes directly to the human
+ *   review gate, which pauses delivery until the user signals via
+ *   brain_delivery_signal or `brain agent approve/reject`.
  */
 export async function runDeliveryReview(
   db: Database.Database,
@@ -57,7 +62,7 @@ export async function runDeliveryReview(
   const signal = parseSignals('review', 'delivery', first.output);
 
   if (tier === 'human-review' || signal === 'high_risk') {
-    return escalate(riskScore, first.agentId, 0);
+    return runHumanReviewGate(db, delivery, first.agentId, riskScore, first.output, projectDir, 0);
   }
 
   if (signal === 'approved' || signal === null) {
@@ -82,6 +87,8 @@ async function runFixupLoop(
   let latestReviewAgentId = initialReviewAgentId;
   let latestRisk = initialRisk;
 
+  let latestOutput = '';
+
   while (fixupIterations < MAX_FIXUP_ITERATIONS) {
     fixupIterations++;
     await runFixupAgent(db, delivery, projectDir);
@@ -89,10 +96,19 @@ async function runFixupLoop(
     const reReview = await runReviewAgent(db, delivery, projectDir);
     latestReviewAgentId = reReview.agentId;
     latestRisk = parseRiskScore(reReview.output);
+    latestOutput = reReview.output;
     const signal = parseSignals('review', 'delivery', reReview.output);
 
     if (signal === 'high_risk') {
-      return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+      return runHumanReviewGate(
+        db,
+        delivery,
+        latestReviewAgentId,
+        latestRisk,
+        reReview.output,
+        projectDir,
+        fixupIterations
+      );
     }
     if (signal === 'approved' || signal === null) {
       return {
@@ -105,7 +121,15 @@ async function runFixupLoop(
     }
   }
 
-  return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+  return runHumanReviewGate(
+    db,
+    delivery,
+    latestReviewAgentId,
+    latestRisk,
+    latestOutput,
+    projectDir,
+    fixupIterations
+  );
 }
 
 function approved(riskScore: number, reviewAgentId: string): DeliveryReviewResult {
@@ -118,18 +142,164 @@ function approved(riskScore: number, reviewAgentId: string): DeliveryReviewResul
   };
 }
 
-function escalate(
-  riskScore: number,
+interface ReviewSummary {
+  findings: string;
+  highlightedFiles: string;
+  questions: string;
+}
+
+export async function runHumanReviewGate(
+  db: Database.Database,
+  delivery: DeliveryRecord,
   reviewAgentId: string,
-  fixupIterations: number
-): DeliveryReviewResult {
+  riskScore: number,
+  reviewOutput: string,
+  projectDir: string,
+  priorFixupIterations: number
+): Promise<DeliveryReviewResult> {
+  let latestSummary = extractReviewSummary(reviewOutput);
+  let latestReviewAgentId = reviewAgentId;
+  let latestRisk = riskScore;
+  let fixupIterations = priorFixupIterations;
+
+  for (let cycle = 1; cycle <= HUMAN_REVIEW_MAX_CYCLES; cycle++) {
+    notifyHumanReview(db, delivery, latestSummary, latestRisk, latestReviewAgentId, cycle);
+    recordDelivery(db, delivery.agent_id, {
+      status: 'review-paused',
+      review_agent_id: latestReviewAgentId,
+    });
+
+    const signal = await waitForHumanSignal(db, delivery.agent_id);
+
+    if (signal === 'approve') {
+      recordDelivery(db, delivery.agent_id, { status: 'pr-open' });
+      return {
+        approved: true,
+        riskScore: latestRisk,
+        escalated: true,
+        fixupIterations,
+        reviewAgentId: latestReviewAgentId,
+      };
+    }
+
+    if (cycle === HUMAN_REVIEW_MAX_CYCLES) break;
+
+    await runFixupAgent(db, delivery, projectDir);
+    fixupIterations++;
+    const reReview = await runReviewAgent(db, delivery, projectDir);
+    latestReviewAgentId = reReview.agentId;
+    latestRisk = parseRiskScore(reReview.output);
+    latestSummary = extractReviewSummary(reReview.output);
+  }
+
   return {
     approved: false,
-    riskScore,
+    riskScore: latestRisk,
     escalated: true,
     fixupIterations,
-    reviewAgentId,
+    reviewAgentId: latestReviewAgentId,
   };
+}
+
+async function waitForHumanSignal(
+  db: Database.Database,
+  agentId: string
+): Promise<'approve' | 'needs_fixes'> {
+  while (true) {
+    const signal = readAndClearHumanSignal(db, agentId);
+    if (signal) return signal;
+    await sleep(HUMAN_SIGNAL_POLL_MS);
+  }
+}
+
+function notifyHumanReview(
+  db: Database.Database,
+  delivery: DeliveryRecord,
+  summary: ReviewSummary,
+  riskScore: number,
+  reviewAgentId: string,
+  cycle: number
+): void {
+  const action = cycle === 1 ? 'review-requested' : 'review-re-requested';
+  const content = formatHumanReviewRequest(delivery, summary, riskScore, reviewAgentId, cycle);
+  const meta = JSON.stringify({
+    taskId: delivery.task_id,
+    prUrl: delivery.pr_url,
+    prNumber: delivery.pr_number,
+    reviewAgentId,
+    riskScore,
+    action,
+    cycle,
+  });
+  try {
+    db.prepare(
+      `INSERT INTO inbox (id, content, title, source, source_url, source_meta, status, created_at, processed_at)
+       VALUES (?, ?, ?, 'api', NULL, ?, 'pending', ?, NULL)`
+    ).run(
+      randomUUID(),
+      content,
+      `Review required: ${delivery.task_id ?? 'unknown'}`,
+      meta,
+      new Date().toISOString()
+    );
+  } catch (err) {
+    process.stderr.write(
+      `[delivery-review] failed to add inbox notification: ${err instanceof Error ? err.message : String(err)}\n`
+    );
+  }
+}
+
+function formatHumanReviewRequest(
+  delivery: DeliveryRecord,
+  summary: ReviewSummary,
+  riskScore: number,
+  reviewAgentId: string,
+  cycle: number
+): string {
+  const header =
+    cycle === 1
+      ? `## Review Required: ${delivery.task_id ?? 'unknown'}`
+      : `## Review Required (after fixup): ${delivery.task_id ?? 'unknown'}`;
+  return [
+    header,
+    '',
+    `**PR**: ${delivery.pr_url ?? 'unknown'}`,
+    `**Risk Score**: ${riskScore}/5 (tier: human-review)`,
+    `**Review Agent**: ${reviewAgentId}`,
+    '',
+    '### Key Findings',
+    summary.findings || '(none extracted)',
+    '',
+    '### Files of Interest',
+    summary.highlightedFiles || '(none extracted)',
+    '',
+    '### Open Questions',
+    summary.questions || '(none extracted)',
+    '',
+    `**Actions**: Signal \`approve\` or \`needs_fixes\` via \`brain_delivery_signal\` MCP tool, or run:`,
+    `  brain agent approve ${delivery.task_id ?? '<taskId>'}`,
+    `  brain agent reject ${delivery.task_id ?? '<taskId>'}`,
+  ].join('\n');
+}
+
+function extractReviewSummary(output: string): ReviewSummary {
+  return {
+    findings: extractSection(output, ['Key Findings', 'Findings', 'Summary']),
+    highlightedFiles: extractSection(output, ['Files of Interest', 'Files', 'Highlighted Files']),
+    questions: extractSection(output, ['Open Questions', 'Questions']),
+  };
+}
+
+function extractSection(output: string, headings: string[]): string {
+  for (const heading of headings) {
+    const pattern = new RegExp(`##?\\s*${heading}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|\\n\\*\\*|$)`, 'i');
+    const match = output.match(pattern);
+    if (match) {
+      const text = match[1].trim();
+      if (text) return text;
+    }
+  }
+  return '';
 }
 
 async function runReviewAgent(

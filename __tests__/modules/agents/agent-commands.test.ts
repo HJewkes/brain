@@ -1,6 +1,12 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { agentsMigrationV1, agentsMigrationV2 } from '../../../src/modules/agents/schema.js';
+import {
+  agentsMigrationV1,
+  agentsMigrationV2,
+  agentsMigrationV3,
+  agentsMigrationV4,
+} from '../../../src/modules/agents/schema.js';
+import { recordDelivery } from '../../../src/modules/agents/delivery.js';
 
 // We use a raw better-sqlite3 Database that has the agents migration applied.
 // The data.ts toRaw() helper handles both BrainDB and raw Database instances.
@@ -40,6 +46,8 @@ beforeEach(() => {
   db = new Database(':memory:');
   agentsMigrationV1.up(db);
   agentsMigrationV2.up(db);
+  agentsMigrationV3.up(db);
+  agentsMigrationV4.up(db);
 
   stdoutData = '';
   stderrData = '';
@@ -455,5 +463,55 @@ describe('agent status', () => {
     await run('status', '--agent', 'no-such-id');
     expect(stderrData).toContain('not found');
     expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('agent approve / reject', () => {
+  function seedPausedDelivery(agentName: string, taskId: string): string {
+    db.prepare(
+      `INSERT INTO agents (id, name, parent, status, created_at, context)
+       VALUES (?, ?, 'orchestrator', 'active', ?, '{}')`
+    ).run(agentName, agentName, new Date().toISOString());
+    recordDelivery(db, agentName, {
+      status: 'review-paused',
+      task_id: taskId,
+      branch: `agent/${taskId}`,
+    });
+    return agentName;
+  }
+
+  it('approve sets human_signal to approve', async () => {
+    seedPausedDelivery('agent-approve-1', 'VNM-56.30');
+    await run('approve', 'VNM-56.30');
+    const row = db
+      .prepare('SELECT human_signal FROM delivery_states WHERE agent_id = ?')
+      .get('agent-approve-1') as { human_signal: string };
+    expect(row.human_signal).toBe('approve');
+    expect(stdoutData).toContain('Signaled approve for VNM-56.30');
+  });
+
+  it('reject sets human_signal to needs_fixes', async () => {
+    seedPausedDelivery('agent-reject-1', 'VNM-56.31');
+    await run('reject', 'VNM-56.31');
+    const row = db
+      .prepare('SELECT human_signal FROM delivery_states WHERE agent_id = ?')
+      .get('agent-reject-1') as { human_signal: string };
+    expect(row.human_signal).toBe('needs_fixes');
+    expect(stdoutData).toContain('Signaled needs_fixes for VNM-56.31');
+  });
+
+  it('approve errors when no delivery exists for taskId', async () => {
+    await run('approve', 'VNM-99.99');
+    expect(stderrData).toContain('No delivery found');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('uppercases taskId before lookup', async () => {
+    seedPausedDelivery('agent-lower-1', 'VNM-56.30');
+    await run('approve', 'vnm-56.30');
+    const row = db
+      .prepare('SELECT human_signal FROM delivery_states WHERE agent_id = ?')
+      .get('agent-lower-1') as { human_signal: string };
+    expect(row.human_signal).toBe('approve');
   });
 });

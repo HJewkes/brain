@@ -17,6 +17,7 @@ import { readTaskBody } from '../modules/pm/engine/dispatch.js';
 import type { TaskStatus } from '../modules/pm/types.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 import { getAgent, listAgents, getAgentContext } from '../modules/agents/data.js';
+import { signalDelivery } from '../modules/agents/delivery.js';
 import { dispatchTask, resolveProjectDir } from './dispatch.js';
 import { OrchestrationService } from './orchestration.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
@@ -759,6 +760,31 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
         })),
         filesTouched: [...filesSet].slice(0, 20),
       });
+    }
+  );
+
+  server.tool(
+    'brain_delivery_signal',
+    'Signal a human review decision on a paused delivery. Use approve to resume merge, needs_fixes to trigger a fixup cycle.',
+    {
+      taskId: z.string().describe('PM task display_id (e.g. VNM-56.30)'),
+      action: z
+        .enum(['approve', 'needs_fixes'])
+        .describe('Approve to merge; needs_fixes to iterate'),
+    },
+    async ({ taskId, action }) => {
+      try {
+        const delivery = signalDelivery(svc.db.rawDb, taskId.toUpperCase(), action);
+        if (!delivery) return errorResult(`No delivery found for task: ${taskId}`);
+        return textResult({
+          taskId: delivery.task_id,
+          agentId: delivery.agent_id,
+          status: delivery.status,
+          humanSignal: action,
+        });
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
     }
   );
 }
