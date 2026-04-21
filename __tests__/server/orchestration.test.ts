@@ -16,10 +16,12 @@ vi.mock('../../src/modules/agents/delivery.js', () => ({
 
 vi.mock('../../src/modules/pm/engine/dependency.js', () => ({
   computeWaves: vi.fn(),
+  buildDependencyGraph: vi.fn(() => new Map()),
 }));
 
 vi.mock('../../src/modules/pm/data/task-ops.js', () => ({
   listTasks: vi.fn(),
+  updateTaskStatus: vi.fn(() => Promise.resolve({ ok: true, data: {} })),
 }));
 
 vi.mock('../../src/modules/agents/dispatch-loop.js', () => {
@@ -28,6 +30,7 @@ vi.mock('../../src/modules/agents/dispatch-loop.js', () => {
       executeWave: vi.fn(() =>
         Promise.resolve({
           settled: [],
+          failedTaskIds: [],
           review: {
             wave: 1,
             taskCount: 0,
@@ -52,14 +55,16 @@ vi.mock('../../src/server/dispatch.js', () => ({
 import { OrchestrationService } from '../../src/server/orchestration.js';
 import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
 import { getDeliveryForTask } from '../../src/modules/agents/delivery.js';
-import { computeWaves } from '../../src/modules/pm/engine/dependency.js';
-import { listTasks } from '../../src/modules/pm/data/task-ops.js';
+import { buildDependencyGraph, computeWaves } from '../../src/modules/pm/engine/dependency.js';
+import { listTasks, updateTaskStatus } from '../../src/modules/pm/data/task-ops.js';
 import { DispatchLoop } from '../../src/modules/agents/dispatch-loop.js';
 
 const mockMonitorDelivery = monitorDelivery as ReturnType<typeof vi.fn>;
 const mockGetDelivery = getDeliveryForTask as ReturnType<typeof vi.fn>;
 const mockComputeWaves = computeWaves as ReturnType<typeof vi.fn>;
+const mockBuildDependencyGraph = buildDependencyGraph as ReturnType<typeof vi.fn>;
 const mockListTasks = listTasks as ReturnType<typeof vi.fn>;
+const mockUpdateTaskStatus = updateTaskStatus as ReturnType<typeof vi.fn>;
 
 const projectDir = '/tmp/test-project';
 
@@ -340,7 +345,9 @@ describe('OrchestrationService', () => {
         lintPassed: null,
         summary: 'CLEAN',
       };
-      const executeWaveFn = vi.fn(() => Promise.resolve({ settled: [], review: cleanReview }));
+      const executeWaveFn = vi.fn(() =>
+        Promise.resolve({ settled: [], failedTaskIds: [], review: cleanReview })
+      );
       (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
         executeWave: executeWaveFn,
       }));
@@ -373,7 +380,9 @@ describe('OrchestrationService', () => {
         lintPassed: null,
         summary: 'CLEAN',
       };
-      const executeWaveFn = vi.fn(() => Promise.resolve({ settled: [], review: cleanReview }));
+      const executeWaveFn = vi.fn(() =>
+        Promise.resolve({ settled: [], failedTaskIds: [], review: cleanReview })
+      );
       (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
         executeWave: executeWaveFn,
       }));
@@ -394,6 +403,91 @@ describe('OrchestrationService', () => {
       await expect(svc.executeWorkstream({ db } as unknown, 'VNM-48')).rejects.toThrow(
         'Failed to list tasks'
       );
+    });
+
+    it('skips downstream tasks when a dependency fails', async () => {
+      mockListTasks.mockReturnValue({
+        ok: true,
+        data: [
+          { display_id: 'VNM-48.101' },
+          { display_id: 'VNM-48.102' },
+          { display_id: 'VNM-48.103' },
+        ],
+      });
+      mockComputeWaves.mockReturnValue([
+        { wave: 1, taskIds: ['VNM-48.101'] },
+        { wave: 2, taskIds: ['VNM-48.102'] },
+        { wave: 3, taskIds: ['VNM-48.103'] },
+      ]);
+      // .102 depends on .101; .103 depends on .102 (transitive chain)
+      mockBuildDependencyGraph.mockReturnValue(
+        new Map([
+          ['VNM-48.101', []],
+          ['VNM-48.102', ['VNM-48.101']],
+          ['VNM-48.103', ['VNM-48.102']],
+        ])
+      );
+
+      mockUpdateTaskStatus.mockResolvedValue({ ok: true, data: {} });
+
+      const executeWaveFn = vi.fn(() =>
+        Promise.resolve({ settled: [], failedTaskIds: ['VNM-48.101'] })
+      );
+      (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        executeWave: executeWaveFn,
+      }));
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.executeWorkstream({ db } as unknown, 'VNM-48');
+
+      // Only wave 1 should have been dispatched — waves 2 and 3 are fully skipped
+      expect(executeWaveFn).toHaveBeenCalledTimes(1);
+      expect(executeWaveFn.mock.calls[0][0].taskIds).toEqual(['VNM-48.101']);
+
+      // All three tasks marked blocked: .101 (failed agent), .102 + .103 (transitive skip)
+      const blocked = mockUpdateTaskStatus.mock.calls
+        .filter((c) => c[4] === 'blocked')
+        .map((c) => c[3]);
+      expect(blocked).toEqual(expect.arrayContaining(['VNM-48.101', 'VNM-48.102', 'VNM-48.103']));
+    });
+
+    it('runs independent tasks in the same wave as a failure', async () => {
+      mockListTasks.mockReturnValue({
+        ok: true,
+        data: [
+          { display_id: 'VNM-48.101' },
+          { display_id: 'VNM-48.102' },
+          { display_id: 'VNM-48.103' },
+        ],
+      });
+      mockComputeWaves.mockReturnValue([
+        { wave: 1, taskIds: ['VNM-48.101', 'VNM-48.102'] },
+        { wave: 2, taskIds: ['VNM-48.103'] },
+      ]);
+      // .103 depends only on .102 (independent of .101's failure)
+      mockBuildDependencyGraph.mockReturnValue(
+        new Map([
+          ['VNM-48.101', []],
+          ['VNM-48.102', []],
+          ['VNM-48.103', ['VNM-48.102']],
+        ])
+      );
+
+      mockUpdateTaskStatus.mockResolvedValue({ ok: true, data: {} });
+
+      const executeWaveFn = vi.fn(() =>
+        Promise.resolve({ settled: [], failedTaskIds: ['VNM-48.101'] })
+      );
+      (DispatchLoop as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        executeWave: executeWaveFn,
+      }));
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.executeWorkstream({ db } as unknown, 'VNM-48');
+
+      // Wave 1 runs both tasks, wave 2 still runs .103 since its dep .102 succeeded
+      expect(executeWaveFn).toHaveBeenCalledTimes(2);
+      expect(executeWaveFn.mock.calls[1][0].taskIds).toEqual(['VNM-48.103']);
     });
   });
 

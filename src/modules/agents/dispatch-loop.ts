@@ -21,6 +21,8 @@ export interface SpawnResult {
 
 export interface WaveExecutionResult {
   settled: PromiseSettledResult<void>[];
+  /** Tasks whose agent failed, was abandoned, or failed to spawn. */
+  failedTaskIds: string[];
 }
 
 /** Inject the spawn function to avoid circular server ↔ modules dependency. */
@@ -236,6 +238,7 @@ export class DispatchLoop {
   async executeWave(wave: WaveAssignment): Promise<WaveExecutionResult> {
     const semaphore = new Semaphore(this.wipLimit);
     const deliveries: Promise<void>[] = [];
+    const failedTaskIds: string[] = [];
 
     const agentTasks = wave.taskIds.map(async (taskId) => {
       await semaphore.acquire();
@@ -247,6 +250,7 @@ export class DispatchLoop {
         semaphore.release();
         const msg = err instanceof Error ? err.message : String(err);
         process.stderr.write(`[dispatch-loop] spawn failed for ${taskId}: ${msg}\n`);
+        failedTaskIds.push(taskId);
         return;
       }
 
@@ -257,6 +261,7 @@ export class DispatchLoop {
       if (!success) {
         process.stderr.write(`[dispatch-loop] agent ${agentId} failed for ${taskId}\n`);
         releaseWorktree(this.rawDb, this.projectDir, taskId);
+        failedTaskIds.push(taskId);
         return;
       }
 
@@ -265,8 +270,10 @@ export class DispatchLoop {
 
     const settled = await Promise.allSettled(agentTasks);
     await Promise.allSettled(deliveries);
-    process.stderr.write(`[dispatch-loop] wave ${wave.wave} complete: ${settled.length} task(s)\n`);
+    process.stderr.write(
+      `[dispatch-loop] wave ${wave.wave} complete: ${settled.length} task(s), ${failedTaskIds.length} failed\n`
+    );
 
-    return { settled };
+    return { settled, failedTaskIds };
   }
 }
