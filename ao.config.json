@@ -19,5 +19,20 @@
   },
   "delivery": {
     "flakyTests": ["workflow-mcp.test.ts"]
+  },
+  "dispatch": {
+    "defaultMaxBudgetUsd": 50,
+    "categoryBudgets": {
+      "research": 10,
+      "implementation": 50,
+      "testing": 30,
+      "documentation": 15,
+      "review": 25,
+      "infrastructure": 40,
+      "configuration": 20,
+      "design": 20,
+      "migration": 35,
+      "feature": 50
+    }
   }
 }
