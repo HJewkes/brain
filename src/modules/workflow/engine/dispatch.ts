@@ -10,6 +10,7 @@ import { readTaskBody } from '../../pm/engine/dispatch.js';
 import { getPmNotes } from '../../pm/data/queries.js';
 import { generateClaim } from '../../pm/engine/claims.js';
 import type { TaskMode } from '../../pm/types.js';
+import { getAoConfigWatcher } from '../../../services/ao-config-watcher.js';
 
 export interface DispatchOptions {
   branch?: string;
@@ -119,6 +120,9 @@ export async function dispatchTemplate(
   vars.BRAIN_TASK_ID = taskId;
   vars.PROJECT_PREFIX = prefix;
 
+  const aoDefaults = getAoConfigWatcher(process.cwd()).snapshot;
+  const fallbackReviewThreshold = aoDefaults.reviewThreshold ?? 5;
+
   if (projectResult.ok) {
     const p = projectResult.data;
     vars.REPO_PATH = p.path || process.cwd();
@@ -127,7 +131,7 @@ export async function dispatchTemplate(
     vars.TYPECHECK_CMD = p.commands?.typecheck ?? 'N/A';
     vars.LINT_CMD = p.commands?.lint ?? 'N/A';
     vars.BASE_BRANCH = p.default_branch ?? 'main';
-    vars.REVIEW_THRESHOLD = String(p.review_threshold ?? 5);
+    vars.REVIEW_THRESHOLD = String(p.review_threshold ?? fallbackReviewThreshold);
 
     vars.BRANCH_NAME =
       opts.branch ?? buildBranchName(task.category, task.title ?? taskId, p.branch_prefix);
@@ -138,7 +142,7 @@ export async function dispatchTemplate(
     vars.TYPECHECK_CMD = 'N/A';
     vars.LINT_CMD = 'N/A';
     vars.BASE_BRANCH = 'main';
-    vars.REVIEW_THRESHOLD = '5';
+    vars.REVIEW_THRESHOLD = String(fallbackReviewThreshold);
     vars.BRANCH_NAME = opts.branch ?? buildBranchName(task.category, task.title ?? taskId);
   }
 
