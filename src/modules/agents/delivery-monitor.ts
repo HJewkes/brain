@@ -1,7 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type Database from 'better-sqlite3';
 import type { BrainDB } from '../../services/brain-db.js';
 import { getRawDb, sleep } from '../../utils/db.js';
-import { getPrForBranch, mergePr } from './auto-merge.js';
+import { getPrForBranch, mergePr, rerunPrChecks, type PrStatus } from './auto-merge.js';
 import { rebaseInIsolation } from './rebase-isolation.js';
 import { spawnFixAgent } from './fix-agent.js';
 import { updateDeliveryStatus, type DeliveryRecord } from './delivery.js';
@@ -14,6 +16,34 @@ const POLL_INITIAL = 10_000; // 10s
 const POLL_MAX = 60_000; // 60s
 const POLL_BACKOFF = 1.5;
 const MAX_FIX_ATTEMPTS = 3;
+
+/**
+ * Load the known-flaky test allowlist from ao.config.json's `delivery.flakyTests` array.
+ * When every failing check name matches an entry, CI failures are downgraded to warnings.
+ */
+export function loadFlakyTests(projectDir: string): string[] {
+  const configPath = join(projectDir, 'ao.config.json');
+  if (!existsSync(configPath)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    const delivery = raw.delivery as { flakyTests?: unknown } | undefined;
+    const list = delivery?.flakyTests;
+    if (!Array.isArray(list)) return [];
+    return list.filter((v): v is string => typeof v === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function allFailuresAreFlaky(failedChecks: string[], flakyTests: string[]): boolean {
+  if (failedChecks.length === 0 || flakyTests.length === 0) return false;
+  return failedChecks.every((name) => flakyTests.some((pattern) => name.includes(pattern)));
+}
+
+function isEffectivelyGreen(pr: PrStatus, flakyTests: string[]): boolean {
+  if (pr.checksPass) return true;
+  return allFailuresAreFlaky(pr.failedChecks ?? [], flakyTests);
+}
 
 function readFixAttempts(rawDb: Database.Database, agentId: string): number {
   try {
@@ -90,6 +120,8 @@ export async function monitorDelivery(
   const startedAt = Date.now();
   let pollInterval = POLL_INITIAL;
   let fixAttempts = readFixAttempts(rawDb, delivery.agent_id);
+  let ciRetried = false;
+  const flakyTests = loadFlakyTests(projectDir);
 
   while (true) {
     await sleep(pollInterval);
@@ -119,8 +151,11 @@ export async function monitorDelivery(
       return 'stalled';
     }
 
-    // Ready to merge: CI green + mergeable
-    if (pr.checksPass && pr.mergeable) {
+    // Flaky-test allowlist: treat CI failures as pass if every failed check is allowlisted
+    const effectivelyGreen = isEffectivelyGreen(pr, flakyTests);
+
+    // Ready to merge: CI green (or all-flaky) + mergeable
+    if (effectivelyGreen && pr.mergeable) {
       const result = mergePr(pr.number, { projectDir });
       if (result.merged) {
         markMerged(rawDb, delivery);
@@ -152,8 +187,18 @@ export async function monitorDelivery(
       return 'redispatched';
     }
 
-    // CI failed — spawn fix agent
+    // CI failed — retry once, then escalate to fix agent
     if (!pr.checksPass) {
+      if (!ciRetried && rerunPrChecks(delivery.branch, projectDir)) {
+        ciRetried = true;
+        const names = (pr.failedChecks ?? []).join(', ');
+        process.stderr.write(
+          `[delivery-monitor] ${delivery.task_id} PR #${delivery.pr_number}: ` +
+            `rerunning failed checks (${names})\n`
+        );
+        continue;
+      }
+
       if (brainDb && fixAttempts < MAX_FIX_ATTEMPTS) {
         const fixed = await spawnFixAgent(brainDb, delivery);
         fixAttempts++;

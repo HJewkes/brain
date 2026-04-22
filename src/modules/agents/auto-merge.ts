@@ -14,6 +14,7 @@ export interface PrStatus {
   mergeable: boolean;
   mergeStateStatus?: string;
   state: 'open' | 'closed' | 'merged';
+  failedChecks: string[];
 }
 
 export type MergeStrategy = 'squash' | 'merge' | 'rebase';
@@ -49,18 +50,16 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
       state: string;
       mergeable: string;
       mergeStateStatus?: string;
-      statusCheckRollup: Array<{ conclusion: string; state: string }> | null;
+      statusCheckRollup: Array<{ conclusion: string; state: string; name?: string }> | null;
     };
 
     const checks = data.statusCheckRollup ?? [];
-    const checksPass =
-      checks.length === 0 ||
-      checks.every((c) => {
-        if (c.conclusion) {
-          return c.conclusion === 'SUCCESS' || c.conclusion === 'NEUTRAL';
-        }
-        return c.state !== 'FAILURE' && c.state !== 'ERROR';
-      });
+    const isFailure = (c: { conclusion: string; state: string }): boolean => {
+      if (c.conclusion) return c.conclusion !== 'SUCCESS' && c.conclusion !== 'NEUTRAL';
+      return c.state === 'FAILURE' || c.state === 'ERROR';
+    };
+    const failedChecks = checks.filter(isFailure).map((c) => c.name ?? '');
+    const checksPass = failedChecks.length === 0;
 
     return {
       number: data.number,
@@ -69,6 +68,7 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
       mergeable: data.mergeable === 'MERGEABLE',
       mergeStateStatus: data.mergeStateStatus,
       state: data.state.toLowerCase() as PrStatus['state'],
+      failedChecks,
     };
   } catch {
     return null;
@@ -109,6 +109,30 @@ export function mergePr(
   }
 
   return result;
+}
+
+/**
+ * Re-run the failed jobs of the latest GitHub Actions workflow run for a branch.
+ * Used to retry flaky CI failures once before escalating to a fix agent.
+ */
+export function rerunPrChecks(branch: string, projectDir: string): boolean {
+  try {
+    const json = execFileSync(
+      'gh',
+      ['run', 'list', '--branch', branch, '--limit', '1', '--json', 'databaseId'],
+      { cwd: projectDir, encoding: 'utf-8', stdio: 'pipe' }
+    );
+    const runs = JSON.parse(json) as Array<{ databaseId: number }>;
+    if (runs.length === 0) return false;
+    execFileSync('gh', ['run', 'rerun', String(runs[0].databaseId), '--failed'], {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function pullMain(projectDir: string): void {

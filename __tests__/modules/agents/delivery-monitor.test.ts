@@ -13,6 +13,7 @@ vi.mock('../../../src/utils/db.js', () => ({
 vi.mock('../../../src/modules/agents/auto-merge.js', () => ({
   getPrForBranch: vi.fn(),
   mergePr: vi.fn(),
+  rerunPrChecks: vi.fn(() => false),
 }));
 
 vi.mock('../../../src/modules/agents/rebase-isolation.js', () => ({
@@ -28,7 +29,7 @@ vi.mock('../../../src/modules/agents/delivery.js', () => ({
 }));
 
 import { monitorDelivery } from '../../../src/modules/agents/delivery-monitor.js';
-import { getPrForBranch, mergePr } from '../../../src/modules/agents/auto-merge.js';
+import { getPrForBranch, mergePr, rerunPrChecks } from '../../../src/modules/agents/auto-merge.js';
 import { rebaseInIsolation } from '../../../src/modules/agents/rebase-isolation.js';
 import { spawnFixAgent } from '../../../src/modules/agents/fix-agent.js';
 import { updateDeliveryStatus } from '../../../src/modules/agents/delivery.js';
@@ -38,6 +39,7 @@ const mockMergePr = mergePr as ReturnType<typeof vi.fn>;
 const mockRebase = rebaseInIsolation as ReturnType<typeof vi.fn>;
 const mockFixAgent = spawnFixAgent as ReturnType<typeof vi.fn>;
 const mockUpdateStatus = updateDeliveryStatus as ReturnType<typeof vi.fn>;
+const mockRerun = rerunPrChecks as ReturnType<typeof vi.fn>;
 
 function makeDelivery(overrides: Partial<DeliveryRecord> = {}): DeliveryRecord {
   return {
@@ -424,5 +426,142 @@ describe('monitorDelivery', () => {
     expect(result).toBe('stalled');
     const stallWrites = findQueries(db, 'SET stall_reason');
     expect(stallWrites[0].runArgs[0]).toEqual(['pr-missing', expect.any(String), 'agent-1']);
+  });
+
+  it('CI failure: reruns failed checks once before escalating to fix agent', async () => {
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
+    // First poll: CI failed → trigger rerun
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
+      failedChecks: ['workflow-mcp.test.ts'],
+    });
+    mockRerun.mockReturnValueOnce(true);
+    // Second poll: CI still failed → fix agent called this time
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
+      failedChecks: ['workflow-mcp.test.ts'],
+    });
+    mockFixAgent.mockResolvedValueOnce(true);
+    // Third poll: green
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: true,
+      mergeable: true,
+      state: 'open',
+      failedChecks: [],
+    });
+    mockMergePr.mockReturnValueOnce({ merged: true, taskId: 't', prNumber: 42 });
+
+    const result = await monitorDelivery(brainDb, makeDelivery(), projectDir);
+    expect(result).toBe('merged');
+    expect(mockRerun).toHaveBeenCalledTimes(1);
+    expect(mockRerun).toHaveBeenCalledWith('agent/vnm-48/VNM-48.101', projectDir);
+    expect(mockFixAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('CI failure: skips rerun if rerunPrChecks returns false and escalates directly', async () => {
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
+      failedChecks: ['some-test'],
+    });
+    mockRerun.mockReturnValueOnce(false);
+    mockFixAgent.mockResolvedValueOnce(false);
+
+    const result = await monitorDelivery(brainDb, makeDelivery(), projectDir);
+    expect(result).toBe('redispatched');
+    expect(mockFixAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('CI failure: only retries once per monitor run even if checks fail again', async () => {
+    const db = makeDbMock();
+    const brainDb = { rawDb: db } as unknown;
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
+      failedChecks: ['t'],
+    });
+    mockRerun.mockReturnValueOnce(true);
+    mockGetPr.mockReturnValueOnce({
+      number: 42,
+      branch: 'b',
+      checksPass: false,
+      mergeable: true,
+      state: 'open',
+      failedChecks: ['t'],
+    });
+    mockRerun.mockReturnValueOnce(true); // should NOT be called
+    mockFixAgent.mockResolvedValueOnce(false);
+
+    const result = await monitorDelivery(brainDb, makeDelivery(), projectDir);
+    expect(result).toBe('redispatched');
+    expect(mockRerun).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('loadFlakyTests', () => {
+  it('returns flaky test list from ao.config.json delivery.flakyTests', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { loadFlakyTests } = await import('../../../src/modules/agents/delivery-monitor.js');
+
+    const dir = mkdtempSync(join(tmpdir(), 'flaky-'));
+    try {
+      writeFileSync(
+        join(dir, 'ao.config.json'),
+        JSON.stringify({ delivery: { flakyTests: ['workflow-mcp.test.ts', 'other'] } })
+      );
+      expect(loadFlakyTests(dir)).toEqual(['workflow-mcp.test.ts', 'other']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns empty list when ao.config.json is missing', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { loadFlakyTests } = await import('../../../src/modules/agents/delivery-monitor.js');
+
+    const dir = mkdtempSync(join(tmpdir(), 'flaky-'));
+    try {
+      expect(loadFlakyTests(dir)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns empty list when delivery.flakyTests is absent', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { loadFlakyTests } = await import('../../../src/modules/agents/delivery-monitor.js');
+
+    const dir = mkdtempSync(join(tmpdir(), 'flaky-'));
+    try {
+      writeFileSync(join(dir, 'ao.config.json'), JSON.stringify({ enforcement: {} }));
+      expect(loadFlakyTests(dir)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
