@@ -16,5 +16,8 @@
   "ownershipManifest": ".claude/ownership.json",
   "browserGate": {
     "agent": "deploy-agent"
+  },
+  "delivery": {
+    "flakyTests": ["workflow-mcp.test.ts"]
   }
 }

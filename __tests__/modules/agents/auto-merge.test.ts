@@ -12,6 +12,7 @@ import {
   mergePr,
   tryAutoMerge,
   pullMain,
+  rerunPrChecks,
 } from '../../../src/modules/agents/auto-merge.js';
 
 describe('auto-merge', () => {
@@ -39,6 +40,7 @@ describe('auto-merge', () => {
         checksPass: true,
         mergeable: true,
         state: 'open',
+        failedChecks: [],
       });
     });
 
@@ -383,6 +385,78 @@ describe('auto-merge', () => {
 
       // Only one call: getPrForBranch. No merge call.
       expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('getPrForBranch failedChecks', () => {
+    it('returns names of failing checks', () => {
+      mockExecFileSync.mockReturnValue(
+        JSON.stringify({
+          number: 1,
+          headRefName: 'b',
+          state: 'OPEN',
+          mergeable: 'MERGEABLE',
+          statusCheckRollup: [
+            { name: 'lint', conclusion: 'SUCCESS', state: 'COMPLETED' },
+            { name: 'integration-tests', conclusion: 'FAILURE', state: 'COMPLETED' },
+            { name: 'unit-tests', conclusion: 'FAILURE', state: 'COMPLETED' },
+          ],
+        })
+      );
+
+      const pr = getPrForBranch('b', '/repo');
+      expect(pr?.checksPass).toBe(false);
+      expect(pr?.failedChecks).toEqual(['integration-tests', 'unit-tests']);
+    });
+
+    it('returns empty failedChecks when all checks pass', () => {
+      mockExecFileSync.mockReturnValue(
+        JSON.stringify({
+          number: 1,
+          headRefName: 'b',
+          state: 'OPEN',
+          mergeable: 'MERGEABLE',
+          statusCheckRollup: [{ name: 'ci', conclusion: 'SUCCESS', state: 'COMPLETED' }],
+        })
+      );
+
+      const pr = getPrForBranch('b', '/repo');
+      expect(pr?.failedChecks).toEqual([]);
+    });
+  });
+
+  describe('rerunPrChecks', () => {
+    it('reruns the latest failed run for a branch', () => {
+      mockExecFileSync
+        .mockReturnValueOnce(JSON.stringify([{ databaseId: 9999 }]))
+        .mockReturnValueOnce('');
+
+      const ok = rerunPrChecks('feat/x', '/repo');
+      expect(ok).toBe(true);
+      expect(mockExecFileSync).toHaveBeenNthCalledWith(
+        1,
+        'gh',
+        ['run', 'list', '--branch', 'feat/x', '--limit', '1', '--json', 'databaseId'],
+        expect.objectContaining({ cwd: '/repo' })
+      );
+      expect(mockExecFileSync).toHaveBeenNthCalledWith(
+        2,
+        'gh',
+        ['run', 'rerun', '9999', '--failed'],
+        expect.objectContaining({ cwd: '/repo' })
+      );
+    });
+
+    it('returns false when no runs are found', () => {
+      mockExecFileSync.mockReturnValueOnce(JSON.stringify([]));
+      expect(rerunPrChecks('feat/x', '/repo')).toBe(false);
+    });
+
+    it('returns false when gh throws', () => {
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error('gh failure');
+      });
+      expect(rerunPrChecks('feat/x', '/repo')).toBe(false);
     });
   });
 });
