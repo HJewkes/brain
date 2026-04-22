@@ -4,6 +4,8 @@ import { formatError } from '../errors.js';
 import { resolveProject } from '../data/queries.js';
 import { getTask, listTasks, updateTaskStatus } from '../data/task-ops.js';
 import { computeWaves, buildDependencyGraph } from '../engine/dependency.js';
+import { detectFileCollisions } from '../engine/collisions.js';
+import type { FileCollision } from '../engine/collisions.js';
 import type { BrainDB } from '../../../services/brain-db.js';
 import type { TaskStatus } from '../types.js';
 
@@ -20,6 +22,7 @@ export interface DispatchWaveResult {
   eligible: WaveTaskSummary[];
   inProgress: WaveTaskSummary[];
   done: WaveTaskSummary[];
+  collisions: FileCollision[];
   nextWave: {
     wave: number;
     tasks: WaveTaskSummary[];
@@ -85,6 +88,7 @@ export function computeDispatchWave(db: BrainDB, prefix: string): DispatchWaveRe
       eligible: [],
       inProgress: [],
       done: [],
+      collisions: [],
       nextWave: null,
     };
   }
@@ -130,13 +134,22 @@ export function computeDispatchWave(db: BrainDB, prefix: string): DispatchWaveRe
         }
       : null;
 
+  // Detect file-path overlaps across concurrent tasks (eligible + in-progress).
+  const concurrentIds = [...eligible, ...inProgress].map((t) => t.displayId);
+  const collisions = detectFileCollisions(db, concurrentIds);
+
   return {
     wave: currentWave.wave,
     eligible,
     inProgress,
     done,
+    collisions,
     nextWave,
   };
+}
+
+function isInProgress(result: DispatchWaveResult, displayId: string): boolean {
+  return result.inProgress.some((t) => t.displayId === displayId);
 }
 
 function formatDepsLine(deps: Array<{ displayId: string; status: string }>): string {
@@ -172,6 +185,12 @@ export function createDispatchWaveCommand(): Command {
         const maxN = opts.max ? parseInt(opts.max, 10) : Infinity;
         const toDispatch = result.eligible.slice(0, maxN);
 
+        const dispatchIds = new Set(toDispatch.map((t) => t.displayId));
+        const collisions = result.collisions.filter(
+          (c) =>
+            c.taskIds.filter((id) => dispatchIds.has(id) || isInProgress(result, id)).length > 1
+        );
+
         if (opts.json) {
           const output = {
             wave: result.wave,
@@ -179,6 +198,7 @@ export function createDispatchWaveCommand(): Command {
             inProgress: result.inProgress,
             blocked: result.nextWave?.tasks ?? [],
             nextWave: result.nextWave,
+            collisions,
           };
           process.stdout.write(JSON.stringify(output, null, 2) + '\n');
           return;
@@ -204,6 +224,18 @@ export function createDispatchWaveCommand(): Command {
         if (result.inProgress.length > 0) {
           process.stdout.write(
             `In-progress (${result.inProgress.length}): ${result.inProgress.map((t) => t.displayId).join(', ')}\n`
+          );
+        }
+
+        if (collisions.length > 0) {
+          process.stdout.write(
+            `\n⚠ File ownership collisions (${collisions.length}): concurrent tasks reference the same paths.\n`
+          );
+          for (const c of collisions) {
+            process.stdout.write(`  ${c.pattern} ← ${c.taskIds.join(', ')}\n`);
+          }
+          process.stdout.write(
+            '  Review descriptions and serialize overlapping work (add depends_on) or dispatch separately.\n'
           );
         }
 
