@@ -774,12 +774,19 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
     },
     async ({ taskId, action }) => {
       try {
-        const delivery = signalDelivery(svc.db.rawDb, taskId.toUpperCase(), action);
-        if (!delivery) return errorResult(`No delivery found for task: ${taskId}`);
+        const result = signalDelivery(svc.db.rawDb, taskId.toUpperCase(), action);
+        if (!result.ok) {
+          if (result.reason === 'not-found') {
+            return errorResult(`No delivery found for task: ${taskId}`);
+          }
+          return errorResult(
+            `Delivery for ${taskId} is in status '${result.delivery.status}', not 'review-paused'. Signal would not be read.`
+          );
+        }
         return textResult({
-          taskId: delivery.task_id,
-          agentId: delivery.agent_id,
-          status: delivery.status,
+          taskId: result.delivery.task_id,
+          agentId: result.delivery.agent_id,
+          status: result.delivery.status,
           humanSignal: action,
         });
       } catch (err) {

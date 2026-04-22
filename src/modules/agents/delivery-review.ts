@@ -33,6 +33,7 @@ const FIXUP_TOOLS = 'Bash,Edit,Read,Write,Glob,Grep';
 const REVIEW_BUDGET_USD = '5.0';
 const HUMAN_SIGNAL_POLL_MS = 30_000;
 const HUMAN_REVIEW_MAX_CYCLES = 2;
+const HUMAN_REVIEW_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Run the review phase of delivery.
@@ -91,7 +92,7 @@ async function runFixupLoop(
 
   while (fixupIterations < MAX_FIXUP_ITERATIONS) {
     fixupIterations++;
-    await runFixupAgent(db, delivery, projectDir);
+    await runFixupAgent(delivery, projectDir);
 
     const reReview = await runReviewAgent(db, delivery, projectDir);
     latestReviewAgentId = reReview.agentId;
@@ -169,7 +170,8 @@ export async function runHumanReviewGate(
       review_agent_id: latestReviewAgentId,
     });
 
-    const signal = await waitForHumanSignal(db, delivery.agent_id);
+    const deadline = Date.now() + HUMAN_REVIEW_TIMEOUT_MS;
+    const signal = await waitForHumanSignal(db, delivery.agent_id, deadline);
 
     if (signal === 'approve') {
       recordDelivery(db, delivery.agent_id, { status: 'pr-open' });
@@ -182,9 +184,23 @@ export async function runHumanReviewGate(
       };
     }
 
+    if (signal === 'timeout') {
+      recordDelivery(db, delivery.agent_id, {
+        status: 'stalled',
+        stall_reason: 'review-timeout',
+      });
+      return {
+        approved: false,
+        riskScore: latestRisk,
+        escalated: true,
+        fixupIterations,
+        reviewAgentId: latestReviewAgentId,
+      };
+    }
+
     if (cycle === HUMAN_REVIEW_MAX_CYCLES) break;
 
-    await runFixupAgent(db, delivery, projectDir);
+    await runFixupAgent(delivery, projectDir);
     fixupIterations++;
     const reReview = await runReviewAgent(db, delivery, projectDir);
     latestReviewAgentId = reReview.agentId;
@@ -192,6 +208,10 @@ export async function runHumanReviewGate(
     latestSummary = extractReviewSummary(reReview.output);
   }
 
+  recordDelivery(db, delivery.agent_id, {
+    status: 'stalled',
+    stall_reason: 'review-rejected',
+  });
   return {
     approved: false,
     riskScore: latestRisk,
@@ -203,13 +223,17 @@ export async function runHumanReviewGate(
 
 async function waitForHumanSignal(
   db: Database.Database,
-  agentId: string
-): Promise<'approve' | 'needs_fixes'> {
-  while (true) {
+  agentId: string,
+  deadline: number
+): Promise<'approve' | 'needs_fixes' | 'timeout'> {
+  while (Date.now() < deadline) {
     const signal = readAndClearHumanSignal(db, agentId);
     if (signal) return signal;
     await sleep(HUMAN_SIGNAL_POLL_MS);
   }
+  // Final check so a signal arriving just past the deadline isn't dropped.
+  const signal = readAndClearHumanSignal(db, agentId);
+  return signal ?? 'timeout';
 }
 
 function notifyHumanReview(
@@ -314,14 +338,11 @@ async function runReviewAgent(
 }
 
 async function runFixupAgent(
-  db: Database.Database,
   delivery: DeliveryRecord,
   projectDir: string
 ): Promise<ReviewRunOutput> {
   const prompt = buildFixupPrompt(delivery, projectDir);
-  const result = await spawnClaudeReview(prompt, projectDir, FIXUP_TOOLS);
-  void db;
-  return result;
+  return spawnClaudeReview(prompt, projectDir, FIXUP_TOOLS);
 }
 
 function buildReviewPrompt(delivery: DeliveryRecord, projectDir: string): string {

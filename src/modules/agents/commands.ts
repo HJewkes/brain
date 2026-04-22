@@ -427,14 +427,20 @@ export function createAgentCommands(): Command {
 async function runDeliverySignal(taskId: string, signal: HumanSignal): Promise<void> {
   await withDb((svc) => {
     const rawDb = getRawDb(svc.db);
-    const delivery = signalDelivery(rawDb, taskId.toUpperCase(), signal);
-    if (!delivery) {
-      process.stderr.write(`Error: No delivery found for task: ${taskId}\n`);
+    const result = signalDelivery(rawDb, taskId.toUpperCase(), signal);
+    if (!result.ok) {
+      if (result.reason === 'not-found') {
+        process.stderr.write(`Error: No delivery found for task: ${taskId}\n`);
+      } else {
+        process.stderr.write(
+          `Error: Delivery for ${taskId} is in status '${result.delivery.status}', not 'review-paused'. Signal would not be read.\n`
+        );
+      }
       process.exitCode = 1;
       return;
     }
     process.stdout.write(
-      `Signaled ${signal} for ${taskId} (agent ${delivery.agent_id}, status ${delivery.status}).\n`
+      `Signaled ${signal} for ${taskId} (agent ${result.delivery.agent_id}, status ${result.delivery.status}).\n`
     );
   });
 }

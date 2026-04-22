@@ -176,22 +176,30 @@ export type HumanSignal = 'approve' | 'needs_fixes';
 
 export const VALID_HUMAN_SIGNALS: ReadonlySet<HumanSignal> = new Set(['approve', 'needs_fixes']);
 
+export type SignalDeliveryResult =
+  | { ok: true; delivery: DeliveryRecord }
+  | { ok: false; reason: 'not-found' }
+  | { ok: false; reason: 'not-paused'; delivery: DeliveryRecord };
+
 export function signalDelivery(
   db: Database.Database,
   taskId: string,
   signal: HumanSignal
-): DeliveryRecord | null {
+): SignalDeliveryResult {
   if (!VALID_HUMAN_SIGNALS.has(signal)) {
     throw new Error(`Invalid human signal: ${signal}`);
   }
   const delivery = getDeliveryForTask(db, taskId);
-  if (!delivery) return null;
+  if (!delivery) return { ok: false, reason: 'not-found' };
+  if (delivery.status !== 'review-paused') {
+    return { ok: false, reason: 'not-paused', delivery };
+  }
   db.prepare('UPDATE delivery_states SET human_signal = ?, updated_at = ? WHERE agent_id = ?').run(
     signal,
     new Date().toISOString(),
     delivery.agent_id
   );
-  return { ...delivery, human_signal: signal };
+  return { ok: true, delivery: { ...delivery, human_signal: signal } };
 }
 
 export function readAndClearHumanSignal(

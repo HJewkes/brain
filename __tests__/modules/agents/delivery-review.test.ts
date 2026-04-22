@@ -57,12 +57,13 @@ function makeDelivery(
   const agentId = overrides.agent_id ?? 'agent-human-1';
   const taskId = overrides.task_id ?? 'VNM-56.30';
   const branch = overrides.branch ?? 'agent/VNM-56/VNM-56.30';
+  const status = (overrides.status ?? 'pr-open') as DeliveryRecord['status'];
   db.prepare(
     `INSERT INTO agents (id, name, parent, status, created_at, context)
      VALUES (?, ?, 'orchestrator', 'active', ?, '{}')`
   ).run(agentId, `agent-for-${taskId}`, new Date().toISOString());
   recordDelivery(db, agentId, {
-    status: 'pr-open',
+    status,
     task_id: taskId,
     branch,
     pr_number: 101,
@@ -86,42 +87,59 @@ describe('signalDelivery / readAndClearHumanSignal', () => {
     db.close();
   });
 
-  it('writes approve signal and returns the delivery', () => {
-    const delivery = makeDelivery(db);
-    const updated = signalDelivery(db, 'VNM-56.30', 'approve');
-    expect(updated).not.toBeNull();
-    expect(updated!.agent_id).toBe(delivery.agent_id);
-    expect(updated!.human_signal).toBe('approve');
+  it('writes approve signal and returns ok result when delivery is review-paused', () => {
+    const delivery = makeDelivery(db, { status: 'review-paused' });
+    const result = signalDelivery(db, 'VNM-56.30', 'approve');
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.delivery.agent_id).toBe(delivery.agent_id);
+    expect(result.delivery.human_signal).toBe('approve');
 
     const reloaded = getDeliveryForTask(db, 'VNM-56.30');
     expect(reloaded!.human_signal).toBe('approve');
   });
 
-  it('writes needs_fixes signal', () => {
-    makeDelivery(db);
-    const updated = signalDelivery(db, 'VNM-56.30', 'needs_fixes');
-    expect(updated!.human_signal).toBe('needs_fixes');
+  it('writes needs_fixes signal when delivery is review-paused', () => {
+    makeDelivery(db, { status: 'review-paused' });
+    const result = signalDelivery(db, 'VNM-56.30', 'needs_fixes');
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.delivery.human_signal).toBe('needs_fixes');
   });
 
-  it('returns null when no delivery exists for taskId', () => {
+  it('returns not-found when no delivery exists for taskId', () => {
     const result = signalDelivery(db, 'NOPE-99.99', 'approve');
-    expect(result).toBeNull();
+    expect(result).toEqual({ ok: false, reason: 'not-found' });
+  });
+
+  it('returns not-paused and does not write when delivery is not review-paused', () => {
+    const delivery = makeDelivery(db); // defaults to pr-open
+    const result = signalDelivery(db, 'VNM-56.30', 'approve');
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.reason).toBe('not-paused');
+    if (result.reason !== 'not-paused') throw new Error('expected not-paused');
+    expect(result.delivery.agent_id).toBe(delivery.agent_id);
+    expect(result.delivery.status).toBe('pr-open');
+
+    const reloaded = getDeliveryForTask(db, 'VNM-56.30');
+    expect(reloaded!.human_signal).toBeNull();
   });
 
   it('rejects invalid signals', () => {
-    makeDelivery(db);
+    makeDelivery(db, { status: 'review-paused' });
     expect(() => signalDelivery(db, 'VNM-56.30', 'maybe' as unknown as 'approve')).toThrow(
       /Invalid human signal/
     );
   });
 
   it('readAndClearHumanSignal returns null when no signal is set', () => {
-    const delivery = makeDelivery(db);
+    const delivery = makeDelivery(db, { status: 'review-paused' });
     expect(readAndClearHumanSignal(db, delivery.agent_id)).toBeNull();
   });
 
   it('readAndClearHumanSignal returns the signal and clears it', () => {
-    const delivery = makeDelivery(db);
+    const delivery = makeDelivery(db, { status: 'review-paused' });
     signalDelivery(db, 'VNM-56.30', 'approve');
 
     const first = readAndClearHumanSignal(db, delivery.agent_id);
@@ -162,7 +180,7 @@ describe('runHumanReviewGate', () => {
   });
 
   it('approves on first human signal, returns approved result and resumes to pr-open', async () => {
-    const delivery = makeDelivery(db);
+    const delivery = makeDelivery(db, { status: 'review-paused' });
     const { runHumanReviewGate } = await import('../../../src/modules/agents/delivery-review.js');
 
     // Pre-seed the approve signal so the poll returns immediately.
@@ -204,19 +222,19 @@ describe('runHumanReviewGate', () => {
     expect(meta.taskId).toBe('VNM-56.30');
   });
 
-  it('returns not approved after two rejections with no fixup agent available', async () => {
+  it('transitions to stalled with review-rejected after two rejections', async () => {
     const delivery = makeDelivery(db);
     const { runHumanReviewGate } = await import('../../../src/modules/agents/delivery-review.js');
 
-    // Drive the poll: first cycle rejects, fixup/re-review fails softly,
-    // second cycle rejects again. We'll queue signals via a timer that fires
-    // between sleep() ticks (sleep is stubbed to resolve immediately).
-    let pollCount = 0;
+    // Drive the poll: on each sleep tick, write a needs_fixes signal directly
+    // via SQL (bypasses the status guard so the test doesn't depend on the
+    // internal transition order).
     const originalSleep = await import('../../../src/utils/db.js');
     vi.mocked(originalSleep.sleep).mockImplementation(async () => {
-      pollCount++;
-      if (pollCount === 1) signalDelivery(db, delivery.task_id!, 'needs_fixes');
-      else if (pollCount >= 2) signalDelivery(db, delivery.task_id!, 'needs_fixes');
+      db.prepare('UPDATE delivery_states SET human_signal = ? WHERE agent_id = ?').run(
+        'needs_fixes',
+        delivery.agent_id
+      );
     });
 
     const result = await runHumanReviewGate(
@@ -231,9 +249,11 @@ describe('runHumanReviewGate', () => {
 
     expect(result.approved).toBe(false);
     expect(result.escalated).toBe(true);
-    // Delivery remains paused since the user rejected both cycles.
+    // After two rejections the gate stalls the delivery so crash recovery
+    // doesn't re-process it.
     const final = getDeliveryForTask(db, delivery.task_id!);
-    expect(final!.status).toBe('review-paused');
+    expect(final!.status).toBe('stalled');
+    expect(final!.stall_reason).toBe('review-rejected');
 
     // Two inbox notifications — one per cycle.
     const rows = db.prepare(`SELECT source_meta FROM inbox ORDER BY created_at`).all() as Array<{
@@ -242,5 +262,38 @@ describe('runHumanReviewGate', () => {
     expect(rows).toHaveLength(2);
     const actions = rows.map((r) => (JSON.parse(r.source_meta) as { action: string }).action);
     expect(actions).toEqual(['review-requested', 'review-re-requested']);
+  });
+
+  it('transitions to stalled with review-timeout when no signal arrives before deadline', async () => {
+    const delivery = makeDelivery(db);
+    const { runHumanReviewGate } = await import('../../../src/modules/agents/delivery-review.js');
+
+    // Freeze Date.now via a spy so we can deterministically march past the
+    // 7-day deadline. Each sleep() tick advances the clock by 8 days, which
+    // exceeds the gate's timeout on the first poll.
+    let fakeNow = new Date('2026-04-22T00:00:00Z').getTime();
+    vi.spyOn(Date, 'now').mockImplementation(() => fakeNow);
+
+    const originalSleep = await import('../../../src/utils/db.js');
+    vi.mocked(originalSleep.sleep).mockImplementation(async () => {
+      fakeNow += 8 * 24 * 60 * 60 * 1000;
+    });
+
+    const result = await runHumanReviewGate(
+      db,
+      delivery,
+      'reviewer-agent-1',
+      2,
+      '## Key Findings\nMinor.',
+      '/tmp/project',
+      0
+    );
+
+    expect(result.approved).toBe(false);
+    expect(result.escalated).toBe(true);
+
+    const final = getDeliveryForTask(db, delivery.task_id!);
+    expect(final!.status).toBe('stalled');
+    expect(final!.stall_reason).toBe('review-timeout');
   });
 });

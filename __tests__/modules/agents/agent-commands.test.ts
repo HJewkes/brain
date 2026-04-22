@@ -514,4 +514,26 @@ describe('agent approve / reject', () => {
       .get('agent-lower-1') as { human_signal: string };
     expect(row.human_signal).toBe('approve');
   });
+
+  it('errors when delivery is not in review-paused status', async () => {
+    db.prepare(
+      `INSERT INTO agents (id, name, parent, status, created_at, context)
+       VALUES (?, ?, 'orchestrator', 'active', ?, '{}')`
+    ).run('agent-open-1', 'agent-open-1', new Date().toISOString());
+    recordDelivery(db, 'agent-open-1', {
+      status: 'pr-open',
+      task_id: 'VNM-56.32',
+      branch: 'agent/VNM-56.32',
+    });
+
+    await run('approve', 'VNM-56.32');
+    expect(stderrData).toContain("is in status 'pr-open'");
+    expect(stderrData).toContain("not 'review-paused'");
+    expect(process.exitCode).toBe(1);
+
+    const row = db
+      .prepare('SELECT human_signal FROM delivery_states WHERE agent_id = ?')
+      .get('agent-open-1') as { human_signal: string | null };
+    expect(row.human_signal).toBeNull();
+  });
 });
