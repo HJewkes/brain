@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const PROJECT_ROOT = join(import.meta.dirname, '..', '..');
-const CLI = `npx tsx ${join(PROJECT_ROOT, 'src', 'cli.ts')}`;
+const TSX_BIN = join(PROJECT_ROOT, 'node_modules', '.bin', 'tsx');
+const CLI = `${TSX_BIN} ${join(PROJECT_ROOT, 'src', 'cli.ts')}`;
 
 let tmpDir: string;
 let notesDir: string;
