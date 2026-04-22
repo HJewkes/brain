@@ -2,6 +2,7 @@ import type { BrainDB } from '../../services/brain-db.js';
 import type { BrainConfig } from '../../types.js';
 import type { RoutingResult } from '../pm/engine/routing.js';
 import { computeRouting, isAgentDispatchable } from '../pm/engine/routing.js';
+import type { TaskRoutingOverrides } from '../pm/engine/routing.js';
 import { assembleContext } from '../pm/engine/dispatch.js';
 import { computeWaves } from '../pm/engine/dependency.js';
 import { getPmNotes } from '../pm/data/queries.js';
@@ -59,7 +60,11 @@ export function buildAgentDispatchContext(
   const extData = computeExtensions(db, taskDisplayId, options);
 
   const completionCheck = extData['alreadyCompleted'] as CompletionCheck | undefined;
-  const routing = computeRouting(taskMeta.category, taskMeta.mode);
+  const overrides: TaskRoutingOverrides = {};
+  if (taskMeta.template) overrides.template = taskMeta.template;
+  if (taskMeta.model_override) overrides.model = taskMeta.model_override;
+  if (taskMeta.allowed_tools) overrides.allowedTools = taskMeta.allowed_tools;
+  const routing = computeRouting(taskMeta.category, taskMeta.mode, overrides);
   const dispatchable = isAgentDispatchable(taskMeta.mode) && !completionCheck?.alreadyDone;
 
   const ctxResult = assembleContext(db, taskDisplayId);

@@ -5,8 +5,8 @@ import { resolve } from 'node:path';
  * Rebase a branch onto origin/main in a temporary worktree.
  *
  * Using an isolated worktree prevents HEAD races when multiple delivery
- * monitors run concurrently — conflict-recovery.tryRebase mutates the main
- * repo's HEAD, which is unsafe under parallelism.
+ * monitors run concurrently — mutating the main repo's HEAD is unsafe
+ * under parallelism.
  */
 export async function rebaseInIsolation(branch: string, projectDir: string): Promise<boolean> {
   const tmpPath = resolve(projectDir, '.worktrees', `rebase-${Date.now()}`);

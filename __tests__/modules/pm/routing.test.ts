@@ -9,7 +9,7 @@ import type { TaskCategory } from '../../../src/modules/pm/types.js';
 
 describe('computeRouting', () => {
   // Agent mode — every category
-  test('implementation + agent → opus, worktree, verify', () => {
+  test('implementation + agent → opus, worktree, verify, worker template', () => {
     const result = computeRouting('implementation', 'agent');
     expect(result).toEqual<RoutingResult>({
       agentType: 'general-purpose',
@@ -17,10 +17,12 @@ describe('computeRouting', () => {
       isolation: 'worktree',
       verify: true,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
     });
   });
 
-  test('research + agent → sonnet, Explore, no worktree', () => {
+  test('research + agent → sonnet, Explore, no worktree, research template', () => {
     const result = computeRouting('research', 'agent');
     expect(result).toEqual<RoutingResult>({
       agentType: 'Explore',
@@ -28,6 +30,8 @@ describe('computeRouting', () => {
       isolation: 'none',
       verify: false,
       concurrency: 'parallel',
+      template: 'research',
+      allowedTools: 'Bash,Read,Glob,Grep,WebSearch,WebFetch',
     });
   });
 
@@ -39,6 +43,8 @@ describe('computeRouting', () => {
       isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
     });
   });
 
@@ -50,6 +56,8 @@ describe('computeRouting', () => {
       isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
     });
   });
 
@@ -61,10 +69,12 @@ describe('computeRouting', () => {
       isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
     });
   });
 
-  test('review + agent → sonnet, Explore, no worktree', () => {
+  test('review + agent → sonnet, Explore, no worktree, research tools', () => {
     const result = computeRouting('review', 'agent');
     expect(result).toEqual<RoutingResult>({
       agentType: 'Explore',
@@ -72,6 +82,8 @@ describe('computeRouting', () => {
       isolation: 'none',
       verify: false,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Read,Glob,Grep,WebSearch,WebFetch',
     });
   });
 
@@ -83,6 +95,8 @@ describe('computeRouting', () => {
       isolation: 'worktree',
       verify: false,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
     });
   });
 
@@ -94,6 +108,8 @@ describe('computeRouting', () => {
       isolation: 'worktree',
       verify: true,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
     });
   });
 
@@ -105,6 +121,8 @@ describe('computeRouting', () => {
       isolation: 'worktree',
       verify: true,
       concurrency: 'parallel',
+      template: 'worker',
+      allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
     });
   });
 
@@ -115,6 +133,8 @@ describe('computeRouting', () => {
     isolation: 'worktree',
     verify: false,
     concurrency: 'parallel',
+    template: 'worker',
+    allowedTools: 'Bash,Edit,Read,Write,Glob,Grep',
   };
 
   const categories: TaskCategory[] = [
@@ -152,6 +172,27 @@ describe('computeRouting', () => {
     const b = computeRouting('implementation', 'agent');
     expect(a).toEqual(b);
     expect(a).not.toBe(b);
+  });
+
+  // Task-level overrides
+  test('task-level template override replaces category default', () => {
+    const result = computeRouting('implementation', 'agent', { template: 'research' });
+    expect(result.template).toBe('research');
+    expect(result.model).toBe('opus'); // other fields unchanged
+  });
+
+  test('task-level model override replaces category default', () => {
+    const result = computeRouting('research', 'agent', { model: 'opus' });
+    expect(result.model).toBe('opus');
+    expect(result.template).toBe('research'); // other fields unchanged
+  });
+
+  test('task-level overrides do not affect non-agent modes', () => {
+    const result = computeRouting('implementation', 'assisted', {
+      template: 'research',
+      model: 'opus',
+    });
+    expect(result).toEqual(nonAgentDefault);
   });
 });
 

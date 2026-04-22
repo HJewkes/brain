@@ -125,6 +125,14 @@ export interface TaskMetadata {
   acceptance_criteria?: string[];
   references?: string[];
   spawn_timestamp?: string;
+  /** Agent template override — falls back to category-based default from routing table */
+  template?: string;
+  /** Model override — falls back to category-based default from routing table */
+  model_override?: 'opus' | 'sonnet' | 'haiku';
+  /** Allowed tools override — comma-separated tool names */
+  allowed_tools?: string;
+  /** Review tier override — bypasses computeReviewTier scoring when set */
+  review_tier?: 'ci-only' | 'ai-review' | 'human-review';
 }
 
 export interface DecisionMetadata {

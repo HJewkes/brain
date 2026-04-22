@@ -89,7 +89,8 @@ export function buildWorkerDispatchFromPull(
     templateName?: string;
   }
 ): WorkerDispatch | null {
-  const templateName = options.templateName ?? 'worker';
+  const templateName =
+    options.templateName ?? pullResult.dispatchContext.routing.template ?? 'worker';
   const templatePath = join(options.projectDir, 'templates', 'agents', `${templateName}.md`);
 
   if (!existsSync(templatePath)) {

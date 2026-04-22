@@ -87,3 +87,83 @@ export const agentsMigrationV3: ModuleMigration = {
     `);
   },
 };
+
+export const agentsMigrationV4: ModuleMigration = {
+  version: 4,
+  description: 'Add review tier, fix tracking, and human signal columns to delivery_states',
+  up: (db) => {
+    const rawDb = db as {
+      exec(sql: string): void;
+      prepare(sql: string): { all(...args: unknown[]): unknown[] };
+    };
+
+    // Recreate delivery_states without the CHECK constraint on status, so
+    // application-level validation in recordDelivery can evolve the set of
+    // valid statuses without schema churn. Also adds the new columns used by
+    // the review/merge workflow.
+    try {
+      rawDb.exec(`
+        CREATE TABLE delivery_states_v4 (
+          agent_id        TEXT PRIMARY KEY REFERENCES agents(id),
+          task_id         TEXT NOT NULL,
+          branch          TEXT NOT NULL,
+          status          TEXT NOT NULL DEFAULT 'in-progress',
+          pr_number       INTEGER,
+          pr_url          TEXT,
+          pr_merged_at    TEXT,
+          delivered_at    TEXT,
+          retry_count     INTEGER NOT NULL DEFAULT 0,
+          session_id      TEXT,
+          review_tier     TEXT,
+          review_score    INTEGER,
+          fix_attempts    INTEGER NOT NULL DEFAULT 0,
+          review_agent_id TEXT,
+          stall_reason    TEXT,
+          human_signal    TEXT,
+          created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO delivery_states_v4
+          (agent_id, task_id, branch, status, pr_number, pr_url,
+           pr_merged_at, delivered_at, retry_count, session_id,
+           review_tier, review_score, fix_attempts, review_agent_id,
+           stall_reason, human_signal, created_at, updated_at)
+          SELECT agent_id, task_id, branch, status, pr_number, pr_url,
+                 pr_merged_at, delivered_at, retry_count, session_id,
+                 NULL, NULL, 0, NULL, NULL, NULL,
+                 created_at, updated_at
+          FROM delivery_states;
+        DROP TABLE delivery_states;
+        ALTER TABLE delivery_states_v4 RENAME TO delivery_states;
+        CREATE INDEX IF NOT EXISTS idx_delivery_status ON delivery_states(status);
+        CREATE INDEX IF NOT EXISTS idx_delivery_task ON delivery_states(task_id);
+      `);
+    } catch {
+      // Already migrated — ensure any missing columns are present via ALTER.
+      const cols = rawDb.prepare('PRAGMA table_info(delivery_states)').all() as {
+        name: string;
+      }[];
+      const existing = new Set(cols.map((c) => c.name));
+      if (!existing.has('review_tier')) {
+        rawDb.exec(`ALTER TABLE delivery_states ADD COLUMN review_tier TEXT`);
+      }
+      if (!existing.has('review_score')) {
+        rawDb.exec(`ALTER TABLE delivery_states ADD COLUMN review_score INTEGER`);
+      }
+      if (!existing.has('fix_attempts')) {
+        rawDb.exec(
+          `ALTER TABLE delivery_states ADD COLUMN fix_attempts INTEGER NOT NULL DEFAULT 0`
+        );
+      }
+      if (!existing.has('review_agent_id')) {
+        rawDb.exec(`ALTER TABLE delivery_states ADD COLUMN review_agent_id TEXT`);
+      }
+      if (!existing.has('stall_reason')) {
+        rawDb.exec(`ALTER TABLE delivery_states ADD COLUMN stall_reason TEXT`);
+      }
+      if (!existing.has('human_signal')) {
+        rawDb.exec(`ALTER TABLE delivery_states ADD COLUMN human_signal TEXT`);
+      }
+    }
+  },
+};

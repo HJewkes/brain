@@ -10,6 +10,7 @@ import {
   agentsMigrationV1,
   agentsMigrationV2,
   agentsMigrationV3,
+  agentsMigrationV4,
 } from '../../src/modules/agents/schema.js';
 import { createAgent, updateAgentStatus } from '../../src/modules/agents/data.js';
 import { recordDelivery, getDeliveryForTask } from '../../src/modules/agents/delivery.js';
@@ -41,6 +42,7 @@ describe('parallel dispatch integration', () => {
     agentsMigrationV1.up(db);
     agentsMigrationV2.up(db);
     agentsMigrationV3.up(db);
+    agentsMigrationV4.up(db);
     mockMonitorDelivery.mockClear();
   });
 

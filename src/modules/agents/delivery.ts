@@ -11,7 +11,22 @@ export type DeliveryStatus =
   | 'merged'
   | 'delivered'
   | 'stalled'
-  | 'redispatched';
+  | 'redispatched'
+  | 'review-paused';
+
+export const VALID_DELIVERY_STATUSES: ReadonlySet<DeliveryStatus> = new Set([
+  'in-progress',
+  'pushed',
+  'push-failed',
+  'pr-open',
+  'pr-failed',
+  'conflicted',
+  'merged',
+  'delivered',
+  'stalled',
+  'redispatched',
+  'review-paused',
+]);
 
 export interface DeliveryRecord {
   agent_id: string;
@@ -24,6 +39,12 @@ export interface DeliveryRecord {
   delivered_at: string | null;
   retry_count: number;
   session_id: string | null;
+  review_tier: string | null;
+  review_score: number | null;
+  fix_attempts: number;
+  review_agent_id: string | null;
+  stall_reason: string | null;
+  human_signal: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +59,12 @@ interface RecordDeliveryOpts {
   delivered_at?: string;
   retry_count?: number;
   session_id?: string;
+  review_tier?: string | null;
+  review_score?: number | null;
+  fix_attempts?: number;
+  review_agent_id?: string | null;
+  stall_reason?: string | null;
+  human_signal?: string | null;
 }
 
 export interface PrResult {
@@ -50,6 +77,9 @@ export function recordDelivery(
   agentId: string,
   opts: RecordDeliveryOpts
 ): void {
+  if (!VALID_DELIVERY_STATUSES.has(opts.status)) {
+    throw new Error(`Invalid delivery status: ${opts.status}`);
+  }
   const now = new Date().toISOString();
   const existing = db.prepare('SELECT * FROM delivery_states WHERE agent_id = ?').get(agentId) as
     | DeliveryRecord
@@ -60,7 +90,14 @@ export function recordDelivery(
       UPDATE delivery_states SET
         status = ?, pr_number = COALESCE(?, pr_number), pr_url = COALESCE(?, pr_url),
         pr_merged_at = COALESCE(?, pr_merged_at), delivered_at = COALESCE(?, delivered_at),
-        retry_count = COALESCE(?, retry_count), updated_at = ?
+        retry_count = COALESCE(?, retry_count),
+        review_tier = COALESCE(?, review_tier),
+        review_score = COALESCE(?, review_score),
+        fix_attempts = COALESCE(?, fix_attempts),
+        review_agent_id = COALESCE(?, review_agent_id),
+        stall_reason = COALESCE(?, stall_reason),
+        human_signal = COALESCE(?, human_signal),
+        updated_at = ?
       WHERE agent_id = ?
     `
     ).run(
@@ -70,6 +107,12 @@ export function recordDelivery(
       opts.pr_merged_at ?? null,
       opts.delivered_at ?? null,
       opts.retry_count ?? null,
+      opts.review_tier ?? null,
+      opts.review_score ?? null,
+      opts.fix_attempts ?? null,
+      opts.review_agent_id ?? null,
+      opts.stall_reason ?? null,
+      opts.human_signal ?? null,
       now,
       agentId
     );
@@ -77,8 +120,10 @@ export function recordDelivery(
     db.prepare(
       `
       INSERT INTO delivery_states
-        (agent_id, task_id, branch, status, pr_number, pr_url, pr_merged_at, delivered_at, retry_count, session_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (agent_id, task_id, branch, status, pr_number, pr_url, pr_merged_at, delivered_at,
+         retry_count, session_id, review_tier, review_score, fix_attempts, review_agent_id,
+         stall_reason, human_signal, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     ).run(
       agentId,
@@ -91,6 +136,12 @@ export function recordDelivery(
       opts.delivered_at ?? null,
       opts.retry_count ?? 0,
       opts.session_id ?? null,
+      opts.review_tier ?? null,
+      opts.review_score ?? null,
+      opts.fix_attempts ?? 0,
+      opts.review_agent_id ?? null,
+      opts.stall_reason ?? null,
+      opts.human_signal ?? null,
       now,
       now
     );
