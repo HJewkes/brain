@@ -133,6 +133,11 @@ export async function monitorDelivery(
 
     // Conflict — escalation ladder
     if (!pr.mergeable) {
+      process.stderr.write(
+        `[delivery-monitor] ${delivery.task_id} PR #${delivery.pr_number}: ` +
+          `checks=${pr.checksPass ? 'pass' : 'fail'}, mergeable=${pr.mergeable}, ` +
+          `reason=${pr.mergeStateStatus ?? 'unknown'}\n`
+      );
       const rebased = await rebaseInIsolation(delivery.branch, projectDir);
       if (rebased) continue;
 

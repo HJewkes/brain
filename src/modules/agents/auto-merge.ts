@@ -12,6 +12,7 @@ export interface PrStatus {
   branch: string;
   checksPass: boolean;
   mergeable: boolean;
+  mergeStateStatus?: string;
   state: 'open' | 'closed' | 'merged';
 }
 
@@ -33,7 +34,13 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
   try {
     const json = execFileSync(
       'gh',
-      ['pr', 'view', branch, '--json', 'number,headRefName,state,mergeable,statusCheckRollup'],
+      [
+        'pr',
+        'view',
+        branch,
+        '--json',
+        'number,headRefName,state,mergeable,mergeStateStatus,statusCheckRollup',
+      ],
       { cwd: projectDir, encoding: 'utf-8', stdio: 'pipe' }
     );
     const data = JSON.parse(json) as {
@@ -41,6 +48,7 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
       headRefName: string;
       state: string;
       mergeable: string;
+      mergeStateStatus?: string;
       statusCheckRollup: Array<{ conclusion: string; state: string }> | null;
     };
 
@@ -59,6 +67,7 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
       branch: data.headRefName,
       checksPass,
       mergeable: data.mergeable === 'MERGEABLE',
+      mergeStateStatus: data.mergeStateStatus,
       state: data.state.toLowerCase() as PrStatus['state'],
     };
   } catch {

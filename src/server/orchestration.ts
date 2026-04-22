@@ -101,7 +101,8 @@ export class OrchestrationService {
         const r = result as DispatchResult;
         return { agentId: r.agentId, taskId: r.taskId, branch: r.branch };
       },
-      projectDir
+      projectDir,
+      { brainDb: svc.db, config: svc.config, embedder: svc.embedder }
     );
 
     process.stderr.write(
