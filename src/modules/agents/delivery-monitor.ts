@@ -7,12 +7,37 @@ import { spawnFixAgent } from './fix-agent.js';
 import { updateDeliveryStatus, type DeliveryRecord } from './delivery.js';
 
 export type DeliveryOutcome = 'merged' | 'stalled' | 'redispatched';
+export type StallReason = 'timeout' | 'pr-closed' | 'pr-missing';
 
 const STALE_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours
 const POLL_INITIAL = 10_000; // 10s
 const POLL_MAX = 60_000; // 60s
 const POLL_BACKOFF = 1.5;
 const MAX_FIX_ATTEMPTS = 3;
+
+function readFixAttempts(rawDb: Database.Database, agentId: string): number {
+  try {
+    const row = rawDb
+      .prepare('SELECT fix_attempts FROM delivery_states WHERE agent_id = ?')
+      .get(agentId) as { fix_attempts: number | null } | undefined;
+    return row?.fix_attempts ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+function persistFixAttempts(rawDb: Database.Database, agentId: string, count: number): void {
+  rawDb
+    .prepare('UPDATE delivery_states SET fix_attempts = ?, updated_at = ? WHERE agent_id = ?')
+    .run(count, new Date().toISOString(), agentId);
+}
+
+function markStalled(rawDb: Database.Database, agentId: string, reason: StallReason): void {
+  updateDeliveryStatus(rawDb, agentId, 'stalled');
+  rawDb
+    .prepare('UPDATE delivery_states SET stall_reason = ?, updated_at = ? WHERE agent_id = ?')
+    .run(reason, new Date().toISOString(), agentId);
+}
 
 function redispatchTask(rawDb: Database.Database, delivery: DeliveryRecord): void {
   updateDeliveryStatus(rawDb, delivery.agent_id, 'redispatched');
@@ -44,6 +69,10 @@ function markMerged(rawDb: Database.Database, delivery: DeliveryRecord): void {
  *
  * The caller is responsible for updating the PM task status after this
  * returns — the monitor only manages delivery_states and PR operations.
+ *
+ * fix_attempts is persisted to delivery_states so it survives monitor
+ * restarts (e.g. crash recovery). stall_reason is persisted alongside
+ * the 'stalled' status for downstream diagnostics.
  */
 export async function monitorDelivery(
   db: BrainDB | Database.Database,
@@ -54,13 +83,13 @@ export async function monitorDelivery(
   const brainDb = 'rawDb' in db ? (db as BrainDB) : null;
 
   if (!delivery.branch || !delivery.pr_number) {
-    updateDeliveryStatus(rawDb, delivery.agent_id, 'stalled');
+    markStalled(rawDb, delivery.agent_id, 'pr-missing');
     return 'stalled';
   }
 
   const startedAt = Date.now();
   let pollInterval = POLL_INITIAL;
-  let fixAttempts = 0;
+  let fixAttempts = readFixAttempts(rawDb, delivery.agent_id);
 
   while (true) {
     await sleep(pollInterval);
@@ -71,7 +100,7 @@ export async function monitorDelivery(
     if (!pr) {
       // PR no longer visible — may have been force-closed; treat as stalled
       if (Date.now() - startedAt > STALE_TIMEOUT) {
-        updateDeliveryStatus(rawDb, delivery.agent_id, 'stalled');
+        markStalled(rawDb, delivery.agent_id, 'pr-missing');
         return 'stalled';
       }
       continue;
@@ -86,7 +115,7 @@ export async function monitorDelivery(
 
     // PR closed without merge — treat as stalled
     if (pr.state === 'closed') {
-      updateDeliveryStatus(rawDb, delivery.agent_id, 'stalled');
+      markStalled(rawDb, delivery.agent_id, 'pr-closed');
       return 'stalled';
     }
 
@@ -108,8 +137,9 @@ export async function monitorDelivery(
       if (rebased) continue;
 
       if (brainDb && fixAttempts < MAX_FIX_ATTEMPTS) {
-        fixAttempts++;
         const fixed = await spawnFixAgent(brainDb, delivery);
+        fixAttempts++;
+        persistFixAttempts(rawDb, delivery.agent_id, fixAttempts);
         if (fixed) continue;
       }
 
@@ -120,8 +150,9 @@ export async function monitorDelivery(
     // CI failed — spawn fix agent
     if (!pr.checksPass) {
       if (brainDb && fixAttempts < MAX_FIX_ATTEMPTS) {
-        fixAttempts++;
         const fixed = await spawnFixAgent(brainDb, delivery);
+        fixAttempts++;
+        persistFixAttempts(rawDb, delivery.agent_id, fixAttempts);
         if (fixed) continue;
       }
       redispatchTask(rawDb, delivery);
@@ -130,7 +161,7 @@ export async function monitorDelivery(
 
     // Stale timeout
     if (Date.now() - startedAt > STALE_TIMEOUT) {
-      updateDeliveryStatus(rawDb, delivery.agent_id, 'stalled');
+      markStalled(rawDb, delivery.agent_id, 'timeout');
       return 'stalled';
     }
 
