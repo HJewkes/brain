@@ -10,6 +10,7 @@ vi.mock('../../../src/utils/db.js', () => ({
 
 vi.mock('../../../src/modules/agents/data.js', () => ({
   getAgent: vi.fn(),
+  findAgentByTask: vi.fn(),
 }));
 
 vi.mock('../../../src/modules/agents/delivery.js', () => ({
@@ -34,13 +35,14 @@ import {
   type DispatchLoopPmDeps,
   type SpawnResult,
 } from '../../../src/modules/agents/dispatch-loop.js';
-import { getAgent } from '../../../src/modules/agents/data.js';
+import { findAgentByTask, getAgent } from '../../../src/modules/agents/data.js';
 import { getDeliveryForTask, initiateDelivery } from '../../../src/modules/agents/delivery.js';
 import { releaseWorktree } from '../../../src/modules/agents/worktree.js';
 import { monitorDelivery } from '../../../src/modules/agents/delivery-monitor.js';
 import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 
 const mockGetAgent = getAgent as ReturnType<typeof vi.fn>;
+const mockFindAgentByTask = findAgentByTask as ReturnType<typeof vi.fn>;
 const mockGetDelivery = getDeliveryForTask as ReturnType<typeof vi.fn>;
 const mockInitiateDelivery = initiateDelivery as ReturnType<typeof vi.fn>;
 const mockReleaseWorktree = releaseWorktree as ReturnType<typeof vi.fn>;
@@ -55,6 +57,8 @@ describe('DispatchLoop', () => {
 
   beforeEach(() => {
     spawnFn = vi.fn();
+    mockFindAgentByTask.mockReset();
+    mockGetDelivery.mockReset();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -201,6 +205,80 @@ describe('DispatchLoop', () => {
 
       // No branch → no delivery → worktree preserved (not released in deliver path)
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+
+    it('skips spawn when task already has completed agent with branch', async () => {
+      mockFindAgentByTask.mockReturnValue({
+        id: 'existing-a1',
+        status: 'completed',
+        branch: 'agent/t1',
+      });
+      mockGetDelivery.mockReturnValue(null);
+      mockInitiateDelivery.mockReturnValue({
+        agent_id: 'existing-a1',
+        task_id: 't1',
+        branch: 'agent/t1',
+      });
+      mockMonitorDelivery.mockResolvedValue('merged');
+
+      await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+      expect(spawnFn).not.toHaveBeenCalled();
+      expect(mockInitiateDelivery).toHaveBeenCalledWith(
+        fakeDb,
+        'existing-a1',
+        't1',
+        'agent/t1',
+        projectDir
+      );
+      expect(mockMonitorDelivery).toHaveBeenCalled();
+    });
+
+    it('skips task entirely when delivery already merged', async () => {
+      mockFindAgentByTask.mockReturnValue({
+        id: 'existing-a1',
+        status: 'completed',
+        branch: 'agent/t1',
+      });
+      mockGetDelivery.mockReturnValue({ status: 'merged', agent_id: 'existing-a1', task_id: 't1' });
+
+      await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+      expect(spawnFn).not.toHaveBeenCalled();
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+      expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+
+    it('skips task entirely when delivery stalled', async () => {
+      mockFindAgentByTask.mockReturnValue({
+        id: 'existing-a1',
+        status: 'completed',
+        branch: 'agent/t1',
+      });
+      mockGetDelivery.mockReturnValue({
+        status: 'stalled',
+        agent_id: 'existing-a1',
+        task_id: 't1',
+      });
+
+      await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+      expect(spawnFn).not.toHaveBeenCalled();
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+      expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+
+    it('spawns normally when prior agent failed', async () => {
+      mockFindAgentByTask.mockReturnValue({ id: 'prev', status: 'failed', branch: null });
+      mockGetDelivery.mockReturnValue(null);
+      spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'agent/t1' });
+      mockGetAgent.mockReturnValue({ status: 'completed' });
+      mockInitiateDelivery.mockReturnValue({ agent_id: 'a1', task_id: 't1' });
+      mockMonitorDelivery.mockResolvedValue('merged');
+
+      await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+      expect(spawnFn).toHaveBeenCalledWith('t1');
     });
   });
 

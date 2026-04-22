@@ -5,7 +5,7 @@ import type { BrainConfig, Embedder, InboxItem } from '../../types.js';
 import type { WaveAssignment } from '../pm/engine/dependency.js';
 import type { TaskStatus } from '../pm/types.js';
 import { getRawDb, sleep } from '../../utils/db.js';
-import { getAgent } from './data.js';
+import { findAgentByTask, getAgent } from './data.js';
 import { getDeliveryForTask, initiateDelivery, type DeliveryRecord } from './delivery.js';
 import { releaseWorktree } from './worktree.js';
 import { monitorDelivery, type DeliveryOutcome } from './delivery-monitor.js';
@@ -110,6 +110,32 @@ export class DispatchLoop {
     'stalled',
     'redispatched',
   ]);
+
+  /** Delivery statuses where all work (including monitoring) is finished. */
+  private static FINAL_STATUSES = new Set(['merged', 'delivered', 'stalled', 'redispatched']);
+
+  /**
+   * Check whether a task can be skipped or fast-forwarded based on existing
+   * agent/delivery state. Returns:
+   *  - 'skip': task is already fully delivered; do nothing
+   *  - { agentId, branch }: completed agent exists; skip spawn and deliver
+   *  - null: no completed agent; proceed with normal spawn
+   */
+  private idempotentCheck(
+    taskId: string
+  ): 'skip' | { agentId: string; branch: string | undefined } | null {
+    const delivery = getDeliveryForTask(this.rawDb, taskId);
+    if (delivery && DispatchLoop.FINAL_STATUSES.has(delivery.status)) {
+      return 'skip';
+    }
+
+    const agent = findAgentByTask(this.rawDb, taskId);
+    if (agent && agent.status === 'completed' && agent.branch) {
+      return { agentId: agent.id, branch: agent.branch };
+    }
+
+    return null;
+  }
 
   /**
    * Push branch and create PR for a completed agent.
@@ -241,6 +267,19 @@ export class DispatchLoop {
     const failedTaskIds: string[] = [];
 
     const agentTasks = wave.taskIds.map(async (taskId) => {
+      const existing = this.idempotentCheck(taskId);
+      if (existing === 'skip') {
+        process.stderr.write(`[dispatch-loop] ${taskId} already delivered, skipping\n`);
+        return;
+      }
+      if (existing) {
+        process.stderr.write(
+          `[dispatch-loop] ${taskId} has completed agent ${existing.agentId}, skipping spawn\n`
+        );
+        deliveries.push(this.deliverAndCleanup(existing.agentId, taskId, existing.branch));
+        return;
+      }
+
       await semaphore.acquire();
 
       let spawnResult: SpawnResult;
