@@ -653,7 +653,7 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
     async ({ workstream, wipLimit }) => {
       try {
         const orch = new OrchestrationService(svc.db, wipLimit ?? 3, resolveProjectDir(svc));
-        await orch.initialize();
+        await orch.initialize(svc);
         // Fire-and-forget: waves take minutes; MCP tool returns immediately
         orch.executeWorkstream(svc, workstream).catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);

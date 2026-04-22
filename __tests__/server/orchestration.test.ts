@@ -220,6 +220,121 @@ describe('OrchestrationService', () => {
     });
   });
 
+  describe('recoverZombieAgents', () => {
+    const DEAD_PID = 424242;
+    const ALIVE_PID = 111111;
+
+    function insertActiveAgent(id: string, pid: number | null, brainTask: string | null) {
+      db.prepare(
+        `INSERT INTO agents (id, name, parent, status, pid, brain_task, created_at, context)
+         VALUES (?, 'test', 'root', 'active', ?, ?, '2026-01-01', '{}')`
+      ).run(id, pid, brainTask);
+    }
+
+    function getAgentStatus(id: string): { status: string; exit_reason: string | null } {
+      return db.prepare('SELECT status, exit_reason FROM agents WHERE id = ?').get(id) as {
+        status: string;
+        exit_reason: string | null;
+      };
+    }
+
+    beforeEach(() => {
+      vi.spyOn(process, 'kill').mockImplementation((pid: number): true => {
+        if (pid === ALIVE_PID) return true;
+        throw new Error('ESRCH');
+      });
+    });
+
+    it('abandons active agents whose PID is dead', async () => {
+      insertActiveAgent('z1', DEAD_PID, 'VNM-56.99');
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.recoverZombieAgents();
+
+      const row = getAgentStatus('z1');
+      expect(row.status).toBe('abandoned');
+      expect(row.exit_reason).toContain('not alive');
+    });
+
+    it('leaves active agents alone when their PID is alive', async () => {
+      insertActiveAgent('alive1', ALIVE_PID, 'VNM-56.98');
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.recoverZombieAgents();
+
+      expect(getAgentStatus('alive1').status).toBe('active');
+    });
+
+    it('treats agents without a recorded PID as zombies', async () => {
+      insertActiveAgent('nopid', null, 'VNM-56.97');
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.recoverZombieAgents();
+
+      const row = getAgentStatus('nopid');
+      expect(row.status).toBe('abandoned');
+      expect(row.exit_reason).toContain('No PID');
+    });
+
+    it('releases worktree allocations for zombie tasks', async () => {
+      insertActiveAgent('z2', DEAD_PID, 'VNM-56.96');
+      db.prepare(
+        `INSERT INTO worktree_allocations (task_id, worktree_path, branch, created_at)
+         VALUES ('VNM-56.96', '/tmp/wt', 'agent/x', '2026-01-01')`
+      ).run();
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.recoverZombieAgents();
+
+      const alloc = db
+        .prepare('SELECT * FROM worktree_allocations WHERE task_id = ?')
+        .get('VNM-56.96');
+      expect(alloc).toBeUndefined();
+    });
+
+    it('resets PM task to pending when svc is provided', async () => {
+      insertActiveAgent('z3', DEAD_PID, 'VNM-56.95');
+      mockUpdateTaskStatus.mockClear();
+
+      const fakeSvc = { db: 'BRAIN_DB', config: 'CFG', embedder: 'EMB' };
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.recoverZombieAgents(fakeSvc as unknown);
+
+      expect(mockUpdateTaskStatus).toHaveBeenCalledWith(
+        'BRAIN_DB',
+        'CFG',
+        'EMB',
+        'VNM-56.95',
+        'pending'
+      );
+    });
+
+    it('skips task reset when svc is omitted', async () => {
+      insertActiveAgent('z4', DEAD_PID, 'VNM-56.94');
+      mockUpdateTaskStatus.mockClear();
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.recoverZombieAgents();
+
+      expect(mockUpdateTaskStatus).not.toHaveBeenCalled();
+      expect(getAgentStatus('z4').status).toBe('abandoned');
+    });
+
+    it('no-ops when there are no active agents', async () => {
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await expect(svc.recoverZombieAgents()).resolves.toBeUndefined();
+    });
+
+    it('runs as part of recover()', async () => {
+      insertActiveAgent('z5', DEAD_PID, null);
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.recover();
+
+      expect(getAgentStatus('z5').status).toBe('abandoned');
+    });
+  });
+
   describe('initialize', () => {
     it('runs recover on first call and is idempotent', async () => {
       insertAgent('a1');

@@ -6,6 +6,7 @@ import type { BrainServiceClass } from '../services/brain-service.js';
 import { getRawDb } from '../utils/db.js';
 import { monitorDelivery, type DeliveryOutcome } from '../modules/agents/delivery-monitor.js';
 import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/delivery.js';
+import { releaseWorktree, updateAgentStatus } from '../modules/agents/data.js';
 import { buildDependencyGraph, computeWaves } from '../modules/pm/engine/dependency.js';
 import { listTasks, updateTaskStatus } from '../modules/pm/data/task-ops.js';
 import { DispatchLoop } from '../modules/agents/dispatch-loop.js';
@@ -41,6 +42,32 @@ function getInFlightDeliveries(rawDb: Database.Database): DeliveryRecord[] {
   }
 }
 
+interface ZombieCandidate {
+  id: string;
+  pid: number | null;
+  brain_task: string | null;
+}
+
+function getActiveAgents(rawDb: Database.Database): ZombieCandidate[] {
+  try {
+    return rawDb
+      .prepare(`SELECT id, pid, brain_task FROM agents WHERE status = 'active'`)
+      .all() as ZombieCandidate[];
+  } catch {
+    return [];
+  }
+}
+
+function isProcessAlive(pid: number | null): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isBrainDb(db: BrainDB | Database.Database): db is BrainDB {
   return typeof (db as BrainDB).addInboxItem === 'function';
 }
@@ -70,13 +97,13 @@ export class OrchestrationService {
   }
 
   /** Idempotent startup hook — recovers in-flight deliveries on first call. */
-  async initialize(): Promise<void> {
+  async initialize(svc?: BrainServiceClass): Promise<void> {
     if (this.initialized) return;
     this.initialized = true;
-    await this.recover();
+    await this.recover(svc);
   }
 
-  async recover(): Promise<void> {
+  async recover(svc?: BrainServiceClass): Promise<void> {
     const pending = getInFlightDeliveries(this.rawDb);
     for (const delivery of pending) {
       if (delivery.status === 'review-paused') {
@@ -88,6 +115,44 @@ export class OrchestrationService {
     if (pending.length > 0) {
       process.stderr.write(`[orchestration] recovered ${pending.length} in-flight deliveries\n`);
     }
+
+    await this.recoverZombieAgents(svc);
+  }
+
+  /** Detect agents marked active whose process is dead, and auto-abandon them. */
+  async recoverZombieAgents(svc?: BrainServiceClass): Promise<void> {
+    const active = getActiveAgents(this.rawDb);
+    const zombies = active.filter((a) => !isProcessAlive(a.pid));
+    if (zombies.length === 0) return;
+
+    for (const zombie of zombies) {
+      const reason = zombie.pid
+        ? `Process ${zombie.pid} not alive at MCP startup recovery`
+        : 'No PID recorded at MCP startup recovery';
+      updateAgentStatus(this.rawDb, zombie.id, 'abandoned', { exit_reason: reason });
+
+      if (zombie.brain_task) {
+        releaseWorktree(this.rawDb, zombie.brain_task);
+        if (svc) {
+          const result = await updateTaskStatus(
+            svc.db,
+            svc.config,
+            svc.embedder,
+            zombie.brain_task,
+            'pending'
+          );
+          if (!result.ok) {
+            process.stderr.write(
+              `[orchestration] failed to reset task ${zombie.brain_task} for zombie ${zombie.id}: ${result.error.message}\n`
+            );
+          }
+        }
+      }
+    }
+
+    process.stderr.write(
+      `[orchestration] recovered ${zombies.length} zombie agent(s): ${zombies.map((z) => z.id).join(', ')}\n`
+    );
   }
 
   private renotifyHumanReview(delivery: DeliveryRecord): void {
