@@ -17,6 +17,7 @@ export type DeliveryStatus =
   | 'stalled'
   | 'redispatched'
   | 'review-paused';
+<<<<<<< HEAD
 
 export const VALID_DELIVERY_STATUSES: ReadonlySet<DeliveryStatus> = new Set([
   'in-progress',
@@ -31,6 +32,8 @@ export const VALID_DELIVERY_STATUSES: ReadonlySet<DeliveryStatus> = new Set([
   'redispatched',
   'review-paused',
 ]);
+=======
+>>>>>>> 35dd88c (Wire crash recovery on MCP startup for review-paused deliveries)
 
 export interface DeliveryRecord {
   agent_id: string;

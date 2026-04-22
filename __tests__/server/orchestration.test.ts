@@ -71,6 +71,29 @@ function setupDb(): Database.Database {
   return db;
 }
 
+/** Drop the CHECK constraint on delivery_states.status so tests can insert 'review-paused' rows. */
+function dropDeliveryStatusCheck(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE delivery_states_tmp (
+      agent_id     TEXT PRIMARY KEY REFERENCES agents(id),
+      task_id      TEXT NOT NULL,
+      branch       TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'in-progress',
+      pr_number    INTEGER,
+      pr_url       TEXT,
+      pr_merged_at TEXT,
+      delivered_at TEXT,
+      retry_count  INTEGER NOT NULL DEFAULT 0,
+      session_id   TEXT,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO delivery_states_tmp SELECT * FROM delivery_states;
+    DROP TABLE delivery_states;
+    ALTER TABLE delivery_states_tmp RENAME TO delivery_states;
+  `);
+}
+
 function makeBackpressure() {
   return {
     computeEffectiveWip: vi.fn(() => ({ effectiveWip: 3, reason: 'nominal' })),
@@ -139,6 +162,72 @@ describe('OrchestrationService', () => {
       const svc = new OrchestrationService(db, bp as unknown, projectDir);
       await svc.recover();
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+
+    it('re-notifies inbox for review-paused deliveries instead of starting monitor', async () => {
+      insertAgent('a1');
+      insertAgent('a2');
+      dropDeliveryStatusCheck(db);
+      db.exec(`
+        INSERT INTO delivery_states
+          (agent_id, task_id, branch, status, pr_number, pr_url, created_at, updated_at)
+        VALUES
+          ('a1', 't1', 'b1', 'review-paused', 42, 'https://example.com/pr/42',
+           '2026-01-01', '2026-01-01'),
+          ('a2', 't2', 'b2', 'pr-open', NULL, NULL, '2026-01-01', '2026-01-01')
+      `);
+
+      const addInboxItem = vi.fn();
+      const brainDbLike = { addInboxItem, rawDb: db } as unknown as {
+        addInboxItem: typeof addInboxItem;
+      };
+
+      const svc = new OrchestrationService(brainDbLike, bp as unknown, projectDir);
+      await svc.recover();
+
+      expect(addInboxItem).toHaveBeenCalledTimes(1);
+      const item = addInboxItem.mock.calls[0][0];
+      expect(item.source).toBe('alert');
+      expect(item.status).toBe('pending');
+      expect(item.sourceUrl).toBe('https://example.com/pr/42');
+      expect(item.content).toContain('t1');
+      expect(JSON.parse(item.sourceMeta)).toMatchObject({
+        taskId: 't1',
+        agentId: 'a1',
+        prNumber: 42,
+        action: 'review-renotified',
+      });
+      // Monitor started for pr-open but not review-paused
+      expect(mockMonitorDelivery).toHaveBeenCalledTimes(1);
+    });
+
+    it('review-paused recovery is a no-op when brainDb is not provided', async () => {
+      insertAgent('a1');
+      dropDeliveryStatusCheck(db);
+      db.exec(`
+        INSERT INTO delivery_states (agent_id, task_id, branch, status, created_at, updated_at)
+        VALUES ('a1', 't1', 'b1', 'review-paused', '2026-01-01', '2026-01-01')
+      `);
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await expect(svc.recover()).resolves.toBeUndefined();
+      expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('initialize', () => {
+    it('runs recover on first call and is idempotent', async () => {
+      insertAgent('a1');
+      db.exec(`
+        INSERT INTO delivery_states (agent_id, task_id, branch, status, created_at, updated_at)
+        VALUES ('a1', 't1', 'b1', 'pr-open', '2026-01-01', '2026-01-01')
+      `);
+
+      const svc = new OrchestrationService(db, bp as unknown, projectDir);
+      await svc.initialize();
+      await svc.initialize();
+
+      expect(mockMonitorDelivery).toHaveBeenCalledTimes(1);
     });
   });
 
