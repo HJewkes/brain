@@ -57,6 +57,7 @@ vi.mock('../../src/server/dispatch.js', () => ({
     model: 'sonnet',
     prompt: 'x',
   }),
+  resolveProjectDir: vi.fn(() => '/tmp/test-project'),
 }));
 
 vi.mock('../../src/services/search.js', () => ({

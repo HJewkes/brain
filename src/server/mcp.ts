@@ -22,6 +22,7 @@ import { dispatchTask, resolveProjectDir } from './dispatch.js';
 import { OrchestrationService } from './orchestration.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 import { askAdvisor, reviewAdvisor } from './advisor.js';
+import { getAoConfigWatcher } from '../services/ao-config-watcher.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -635,7 +636,13 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
     },
     async ({ taskId, model, maxBudgetUsd, dryRun }) => {
       try {
-        const result = await dispatchTask(svc, { taskId, model, maxBudgetUsd, dryRun });
+        const defaults = getAoConfigWatcher(resolveProjectDir(svc)).snapshot;
+        const result = await dispatchTask(svc, {
+          taskId,
+          model,
+          maxBudgetUsd: maxBudgetUsd ?? defaults.maxBudgetUsd,
+          dryRun,
+        });
         return textResult(result);
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
@@ -652,7 +659,10 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
     },
     async ({ workstream, wipLimit }) => {
       try {
-        const orch = new OrchestrationService(svc.db, wipLimit ?? 3, resolveProjectDir(svc));
+        const projectDir = resolveProjectDir(svc);
+        const defaults = getAoConfigWatcher(projectDir).snapshot;
+        const resolvedWipLimit = wipLimit ?? defaults.wipLimit ?? 3;
+        const orch = new OrchestrationService(svc.db, resolvedWipLimit, projectDir);
         await orch.initialize(svc);
         // Fire-and-forget: waves take minutes; MCP tool returns immediately
         orch.executeWorkstream(svc, workstream).catch((err: unknown) => {
@@ -867,7 +877,11 @@ function registerWorkflowTools(server: McpServer, svc: BrainServiceClass): void 
           project,
           workstream: String(workstream),
         };
-        const runId = await runtime.start(workflowId, params, { model, maxBudgetUsd });
+        const defaults = getAoConfigWatcher(resolveProjectDir(svc)).snapshot;
+        const runId = await runtime.start(workflowId, params, {
+          model,
+          maxBudgetUsd: maxBudgetUsd ?? defaults.maxBudgetUsd,
+        });
         const status = runtime.getStatus(runId);
         return textResult({
           instanceId: runId,
