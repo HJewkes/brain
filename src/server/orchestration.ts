@@ -6,11 +6,25 @@ import type { BrainServiceClass } from '../services/brain-service.js';
 import { getRawDb } from '../utils/db.js';
 import { monitorDelivery, type DeliveryOutcome } from '../modules/agents/delivery-monitor.js';
 import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/delivery.js';
-import { computeWaves } from '../modules/pm/engine/dependency.js';
-import { listTasks } from '../modules/pm/data/task-ops.js';
+import { buildDependencyGraph, computeWaves } from '../modules/pm/engine/dependency.js';
+import { listTasks, updateTaskStatus } from '../modules/pm/data/task-ops.js';
 import { DispatchLoop } from '../modules/agents/dispatch-loop.js';
 import { dispatchTask, resolveProjectDir, type DispatchResult } from './dispatch.js';
 import type { InboxItem } from '../types.js';
+
+async function markTaskBlocked(svc: BrainServiceClass, displayId: string): Promise<void> {
+  try {
+    const result = await updateTaskStatus(svc.db, svc.config, svc.embedder, displayId, 'blocked');
+    if (!result.ok) {
+      process.stderr.write(
+        `[orchestration] could not mark ${displayId} blocked: ${result.error.message}\n`
+      );
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[orchestration] could not mark ${displayId} blocked: ${msg}\n`);
+  }
+}
 
 /** Recovery statuses: deliveries that need attention after process restart. */
 const RECOVERY_STATUSES = ['pr-open', 'push-failed', 'conflicted', 'review-paused'] as const;
@@ -160,9 +174,39 @@ export class OrchestrationService {
     process.stderr.write(
       `[orchestration] executing workstream ${workstreamDisplayId}: ${waves.length} wave(s)\n`
     );
+
+    const graph = buildDependencyGraph(svc.db, prefix);
+    const failedOrSkipped = new Set<string>();
+
     for (const wave of waves) {
-      process.stderr.write(`[orchestration] wave ${wave.wave}: [${wave.taskIds.join(', ')}]\n`);
-      await loop.executeWave(wave);
+      const toRun: string[] = [];
+      for (const taskId of wave.taskIds) {
+        const deps = graph.get(taskId) ?? [];
+        const failedDeps = deps.filter((d) => failedOrSkipped.has(d));
+        if (failedDeps.length > 0) {
+          process.stderr.write(
+            `[orchestration] skipping ${taskId}: depends on failed task(s) ${failedDeps.join(', ')}\n`
+          );
+          failedOrSkipped.add(taskId);
+          await markTaskBlocked(svc, taskId);
+        } else {
+          toRun.push(taskId);
+        }
+      }
+
+      if (toRun.length === 0) {
+        process.stderr.write(
+          `[orchestration] wave ${wave.wave} skipped: all tasks blocked by prior failures\n`
+        );
+        continue;
+      }
+
+      process.stderr.write(`[orchestration] wave ${wave.wave}: [${toRun.join(', ')}]\n`);
+      const result = await loop.executeWave({ wave: wave.wave, taskIds: toRun });
+      for (const failed of result.failedTaskIds ?? []) {
+        failedOrSkipped.add(failed);
+        await markTaskBlocked(svc, failed);
+      }
     }
     process.stderr.write(`[orchestration] workstream ${workstreamDisplayId} dispatch complete\n`);
   }

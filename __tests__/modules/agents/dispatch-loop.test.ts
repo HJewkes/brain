@@ -89,10 +89,38 @@ describe('DispatchLoop', () => {
       spawnFn.mockResolvedValue({ agentId: 'a1', taskId: 't1', branch: 'b1' });
       mockGetAgent.mockReturnValue({ status: 'failed' });
 
-      await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+      const result = await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
 
       expect(mockReleaseWorktree).toHaveBeenCalledWith(fakeDb, projectDir, 't1');
       expect(mockMonitorDelivery).not.toHaveBeenCalled();
+      expect(result.failedTaskIds).toEqual(['t1']);
+    });
+
+    it('reports spawn failures in failedTaskIds', async () => {
+      spawnFn.mockRejectedValue(new Error('spawn failed'));
+
+      const result = await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+      expect(result.failedTaskIds).toEqual(['t1']);
+    });
+
+    it('reports only the failed tasks in mixed outcomes', async () => {
+      spawnFn.mockImplementation(async (taskId: string) => ({
+        agentId: `a-${taskId}`,
+        taskId,
+        branch: `b-${taskId}`,
+      }));
+      // First poll returns for t1, second poll returns for t2
+      mockGetAgent
+        .mockReturnValueOnce({ status: 'completed' })
+        .mockReturnValueOnce({ status: 'failed' });
+      mockGetDelivery.mockReturnValue(null);
+      mockInitiateDelivery.mockReturnValue({ agent_id: 'a-t1', task_id: 't1' });
+      mockMonitorDelivery.mockResolvedValue('merged');
+
+      const result = await makeLoop(1).executeWave({ wave: 1, taskIds: ['t1', 't2'] });
+
+      expect(result.failedTaskIds).toEqual(['t2']);
     });
 
     it('handles spawn failure gracefully', async () => {

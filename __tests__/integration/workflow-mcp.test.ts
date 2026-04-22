@@ -137,7 +137,12 @@ function makeServiceWithRuntime(
     db: {
       ...db,
       addInboxItem: vi.fn(),
-      getNoteById: vi.fn().mockReturnValue(null),
+      getNoteById: vi.fn().mockImplementation((id: string) => {
+        if (id.endsWith('-workstream')) {
+          return { id, type: 'workstream', title: 'Test Workstream' };
+        }
+        return null;
+      }),
       forgetExpiredMemories: vi.fn(),
       getLatestMemories: vi.fn().mockReturnValue([]),
     },
