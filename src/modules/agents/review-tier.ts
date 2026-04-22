@@ -32,14 +32,21 @@ const PRIORITY_SCORES: Record<TaskPriority, number> = {
 const HIGH_RISK_CATEGORIES: TaskCategory[] = ['infrastructure', 'migration'];
 const STANDARD_CATEGORIES: TaskCategory[] = ['feature', 'improvement', 'bug'];
 
-const SENSITIVE_PATHS: Array<{ pattern: RegExp; points: number; label: string }> = [
+// Sorted by points descending so the first match is the highest-severity one.
+const SENSITIVE_PATHS: ReadonlyArray<{ pattern: RegExp; points: number; label: string }> = [
   { pattern: /\/(protocol|auth|security)\//i, points: 3, label: 'security-path' },
   { pattern: /\/types\.ts$|\/schema\/|\/migration/i, points: 2, label: 'contract-change' },
   { pattern: /\/cli\.ts$/i, points: 1, label: 'entry-point' },
-];
+]
+  .slice()
+  .sort((a, b) => b.points - a.points);
 
 const DEFAULT_AI_THRESHOLD = 4;
 const DEFAULT_HUMAN_THRESHOLD = 7;
+/** Score marker used when a task-level review_tier override short-circuits scoring. */
+export const OVERRIDE_SCORE = -1;
+/** Score marker used when task mode forces human review (e.g. mode: 'review' or 'human'). */
+export const MODE_OVERRIDE_SCORE = -2;
 
 export function computeReviewTier(
   input: ReviewTierInput,
@@ -67,10 +74,18 @@ function checkOverrides(
   task: TaskMetadata & { review_tier?: ReviewTier }
 ): ReviewTierResult | null {
   if (task.review_tier) {
-    return { tier: task.review_tier, score: -1, breakdown: { override: -1 } };
+    return {
+      tier: task.review_tier,
+      score: OVERRIDE_SCORE,
+      breakdown: { override: OVERRIDE_SCORE },
+    };
   }
   if (task.mode === 'review' || task.mode === 'human') {
-    return { tier: 'human-review', score: 99, breakdown: { 'mode-override': 99 } };
+    return {
+      tier: 'human-review',
+      score: MODE_OVERRIDE_SCORE,
+      breakdown: { 'mode-override': MODE_OVERRIDE_SCORE },
+    };
   }
   return null;
 }
