@@ -8,6 +8,7 @@ import type { BrainDB } from '../services/brain-db.js';
 import type { Embedder } from '../types.js';
 import type { RoutingResult } from '../modules/pm/engine/routing.js';
 import type { PullResult } from '../modules/agents/task-pull.js';
+import type { TaskCategory } from '../modules/pm/types.js';
 import { pullNextTask } from '../modules/agents/task-pull.js';
 import { getTask, updateTaskStatus } from '../modules/pm/data/task-ops.js';
 import { buildWorkerDispatchFromPull } from '../modules/agents/coordinator.js';
@@ -38,6 +39,57 @@ function isAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+interface DispatchConfigBudget {
+  defaultMaxBudgetUsd?: number;
+  categoryBudgets?: Record<string, number>;
+}
+
+function readDispatchConfig(projectDir: string): DispatchConfigBudget {
+  try {
+    const configPath = join(projectDir, 'ao.config.json');
+    if (!existsSync(configPath)) {
+      return { defaultMaxBudgetUsd: 50 };
+    }
+    const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      dispatch?: DispatchConfigBudget;
+    };
+    return raw.dispatch ?? { defaultMaxBudgetUsd: 50 };
+  } catch {
+    return { defaultMaxBudgetUsd: 50 };
+  }
+}
+
+function getTaskCategory(db: BrainDB, taskId: string): TaskCategory | undefined {
+  try {
+    const taskNotes = getPmNotes(db, 'task', { display_id: taskId });
+    if (taskNotes.length === 0) return undefined;
+    const meta = JSON.parse(taskNotes[0].metadata ?? '{}') as Record<string, unknown>;
+    return (meta.category as TaskCategory | undefined) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveMaxBudgetUsd(
+  db: BrainDB,
+  projectDir: string,
+  taskId: string,
+  opts: DispatchOptions
+): number {
+  if (opts.maxBudgetUsd !== undefined) {
+    return opts.maxBudgetUsd;
+  }
+
+  const config = readDispatchConfig(projectDir);
+  const category = getTaskCategory(db, taskId);
+
+  if (category && config.categoryBudgets?.[category]) {
+    return config.categoryBudgets[category];
+  }
+
+  return config.defaultMaxBudgetUsd ?? 50;
 }
 
 // --- Types ---
@@ -138,6 +190,8 @@ export async function dispatchTask(
 
   const mcpConfigPath = writeMcpConfig(agentId, projectDir);
 
+  const maxBudgetUsd = resolveMaxBudgetUsd(svc.db, projectDir, taskId, opts);
+
   const proc = spawnClaude({
     prompt,
     model,
@@ -146,7 +200,7 @@ export async function dispatchTask(
     agentId,
     claimToken: pullResult.claimToken,
     mcpConfigPath,
-    maxBudgetUsd: opts.maxBudgetUsd ?? 5.0,
+    maxBudgetUsd,
     cwd: worktreeResult?.worktreePath || projectDir,
     worktreePath: worktreeResult?.worktreePath,
     addDir: worktreeResult ? projectDir : undefined,
