@@ -17,7 +17,6 @@ export type DeliveryStatus =
   | 'stalled'
   | 'redispatched'
   | 'review-paused';
-<<<<<<< HEAD
 
 export const VALID_DELIVERY_STATUSES: ReadonlySet<DeliveryStatus> = new Set([
   'in-progress',
@@ -32,8 +31,8 @@ export const VALID_DELIVERY_STATUSES: ReadonlySet<DeliveryStatus> = new Set([
   'redispatched',
   'review-paused',
 ]);
-=======
->>>>>>> 35dd88c (Wire crash recovery on MCP startup for review-paused deliveries)
+
+export type HumanSignal = 'approve' | 'needs_fixes';
 
 export interface DeliveryRecord {
   agent_id: string;
@@ -267,4 +266,42 @@ export async function initiateDelivery(
   recordDelivery(db, agentId, { status: 'pr-open', pr_number: pr.number, pr_url: pr.url });
 
   return getDelivery(db, agentId)!;
+}
+
+export type SignalResult =
+  | { ok: true; delivery: DeliveryRecord }
+  | { ok: false; reason: 'not-found' }
+  | { ok: false; reason: 'not-paused'; delivery: DeliveryRecord };
+
+export function signalDelivery(
+  db: Database.Database,
+  taskId: string,
+  signal: HumanSignal
+): SignalResult {
+  if (signal !== 'approve' && signal !== 'needs_fixes') {
+    throw new Error(`Invalid human signal: ${signal}`);
+  }
+  const delivery = getDeliveryForTask(db, taskId);
+  if (!delivery) return { ok: false, reason: 'not-found' };
+  if (delivery.status !== 'review-paused') {
+    return { ok: false, reason: 'not-paused', delivery };
+  }
+  db.prepare('UPDATE delivery_states SET human_signal = ? WHERE agent_id = ?').run(
+    signal,
+    delivery.agent_id
+  );
+  return { ok: true, delivery: { ...delivery, human_signal: signal } };
+}
+
+export function readAndClearHumanSignal(
+  db: Database.Database,
+  agentId: string
+): HumanSignal | null {
+  const row = db
+    .prepare('SELECT human_signal FROM delivery_states WHERE agent_id = ?')
+    .get(agentId) as { human_signal: string | null } | undefined;
+  if (!row?.human_signal) return null;
+  const signal = row.human_signal as HumanSignal;
+  db.prepare('UPDATE delivery_states SET human_signal = NULL WHERE agent_id = ?').run(agentId);
+  return signal;
 }
