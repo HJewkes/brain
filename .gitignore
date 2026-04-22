@@ -12,3 +12,12 @@ coverage/
 .brain/
 .worktrees/
 .claude/skills/
+.claude/scheduled_tasks.lock
+
+# Agent/tool artifacts
+.ao/
+.playwright-mcp/
+.recovered/
+
+# Screenshots (development artifacts)
+*.png
