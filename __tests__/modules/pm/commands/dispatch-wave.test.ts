@@ -3,6 +3,9 @@ import { Command } from '@commander-js/extra-typings';
 import { BrainDB } from '../../../../src/services/brain-db.js';
 import { createMockEmbedder, createTestDb } from '../../../helpers.js';
 import { createStandardProject } from '../../../fixtures/pm-project.js';
+import { createProject } from '../../../../src/modules/pm/data/project-ops.js';
+import { createWorkstream } from '../../../../src/modules/pm/data/workstream-ops.js';
+import { createTestTask } from '../../../helpers.js';
 import type { BrainConfig } from '../../../../src/types.js';
 import {
   createDispatchWaveCommand,
@@ -127,6 +130,41 @@ describe('computeDispatchWave', () => {
     expect(inProgressIds).toContain('TEST-01.01');
   });
 
+  it('collisions is empty when no eligible tasks share paths', () => {
+    const result = computeDispatchWave(db, 'TEST');
+    expect(result.collisions).toEqual([]);
+  });
+
+  it('collisions surface when concurrent tasks reference the same file', async () => {
+    const project = await createProject(db, config, embedder, {
+      name: 'Coll',
+      prefix: 'COLL',
+    });
+    expect(project.ok).toBe(true);
+    const ws = await createWorkstream(db, config, embedder, { project: 'COLL', name: 'WS' });
+    expect(ws.ok).toBe(true);
+
+    const a = await createTestTask(db, config, embedder, {
+      project: 'COLL',
+      workstream: 1,
+      name: 'A',
+      description: 'Create src/shared/delivery-review.ts from scratch.',
+    });
+    const b = await createTestTask(db, config, embedder, {
+      project: 'COLL',
+      workstream: 1,
+      name: 'B',
+      description: 'Also create src/shared/delivery-review.ts with validation.',
+    });
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+
+    const result = computeDispatchWave(db, 'COLL');
+    expect(result.collisions).toHaveLength(1);
+    expect(result.collisions[0].pattern).toBe('src/shared/delivery-review.ts');
+    expect(result.collisions[0].taskIds.sort()).toEqual(['COLL-01.01', 'COLL-01.02']);
+  });
+
   it('returns empty result when all tasks are done', async () => {
     const allIds = [
       'TEST-01.01',
@@ -236,6 +274,67 @@ describe('dispatch-wave CLI output', () => {
     await run('dispatch-wave', '--project', 'TEST');
 
     expect(stdout()).toContain('Next wave (blocked)');
+  });
+
+  it('warns when concurrent eligible tasks reference the same file', async () => {
+    const project = await createProject(db, config, embedder, {
+      name: 'CollCli',
+      prefix: 'CCLI',
+    });
+    expect(project.ok).toBe(true);
+    const ws = await createWorkstream(db, config, embedder, { project: 'CCLI', name: 'WS' });
+    expect(ws.ok).toBe(true);
+
+    await createTestTask(db, config, embedder, {
+      project: 'CCLI',
+      workstream: 1,
+      name: 'A',
+      description: 'Edit src/shared/merge.ts.',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'CCLI',
+      workstream: 1,
+      name: 'B',
+      description: 'Also edit src/shared/merge.ts.',
+    });
+
+    await run('dispatch-wave', '--project', 'CCLI');
+
+    expect(stdout()).toContain('File ownership collisions');
+    expect(stdout()).toContain('src/shared/merge.ts');
+    expect(stdout()).toContain('CCLI-01.01');
+    expect(stdout()).toContain('CCLI-01.02');
+  });
+
+  it('--json output includes collisions array', async () => {
+    const project = await createProject(db, config, embedder, {
+      name: 'CollJson',
+      prefix: 'CJSN',
+    });
+    expect(project.ok).toBe(true);
+    const ws = await createWorkstream(db, config, embedder, { project: 'CJSN', name: 'WS' });
+    expect(ws.ok).toBe(true);
+
+    await createTestTask(db, config, embedder, {
+      project: 'CJSN',
+      workstream: 1,
+      name: 'A',
+      description: 'Touch src/pipeline.ts.',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'CJSN',
+      workstream: 1,
+      name: 'B',
+      description: 'Also touch src/pipeline.ts.',
+    });
+
+    await run('dispatch-wave', '--project', 'CJSN', '--json');
+
+    const out = JSON.parse(stdout());
+    expect(out).toHaveProperty('collisions');
+    expect(Array.isArray(out.collisions)).toBe(true);
+    expect(out.collisions).toHaveLength(1);
+    expect(out.collisions[0].pattern).toBe('src/pipeline.ts');
   });
 
   it('shows error when project not found', async () => {
