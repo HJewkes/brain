@@ -18,10 +18,19 @@ export interface DeliveryReviewResult {
   reviewAgentId: string;
 }
 
-interface ReviewRunOutput {
+export interface ReviewRunOutput {
   agentId: string;
   output: string;
   success: boolean;
+}
+
+export interface ReviewDeps {
+  runReview: (
+    db: Database.Database,
+    delivery: DeliveryRecord,
+    projectDir: string
+  ) => Promise<ReviewRunOutput>;
+  runFixup: (delivery: DeliveryRecord, projectDir: string) => Promise<ReviewRunOutput>;
 }
 
 const MAX_FIXUP_ITERATIONS = 3;
@@ -44,7 +53,8 @@ export async function runDeliveryReview(
   db: Database.Database,
   delivery: DeliveryRecord,
   tier: ReviewTier,
-  projectDir: string
+  projectDir: string,
+  deps: ReviewDeps = defaultDeps
 ): Promise<DeliveryReviewResult> {
   persistReviewTier(db, delivery.agent_id, tier);
 
@@ -52,23 +62,37 @@ export async function runDeliveryReview(
     return approved(0, '');
   }
 
-  const first = await runReviewAgent(db, delivery, projectDir);
+  const first = await deps.runReview(db, delivery, projectDir);
+  persistReviewAgentId(db, delivery.agent_id, first.agentId);
   const riskScore = parseRiskScore(first.output);
-  const signal = parseSignals('review', 'delivery', first.output);
+  persistReviewScore(db, delivery.agent_id, riskScore);
 
-  if (tier === 'human-review' || signal === 'high_risk') {
+  // A failed subprocess (timeout, budget cap, non-zero exit) leaves empty
+  // output that would otherwise parse to signal === null → approved. Treat
+  // it as an escalation instead so the human gate can verify.
+  if (!first.success) {
     return escalate(riskScore, first.agentId, 0);
   }
 
-  if (signal === 'approved' || signal === null) {
-    return approved(riskScore, first.agentId);
+  // parseSignals returns the first-matching pattern, and `approved` is
+  // checked before `high_risk` in CONDITION_PATTERNS. So a verdict of PASS
+  // with a risk score of 5 would short-circuit to approved. Guard on the
+  // risk score directly before dispatching on the signal.
+  if (tier === 'human-review' || riskScore >= 4) {
+    return escalate(riskScore, first.agentId, 0);
+  }
+
+  const signal = parseSignals('review', 'delivery', first.output);
+
+  if (signal === 'high_risk') {
+    return escalate(riskScore, first.agentId, 0);
   }
 
   if (signal !== 'needs_fixes') {
     return approved(riskScore, first.agentId);
   }
 
-  return runFixupLoop(db, delivery, projectDir, first.agentId, riskScore);
+  return runFixupLoop(db, delivery, projectDir, first.agentId, riskScore, deps);
 }
 
 async function runFixupLoop(
@@ -76,7 +100,8 @@ async function runFixupLoop(
   delivery: DeliveryRecord,
   projectDir: string,
   initialReviewAgentId: string,
-  initialRisk: number
+  initialRisk: number,
+  deps: ReviewDeps
 ): Promise<DeliveryReviewResult> {
   let fixupIterations = 0;
   let latestReviewAgentId = initialReviewAgentId;
@@ -84,17 +109,28 @@ async function runFixupLoop(
 
   while (fixupIterations < MAX_FIXUP_ITERATIONS) {
     fixupIterations++;
-    await runFixupAgent(db, delivery, projectDir);
+    await deps.runFixup(delivery, projectDir);
 
-    const reReview = await runReviewAgent(db, delivery, projectDir);
+    const reReview = await deps.runReview(db, delivery, projectDir);
     latestReviewAgentId = reReview.agentId;
+    persistReviewAgentId(db, delivery.agent_id, latestReviewAgentId);
     latestRisk = parseRiskScore(reReview.output);
+    persistReviewScore(db, delivery.agent_id, latestRisk);
+
+    if (!reReview.success) {
+      return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+    }
+
+    if (latestRisk >= 4) {
+      return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+    }
+
     const signal = parseSignals('review', 'delivery', reReview.output);
 
     if (signal === 'high_risk') {
       return escalate(latestRisk, latestReviewAgentId, fixupIterations);
     }
-    if (signal === 'approved' || signal === null) {
+    if (signal !== 'needs_fixes') {
       return {
         approved: true,
         riskScore: latestRisk,
@@ -133,25 +169,20 @@ function escalate(
 }
 
 async function runReviewAgent(
-  db: Database.Database,
+  _db: Database.Database,
   delivery: DeliveryRecord,
   projectDir: string
 ): Promise<ReviewRunOutput> {
   const prompt = buildReviewPrompt(delivery, projectDir);
-  const result = await spawnClaudeReview(prompt, projectDir, RESEARCH_TOOLS);
-  persistReviewAgentId(db, delivery.agent_id, result.agentId);
-  return result;
+  return spawnClaudeReview(prompt, projectDir, RESEARCH_TOOLS);
 }
 
 async function runFixupAgent(
-  db: Database.Database,
   delivery: DeliveryRecord,
   projectDir: string
 ): Promise<ReviewRunOutput> {
   const prompt = buildFixupPrompt(delivery, projectDir);
-  const result = await spawnClaudeReview(prompt, projectDir, FIXUP_TOOLS);
-  void db;
-  return result;
+  return spawnClaudeReview(prompt, projectDir, FIXUP_TOOLS);
 }
 
 function buildReviewPrompt(delivery: DeliveryRecord, projectDir: string): string {
@@ -212,10 +243,15 @@ function fallbackFixupPrompt(delivery: DeliveryRecord): string {
   ].join('\n');
 }
 
-function parseRiskScore(output: string): number {
+export function parseRiskScore(output: string): number {
   const match = output.match(/Risk\s*(?:Score|Level)?\s*:\s*(\d+)/i);
   return match ? parseInt(match[1], 10) : 0;
 }
+
+const defaultDeps: ReviewDeps = {
+  runReview: runReviewAgent,
+  runFixup: runFixupAgent,
+};
 
 function getRepoInfo(projectDir: string): { owner: string; repo: string } {
   try {
@@ -244,6 +280,17 @@ function persistReviewAgentId(db: Database.Database, agentId: string, reviewAgen
   try {
     db.prepare('UPDATE delivery_states SET review_agent_id = ? WHERE agent_id = ?').run(
       reviewAgentId,
+      agentId
+    );
+  } catch {
+    /* columns from VNM-56.27 migration not yet present */
+  }
+}
+
+function persistReviewScore(db: Database.Database, agentId: string, score: number): void {
+  try {
+    db.prepare('UPDATE delivery_states SET review_score = ? WHERE agent_id = ?').run(
+      score,
       agentId
     );
   } catch {
