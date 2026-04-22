@@ -5,8 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DeliveryRecord } from './delivery.js';
+import { recordDelivery, readAndClearHumanSignal } from './delivery.js';
 import { parseSignals } from '../workflow/runtime/signals.js';
 import { renderTemplate } from '../workflow/engine/templates.js';
+import { sleep } from '../../utils/db.js';
 
 export type ReviewTier = 'ci-only' | 'ai-review' | 'human-review';
 
@@ -38,16 +40,20 @@ const REVIEW_MODEL = 'claude-sonnet-4-6';
 const RESEARCH_TOOLS = 'Bash,Read,Glob,Grep,WebSearch,WebFetch';
 const FIXUP_TOOLS = 'Bash,Edit,Read,Write,Glob,Grep';
 const REVIEW_BUDGET_USD = '5.0';
+const HUMAN_SIGNAL_POLL_MS = 30_000;
+const HUMAN_REVIEW_MAX_CYCLES = 2;
+export const REVIEW_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Run the review phase of delivery.
  *
  * - ci-only: no-op, returns immediately approved.
  * - ai-review: dispatches review-agent, parses signals, runs fixup loop up to
- *   MAX_FIXUP_ITERATIONS. De-escalates to merge when risk <= 2 and approved.
- *   Escalates to human-review tier on high_risk or exhausted fixups.
- * - human-review: dispatches review-agent but returns unapproved+escalated so
- *   the caller can route to the human gate (implemented in VNM-56.30).
+ *   MAX_FIXUP_ITERATIONS. Escalates to the human review gate on high_risk or
+ *   exhausted fixups.
+ * - human-review: dispatches review-agent and routes directly to the human
+ *   review gate, which pauses delivery until the user signals via
+ *   brain_delivery_signal or `brain agent approve/reject`.
  */
 export async function runDeliveryReview(
   db: Database.Database,
@@ -68,10 +74,10 @@ export async function runDeliveryReview(
   persistReviewScore(db, delivery.agent_id, riskScore);
 
   // A failed subprocess (timeout, budget cap, non-zero exit) leaves empty
-  // output that would otherwise parse to signal === null → approved. Treat
+  // output that would otherwise parse to signal === null -> approved. Treat
   // it as an escalation instead so the human gate can verify.
   if (!first.success) {
-    return escalate(riskScore, first.agentId, 0);
+    return runHumanReviewGate(db, delivery, first.agentId, riskScore, first.output, projectDir, 0);
   }
 
   // parseSignals returns the first-matching pattern, and `approved` is
@@ -79,13 +85,13 @@ export async function runDeliveryReview(
   // with a risk score of 5 would short-circuit to approved. Guard on the
   // risk score directly before dispatching on the signal.
   if (tier === 'human-review' || riskScore >= 4) {
-    return escalate(riskScore, first.agentId, 0);
+    return runHumanReviewGate(db, delivery, first.agentId, riskScore, first.output, projectDir, 0);
   }
 
   const signal = parseSignals('review', 'delivery', first.output);
 
   if (signal === 'high_risk') {
-    return escalate(riskScore, first.agentId, 0);
+    return runHumanReviewGate(db, delivery, first.agentId, riskScore, first.output, projectDir, 0);
   }
 
   if (signal !== 'needs_fixes') {
@@ -118,17 +124,41 @@ async function runFixupLoop(
     persistReviewScore(db, delivery.agent_id, latestRisk);
 
     if (!reReview.success) {
-      return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+      return runHumanReviewGate(
+        db,
+        delivery,
+        latestReviewAgentId,
+        latestRisk,
+        reReview.output,
+        projectDir,
+        fixupIterations
+      );
     }
 
     if (latestRisk >= 4) {
-      return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+      return runHumanReviewGate(
+        db,
+        delivery,
+        latestReviewAgentId,
+        latestRisk,
+        reReview.output,
+        projectDir,
+        fixupIterations
+      );
     }
 
     const signal = parseSignals('review', 'delivery', reReview.output);
 
     if (signal === 'high_risk') {
-      return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+      return runHumanReviewGate(
+        db,
+        delivery,
+        latestReviewAgentId,
+        latestRisk,
+        reReview.output,
+        projectDir,
+        fixupIterations
+      );
     }
     if (signal !== 'needs_fixes') {
       return {
@@ -141,7 +171,15 @@ async function runFixupLoop(
     }
   }
 
-  return escalate(latestRisk, latestReviewAgentId, fixupIterations);
+  return runHumanReviewGate(
+    db,
+    delivery,
+    latestReviewAgentId,
+    latestRisk,
+    '',
+    projectDir,
+    fixupIterations
+  );
 }
 
 function approved(riskScore: number, reviewAgentId: string): DeliveryReviewResult {
@@ -154,27 +192,198 @@ function approved(riskScore: number, reviewAgentId: string): DeliveryReviewResul
   };
 }
 
-function escalate(
-  riskScore: number,
+interface ReviewSummary {
+  findings: string;
+  highlightedFiles: string;
+  questions: string;
+}
+
+export async function runHumanReviewGate(
+  db: Database.Database,
+  delivery: DeliveryRecord,
   reviewAgentId: string,
-  fixupIterations: number
-): DeliveryReviewResult {
+  riskScore: number,
+  reviewOutput: string,
+  projectDir: string,
+  priorFixupIterations: number
+): Promise<DeliveryReviewResult> {
+  let latestSummary = extractReviewSummary(reviewOutput);
+  let latestReviewAgentId = reviewAgentId;
+  let latestRisk = riskScore;
+  let fixupIterations = priorFixupIterations;
+
+  for (let cycle = 1; cycle <= HUMAN_REVIEW_MAX_CYCLES; cycle++) {
+    notifyHumanReview(db, delivery, latestSummary, latestRisk, latestReviewAgentId, cycle);
+    recordDelivery(db, delivery.agent_id, {
+      status: 'review-paused',
+      review_agent_id: latestReviewAgentId,
+    });
+
+    const deadline = Date.now() + REVIEW_TIMEOUT_MS;
+    const signal = await waitForHumanSignal(db, delivery.agent_id, deadline);
+
+    if (signal === 'approve') {
+      recordDelivery(db, delivery.agent_id, { status: 'pr-open' });
+      return {
+        approved: true,
+        riskScore: latestRisk,
+        escalated: true,
+        fixupIterations,
+        reviewAgentId: latestReviewAgentId,
+      };
+    }
+
+    if (signal === 'timeout') {
+      recordDelivery(db, delivery.agent_id, {
+        status: 'stalled',
+        stall_reason: 'review-timeout',
+      });
+      return {
+        approved: false,
+        riskScore: latestRisk,
+        escalated: true,
+        fixupIterations,
+        reviewAgentId: latestReviewAgentId,
+      };
+    }
+
+    if (cycle === HUMAN_REVIEW_MAX_CYCLES) break;
+
+    await defaultDeps.runFixup(delivery, projectDir);
+    fixupIterations++;
+    const reReview = await defaultDeps.runReview(db, delivery, projectDir);
+    latestReviewAgentId = reReview.agentId;
+    latestRisk = parseRiskScore(reReview.output);
+    latestSummary = extractReviewSummary(reReview.output);
+  }
+
+  recordDelivery(db, delivery.agent_id, {
+    status: 'stalled',
+    stall_reason: 'review-rejected',
+  });
   return {
     approved: false,
-    riskScore,
+    riskScore: latestRisk,
     escalated: true,
     fixupIterations,
-    reviewAgentId,
+    reviewAgentId: latestReviewAgentId,
   };
 }
 
+async function waitForHumanSignal(
+  db: Database.Database,
+  agentId: string,
+  deadline: number
+): Promise<'approve' | 'needs_fixes' | 'timeout'> {
+  while (Date.now() < deadline) {
+    const signal = readAndClearHumanSignal(db, agentId);
+    if (signal) return signal;
+    await sleep(HUMAN_SIGNAL_POLL_MS);
+  }
+  // Final check so a signal arriving just past the deadline isn't dropped.
+  const signal = readAndClearHumanSignal(db, agentId);
+  return signal ?? 'timeout';
+}
+
+function notifyHumanReview(
+  db: Database.Database,
+  delivery: DeliveryRecord,
+  summary: ReviewSummary,
+  riskScore: number,
+  reviewAgentId: string,
+  cycle: number
+): void {
+  const action = cycle === 1 ? 'review-requested' : 'review-re-requested';
+  const content = formatHumanReviewRequest(delivery, summary, riskScore, reviewAgentId, cycle);
+  const meta = JSON.stringify({
+    taskId: delivery.task_id,
+    prUrl: delivery.pr_url,
+    prNumber: delivery.pr_number,
+    reviewAgentId,
+    riskScore,
+    action,
+    cycle,
+  });
+  try {
+    db.prepare(
+      `INSERT INTO inbox (id, content, title, source, source_url, source_meta, status, created_at, processed_at)
+       VALUES (?, ?, ?, 'api', NULL, ?, 'pending', ?, NULL)`
+    ).run(
+      randomUUID(),
+      content,
+      `Review required: ${delivery.task_id ?? 'unknown'}`,
+      meta,
+      new Date().toISOString()
+    );
+  } catch (err) {
+    process.stderr.write(
+      `[delivery-review] failed to add inbox notification: ${err instanceof Error ? err.message : String(err)}\n`
+    );
+  }
+}
+
+function formatHumanReviewRequest(
+  delivery: DeliveryRecord,
+  summary: ReviewSummary,
+  riskScore: number,
+  reviewAgentId: string,
+  cycle: number
+): string {
+  const header =
+    cycle === 1
+      ? `## Review Required: ${delivery.task_id ?? 'unknown'}`
+      : `## Review Required (after fixup): ${delivery.task_id ?? 'unknown'}`;
+  return [
+    header,
+    '',
+    `**PR**: ${delivery.pr_url ?? 'unknown'}`,
+    `**Risk Score**: ${riskScore}/5 (tier: human-review)`,
+    `**Review Agent**: ${reviewAgentId}`,
+    '',
+    '### Key Findings',
+    summary.findings || '(none extracted)',
+    '',
+    '### Files of Interest',
+    summary.highlightedFiles || '(none extracted)',
+    '',
+    '### Open Questions',
+    summary.questions || '(none extracted)',
+    '',
+    `**Actions**: Signal \`approve\` or \`needs_fixes\` via \`brain_delivery_signal\` MCP tool, or run:`,
+    `  brain agent approve ${delivery.task_id ?? '<taskId>'}`,
+    `  brain agent reject ${delivery.task_id ?? '<taskId>'}`,
+  ].join('\n');
+}
+
+function extractReviewSummary(output: string): ReviewSummary {
+  return {
+    findings: extractSection(output, ['Key Findings', 'Findings', 'Summary']),
+    highlightedFiles: extractSection(output, ['Files of Interest', 'Files', 'Highlighted Files']),
+    questions: extractSection(output, ['Open Questions', 'Questions']),
+  };
+}
+
+function extractSection(output: string, headings: string[]): string {
+  for (const heading of headings) {
+    const pattern = new RegExp(`##?\\s*${heading}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|\\n\\*\\*|$)`, 'i');
+    const match = output.match(pattern);
+    if (match) {
+      const text = match[1].trim();
+      if (text) return text;
+    }
+  }
+  return '';
+}
+
 async function runReviewAgent(
-  _db: Database.Database,
+  db: Database.Database,
   delivery: DeliveryRecord,
   projectDir: string
 ): Promise<ReviewRunOutput> {
   const prompt = buildReviewPrompt(delivery, projectDir);
-  return spawnClaudeReview(prompt, projectDir, RESEARCH_TOOLS);
+  const result = await spawnClaudeReview(prompt, projectDir, RESEARCH_TOOLS);
+  persistReviewAgentId(db, delivery.agent_id, result.agentId);
+  return result;
 }
 
 async function runFixupAgent(
