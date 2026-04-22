@@ -1,5 +1,9 @@
 import type Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
+import { sleep } from '../../utils/db.js';
+
+const MAX_PUSH_RETRIES = 3;
+const PUSH_BACKOFF_BASE_MS = 2_000;
 
 export type DeliveryStatus =
   | 'in-progress'
@@ -225,22 +229,28 @@ export function updateDeliveryStatus(
   recordDelivery(db, agentId, { status, ...opts });
 }
 
-export function initiateDelivery(
+export async function initiateDelivery(
   db: Database.Database,
   agentId: string,
   taskId: string,
   branch: string,
   projectDir: string
-): DeliveryRecord {
+): Promise<DeliveryRecord> {
   requireGh();
 
   recordDelivery(db, agentId, { status: 'in-progress', task_id: taskId, branch });
 
-  try {
-    pushBranch(branch, projectDir);
-  } catch (err) {
-    recordDelivery(db, agentId, { status: 'push-failed' });
-    throw err;
+  for (let attempt = 1; attempt <= MAX_PUSH_RETRIES; attempt++) {
+    try {
+      pushBranch(branch, projectDir);
+      break;
+    } catch (err) {
+      if (attempt === MAX_PUSH_RETRIES) {
+        recordDelivery(db, agentId, { status: 'push-failed' });
+        throw err;
+      }
+      await sleep(PUSH_BACKOFF_BASE_MS * Math.pow(2, attempt - 1));
+    }
   }
   recordDelivery(db, agentId, { status: 'pushed' });
 
