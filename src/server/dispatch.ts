@@ -216,6 +216,7 @@ async function runDispatch(
   const mcpConfigPath = writeMcpConfig(agentId, projectDir);
 
   const maxBudgetUsd = resolveMaxBudgetUsd(svc.db, projectDir, taskId, opts);
+  setAgentContext(svc.db, agentId, 'max_budget_usd', maxBudgetUsd);
 
   const proc = spawnClaude({
     prompt,

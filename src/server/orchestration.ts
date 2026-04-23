@@ -228,8 +228,12 @@ export class OrchestrationService {
     const loop = new DispatchLoop(
       svc.db,
       this.wipLimit,
-      async (taskId) => {
-        const result = await dispatchTask(svc, { taskId, worktreeBudget: this.wipLimit });
+      async (taskId, opts) => {
+        const result = await dispatchTask(svc, {
+          taskId,
+          worktreeBudget: this.wipLimit,
+          maxBudgetUsd: opts?.maxBudgetUsd,
+        });
         const r = result as DispatchResult;
         return { agentId: r.agentId, taskId: r.taskId, branch: r.branch };
       },
