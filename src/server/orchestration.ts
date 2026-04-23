@@ -7,6 +7,7 @@ import { getRawDb } from '../utils/db.js';
 import { monitorDelivery, type DeliveryOutcome } from '../modules/agents/delivery-monitor.js';
 import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/delivery.js';
 import { releaseWorktree, updateAgentStatus } from '../modules/agents/data.js';
+import { cleanupOrphanRemoteBranches } from '../modules/agents/worktree.js';
 import { buildDependencyGraph, computeWaves } from '../modules/pm/engine/dependency.js';
 import { listTasks, updateTaskStatus } from '../modules/pm/data/task-ops.js';
 import { DispatchLoop } from '../modules/agents/dispatch-loop.js';
@@ -278,6 +279,21 @@ export class OrchestrationService {
       }
     }
     process.stderr.write(`[orchestration] workstream ${workstreamDisplayId} dispatch complete\n`);
+
+    try {
+      const reports = cleanupOrphanRemoteBranches(svc.db, projectDir, {
+        workstream: workstreamDisplayId,
+      });
+      const deleted = reports.filter((r) => r.deleted);
+      if (deleted.length > 0) {
+        process.stderr.write(
+          `[orchestration] cleaned ${deleted.length} orphan branch(es): ${deleted.map((r) => r.branch).join(', ')}\n`
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[orchestration] orphan branch cleanup failed: ${msg}\n`);
+    }
   }
 
   migrateInFlightWorkflows(runtime: WorkflowRuntime): void {

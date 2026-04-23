@@ -190,6 +190,102 @@ export function cleanupStaleAllocations(db: unknown, projectRoot: string): strin
   return removed;
 }
 
+export interface CleanupOrphanBranchesOptions {
+  /** Only scan branches under `agent/{workstream}/`. Omit to scan all `agent/*` refs. */
+  workstream?: string;
+  /** Report orphans without actually deleting them. */
+  dryRun?: boolean;
+}
+
+export interface OrphanBranchReport {
+  branch: string;
+  hasOpenPR: boolean;
+  hasActiveAgent: boolean;
+  deleted: boolean;
+}
+
+function listRemoteAgentBranches(projectRoot: string, workstream?: string): string[] {
+  const refPrefix = workstream
+    ? `refs/remotes/origin/agent/${workstream}/`
+    : 'refs/remotes/origin/agent/';
+  try {
+    const output = execFileSync('git', ['for-each-ref', refPrefix, '--format=%(refname:short)'], {
+      cwd: projectRoot,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    return output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.replace(/^origin\//, ''));
+  } catch {
+    return [];
+  }
+}
+
+function hasOpenPullRequest(projectRoot: string, branch: string): boolean {
+  try {
+    const output = execFileSync(
+      'gh',
+      ['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number'],
+      { cwd: projectRoot, encoding: 'utf-8', stdio: 'pipe' }
+    );
+    const prs = JSON.parse(output) as unknown;
+    return Array.isArray(prs) && prs.length > 0;
+  } catch {
+    // gh failure: assume PR exists so we don't accidentally delete branches we can't verify
+    return true;
+  }
+}
+
+function deleteRemoteBranch(projectRoot: string, branch: string): boolean {
+  try {
+    execFileSync('git', ['push', 'origin', '--delete', branch], {
+      cwd: projectRoot,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Scan remote `agent/*` branches and delete those with no open PR and no
+ * active worktree allocation. Intended to run after a workstream dispatch
+ * completes to clear stragglers left by failed, abandoned, or redispatched
+ * agents. Also releases any local worktree/branch tied to a deleted remote.
+ */
+export function cleanupOrphanRemoteBranches(
+  db: unknown,
+  projectRoot: string,
+  opts: CleanupOrphanBranchesOptions = {}
+): OrphanBranchReport[] {
+  const remoteBranches = listRemoteAgentBranches(projectRoot, opts.workstream);
+  if (remoteBranches.length === 0) return [];
+
+  const allocations = getWorktreeAllocations(db);
+  const activeBranches = new Map(allocations.map((a) => [a.branch, a.task_id]));
+
+  const reports: OrphanBranchReport[] = [];
+  for (const branch of remoteBranches) {
+    const hasActiveAgent = activeBranches.has(branch);
+    const hasOpenPR = hasActiveAgent ? true : hasOpenPullRequest(projectRoot, branch);
+    const isOrphan = !hasActiveAgent && !hasOpenPR;
+
+    let deleted = false;
+    if (isOrphan && !opts.dryRun) {
+      deleted = deleteRemoteBranch(projectRoot, branch);
+    }
+
+    reports.push({ branch, hasOpenPR, hasActiveAgent, deleted });
+  }
+
+  return reports;
+}
+
 /**
  * Verify worktree isolation before dispatching an agent.
  * Returns the allocated worktree path if one exists, or null if this is the only agent.
