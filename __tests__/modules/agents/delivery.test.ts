@@ -129,3 +129,64 @@ describe('initiateDelivery push retry', () => {
     expect(mockSleep).not.toHaveBeenCalled();
   });
 });
+
+describe('initiateDelivery auto-merge', () => {
+  beforeEach(() => {
+    mockExec.mockReset();
+    mockSleep.mockClear();
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('arms auto-merge with --squash after PR creation', async () => {
+    const db = makeFakeDb();
+
+    mockExec.mockImplementation((bin: string, args: string[]) => {
+      if (bin === 'gh' && args[0] === 'auth') return Buffer.from('');
+      if (bin === 'git' && args[0] === 'push') return Buffer.from('');
+      if (bin === 'gh' && args[0] === 'pr' && args[1] === 'view') {
+        throw new Error('no existing pr');
+      }
+      if (bin === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+        return 'https://github.com/test/repo/pull/42';
+      }
+      if (bin === 'gh' && args[0] === 'pr' && args[1] === 'merge') {
+        return Buffer.from('');
+      }
+      return Buffer.from('');
+    });
+
+    await initiateDelivery(db, 'agent-1', 'VNM-1.1', 'branch-a', '/tmp/proj');
+
+    const mergeCalls = mockExec.mock.calls.filter(
+      (c) => c[0] === 'gh' && (c[1] as string[])[0] === 'pr' && (c[1] as string[])[1] === 'merge'
+    );
+    expect(mergeCalls).toHaveLength(1);
+    expect(mergeCalls[0][1]).toEqual(['pr', 'merge', '42', '--auto', '--squash']);
+    expect(db._rows.get('agent-1')?.status).toBe('pr-open');
+  });
+
+  it('does not fail delivery when auto-merge arming fails', async () => {
+    const db = makeFakeDb();
+
+    mockExec.mockImplementation((bin: string, args: string[]) => {
+      if (bin === 'gh' && args[0] === 'auth') return Buffer.from('');
+      if (bin === 'git' && args[0] === 'push') return Buffer.from('');
+      if (bin === 'gh' && args[0] === 'pr' && args[1] === 'view') {
+        throw new Error('no existing pr');
+      }
+      if (bin === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+        return 'https://github.com/test/repo/pull/42';
+      }
+      if (bin === 'gh' && args[0] === 'pr' && args[1] === 'merge') {
+        throw new Error('auto-merge not available');
+      }
+      return Buffer.from('');
+    });
+
+    const delivery = await initiateDelivery(db, 'agent-1', 'VNM-1.1', 'branch-a', '/tmp/proj');
+
+    expect(delivery.status).toBe('pr-open');
+    expect(db._rows.get('agent-1')?.status).toBe('pr-open');
+  });
+});
