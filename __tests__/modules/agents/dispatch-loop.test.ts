@@ -11,6 +11,7 @@ vi.mock('../../../src/utils/db.js', () => ({
 vi.mock('../../../src/modules/agents/data.js', () => ({
   getAgent: vi.fn(),
   findAgentByTask: vi.fn(),
+  getAgentContext: vi.fn(),
 }));
 
 vi.mock('../../../src/modules/agents/delivery.js', () => ({
@@ -35,7 +36,7 @@ import {
   type DispatchLoopPmDeps,
   type SpawnResult,
 } from '../../../src/modules/agents/dispatch-loop.js';
-import { findAgentByTask, getAgent } from '../../../src/modules/agents/data.js';
+import { findAgentByTask, getAgent, getAgentContext } from '../../../src/modules/agents/data.js';
 import { getDeliveryForTask, initiateDelivery } from '../../../src/modules/agents/delivery.js';
 import { releaseWorktree } from '../../../src/modules/agents/worktree.js';
 import { monitorDelivery } from '../../../src/modules/agents/delivery-monitor.js';
@@ -43,6 +44,7 @@ import { updateTaskStatus } from '../../../src/modules/pm/data/task-ops.js';
 
 const mockGetAgent = getAgent as ReturnType<typeof vi.fn>;
 const mockFindAgentByTask = findAgentByTask as ReturnType<typeof vi.fn>;
+const mockGetAgentContext = getAgentContext as ReturnType<typeof vi.fn>;
 const mockGetDelivery = getDeliveryForTask as ReturnType<typeof vi.fn>;
 const mockInitiateDelivery = initiateDelivery as ReturnType<typeof vi.fn>;
 const mockReleaseWorktree = releaseWorktree as ReturnType<typeof vi.fn>;
@@ -59,6 +61,7 @@ describe('DispatchLoop', () => {
     spawnFn = vi.fn();
     mockFindAgentByTask.mockReset();
     mockGetDelivery.mockReset();
+    mockGetAgentContext.mockReset();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -279,6 +282,92 @@ describe('DispatchLoop', () => {
       await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
 
       expect(spawnFn).toHaveBeenCalledWith('t1');
+    });
+
+    describe('budget retry', () => {
+      function stubBudgetExhausted(agentId: string, originalBudget: number) {
+        mockGetAgentContext.mockImplementation((_db: unknown, id: string, key: string) => {
+          if (id !== agentId) return undefined;
+          if (key === 'claude_result') return { subtype: 'error_max_budget_usd' };
+          if (key === 'max_budget_usd') return originalBudget;
+          return undefined;
+        });
+      }
+
+      it('retries with 2x budget when first agent exhausts budget', async () => {
+        spawnFn
+          .mockResolvedValueOnce({ agentId: 'a1', taskId: 't1', branch: 'b1' })
+          .mockResolvedValueOnce({ agentId: 'a2', taskId: 't1', branch: 'b2' });
+        mockGetAgent
+          .mockReturnValueOnce({ status: 'failed' })
+          .mockReturnValueOnce({ status: 'completed' });
+        stubBudgetExhausted('a1', 5);
+        mockGetDelivery.mockReturnValue(null);
+        mockInitiateDelivery.mockReturnValue({ agent_id: 'a2', task_id: 't1', branch: 'b2' });
+        mockMonitorDelivery.mockResolvedValue('merged');
+
+        const result = await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+        expect(spawnFn).toHaveBeenCalledTimes(2);
+        expect(spawnFn).toHaveBeenNthCalledWith(1, 't1');
+        expect(spawnFn).toHaveBeenNthCalledWith(2, 't1', { maxBudgetUsd: 10 });
+        expect(result.failedTaskIds).toEqual([]);
+        expect(mockMonitorDelivery).toHaveBeenCalled();
+      });
+
+      it('marks task failed when retry agent also fails', async () => {
+        spawnFn
+          .mockResolvedValueOnce({ agentId: 'a1', taskId: 't1', branch: 'b1' })
+          .mockResolvedValueOnce({ agentId: 'a2', taskId: 't1', branch: 'b2' });
+        mockGetAgent
+          .mockReturnValueOnce({ status: 'failed' })
+          .mockReturnValueOnce({ status: 'failed' });
+        stubBudgetExhausted('a1', 5);
+
+        const result = await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+        expect(spawnFn).toHaveBeenCalledTimes(2);
+        expect(result.failedTaskIds).toEqual(['t1']);
+      });
+
+      it('does not retry when failure is not budget-related', async () => {
+        spawnFn.mockResolvedValueOnce({ agentId: 'a1', taskId: 't1', branch: 'b1' });
+        mockGetAgent.mockReturnValueOnce({ status: 'failed' });
+        // No claude_result subtype → wasBudgetExhausted is false
+        mockGetAgentContext.mockReturnValue(undefined);
+
+        const result = await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+        expect(spawnFn).toHaveBeenCalledTimes(1);
+        expect(result.failedTaskIds).toEqual(['t1']);
+      });
+
+      it('does not retry when original budget is missing', async () => {
+        spawnFn.mockResolvedValueOnce({ agentId: 'a1', taskId: 't1', branch: 'b1' });
+        mockGetAgent.mockReturnValueOnce({ status: 'failed' });
+        mockGetAgentContext.mockImplementation((_db: unknown, _id: string, key: string) => {
+          if (key === 'claude_result') return { subtype: 'error_max_budget_usd' };
+          return undefined; // max_budget_usd missing
+        });
+
+        const result = await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+        expect(spawnFn).toHaveBeenCalledTimes(1);
+        expect(result.failedTaskIds).toEqual(['t1']);
+      });
+
+      it('marks failed when retry spawn throws', async () => {
+        spawnFn
+          .mockResolvedValueOnce({ agentId: 'a1', taskId: 't1', branch: 'b1' })
+          .mockRejectedValueOnce(new Error('spawn boom'));
+        mockGetAgent.mockReturnValueOnce({ status: 'failed' });
+        stubBudgetExhausted('a1', 5);
+
+        const result = await makeLoop().executeWave({ wave: 1, taskIds: ['t1'] });
+
+        expect(spawnFn).toHaveBeenCalledTimes(2);
+        expect(result.failedTaskIds).toEqual(['t1']);
+      });
     });
   });
 
