@@ -41,6 +41,7 @@ vi.mock('../../src/modules/agents/data.js', () => ({
   createAgent: vi.fn().mockReturnValue('agent-001'),
   updateAgentStatus: vi.fn(),
   setAgentContext: vi.fn(),
+  listAgents: vi.fn().mockReturnValue([]),
 }));
 
 vi.mock('../../src/modules/agents/completion-protocol.js', async (importOriginal) => {
@@ -52,9 +53,27 @@ vi.mock('../../src/modules/agents/completion-protocol.js', async (importOriginal
   };
 });
 
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    existsSync: vi.fn().mockReturnValue(true),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    unlinkSync: vi.fn(),
+  };
+});
+
+vi.mock('../../src/services/indexing.js', () => ({
+  indexSingleFile: vi.fn().mockResolvedValue('note-1'),
+}));
+
 // Lazy imports for mocked modules
 const { pullNextTask } = await import('../../src/modules/agents/task-pull.js');
 const { buildWorkerDispatchFromPull } = await import('../../src/modules/agents/coordinator.js');
+const { allocateWorktree } = await import('../../src/modules/agents/worktree.js');
+const { getPmNotes } = await import('../../src/modules/pm/data/queries.js');
+const fs = await import('node:fs');
 const { dispatchTask } = await import('../../src/server/dispatch.js');
 
 // --- Fixtures ---
@@ -157,6 +176,53 @@ describe('dispatch', () => {
       await expect(dispatchTask(mockSvc, { dryRun: true })).rejects.toThrow(
         'No eligible tasks found for dispatch'
       );
+    });
+  });
+
+  describe('claim release on failure', () => {
+    const claimedFileContent =
+      '---\nstatus: claimed\nclaim_token: test-token\nclaimed_at: "2026-04-22T00:00:00Z"\nmodified: 2026-04-22\n---\n\n# Task\n';
+
+    function setupNoteLookup() {
+      const note = {
+        id: 'note-1',
+        filePath: '/tmp/brain/modules/pm/VNM-99/VNM-99.01.md',
+        metadata: '{}',
+      };
+      vi.mocked(getPmNotes).mockReturnValue([note] as unknown as ReturnType<typeof getPmNotes>);
+      vi.mocked(fs.readFileSync).mockReturnValue(claimedFileContent);
+    }
+
+    it('releases claim when worktree allocation fails', async () => {
+      vi.mocked(pullNextTask).mockResolvedValue(makePullResult());
+      vi.mocked(buildWorkerDispatchFromPull).mockReturnValue(
+        makeWorkerDispatch({ routing: { ...defaultRouting, isolation: 'worktree' } })
+      );
+      vi.mocked(allocateWorktree).mockImplementation(() => {
+        throw new Error('Worktree budget exhausted: 3/3 allocated');
+      });
+      setupNoteLookup();
+
+      await expect(dispatchTask(mockSvc, {})).rejects.toThrow('Worktree budget exhausted');
+
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      const written = vi.mocked(fs.writeFileSync).mock.calls[0]?.[1] as string;
+      expect(written).toContain('status: pending');
+      expect(written).not.toMatch(/^claim_token:/m);
+      expect(written).not.toMatch(/^claimed_at:/m);
+    });
+
+    it('does not release claim when dryRun fails', async () => {
+      vi.mocked(pullNextTask).mockResolvedValue(makePullResult({ claimToken: '' }));
+      vi.mocked(buildWorkerDispatchFromPull).mockImplementation(() => {
+        throw new Error('buildWorkerDispatch failed');
+      });
+
+      await expect(dispatchTask(mockSvc, { dryRun: true })).rejects.toThrow(
+        'buildWorkerDispatch failed'
+      );
+
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
   });
 

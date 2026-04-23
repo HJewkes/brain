@@ -6,6 +6,7 @@ import {
   releaseWorktree,
   checkWorktreePath,
   cleanupStaleAllocations,
+  cleanupOrphanRemoteBranches,
 } from '../../../src/modules/agents/worktree.js';
 import { getWorktreeAllocations } from '../../../src/modules/agents/data.js';
 
@@ -393,6 +394,173 @@ describe('worktree lifecycle', () => {
     it('returns empty array when there are no allocations', () => {
       const removed = cleanupStaleAllocations(db, '/repo');
       expect(removed).toHaveLength(0);
+    });
+  });
+
+  // ── cleanupOrphanRemoteBranches ────────────────────────────────────────────
+
+  describe('cleanupOrphanRemoteBranches', () => {
+    function mockGitBranches(branches: string[]): void {
+      mockExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (argv[0] === 'for-each-ref') {
+          return branches.map((b) => `origin/${b}`).join('\n') + '\n';
+        }
+        return '';
+      });
+    }
+
+    it('returns empty array when no remote agent branches exist', () => {
+      mockGitBranches([]);
+      const reports = cleanupOrphanRemoteBranches(db, '/repo');
+      expect(reports).toHaveLength(0);
+    });
+
+    it('deletes branches with no open PR and no active allocation', () => {
+      const branches = ['agent/VNM-56/VNM-56.01', 'agent/VNM-56/VNM-56.02'];
+      mockExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (cmd === 'git' && argv[0] === 'for-each-ref') {
+          return branches.map((b) => `origin/${b}`).join('\n') + '\n';
+        }
+        if (cmd === 'gh' && argv[0] === 'pr' && argv[1] === 'list') {
+          return '[]';
+        }
+        return '';
+      });
+
+      const reports = cleanupOrphanRemoteBranches(db, '/repo');
+      expect(reports).toHaveLength(2);
+      expect(reports.every((r) => r.deleted)).toBe(true);
+
+      const deleteCalls = mockExecFileSync.mock.calls.filter((c) => {
+        const argv = (c as unknown[])[1] as string[];
+        return argv.includes('push') && argv.includes('--delete');
+      });
+      expect(deleteCalls).toHaveLength(2);
+    });
+
+    it('preserves branches with an open PR', () => {
+      mockExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (cmd === 'git' && argv[0] === 'for-each-ref') {
+          return 'origin/agent/VNM-56/VNM-56.01\n';
+        }
+        if (cmd === 'gh' && argv[0] === 'pr') {
+          return JSON.stringify([{ number: 123 }]);
+        }
+        return '';
+      });
+
+      const reports = cleanupOrphanRemoteBranches(db, '/repo');
+      expect(reports).toHaveLength(1);
+      expect(reports[0].hasOpenPR).toBe(true);
+      expect(reports[0].deleted).toBe(false);
+    });
+
+    it('preserves branches with an active allocation', () => {
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-56.01',
+        workstream: 'VNM-56',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 3,
+      });
+      vi.clearAllMocks();
+
+      mockExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (cmd === 'git' && argv[0] === 'for-each-ref') {
+          return 'origin/agent/VNM-56/VNM-56.01\n';
+        }
+        if (cmd === 'gh') {
+          return '[]';
+        }
+        return '';
+      });
+
+      const reports = cleanupOrphanRemoteBranches(db, '/repo');
+      expect(reports).toHaveLength(1);
+      expect(reports[0].hasActiveAgent).toBe(true);
+      expect(reports[0].deleted).toBe(false);
+
+      const deleteCalls = mockExecFileSync.mock.calls.filter((c) => {
+        const argv = (c as unknown[])[1] as string[];
+        return argv.includes('push') && argv.includes('--delete');
+      });
+      expect(deleteCalls).toHaveLength(0);
+    });
+
+    it('skips deletion in dry-run mode', () => {
+      mockExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (cmd === 'git' && argv[0] === 'for-each-ref') {
+          return 'origin/agent/VNM-56/VNM-56.01\n';
+        }
+        if (cmd === 'gh') return '[]';
+        return '';
+      });
+
+      const reports = cleanupOrphanRemoteBranches(db, '/repo', { dryRun: true });
+      expect(reports).toHaveLength(1);
+      expect(reports[0].deleted).toBe(false);
+      expect(reports[0].hasOpenPR).toBe(false);
+      expect(reports[0].hasActiveAgent).toBe(false);
+
+      const deleteCalls = mockExecFileSync.mock.calls.filter((c) => {
+        const argv = (c as unknown[])[1] as string[];
+        return argv.includes('push') && argv.includes('--delete');
+      });
+      expect(deleteCalls).toHaveLength(0);
+    });
+
+    it('scopes scan to workstream when provided', () => {
+      mockExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (cmd === 'git' && argv[0] === 'for-each-ref') {
+          expect(argv[1]).toBe('refs/remotes/origin/agent/VNM-56/');
+          return '';
+        }
+        return '';
+      });
+
+      cleanupOrphanRemoteBranches(db, '/repo', { workstream: 'VNM-56' });
+    });
+
+    it('assumes PR exists when gh command fails (safer default)', () => {
+      mockExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (cmd === 'git' && argv[0] === 'for-each-ref') {
+          return 'origin/agent/VNM-56/VNM-56.01\n';
+        }
+        if (cmd === 'gh') {
+          throw new Error('gh not found');
+        }
+        return '';
+      });
+
+      const reports = cleanupOrphanRemoteBranches(db, '/repo');
+      expect(reports[0].hasOpenPR).toBe(true);
+      expect(reports[0].deleted).toBe(false);
+    });
+
+    it('marks branch as not deleted when git push fails', () => {
+      mockExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (cmd === 'git' && argv[0] === 'for-each-ref') {
+          return 'origin/agent/VNM-56/VNM-56.01\n';
+        }
+        if (cmd === 'gh') return '[]';
+        if (cmd === 'git' && argv[0] === 'push') {
+          throw new Error('remote rejected');
+        }
+        return '';
+      });
+
+      const reports = cleanupOrphanRemoteBranches(db, '/repo');
+      expect(reports[0].deleted).toBe(false);
+      expect(reports[0].hasOpenPR).toBe(false);
+      expect(reports[0].hasActiveAgent).toBe(false);
     });
   });
 });

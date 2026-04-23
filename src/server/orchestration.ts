@@ -13,6 +13,7 @@ import {
 } from '../modules/agents/delivery.js';
 import { getPrForBranch } from '../modules/agents/auto-merge.js';
 import { releaseWorktree, updateAgentStatus } from '../modules/agents/data.js';
+import { cleanupOrphanRemoteBranches } from '../modules/agents/worktree.js';
 import { buildDependencyGraph, computeWaves } from '../modules/pm/engine/dependency.js';
 import { listTasks, updateTaskStatus } from '../modules/pm/data/task-ops.js';
 import { DispatchLoop } from '../modules/agents/dispatch-loop.js';
@@ -345,8 +346,12 @@ export class OrchestrationService {
     const loop = new DispatchLoop(
       svc.db,
       this.wipLimit,
-      async (taskId) => {
-        const result = await dispatchTask(svc, { taskId, worktreeBudget: this.wipLimit });
+      async (taskId, opts) => {
+        const result = await dispatchTask(svc, {
+          taskId,
+          worktreeBudget: this.wipLimit,
+          maxBudgetUsd: opts?.maxBudgetUsd,
+        });
         const r = result as DispatchResult;
         return { agentId: r.agentId, taskId: r.taskId, branch: r.branch };
       },
@@ -392,6 +397,21 @@ export class OrchestrationService {
       }
     }
     process.stderr.write(`[orchestration] workstream ${workstreamDisplayId} dispatch complete\n`);
+
+    try {
+      const reports = cleanupOrphanRemoteBranches(svc.db, projectDir, {
+        workstream: workstreamDisplayId,
+      });
+      const deleted = reports.filter((r) => r.deleted);
+      if (deleted.length > 0) {
+        process.stderr.write(
+          `[orchestration] cleaned ${deleted.length} orphan branch(es): ${deleted.map((r) => r.branch).join(', ')}\n`
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[orchestration] orphan branch cleanup failed: ${msg}\n`);
+    }
   }
 
   migrateInFlightWorkflows(runtime: WorkflowRuntime): void {
