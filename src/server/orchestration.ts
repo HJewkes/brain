@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import type Database from 'better-sqlite3';
 import type { BrainDB } from '../services/brain-db.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 import type { BrainServiceClass } from '../services/brain-service.js';
 import { getRawDb } from '../utils/db.js';
 import { monitorDelivery, type DeliveryOutcome } from '../modules/agents/delivery-monitor.js';
-import { getDeliveryForTask, type DeliveryRecord } from '../modules/agents/delivery.js';
+import {
+  getDeliveryForTask,
+  initiateDelivery,
+  type DeliveryRecord,
+} from '../modules/agents/delivery.js';
+import { getPrForBranch } from '../modules/agents/auto-merge.js';
 import { releaseWorktree, updateAgentStatus } from '../modules/agents/data.js';
 import { buildDependencyGraph, computeWaves } from '../modules/pm/engine/dependency.js';
 import { listTasks, updateTaskStatus } from '../modules/pm/data/task-ops.js';
@@ -29,6 +35,53 @@ async function markTaskBlocked(svc: BrainServiceClass, displayId: string): Promi
 
 /** Recovery statuses: deliveries that need attention after process restart. */
 const RECOVERY_STATUSES = ['pr-open', 'push-failed', 'conflicted', 'review-paused'] as const;
+
+/**
+ * Delivery statuses indicating push + PR already happened. Orphan recovery
+ * skips these to avoid re-initiating delivery on branches already in flight.
+ */
+const DELIVERY_INITIATED_STATUSES = new Set<string>([
+  'pushed',
+  'pr-open',
+  'pr-failed',
+  'conflicted',
+  'merged',
+  'delivered',
+  'stalled',
+  'redispatched',
+  'review-paused',
+]);
+
+interface OrphanedBranchRow {
+  id: string;
+  brain_task: string;
+  branch: string;
+  delivery_status: string | null;
+}
+
+interface OrphanedBranchCandidate {
+  agentId: string;
+  taskId: string;
+  branch: string;
+}
+
+function branchHasNewCommits(branch: string, projectDir: string): boolean {
+  try {
+    const output = execFileSync('git', ['rev-list', '--count', `origin/main..${branch}`], {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    return parseInt(output.trim(), 10) > 0;
+  } catch {
+    return false;
+  }
+}
+
+function branchHasOpenPr(branch: string, projectDir: string): boolean {
+  const pr = getPrForBranch(branch, projectDir);
+  return pr !== null && pr.state === 'open';
+}
 
 function getInFlightDeliveries(rawDb: Database.Database): DeliveryRecord[] {
   try {
@@ -117,6 +170,71 @@ export class OrchestrationService {
     }
 
     await this.recoverZombieAgents(svc);
+    await this.recoverOrphanedBranches();
+  }
+
+  /**
+   * Detect branches that have committed work but no open PR, and kick off
+   * delivery. This covers agents that exit after committing without triggering
+   * the delivery pipeline (e.g. exit_code_1 post-commit, 'completed without
+   * protocol message', or crash between commit and push).
+   */
+  async recoverOrphanedBranches(): Promise<void> {
+    const candidates = this.findOrphanedBranches();
+    if (candidates.length === 0) return;
+
+    for (const candidate of candidates) {
+      try {
+        const delivery = await initiateDelivery(
+          this.rawDb,
+          candidate.agentId,
+          candidate.taskId,
+          candidate.branch,
+          this.projectDir
+        );
+        this.startMonitor(delivery);
+        process.stderr.write(
+          `[orchestration] recovered orphaned branch ${candidate.branch} for ${candidate.taskId}: PR #${delivery.pr_number}\n`
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(
+          `[orchestration] failed to recover orphaned branch ${candidate.branch}: ${msg}\n`
+        );
+      }
+    }
+  }
+
+  private findOrphanedBranches(): OrphanedBranchCandidate[] {
+    let rows: OrphanedBranchRow[];
+    try {
+      rows = this.rawDb
+        .prepare(
+          `SELECT a.id, a.brain_task, a.branch, d.status AS delivery_status
+             FROM agents a
+             LEFT JOIN delivery_states d ON d.agent_id = a.id
+            WHERE a.status IN ('completed', 'failed', 'abandoned')
+              AND a.branch IS NOT NULL
+              AND a.brain_task IS NOT NULL
+              AND a.branch LIKE 'agent/%'`
+        )
+        .all() as OrphanedBranchRow[];
+    } catch {
+      return [];
+    }
+
+    const candidates: OrphanedBranchCandidate[] = [];
+    for (const row of rows) {
+      if (row.delivery_status && DELIVERY_INITIATED_STATUSES.has(row.delivery_status)) continue;
+      if (!branchHasNewCommits(row.branch, this.projectDir)) continue;
+      if (branchHasOpenPr(row.branch, this.projectDir)) continue;
+      candidates.push({
+        agentId: row.id,
+        taskId: row.brain_task,
+        branch: row.branch,
+      });
+    }
+    return candidates;
   }
 
   /** Detect agents marked active whose process is dead, and auto-abandon them. */
