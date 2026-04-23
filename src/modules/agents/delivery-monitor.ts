@@ -4,7 +4,7 @@ import type Database from 'better-sqlite3';
 import type { BrainDB } from '../../services/brain-db.js';
 import { getRawDb, sleep } from '../../utils/db.js';
 import { getPrForBranch, mergePr, rerunPrChecks, type PrStatus } from './auto-merge.js';
-import { rebaseInIsolation } from './rebase-isolation.js';
+import { rebaseInIsolationDetailed } from './rebase-isolation.js';
 import { spawnFixAgent } from './fix-agent.js';
 import { updateDeliveryStatus, type DeliveryRecord } from './delivery.js';
 
@@ -173,8 +173,12 @@ export async function monitorDelivery(
           `checks=${pr.checksPass ? 'pass' : 'fail'}, mergeable=${pr.mergeable}, ` +
           `reason=${pr.mergeStateStatus ?? 'unknown'}\n`
       );
-      const rebased = await rebaseInIsolation(delivery.branch, projectDir);
-      if (rebased) continue;
+      const rebased = await rebaseInIsolationDetailed(delivery.branch, projectDir);
+      if (rebased.ok) continue;
+      process.stderr.write(
+        `[delivery-monitor] ${delivery.task_id} PR #${delivery.pr_number}: ` +
+          `kind=pr-conflict reason=${rebased.reason} detail=${rebased.detail ?? 'n/a'}\n`
+      );
 
       if (brainDb && fixAttempts < MAX_FIX_ATTEMPTS) {
         const fixed = await spawnFixAgent(brainDb, delivery);

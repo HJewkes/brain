@@ -17,7 +17,7 @@ vi.mock('../../../src/modules/agents/auto-merge.js', () => ({
 }));
 
 vi.mock('../../../src/modules/agents/rebase-isolation.js', () => ({
-  rebaseInIsolation: vi.fn(),
+  rebaseInIsolationDetailed: vi.fn(),
 }));
 
 vi.mock('../../../src/modules/agents/fix-agent.js', () => ({
@@ -30,13 +30,13 @@ vi.mock('../../../src/modules/agents/delivery.js', () => ({
 
 import { monitorDelivery } from '../../../src/modules/agents/delivery-monitor.js';
 import { getPrForBranch, mergePr, rerunPrChecks } from '../../../src/modules/agents/auto-merge.js';
-import { rebaseInIsolation } from '../../../src/modules/agents/rebase-isolation.js';
+import { rebaseInIsolationDetailed } from '../../../src/modules/agents/rebase-isolation.js';
 import { spawnFixAgent } from '../../../src/modules/agents/fix-agent.js';
 import { updateDeliveryStatus } from '../../../src/modules/agents/delivery.js';
 
 const mockGetPr = getPrForBranch as ReturnType<typeof vi.fn>;
 const mockMergePr = mergePr as ReturnType<typeof vi.fn>;
-const mockRebase = rebaseInIsolation as ReturnType<typeof vi.fn>;
+const mockRebaseDetailed = rebaseInIsolationDetailed as ReturnType<typeof vi.fn>;
 const mockFixAgent = spawnFixAgent as ReturnType<typeof vi.fn>;
 const mockUpdateStatus = updateDeliveryStatus as ReturnType<typeof vi.fn>;
 const mockRerun = rerunPrChecks as ReturnType<typeof vi.fn>;
@@ -230,7 +230,7 @@ describe('monitorDelivery', () => {
       mergeable: false,
       state: 'open',
     });
-    mockRebase.mockResolvedValueOnce(true);
+    mockRebaseDetailed.mockResolvedValueOnce({ ok: true });
     mockGetPr.mockReturnValueOnce({
       number: 42,
       branch: 'b',
@@ -242,7 +242,7 @@ describe('monitorDelivery', () => {
 
     const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('merged');
-    expect(mockRebase).toHaveBeenCalledTimes(1);
+    expect(mockRebaseDetailed).toHaveBeenCalledTimes(1);
   });
 
   it('escalates conflict: rebase fails → fix agent succeeds → merge, persists fix_attempts', async () => {
@@ -255,7 +255,11 @@ describe('monitorDelivery', () => {
       mergeable: false,
       state: 'open',
     });
-    mockRebase.mockResolvedValueOnce(false);
+    mockRebaseDetailed.mockResolvedValueOnce({
+      ok: false,
+      reason: 'conflict',
+      detail: 'content conflict',
+    });
     mockFixAgent.mockResolvedValueOnce(true);
     mockGetPr.mockReturnValueOnce({
       number: 42,
@@ -284,7 +288,11 @@ describe('monitorDelivery', () => {
       mergeable: false,
       state: 'open',
     });
-    mockRebase.mockResolvedValueOnce(false);
+    mockRebaseDetailed.mockResolvedValueOnce({
+      ok: false,
+      reason: 'conflict',
+      detail: 'content conflict',
+    });
     mockFixAgent.mockResolvedValueOnce(false);
 
     const result = await monitorDelivery(brainDb, makeDelivery(), projectDir);
@@ -301,7 +309,11 @@ describe('monitorDelivery', () => {
       mergeable: false,
       state: 'open',
     });
-    mockRebase.mockResolvedValueOnce(false);
+    mockRebaseDetailed.mockResolvedValueOnce({
+      ok: false,
+      reason: 'conflict',
+      detail: 'content conflict',
+    });
 
     const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('redispatched');
