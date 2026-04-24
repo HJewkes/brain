@@ -82,11 +82,20 @@ function formatReviewRenotification(delivery: DeliveryRecord): string {
   return lines.join('\n');
 }
 
+// Module-level guard so initialize() runs at most once per process, regardless
+// of how many OrchestrationService instances are constructed (e.g. one per
+// MCP tool invocation). Test-only reset: `resetOrchestrationInitForTests`.
+let _initialized = false;
+
+/** Reset the module-level init guard. Intended for tests only. */
+export function resetOrchestrationInitForTests(): void {
+  _initialized = false;
+}
+
 export class OrchestrationService {
   private readonly activeMonitors = new Map<string, Promise<DeliveryOutcome>>();
   private readonly rawDb: Database.Database;
   private readonly brainDb: BrainDB | null;
-  private initialized = false;
   constructor(
     db: BrainDB | Database.Database,
     private readonly wipLimit: number,
@@ -98,22 +107,38 @@ export class OrchestrationService {
 
   /** Idempotent startup hook — recovers in-flight deliveries on first call. */
   async initialize(svc?: BrainServiceClass): Promise<void> {
-    if (this.initialized) return;
-    this.initialized = true;
+    if (_initialized) return;
+    _initialized = true;
     await this.recover(svc);
   }
 
   async recover(svc?: BrainServiceClass): Promise<void> {
     const pending = getInFlightDeliveries(this.rawDb);
+    let monitoring = 0;
+    let reNotified = 0;
+    let skipped = 0;
     for (const delivery of pending) {
       if (delivery.status === 'review-paused') {
+        if (!this.brainDb) {
+          skipped++;
+          continue;
+        }
         this.renotifyHumanReview(delivery);
+        reNotified++;
       } else {
+        if (!delivery.task_id || this.activeMonitors.has(delivery.task_id)) {
+          skipped++;
+          continue;
+        }
         this.startMonitor(delivery);
+        monitoring++;
       }
     }
     if (pending.length > 0) {
-      process.stderr.write(`[orchestration] recovered ${pending.length} in-flight deliveries\n`);
+      process.stderr.write(
+        `[orchestration] recovered ${pending.length} deliveries ` +
+          `(${monitoring} monitoring, ${reNotified} re-notified, ${skipped} skipped)\n`
+      );
     }
 
     await this.recoverZombieAgents(svc);
@@ -155,6 +180,13 @@ export class OrchestrationService {
     );
   }
 
+  /**
+   * Recreates the inbox notification for a review-paused delivery. Intentional:
+   * we emit a new inbox row on every process restart so the user can't miss a
+   * pending review even if an earlier notification was dismissed or pruned.
+   * The old item is left alone; signal handling keys on delivery state, not
+   * inbox row identity.
+   */
   private renotifyHumanReview(delivery: DeliveryRecord): void {
     if (!this.brainDb) return;
     const item: InboxItem = {

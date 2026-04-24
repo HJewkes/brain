@@ -226,7 +226,7 @@ export function updateDeliveryStatus(
   db: Database.Database,
   agentId: string,
   status: DeliveryStatus,
-  opts: Pick<RecordDeliveryOpts, 'pr_merged_at' | 'delivered_at'> = {}
+  opts: Pick<RecordDeliveryOpts, 'pr_merged_at' | 'delivered_at' | 'stall_reason'> = {}
 ): void {
   recordDelivery(db, agentId, { status, ...opts });
 }

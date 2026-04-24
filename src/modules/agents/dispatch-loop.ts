@@ -32,6 +32,13 @@ function isBrainDb(db: BrainDB | Database.Database): db is BrainDB {
   return typeof db === 'object' && db !== null && 'rawDb' in db;
 }
 
+// Delivery outcome → next PM task status. Preconditions:
+//   merged → done: reachable from in-progress (normal path) and pending-merge
+//     (post-review fixup landed). updateTaskStatus accepts done from either.
+//   stalled → blocked: human intervention required; inbox notification fires.
+//   redispatched → pending: delivery monitor already persisted 'redispatched'
+//     and the agent/worktree have been released, so resetting to pending is
+//     safe — the next dispatch wave treats the task as eligible again.
 const TASK_STATUS_FOR_OUTCOME: Record<DeliveryOutcome, TaskStatus | undefined> = {
   merged: 'done',
   stalled: 'blocked',

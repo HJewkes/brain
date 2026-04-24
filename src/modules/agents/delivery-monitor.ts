@@ -51,7 +51,11 @@ function readFixAttempts(rawDb: Database.Database, agentId: string): number {
       .prepare('SELECT fix_attempts FROM delivery_states WHERE agent_id = ?')
       .get(agentId) as { fix_attempts: number | null } | undefined;
     return row?.fix_attempts ?? 0;
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `[delivery-monitor] readFixAttempts(${agentId}) failed, defaulting to 0: ${msg}\n`
+    );
     return 0;
   }
 }
@@ -63,10 +67,9 @@ function persistFixAttempts(rawDb: Database.Database, agentId: string, count: nu
 }
 
 function markStalled(rawDb: Database.Database, agentId: string, reason: StallReason): void {
-  updateDeliveryStatus(rawDb, agentId, 'stalled');
-  rawDb
-    .prepare('UPDATE delivery_states SET stall_reason = ?, updated_at = ? WHERE agent_id = ?')
-    .run(reason, new Date().toISOString(), agentId);
+  // Single UPDATE so status and stall_reason land atomically; a crash between
+  // two separate writes previously left stall_reason NULL.
+  updateDeliveryStatus(rawDb, agentId, 'stalled', { stall_reason: reason });
 }
 
 function redispatchTask(rawDb: Database.Database, delivery: DeliveryRecord): void {

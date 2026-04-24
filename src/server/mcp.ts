@@ -636,7 +636,12 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
     },
     async ({ taskId, model, maxBudgetUsd, dryRun }) => {
       try {
-        const defaults = getAoConfigWatcher(resolveProjectDir(svc)).snapshot;
+        const projectDir = resolveProjectDir(svc);
+        const defaults = getAoConfigWatcher(projectDir).snapshot;
+        // Trigger once-per-process crash recovery so individual-task dispatch
+        // also picks up in-flight deliveries left over from a prior process.
+        const orch = new OrchestrationService(svc.db, defaults.wipLimit ?? 3, projectDir);
+        await orch.initialize(svc);
         const result = await dispatchTask(svc, {
           taskId,
           model,

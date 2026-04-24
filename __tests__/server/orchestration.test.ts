@@ -52,7 +52,10 @@ vi.mock('../../src/server/dispatch.js', () => ({
   resolveProjectDir: vi.fn(() => '/tmp/test-project'),
 }));
 
-import { OrchestrationService } from '../../src/server/orchestration.js';
+import {
+  OrchestrationService,
+  resetOrchestrationInitForTests,
+} from '../../src/server/orchestration.js';
 import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
 import { getDeliveryForTask } from '../../src/modules/agents/delivery.js';
 import { buildDependencyGraph, computeWaves } from '../../src/modules/pm/engine/dependency.js';
@@ -116,6 +119,7 @@ describe('OrchestrationService', () => {
   beforeEach(() => {
     db = setupDb();
     bp = makeBackpressure();
+    resetOrchestrationInitForTests();
   });
 
   afterEach(() => {
