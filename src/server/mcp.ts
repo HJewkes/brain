@@ -10,6 +10,9 @@ import { indexSingleFile } from '../services/indexing.js';
 import { slugify } from '../utils.js';
 import { getTask, listTasks, createTask } from '../modules/pm/data/task-ops.js';
 import { updateTaskStatus } from '../modules/pm/data/task-ops.js';
+import { updateTaskMetadataFields } from '../modules/pm/commands/task.js';
+import { completeTask } from '../modules/pm/commands/orchestration.js';
+import { validateTransition } from '../modules/pm/engine/state-machine.js';
 import { listWorkstreams, createWorkstream } from '../modules/pm/data/workstream-ops.js';
 import { computeEligible, computeWaves } from '../modules/pm/engine/dependency.js';
 import { resolveProject, getPmNotes } from '../modules/pm/data/queries.js';
@@ -148,12 +151,16 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
 
   server.tool(
     'brain_pm_task_update',
-    'Update a task status (e.g. backlog, ready, in-progress, review, done)',
+    'Update a task status (e.g. pending, claimed, in-progress, blocked, done). When status=blocked and reason is provided, the reason is stored in block_reason metadata.',
     {
       displayId: z.string().describe('Task display ID'),
       status: z.string().describe('New status'),
+      reason: z
+        .string()
+        .optional()
+        .describe('Reason for the transition (stored as block_reason when status=blocked)'),
     },
-    async ({ displayId, status }) => {
+    async ({ displayId, status, reason }) => {
       const result = await updateTaskStatus(
         svc.db,
         svc.config,
@@ -162,7 +169,61 @@ function registerPmTools(server: McpServer, svc: BrainServiceClass): void {
         status as TaskStatus
       );
       if (!result.ok) return errorResult(result.error.message);
+      if (reason && status === 'blocked') {
+        const metaResult = await updateTaskMetadataFields(
+          svc.db,
+          svc.config,
+          svc.embedder,
+          displayId,
+          { block_reason: reason }
+        );
+        if (!metaResult.ok) return errorResult(metaResult.error.message);
+        return textResult(metaResult.data);
+      }
       return textResult(result.data);
+    }
+  );
+
+  server.tool(
+    'brain_pm_task_release',
+    'Release a task claim (claimed → pending). Clears claim_token and claimed_at. Use when an orphaned claim is blocking re-dispatch.',
+    {
+      displayId: z.string().describe('Task display ID'),
+    },
+    async ({ displayId }) => {
+      const taskResult = getTask(svc.db, displayId);
+      if (!taskResult.ok) return errorResult(taskResult.error.message);
+      const transResult = validateTransition(taskResult.data.status, 'pending');
+      if (!transResult.ok) return errorResult(transResult.error.message);
+      const metaResult = await updateTaskMetadataFields(
+        svc.db,
+        svc.config,
+        svc.embedder,
+        displayId,
+        { status: 'pending', claim_token: '', claimed_at: '' }
+      );
+      if (!metaResult.ok) return errorResult(metaResult.error.message);
+      return textResult(metaResult.data);
+    }
+  );
+
+  server.tool(
+    'brain_pm_task_complete',
+    'Mark task done with full impact analysis. Transitions pending→claimed→in-progress→done, records activity, returns newlyEligible downstream tasks.',
+    {
+      displayId: z.string().describe('Task display ID'),
+      summary: z.string().optional().describe('Completion summary (written to task summary.md)'),
+      token: z.string().optional().describe('Claim token to validate'),
+    },
+    async ({ displayId, summary, token }) => {
+      const result = await completeTask(svc, displayId, {
+        token,
+        summary,
+        actorType: 'mcp',
+      });
+      if (!result.ok) return errorResult(result.error.message);
+      const { task, newlyEligible } = result.data;
+      return textResult({ ...(task as object), newlyEligible });
     }
   );
 
