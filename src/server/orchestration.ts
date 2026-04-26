@@ -458,3 +458,71 @@ export class OrchestrationService {
     }
   }
 }
+
+/**
+ * Per-agent orphan-branch recovery, intended to fire from any post-agent-exit
+ * hook (explicit `brain_agent_dispatch`, dispatch loop, etc.) so the trigger
+ * is not coupled to a specific dispatch path.
+ *
+ * Push + PR + auto-merge only — does NOT start a delivery monitor. For
+ * workstream dispatches, the DispatchLoop's deliverAndCleanup is the
+ * monitoring authority; ensureDelivery's DELIVERED_STATUSES guard makes it a
+ * no-op once this function has already moved delivery to pr-open. For
+ * explicit dispatches with no watcher, the PR's auto-merge handles green CI;
+ * CI failures get picked up by the next process-startup recover() pass.
+ */
+export async function recoverBranchForAgent(
+  rawDb: Database.Database,
+  agentId: string,
+  projectDir: string
+): Promise<void> {
+  const candidate = findOrphanedBranchForAgent(rawDb, agentId, projectDir);
+  if (!candidate) return;
+
+  try {
+    await initiateDelivery(
+      rawDb,
+      candidate.agentId,
+      candidate.taskId,
+      candidate.branch,
+      projectDir
+    );
+    process.stderr.write(
+      `[orchestration] post-exit: recovered orphan branch ${candidate.branch} for ${candidate.taskId}\n`
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `[orchestration] post-exit: recovery failed for ${candidate.branch}: ${msg}\n`
+    );
+  }
+}
+
+function findOrphanedBranchForAgent(
+  rawDb: Database.Database,
+  agentId: string,
+  projectDir: string
+): OrphanedBranchCandidate | null {
+  let row: OrphanedBranchRow | undefined;
+  try {
+    row = rawDb
+      .prepare(
+        `SELECT a.id, a.brain_task, a.branch, d.status AS delivery_status
+           FROM agents a
+           LEFT JOIN delivery_states d ON d.agent_id = a.id
+          WHERE a.id = ?
+            AND a.status IN ('completed', 'failed', 'abandoned')
+            AND a.branch IS NOT NULL
+            AND a.brain_task IS NOT NULL
+            AND a.branch LIKE 'agent/%'`
+      )
+      .get(agentId) as OrphanedBranchRow | undefined;
+  } catch {
+    return null;
+  }
+  if (!row) return null;
+  if (row.delivery_status && DELIVERY_INITIATED_STATUSES.has(row.delivery_status)) return null;
+  if (!branchHasNewCommits(row.branch, projectDir)) return null;
+  if (branchHasOpenPr(row.branch, projectDir)) return null;
+  return { agentId: row.id, taskId: row.brain_task, branch: row.branch };
+}
