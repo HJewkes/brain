@@ -3,6 +3,9 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Command } from '@commander-js/extra-typings';
 import { withBrain } from '../../../services/brain-service.js';
+import type { BrainService } from '../../../services/brain-service.js';
+import type { Embedder } from '../../../types.js';
+import type { BrainConfig } from '../../../types.js';
 import { formatError } from '../errors.js';
 import { resolveWorkstreamFilter } from '../ids.js';
 import type { Result } from '../errors.js';
@@ -55,6 +58,121 @@ export function resolveWorkstreamByName(
     'INVALID_INPUT',
     `No workstream matching "${input}". Use a number, display ID, or name. Run "brain pm workstream list" to see options.`
   );
+}
+
+export interface CompleteTaskOptions {
+  token?: string;
+  summary?: string;
+  actorType?: 'cli' | 'mcp' | 'agent';
+  actorId?: string | null;
+  sessionId?: string | null;
+  onTransition?: (from: TaskStatus, to: TaskStatus) => void;
+}
+
+export interface CompleteTaskResult<T = Record<string, unknown>> {
+  task: T;
+  newlyEligible: string[];
+}
+
+type CompleteTaskService = Pick<BrainService, 'db' | 'config' | 'embedder'> & {
+  db: BrainDB;
+  config: BrainConfig;
+  embedder: Embedder;
+};
+
+/**
+ * Core completion logic shared by the CLI `pm complete` command and the
+ * `brain_pm_task_complete` MCP tool. Drives the pending→claimed→in-progress→done
+ * transition, optionally validates a claim token, writes a summary file,
+ * records activity, and computes newly eligible downstream tasks.
+ */
+export async function completeTask(
+  svc: CompleteTaskService,
+  displayId: string,
+  opts: CompleteTaskOptions = {}
+): Promise<Result<CompleteTaskResult>> {
+  const taskResult = getTask(svc.db, displayId);
+  if (!taskResult.ok) return taskResult;
+
+  const transitions: Array<[TaskStatus, TaskStatus]> = [];
+  let currentStatus = taskResult.data.status;
+
+  if (currentStatus === 'pending') {
+    const claimResult = await updateTaskStatus(
+      svc.db,
+      svc.config,
+      svc.embedder,
+      displayId,
+      'claimed' as TaskStatus
+    );
+    if (!claimResult.ok) return claimResult;
+    transitions.push(['pending', 'claimed']);
+    currentStatus = 'claimed';
+  }
+
+  if (currentStatus === 'claimed') {
+    const startResult = await updateTaskStatus(
+      svc.db,
+      svc.config,
+      svc.embedder,
+      displayId,
+      'in-progress' as TaskStatus
+    );
+    if (!startResult.ok) return startResult;
+    transitions.push(['claimed', 'in-progress']);
+  }
+
+  if (opts.token) {
+    const storedToken = taskResult.data.claim_token;
+    if (!storedToken) {
+      return fail('INVALID_CLAIM_TOKEN', 'Task has no active claim');
+    }
+    const tokenCheck = validateClaimToken(storedToken, opts.token);
+    if (!tokenCheck.ok) return tokenCheck;
+  }
+
+  for (const [from, to] of transitions) {
+    opts.onTransition?.(from, to);
+  }
+
+  const statusResult = await updateTaskStatus(
+    svc.db,
+    svc.config,
+    svc.embedder,
+    displayId,
+    'done' as TaskStatus
+  );
+  if (!statusResult.ok) return statusResult;
+
+  if (opts.summary) {
+    const notes = getPmNotes(svc.db, 'task', { display_id: displayId });
+    if (notes.length > 0 && notes[0].contentDir) {
+      const contentDir = notes[0].contentDir;
+      if (!existsSync(contentDir)) {
+        mkdirSync(contentDir, { recursive: true });
+      }
+      writeFileSync(join(contentDir, 'summary.md'), opts.summary, 'utf-8');
+    }
+  }
+
+  const now = new Date().toISOString();
+  svc.db.addActivity({
+    id: randomUUID(),
+    noteIds: JSON.stringify([displayId]),
+    module: 'pm',
+    moduleInstance: taskResult.data.project,
+    activityType: 'task_completed',
+    actorType: opts.actorType ?? 'cli',
+    actorId: opts.actorId ?? null,
+    sessionId: opts.sessionId ?? null,
+    metadata: JSON.stringify({ display_id: displayId }),
+    outcome: 'done',
+    startedAt: now,
+    completedAt: now,
+  });
+
+  const newlyEligible = computeImpact(svc.db, taskResult.data.project, displayId);
+  return ok({ task: statusResult.data as unknown as Record<string, unknown>, newlyEligible });
 }
 
 export function createOrchestrationCommands(): Command[] {
@@ -407,123 +525,31 @@ export function createOrchestrationCommands(): Command[] {
     .action(async (id, opts) => {
       await withBrain(async (svc) => {
         const displayId = id.toUpperCase();
-
-        const taskResult = getTask(svc.db, displayId);
-        if (!taskResult.ok) {
-          process.stderr.write(formatError(taskResult.error, !!opts.json) + '\n');
-          process.exitCode = 1;
-          return;
-        }
-
-        let currentStatus = taskResult.data.status;
-
-        if (currentStatus === 'pending') {
-          const claimResult = await updateTaskStatus(
-            svc.db,
-            svc.config,
-            svc.embedder,
-            displayId,
-            'claimed' as TaskStatus
-          );
-          if (!claimResult.ok) {
-            process.stderr.write(formatError(claimResult.error, !!opts.json) + '\n');
-            process.exitCode = 1;
-            return;
-          }
-          if (!opts.json) process.stdout.write(`${displayId}: pending → claimed\n`);
-          currentStatus = 'claimed';
-        }
-
-        if (currentStatus === 'claimed') {
-          const startResult = await updateTaskStatus(
-            svc.db,
-            svc.config,
-            svc.embedder,
-            displayId,
-            'in-progress' as TaskStatus
-          );
-          if (!startResult.ok) {
-            process.stderr.write(formatError(startResult.error, !!opts.json) + '\n');
-            process.exitCode = 1;
-            return;
-          }
-          if (!opts.json) process.stdout.write(`${displayId}: claimed → in-progress\n`);
-        }
-
-        if (opts.token) {
-          const storedToken = taskResult.data.claim_token;
-          if (!storedToken) {
-            process.stderr.write(
-              formatError(
-                { error: true, code: 'INVALID_CLAIM_TOKEN', message: 'Task has no active claim' },
-                !!opts.json
-              ) + '\n'
-            );
-            process.exitCode = 1;
-            return;
-          }
-          const tokenCheck = validateClaimToken(storedToken, opts.token);
-          if (!tokenCheck.ok) {
-            process.stderr.write(formatError(tokenCheck.error, !!opts.json) + '\n');
-            process.exitCode = 1;
-            return;
-          }
-        }
-
-        const statusResult = await updateTaskStatus(
-          svc.db,
-          svc.config,
-          svc.embedder,
-          displayId,
-          'done' as TaskStatus
-        );
-        if (!statusResult.ok) {
-          process.stderr.write(formatError(statusResult.error, !!opts.json) + '\n');
-          process.exitCode = 1;
-          return;
-        }
-
-        if (opts.summary) {
-          const notes = getPmNotes(svc.db, 'task', { display_id: displayId });
-          if (notes.length > 0 && notes[0].contentDir) {
-            const contentDir = notes[0].contentDir;
-            if (!existsSync(contentDir)) {
-              mkdirSync(contentDir, { recursive: true });
-            }
-            writeFileSync(join(contentDir, 'summary.md'), opts.summary, 'utf-8');
-          }
-        }
-
-        const now = new Date().toISOString();
-        svc.db.addActivity({
-          id: randomUUID(),
-          noteIds: JSON.stringify([displayId]),
-          module: 'pm',
-          moduleInstance: taskResult.data.project,
-          activityType: 'task_completed',
+        const result = await completeTask(svc, displayId, {
+          token: opts.token,
+          summary: opts.summary,
           actorType: 'cli',
-          actorId: null,
-          sessionId: null,
-          metadata: JSON.stringify({ display_id: displayId }),
-          outcome: 'done',
-          startedAt: now,
-          completedAt: now,
+          onTransition: opts.json
+            ? undefined
+            : (from, to) => process.stdout.write(`${displayId}: ${from} → ${to}\n`),
         });
 
-        const impact = computeImpact(svc.db, taskResult.data.project, displayId);
+        if (!result.ok) {
+          process.stderr.write(formatError(result.error, !!opts.json) + '\n');
+          process.exitCode = 1;
+          return;
+        }
 
-        const output = {
-          ...statusResult.data,
-          newlyEligible: impact,
-        };
+        const { task, newlyEligible } = result.data;
+        const output = { ...task, newlyEligible };
 
         if (opts.json) {
           process.stdout.write(JSON.stringify(output, null, 2) + '\n');
         } else {
           process.stdout.write(`Completed ${displayId}\n`);
-          if (impact.length > 0) {
+          if (newlyEligible.length > 0) {
             process.stderr.write('\nNewly eligible tasks:\n');
-            for (const impactId of impact) {
+            for (const impactId of newlyEligible) {
               const impactTask = getTask(svc.db, impactId);
               if (impactTask.ok) {
                 const title = impactTask.data.title ? ` ${impactTask.data.title}` : '';
