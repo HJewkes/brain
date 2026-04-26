@@ -5,6 +5,7 @@ import {
   runDeliveryReview,
   parseRiskScore,
   runHumanReviewGate,
+  resolveOriginalSessionId,
   type ReviewDeps,
   type ReviewRunOutput,
 } from '../../../src/modules/agents/delivery-review.js';
@@ -337,6 +338,51 @@ describe('runDeliveryReview', () => {
     db.close();
   });
 
+  it('passes prior review output into the fixup call so findings get injected', async () => {
+    const db = makeSimpleDb();
+    const initialReviewOutput =
+      'Verdict: NEEDS WORK\nRisk: 2\n\n## Key Findings\nAuth flow leaks tokens.\n';
+    const runReview = vi
+      .fn()
+      .mockResolvedValueOnce(review(initialReviewOutput, { agentId: 'r1' }))
+      .mockResolvedValueOnce(review('Verdict: PASS\nRisk: 1', { agentId: 'r2' }));
+    const runFixup = vi.fn(async () => review('', { agentId: 'f1' }));
+    const deps: ReviewDeps = { runReview, runFixup };
+
+    await runDeliveryReview(db, makeDelivery(), 'ai-review', '/tmp/project', deps);
+
+    // Fixup must receive the review output so the prompt can carry the findings.
+    expect(runFixup).toHaveBeenCalledTimes(1);
+    expect(runFixup).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ agent_id: 'agent-1' }),
+      '/tmp/project',
+      initialReviewOutput
+    );
+    db.close();
+  });
+
+  it('threads each iteration’s review output into the next fixup', async () => {
+    const db = makeSimpleDb();
+    const r1Out = 'Verdict: NEEDS WORK\nRisk: 2\n\n## Key Findings\nfirst pass\n';
+    const r2Out = 'Verdict: NEEDS WORK\nRisk: 2\n\n## Key Findings\nsecond pass\n';
+    const r3Out = 'Verdict: PASS\nRisk: 1';
+    const runReview = vi
+      .fn()
+      .mockResolvedValueOnce(review(r1Out, { agentId: 'r1' }))
+      .mockResolvedValueOnce(review(r2Out, { agentId: 'r2' }))
+      .mockResolvedValueOnce(review(r3Out, { agentId: 'r3' }));
+    const runFixup = vi.fn(async () => review('', { agentId: 'f' }));
+    const deps: ReviewDeps = { runReview, runFixup };
+
+    await runDeliveryReview(db, makeDelivery(), 'ai-review', '/tmp/project', deps);
+
+    expect(runFixup).toHaveBeenCalledTimes(2);
+    expect(runFixup).toHaveBeenNthCalledWith(1, db, expect.anything(), '/tmp/project', r1Out);
+    expect(runFixup).toHaveBeenNthCalledWith(2, db, expect.anything(), '/tmp/project', r2Out);
+    db.close();
+  });
+
   it('tolerates missing review columns (pre-V4 schema)', async () => {
     const db = new Database(':memory:');
     db.exec(`
@@ -623,5 +669,66 @@ describe('runHumanReviewGate', () => {
     const final = getDeliveryForTask(db, delivery.task_id!);
     expect(final!.status).toBe('stalled');
     expect(final!.stall_reason).toBe('review-timeout');
+  });
+});
+
+// ── resolveOriginalSessionId ─────────────────────────────────────────────────
+
+describe('resolveOriginalSessionId', () => {
+  it('returns delivery.session_id when set', () => {
+    const db = makeSimpleDb();
+    const result = resolveOriginalSessionId(db, {
+      ...makeDelivery(),
+      session_id: 'sess-from-delivery',
+    });
+    expect(result).toBe('sess-from-delivery');
+    db.close();
+  });
+
+  it('falls back to agents.context.session_id when delivery.session_id is null', () => {
+    const db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE agents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        parent TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        context TEXT NOT NULL DEFAULT '{}'
+      );
+      INSERT INTO agents (id, name, parent, status, created_at, context)
+        VALUES ('agent-1', 'a1', 'p', 'active', '2026-04-26',
+                json('{"session_id":"sess-from-context"}'));
+    `);
+    const result = resolveOriginalSessionId(db, makeDelivery());
+    expect(result).toBe('sess-from-context');
+    db.close();
+  });
+
+  it('returns null when neither source has a session_id', () => {
+    const db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE agents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        parent TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        context TEXT NOT NULL DEFAULT '{}'
+      );
+      INSERT INTO agents (id, name, parent, status, created_at, context)
+        VALUES ('agent-1', 'a1', 'p', 'active', '2026-04-26', '{}');
+    `);
+    const result = resolveOriginalSessionId(db, makeDelivery());
+    expect(result).toBeNull();
+    db.close();
+  });
+
+  it('returns null when the agents table is missing', () => {
+    const db = new Database(':memory:');
+    // No tables — function should swallow the error and return null.
+    const result = resolveOriginalSessionId(db, makeDelivery());
+    expect(result).toBeNull();
+    db.close();
   });
 });

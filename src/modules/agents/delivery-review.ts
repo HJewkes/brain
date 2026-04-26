@@ -32,7 +32,12 @@ export interface ReviewDeps {
     delivery: DeliveryRecord,
     projectDir: string
   ) => Promise<ReviewRunOutput>;
-  runFixup: (delivery: DeliveryRecord, projectDir: string) => Promise<ReviewRunOutput>;
+  runFixup: (
+    db: Database.Database,
+    delivery: DeliveryRecord,
+    projectDir: string,
+    reviewOutput: string
+  ) => Promise<ReviewRunOutput>;
 }
 
 const MAX_FIXUP_ITERATIONS = 3;
@@ -98,7 +103,7 @@ export async function runDeliveryReview(
     return approved(riskScore, first.agentId);
   }
 
-  return runFixupLoop(db, delivery, projectDir, first.agentId, riskScore, deps);
+  return runFixupLoop(db, delivery, projectDir, first.agentId, riskScore, first.output, deps);
 }
 
 async function runFixupLoop(
@@ -107,18 +112,21 @@ async function runFixupLoop(
   projectDir: string,
   initialReviewAgentId: string,
   initialRisk: number,
+  initialReviewOutput: string,
   deps: ReviewDeps
 ): Promise<DeliveryReviewResult> {
   let fixupIterations = 0;
   let latestReviewAgentId = initialReviewAgentId;
   let latestRisk = initialRisk;
+  let latestReviewOutput = initialReviewOutput;
 
   while (fixupIterations < MAX_FIXUP_ITERATIONS) {
     fixupIterations++;
-    await deps.runFixup(delivery, projectDir);
+    await deps.runFixup(db, delivery, projectDir, latestReviewOutput);
 
     const reReview = await deps.runReview(db, delivery, projectDir);
     latestReviewAgentId = reReview.agentId;
+    latestReviewOutput = reReview.output;
     persistReviewAgentId(db, delivery.agent_id, latestReviewAgentId);
     latestRisk = parseRiskScore(reReview.output);
     persistReviewScore(db, delivery.agent_id, latestRisk);
@@ -210,6 +218,7 @@ export async function runHumanReviewGate(
   let latestSummary = extractReviewSummary(reviewOutput);
   let latestReviewAgentId = reviewAgentId;
   let latestRisk = riskScore;
+  let latestReviewOutput = reviewOutput;
   let fixupIterations = priorFixupIterations;
 
   for (let cycle = 1; cycle <= HUMAN_REVIEW_MAX_CYCLES; cycle++) {
@@ -249,10 +258,11 @@ export async function runHumanReviewGate(
 
     if (cycle === HUMAN_REVIEW_MAX_CYCLES) break;
 
-    await defaultDeps.runFixup(delivery, projectDir);
+    await defaultDeps.runFixup(db, delivery, projectDir, latestReviewOutput);
     fixupIterations++;
     const reReview = await defaultDeps.runReview(db, delivery, projectDir);
     latestReviewAgentId = reReview.agentId;
+    latestReviewOutput = reReview.output;
     latestRisk = parseRiskScore(reReview.output);
     latestSummary = extractReviewSummary(reReview.output);
   }
@@ -387,11 +397,33 @@ async function runReviewAgent(
 }
 
 async function runFixupAgent(
+  db: Database.Database,
   delivery: DeliveryRecord,
-  projectDir: string
+  projectDir: string,
+  reviewOutput: string
 ): Promise<ReviewRunOutput> {
-  const prompt = buildFixupPrompt(delivery, projectDir);
-  return spawnClaudeReview(prompt, projectDir, FIXUP_TOOLS);
+  const prompt = buildFixupPrompt(delivery, projectDir, reviewOutput);
+  const resumeSessionId = resolveOriginalSessionId(db, delivery);
+  return spawnClaudeReview(prompt, projectDir, FIXUP_TOOLS, resumeSessionId);
+}
+
+// Prefer the session_id stored on delivery_states; fall back to the agent
+// context where dispatch.ts persists session_id at spawn time. The fix agent
+// resumes this conversation so it inherits the original implementation
+// context instead of starting cold.
+export function resolveOriginalSessionId(
+  db: Database.Database,
+  delivery: DeliveryRecord
+): string | null {
+  if (delivery.session_id) return delivery.session_id;
+  try {
+    const row = db
+      .prepare("SELECT json_extract(context, '$.session_id') AS sid FROM agents WHERE id = ?")
+      .get(delivery.agent_id) as { sid?: string | null } | undefined;
+    return row?.sid ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function buildReviewPrompt(delivery: DeliveryRecord, projectDir: string): string {
@@ -411,7 +443,11 @@ function buildReviewPrompt(delivery: DeliveryRecord, projectDir: string): string
   return rendered.ok ? rendered.data : fallbackReviewPrompt(delivery, projectDir, repo);
 }
 
-function buildFixupPrompt(delivery: DeliveryRecord, projectDir: string): string {
+function buildFixupPrompt(
+  delivery: DeliveryRecord,
+  projectDir: string,
+  reviewOutput: string
+): string {
   const repo = getRepoInfo(projectDir);
   const vars: Record<string, string> = {
     TASK_ID: delivery.task_id ?? '(unknown)',
@@ -426,7 +462,27 @@ function buildFixupPrompt(delivery: DeliveryRecord, projectDir: string): string 
     LINT_CMD: 'npm run lint',
   };
   const rendered = renderTemplate('review-fixup', vars);
-  return rendered.ok ? rendered.data : fallbackFixupPrompt(delivery);
+  const base = rendered.ok ? rendered.data : fallbackFixupPrompt(delivery, reviewOutput);
+  return prependReviewFindings(base, extractReviewSummary(reviewOutput));
+}
+
+function prependReviewFindings(base: string, summary: ReviewSummary): string {
+  const block = [
+    '## Prior Review Findings',
+    '',
+    '### Key Findings',
+    summary.findings || '(none extracted)',
+    '',
+    '### Files of Interest',
+    summary.highlightedFiles || '(none extracted)',
+    '',
+    '### Open Questions',
+    summary.questions || '(none extracted)',
+    '',
+    '---',
+    '',
+  ].join('\n');
+  return block + base;
 }
 
 function fallbackReviewPrompt(
@@ -444,10 +500,15 @@ function fallbackReviewPrompt(
   ].join('\n');
 }
 
-function fallbackFixupPrompt(delivery: DeliveryRecord): string {
+function fallbackFixupPrompt(delivery: DeliveryRecord, reviewOutput: string): string {
+  const trimmed = reviewOutput.trim();
   return [
     `Address review feedback for PR #${delivery.pr_number ?? '?'} on branch ${delivery.branch ?? ''}.`,
-    'Fetch review comments, implement [FIX] items, run verification, commit changes.',
+    '',
+    '## Review Findings',
+    trimmed || '(no review output captured — fetch comments from the PR)',
+    '',
+    'Implement [FIX] items, run verification, commit changes.',
     'Do not push — the orchestrator handles delivery.',
   ].join('\n');
 }
@@ -564,11 +625,18 @@ function collectProcessOutput(
 async function spawnClaudeReview(
   prompt: string,
   projectDir: string,
-  allowedTools: string
+  allowedTools: string,
+  resumeSessionId?: string | null
 ): Promise<ReviewRunOutput> {
   const agentId = randomUUID();
-  const sessionId = randomUUID();
   const mcpConfigPath = writeMcpConfig(agentId, projectDir);
+
+  // When resuming, hand the original session UUID to --resume so the fix
+  // agent inherits the implementation conversation. Otherwise mint a fresh
+  // session UUID via --session-id for a brand-new run.
+  const sessionArgs = resumeSessionId
+    ? ['--resume', resumeSessionId]
+    : ['--session-id', randomUUID()];
 
   const proc = spawn(
     getClaudeBin(),
@@ -580,8 +648,7 @@ async function spawnClaudeReview(
       REVIEW_MODEL,
       '--permission-mode',
       'bypassPermissions',
-      '--session-id',
-      sessionId,
+      ...sessionArgs,
       '--allowed-tools',
       allowedTools,
       '--mcp-config',
