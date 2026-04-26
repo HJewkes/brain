@@ -214,6 +214,7 @@ describe('MCP server hardening (VNM-42.246)', () => {
         // Dispatch group
         'brain_agent_dispatch',
         'brain_agent_status',
+        'brain_dispatch_triage',
         // Workflow group
         'brain_workflow_start',
         'brain_workflow_status',

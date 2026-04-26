@@ -26,6 +26,7 @@ import { OrchestrationService } from './orchestration.js';
 import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 import { askAdvisor, reviewAdvisor } from './advisor.js';
 import { getAoConfigWatcher } from '../services/ao-config-watcher.js';
+import { triageDispatch } from './triage.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -837,6 +838,31 @@ function registerDispatchTools(server: McpServer, svc: BrainServiceClass): void 
         })),
         filesTouched: [...filesSet].slice(0, 20),
       });
+    }
+  );
+
+  server.tool(
+    'brain_dispatch_triage',
+    'Unified dispatch triage: returns a joined view of PM tasks × agents × PRs × CI × worktrees × deliveries per workstream. Each task is classified as ready / in_flight / stuck / blocked / capacity_limited; stuck tasks include a kind (pr-conflict, review-pending, merge-blocked, orphan). Replaces the 7+ lookups previously needed to answer "what is stuck, what is ready".',
+    {
+      prefix: z.string().optional().describe('Project prefix (e.g. VNM)'),
+      workstream: z
+        .string()
+        .optional()
+        .describe('Filter to a specific workstream display ID (e.g. VNM-56)'),
+      wipLimit: z
+        .number()
+        .optional()
+        .describe(
+          'WIP limit. When provided, ready tasks beyond capacity are flagged as capacity_limited. Defaults to no limit.'
+        ),
+    },
+    async ({ prefix, workstream, wipLimit }) => {
+      try {
+        return textResult(triageDispatch(svc, { prefix, workstream, wipLimit }));
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
     }
   );
 
