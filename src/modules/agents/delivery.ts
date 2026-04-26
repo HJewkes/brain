@@ -222,6 +222,15 @@ export function createPr(branch: string, title: string, projectDir: string): PrR
   return { number, url };
 }
 
+export function enableAutoMerge(prNumber: number, projectDir: string): void {
+  execFileSync('gh', ['pr', 'merge', String(prNumber), '--auto', '--squash'], {
+    cwd: projectDir,
+    encoding: 'utf-8',
+    stdio: 'pipe',
+    timeout: 30_000,
+  });
+}
+
 export function updateDeliveryStatus(
   db: Database.Database,
   agentId: string,
@@ -264,6 +273,12 @@ export async function initiateDelivery(
     throw err;
   }
   recordDelivery(db, agentId, { status: 'pr-open', pr_number: pr.number, pr_url: pr.url });
+
+  try {
+    enableAutoMerge(pr.number, projectDir);
+  } catch {
+    // Non-fatal: PR may be mid-merge, lacking CI, or already armed.
+  }
 
   return getDelivery(db, agentId)!;
 }

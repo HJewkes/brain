@@ -965,7 +965,7 @@ function readTaskBodyFromDb(db: BrainDB, displayId: string): string {
   return readTaskBody(notes[0]);
 }
 
-async function updateTaskMetadataFields(
+export async function updateTaskMetadataFields(
   db: BrainDB,
   config: BrainConfig,
   embedder: Embedder,

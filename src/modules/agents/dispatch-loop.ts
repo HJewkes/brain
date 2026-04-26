@@ -5,7 +5,7 @@ import type { BrainConfig, Embedder, InboxItem } from '../../types.js';
 import type { WaveAssignment } from '../pm/engine/dependency.js';
 import type { TaskStatus } from '../pm/types.js';
 import { getRawDb, sleep } from '../../utils/db.js';
-import { findAgentByTask, getAgent } from './data.js';
+import { findAgentByTask, getAgent, getAgentContext } from './data.js';
 import { getDeliveryForTask, initiateDelivery, type DeliveryRecord } from './delivery.js';
 import { releaseWorktree } from './worktree.js';
 import { monitorDelivery, type DeliveryOutcome } from './delivery-monitor.js';
@@ -25,8 +25,12 @@ export interface WaveExecutionResult {
   failedTaskIds: string[];
 }
 
+export interface SpawnOpts {
+  maxBudgetUsd?: number;
+}
+
 /** Inject the spawn function to avoid circular server ↔ modules dependency. */
-export type SpawnFn = (taskId: string) => Promise<SpawnResult>;
+export type SpawnFn = (taskId: string, opts?: SpawnOpts) => Promise<SpawnResult>;
 
 function isBrainDb(db: BrainDB | Database.Database): db is BrainDB {
   return typeof db === 'object' && db !== null && 'rawDb' in db;
@@ -105,6 +109,20 @@ export class DispatchLoop {
       if (agent.status === 'completed') return true;
       if (agent.status === 'failed' || agent.status === 'abandoned') return false;
     }
+  }
+
+  /** True when the agent's claude result indicates a max-budget exit. */
+  private wasBudgetExhausted(agentId: string): boolean {
+    const ctx = getAgentContext(this.rawDb, agentId, 'claude_result') as
+      | { subtype?: string }
+      | undefined;
+    return ctx?.subtype === 'error_max_budget_usd';
+  }
+
+  /** Read the original max budget recorded when the agent was dispatched. */
+  private getOriginalBudget(agentId: string): number | undefined {
+    const v = getAgentContext(this.rawDb, agentId, 'max_budget_usd');
+    return typeof v === 'number' ? v : undefined;
   }
 
   /** Terminal delivery statuses that don't need a retry. */
@@ -300,8 +318,31 @@ export class DispatchLoop {
         return;
       }
 
-      const { agentId, branch } = spawnResult;
-      const success = await this.waitForAgent(agentId);
+      let { agentId, branch } = spawnResult;
+      let success = await this.waitForAgent(agentId);
+
+      if (!success && this.wasBudgetExhausted(agentId)) {
+        const original = this.getOriginalBudget(agentId);
+        if (original !== undefined) {
+          const newBudget = original * 2;
+          process.stderr.write(
+            `[dispatch-loop] ${taskId} hit max budget ($${original}), retrying with $${newBudget}\n`
+          );
+          releaseWorktree(this.rawDb, this.projectDir, taskId);
+          try {
+            const retry = await this.spawnAgent(taskId, { maxBudgetUsd: newBudget });
+            agentId = retry.agentId;
+            branch = retry.branch;
+            success = await this.waitForAgent(agentId);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            process.stderr.write(
+              `[dispatch-loop] budget retry spawn failed for ${taskId}: ${msg}\n`
+            );
+          }
+        }
+      }
+
       semaphore.release();
 
       if (!success) {

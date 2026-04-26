@@ -5,6 +5,7 @@ import {
   releaseWorktree,
   checkWorktreePath,
   cleanupStaleAllocations,
+  cleanupOrphanRemoteBranches,
   findGitRoot,
 } from './worktree.js';
 import { getWorktreeAllocations } from './data.js';
@@ -135,6 +136,62 @@ export function createWorktreeCommand(): Command {
           process.stdout.write(
             `Removed ${removed.length} stale allocation(s): ${removed.join(', ')}\n`
           );
+        }
+      });
+    });
+
+  // brain agent worktree cleanup-branches
+  worktreeCmd
+    .command('cleanup-branches')
+    .description('Delete orphan remote agent/* branches with no open PR and no active agent')
+    .option('--workstream <ws>', 'Only scan branches under agent/{workstream}/')
+    .option('--dry-run', 'Report orphan branches without deleting them')
+    .option('--json', 'Output JSON')
+    .action(async (opts: { workstream?: string; dryRun?: boolean; json?: boolean }) => {
+      const projectRoot = getProjectRoot();
+      await withBrain(async (svc) => {
+        const reports = cleanupOrphanRemoteBranches(svc.db, projectRoot, {
+          workstream: opts.workstream,
+          dryRun: opts.dryRun,
+        });
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(reports, null, 2) + '\n');
+          return;
+        }
+
+        if (reports.length === 0) {
+          process.stdout.write('No remote agent branches found.\n');
+          return;
+        }
+
+        const orphans = reports.filter((r) => !r.hasOpenPR && !r.hasActiveAgent);
+        const deleted = reports.filter((r) => r.deleted);
+
+        process.stdout.write(`Scanned ${reports.length} remote agent branch(es).\n`);
+        if (orphans.length === 0) {
+          process.stdout.write('No orphan branches found.\n');
+          return;
+        }
+
+        if (opts.dryRun) {
+          process.stdout.write(`\n${orphans.length} orphan branch(es) (dry-run):\n`);
+          for (const r of orphans) {
+            process.stdout.write(`  ${r.branch}\n`);
+          }
+        } else {
+          process.stdout.write(
+            `\nDeleted ${deleted.length}/${orphans.length} orphan branch(es):\n`
+          );
+          for (const r of deleted) {
+            process.stdout.write(`  ${r.branch}\n`);
+          }
+          const failed = orphans.filter((r) => !r.deleted);
+          if (failed.length > 0) {
+            process.stderr.write(
+              `Failed to delete ${failed.length} branch(es): ${failed.map((r) => r.branch).join(', ')}\n`
+            );
+          }
         }
       });
     });
