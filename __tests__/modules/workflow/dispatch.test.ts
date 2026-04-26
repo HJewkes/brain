@@ -359,4 +359,75 @@ describe('dispatchTemplate', () => {
     expect(result.data.variables.BASE_BRANCH).toBe('main');
     expect(result.data.variables.REVIEW_THRESHOLD).toBe('5');
   });
+
+  describe('synthetic workflow task IDs', () => {
+    it('renders without requiring a real PM task', async () => {
+      await setupProjectWithTask();
+      const syntheticId = 'workflow:planning:research:abc12345';
+
+      const result = await dispatchTemplate(
+        db,
+        config,
+        embedder,
+        syntheticId,
+        'planning-research',
+        {
+          extraVars: { PROJECT_PREFIX: 'SDK', RESEARCH_FOCUS: 'auth design' },
+        }
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.variables.TASK_ID).toBe(syntheticId);
+      expect(result.data.variables.WORKFLOW_NAME).toBe('planning');
+      expect(result.data.variables.STEP_ID).toBe('research');
+      expect(result.data.variables.PROJECT_PREFIX).toBe('SDK');
+      expect(result.data.variables.REPO_PATH).toBe('/repos/sdk');
+      expect(result.data.variables.BRANCH_NAME).toBe('workflow/planning/research');
+    });
+
+    it('falls back to defaults when project prefix is unknown', async () => {
+      const syntheticId = 'workflow:brainstorming:explore:deadbeef';
+
+      const result = await dispatchTemplate(
+        db,
+        config,
+        embedder,
+        syntheticId,
+        'brainstorm-explore',
+        { extraVars: { PROJECT_PREFIX: 'GHOST' } }
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.variables.BUILD_CMD).toBe('N/A');
+      expect(result.data.variables.BASE_BRANCH).toBe('main');
+    });
+
+    it('rejects malformed synthetic IDs', async () => {
+      const result = await dispatchTemplate(
+        db,
+        config,
+        embedder,
+        'workflow:incomplete',
+        'planning-research',
+        { extraVars: { PROJECT_PREFIX: 'SDK' } }
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it('lets caller override branch name via opts', async () => {
+      await setupProjectWithTask();
+      const syntheticId = 'workflow:planning:design:abc12345';
+
+      const result = await dispatchTemplate(db, config, embedder, syntheticId, 'planning-design', {
+        extraVars: { PROJECT_PREFIX: 'SDK' },
+        branch: 'custom/branch-name',
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.variables.BRANCH_NAME).toBe('custom/branch-name');
+    });
+  });
 });
