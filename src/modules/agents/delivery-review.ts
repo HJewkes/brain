@@ -311,7 +311,7 @@ function notifyHumanReview(
     ).run(
       randomUUID(),
       content,
-      `Review required: ${delivery.task_id ?? 'unknown'}`,
+      `Review Required: ${delivery.task_id ?? 'unknown'}`,
       meta,
       new Date().toISOString()
     );

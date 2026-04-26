@@ -66,7 +66,10 @@ vi.mock('../../src/server/dispatch.js', () => ({
 }));
 
 import { execFileSync } from 'node:child_process';
-import { OrchestrationService } from '../../src/server/orchestration.js';
+import {
+  OrchestrationService,
+  resetOrchestrationInitForTests,
+} from '../../src/server/orchestration.js';
 import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
 import { getDeliveryForTask, initiateDelivery } from '../../src/modules/agents/delivery.js';
 import { getPrForBranch } from '../../src/modules/agents/auto-merge.js';
@@ -134,6 +137,7 @@ describe('OrchestrationService', () => {
   beforeEach(() => {
     db = setupDb();
     bp = makeBackpressure();
+    resetOrchestrationInitForTests();
   });
 
   afterEach(() => {

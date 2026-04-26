@@ -30,7 +30,9 @@ const PRIORITY_SCORES: Record<TaskPriority, number> = {
 };
 
 const HIGH_RISK_CATEGORIES: TaskCategory[] = ['infrastructure', 'migration'];
-const STANDARD_CATEGORIES: TaskCategory[] = ['feature', 'improvement', 'bug'];
+// Refactors touch production code and warrant the same standard scoring as
+// feature/improvement/bug — never score them as 0.
+const STANDARD_CATEGORIES: TaskCategory[] = ['feature', 'improvement', 'bug', 'refactor'];
 
 // Sorted by points descending so the first match is the highest-severity one.
 const SENSITIVE_PATHS: ReadonlyArray<{ pattern: RegExp; points: number; label: string }> = [

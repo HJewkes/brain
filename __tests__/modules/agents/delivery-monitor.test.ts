@@ -72,8 +72,9 @@ interface DbMock {
 }
 
 // Minimal better-sqlite3 shim: supports prepare().get() for fix_attempts reads
-// and prepare().run() for fix_attempts / stall_reason writes. Records every
-// SQL executed so tests can assert persistence.
+// and prepare().run() for fix_attempts writes. Records every SQL executed so
+// tests can assert persistence. stall_reason is now written via the mocked
+// updateDeliveryStatus call, not a direct prepare().
 function makeDbMock(initialFixAttempts = 0): DbMock {
   const mock: DbMock = {
     prepare: vi.fn(),
@@ -123,10 +124,9 @@ describe('monitorDelivery', () => {
     const delivery = makeDelivery({ branch: null });
     const result = await monitorDelivery(db as unknown as object, delivery, projectDir);
     expect(result).toBe('stalled');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled');
-    const stallWrites = findQueries(db, 'SET stall_reason');
-    expect(stallWrites).toHaveLength(1);
-    expect(stallWrites[0].runArgs[0]).toEqual(['pr-missing', expect.any(String), 'agent-1']);
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled', {
+      stall_reason: 'pr-missing',
+    });
   });
 
   it('returns stalled with pr-missing reason when delivery has no pr_number', async () => {
@@ -134,9 +134,9 @@ describe('monitorDelivery', () => {
     const delivery = makeDelivery({ pr_number: null });
     const result = await monitorDelivery(db as unknown as object, delivery, projectDir);
     expect(result).toBe('stalled');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled');
-    const stallWrites = findQueries(db, 'SET stall_reason');
-    expect(stallWrites[0].runArgs[0]).toEqual(['pr-missing', expect.any(String), 'agent-1']);
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled', {
+      stall_reason: 'pr-missing',
+    });
   });
 
   it('returns merged when PR is already merged externally', async () => {
@@ -177,9 +177,9 @@ describe('monitorDelivery', () => {
 
     const result = await monitorDelivery(db as unknown as object, makeDelivery(), projectDir);
     expect(result).toBe('stalled');
-    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled');
-    const stallWrites = findQueries(db, 'SET stall_reason');
-    expect(stallWrites[0].runArgs[0]).toEqual(['pr-closed', expect.any(String), 'agent-1']);
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled', {
+      stall_reason: 'pr-closed',
+    });
   });
 
   it('merges when CI green and PR is mergeable', async () => {
@@ -436,8 +436,9 @@ describe('monitorDelivery', () => {
 
     const result = await monitorDelivery(db as unknown as object, delivery, projectDir);
     expect(result).toBe('stalled');
-    const stallWrites = findQueries(db, 'SET stall_reason');
-    expect(stallWrites[0].runArgs[0]).toEqual(['pr-missing', expect.any(String), 'agent-1']);
+    expect(mockUpdateStatus).toHaveBeenCalledWith(db, 'agent-1', 'stalled', {
+      stall_reason: 'pr-missing',
+    });
   });
 
   it('CI failure: reruns failed checks once before escalating to fix agent', async () => {
