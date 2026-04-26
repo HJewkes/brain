@@ -280,12 +280,61 @@ export function resolveProjectDir(svc: BrainServiceClass): string {
   return process.cwd();
 }
 
+/**
+ * Synthetic task IDs of the form `workflow:<name>:<step>:<runIdPrefix>` are
+ * emitted by the workflow runtime for steps that don't own a real PM task
+ * (the runtime owns lifecycle directly). dispatchTask must accept these
+ * without calling getTask — see also dispatchSyntheticTemplate in
+ * src/modules/workflow/engine/dispatch.ts.
+ */
+function isSyntheticTaskId(taskId: string): boolean {
+  return taskId.startsWith('workflow:');
+}
+
+function resolveSyntheticTask(taskId: string): PullResult {
+  return {
+    taskId,
+    claimToken: '',
+    brief: '',
+    dispatchContext: {
+      taskId,
+      routing: {
+        agentType: 'general-purpose',
+        model: 'sonnet',
+        // Workflow runtime owns lifecycle; agents run in the project dir
+        // directly (no worktree isolation, no claim, no PM lookup).
+        isolation: 'none',
+        verify: false,
+        concurrency: 'parallel',
+        template: 'worker',
+        allowedTools: '',
+      },
+      agentDispatchable: true,
+      context: {
+        title: taskId,
+        body: '',
+        workstream: undefined,
+        prompt: undefined,
+        dependencies: [],
+        decisions: [],
+        constraints: [],
+      },
+      contextHash: '',
+      extensions: {},
+    },
+  };
+}
+
 async function resolveExplicitTask(
   svc: BrainServiceClass,
   taskId: string,
   projectDir: string,
   dryRun?: boolean
 ): Promise<PullResult> {
+  if (isSyntheticTaskId(taskId)) {
+    return resolveSyntheticTask(taskId);
+  }
+
   const result = getTask(svc.db, taskId);
   if (!result.ok) {
     throw new Error(`Task not found: ${taskId}`);
