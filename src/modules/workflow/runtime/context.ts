@@ -436,7 +436,7 @@ export class WorkflowContext {
 
   private async spawnAgent(
     taskId: string,
-    _rendered: string,
+    rendered: string,
     routedModel?: 'opus' | 'sonnet' | 'haiku'
   ): Promise<{ pid: number; taskId: string; agentId: string }> {
     // Use BrainServiceClass-based dispatch when available.
@@ -459,6 +459,10 @@ export class WorkflowContext {
       taskId,
       model,
       maxBudgetUsd: this.maxBudgetUsd,
+      // For synthetic task IDs (workflow:*) there is no PM task, so dispatchTask
+      // can't build a prompt from task data. Pass the runtime-rendered prompt
+      // explicitly so claude receives the right instructions.
+      promptOverride: rendered,
     });
 
     if ('dryRun' in result) {
