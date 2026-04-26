@@ -97,6 +97,22 @@ function injectWorkflowContext(db: BrainDB, taskId: string, vars: Record<string,
   if (meta.step_id) vars.STEP_ID = meta.step_id as string;
 }
 
+/**
+ * Synthetic task IDs are emitted by the workflow runtime for steps that don't
+ * own a real PM task (the runtime owns lifecycle directly to avoid zombie tasks
+ * piling up on failed runs). They have the form `workflow:<name>:<step>:<runIdPrefix>`.
+ */
+function isSyntheticTaskId(taskId: string): boolean {
+  return taskId.startsWith('workflow:');
+}
+
+function parseSyntheticTaskId(taskId: string): { workflowName: string; stepId: string } | null {
+  if (!isSyntheticTaskId(taskId)) return null;
+  const parts = taskId.split(':');
+  if (parts.length < 4) return null;
+  return { workflowName: parts[1], stepId: parts[2] };
+}
+
 export async function dispatchTemplate(
   db: BrainDB,
   config: BrainConfig,
@@ -105,6 +121,10 @@ export async function dispatchTemplate(
   templateName: string,
   opts: DispatchOptions = {}
 ): Promise<Result<DispatchResult>> {
+  if (isSyntheticTaskId(taskId)) {
+    return dispatchSyntheticTemplate(db, taskId, templateName, opts);
+  }
+
   const prefix = taskId.split('-')[0];
 
   const taskResult = getTask(db, taskId);
@@ -189,5 +209,77 @@ export async function dispatchTemplate(
     variables: vars,
     unfilled,
     mode: stepMode,
+  });
+}
+
+/**
+ * Render a template for a synthetic workflow task ID. The runtime owns
+ * lifecycle directly (no PM task to look up), so we derive vars from
+ * caller-provided extraVars and the workflow/step names parsed from the ID.
+ */
+function dispatchSyntheticTemplate(
+  db: BrainDB,
+  taskId: string,
+  templateName: string,
+  opts: DispatchOptions
+): Result<DispatchResult> {
+  const parsed = parseSyntheticTaskId(taskId);
+  if (!parsed) {
+    return fail('INVALID_INPUT', `Malformed synthetic workflow task ID: ${taskId}`);
+  }
+
+  const extraVars = opts.extraVars ?? {};
+  const prefix = extraVars.PROJECT_PREFIX ?? extraVars.PROJECT ?? '';
+
+  const vars: Record<string, string> = {};
+  vars.TASK_ID = taskId;
+  vars.BRAIN_TASK_ID = taskId;
+  vars.PROJECT_PREFIX = prefix;
+
+  const aoDefaults = getAoConfigWatcher(process.cwd()).snapshot;
+  const fallbackReviewThreshold = aoDefaults.reviewThreshold ?? 5;
+
+  if (prefix) {
+    const projectResult = getProject(db, prefix);
+    if (projectResult.ok) {
+      const p = projectResult.data;
+      vars.REPO_PATH = p.path || process.cwd();
+      vars.BUILD_CMD = p.commands?.build ?? 'N/A';
+      vars.TEST_CMD = p.commands?.test ?? 'N/A';
+      vars.TYPECHECK_CMD = p.commands?.typecheck ?? 'N/A';
+      vars.LINT_CMD = p.commands?.lint ?? 'N/A';
+      vars.BASE_BRANCH = p.default_branch ?? 'main';
+      vars.REVIEW_THRESHOLD = String(p.review_threshold ?? fallbackReviewThreshold);
+    }
+  }
+
+  if (!vars.REPO_PATH) vars.REPO_PATH = process.cwd();
+  if (!vars.BUILD_CMD) vars.BUILD_CMD = 'N/A';
+  if (!vars.TEST_CMD) vars.TEST_CMD = 'N/A';
+  if (!vars.TYPECHECK_CMD) vars.TYPECHECK_CMD = 'N/A';
+  if (!vars.LINT_CMD) vars.LINT_CMD = 'N/A';
+  if (!vars.BASE_BRANCH) vars.BASE_BRANCH = 'main';
+  if (!vars.REVIEW_THRESHOLD) vars.REVIEW_THRESHOLD = String(fallbackReviewThreshold);
+
+  vars.BRANCH_NAME = opts.branch ?? `workflow/${parsed.workflowName}/${parsed.stepId}`;
+  vars.WORKTREE_PATH = opts.worktree ?? '';
+  vars.STEP_ID = parsed.stepId;
+  vars.WORKFLOW_NAME = parsed.workflowName;
+
+  Object.assign(vars, extraVars);
+
+  const rendered = renderTemplate(templateName, vars);
+  if (!rendered.ok) return rendered;
+
+  const unfilledMatches = rendered.data.matchAll(/\{\{(\w+)\}\}/g);
+  const unfilled = [...new Set([...unfilledMatches].map((m) => m[1]))].sort();
+
+  return ok({
+    rendered: rendered.data,
+    template: templateName,
+    taskId,
+    variables: vars,
+    unfilled,
+    mode: 'agent',
   });
 }
