@@ -68,6 +68,7 @@ vi.mock('../../src/server/dispatch.js', () => ({
 import { execFileSync } from 'node:child_process';
 import {
   OrchestrationService,
+  recoverBranchForAgent,
   resetOrchestrationInitForTests,
 } from '../../src/server/orchestration.js';
 import { monitorDelivery } from '../../src/modules/agents/delivery-monitor.js';
@@ -873,6 +874,148 @@ describe('OrchestrationService', () => {
       svc.migrateInFlightWorkflows(runtime as unknown);
 
       expect(runtime.cancel).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recoverBranchForAgent', () => {
+    function insertAgentWithBranch(
+      id: string,
+      status: string,
+      brainTask: string | null,
+      branch: string | null
+    ) {
+      db.prepare(
+        `INSERT INTO agents (id, name, parent, status, brain_task, branch, created_at, context)
+         VALUES (?, 'test', 'root', ?, ?, ?, '2026-01-01', '{}')`
+      ).run(id, status, brainTask, branch);
+    }
+
+    function stubGitRevListCount(count: string) {
+      mockExecFileSync.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'git' && args[0] === 'rev-list') return count;
+        throw new Error(`unexpected exec: ${cmd} ${args.join(' ')}`);
+      });
+    }
+
+    beforeEach(() => {
+      mockInitiateDelivery.mockReset();
+      mockGetPrForBranch.mockReset();
+      mockExecFileSync.mockReset();
+      mockMonitorDelivery.mockClear();
+    });
+
+    it('initiates delivery for the named agent when its branch is orphaned', async () => {
+      insertAgentWithBranch('exit1', 'completed', 'VNM-56.40', 'agent/VNM-56/VNM-56.40');
+      stubGitRevListCount('3');
+      mockGetPrForBranch.mockReturnValue(null);
+      mockInitiateDelivery.mockResolvedValue({
+        agent_id: 'exit1',
+        task_id: 'VNM-56.40',
+        branch: 'agent/VNM-56/VNM-56.40',
+        status: 'pr-open',
+        pr_number: 600,
+      });
+
+      await recoverBranchForAgent(db, 'exit1', projectDir);
+
+      expect(mockInitiateDelivery).toHaveBeenCalledWith(
+        db,
+        'exit1',
+        'VNM-56.40',
+        'agent/VNM-56/VNM-56.40',
+        projectDir
+      );
+    });
+
+    it('does not start a monitor (left to dispatch loop / next-startup recover)', async () => {
+      insertAgentWithBranch('exit2', 'completed', 'VNM-56.41', 'agent/VNM-56/VNM-56.41');
+      stubGitRevListCount('1');
+      mockGetPrForBranch.mockReturnValue(null);
+      mockInitiateDelivery.mockResolvedValue({
+        agent_id: 'exit2',
+        task_id: 'VNM-56.41',
+        branch: 'agent/VNM-56/VNM-56.41',
+        status: 'pr-open',
+        pr_number: 601,
+      });
+
+      await recoverBranchForAgent(db, 'exit2', projectDir);
+
+      expect(mockMonitorDelivery).not.toHaveBeenCalled();
+    });
+
+    it('skips when delivery already progressed past initiation', async () => {
+      insertAgentWithBranch('skip1', 'completed', 'VNM-56.42', 'agent/VNM-56/VNM-56.42');
+      db.exec(`
+        INSERT INTO delivery_states (agent_id, task_id, branch, status, created_at, updated_at)
+        VALUES ('skip1', 'VNM-56.42', 'agent/VNM-56/VNM-56.42', 'pr-open',
+                '2026-01-01', '2026-01-01')
+      `);
+      stubGitRevListCount('2');
+      mockGetPrForBranch.mockReturnValue(null);
+
+      await recoverBranchForAgent(db, 'skip1', projectDir);
+
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+    });
+
+    it('skips when branch has no commits ahead of origin/main', async () => {
+      insertAgentWithBranch('skip2', 'completed', 'VNM-56.43', 'agent/VNM-56/VNM-56.43');
+      stubGitRevListCount('0');
+      mockGetPrForBranch.mockReturnValue(null);
+
+      await recoverBranchForAgent(db, 'skip2', projectDir);
+
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+    });
+
+    it('skips when branch already has an open PR', async () => {
+      insertAgentWithBranch('skip3', 'completed', 'VNM-56.44', 'agent/VNM-56/VNM-56.44');
+      stubGitRevListCount('2');
+      mockGetPrForBranch.mockReturnValue({
+        number: 99,
+        branch: 'agent/VNM-56/VNM-56.44',
+        checksPass: true,
+        mergeable: true,
+        state: 'open',
+        failedChecks: [],
+      });
+
+      await recoverBranchForAgent(db, 'skip3', projectDir);
+
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+    });
+
+    it('skips agents that are still active', async () => {
+      insertAgentWithBranch('active', 'active', 'VNM-56.45', 'agent/VNM-56/VNM-56.45');
+      stubGitRevListCount('1');
+      mockGetPrForBranch.mockReturnValue(null);
+
+      await recoverBranchForAgent(db, 'active', projectDir);
+
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+    });
+
+    it('skips agents without a branch', async () => {
+      insertAgentWithBranch('nobranch', 'completed', 'VNM-56.46', null);
+
+      await recoverBranchForAgent(db, 'nobranch', projectDir);
+
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+    });
+
+    it('no-ops when agent is unknown', async () => {
+      await expect(recoverBranchForAgent(db, 'missing', projectDir)).resolves.toBeUndefined();
+      expect(mockInitiateDelivery).not.toHaveBeenCalled();
+    });
+
+    it('swallows initiateDelivery failures', async () => {
+      insertAgentWithBranch('fail1', 'completed', 'VNM-56.47', 'agent/VNM-56/VNM-56.47');
+      stubGitRevListCount('1');
+      mockGetPrForBranch.mockReturnValue(null);
+      mockInitiateDelivery.mockRejectedValue(new Error('gh auth failed'));
+
+      await expect(recoverBranchForAgent(db, 'fail1', projectDir)).resolves.toBeUndefined();
     });
   });
 });

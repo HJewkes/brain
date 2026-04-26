@@ -31,6 +31,7 @@ import {
 } from '../modules/agents/data.js';
 import type { AgentStatus } from '../modules/agents/types.js';
 import { parseCompletionMessage, handleCompletion } from '../modules/agents/completion-protocol.js';
+import { recoverBranchForAgent } from './orchestration.js';
 
 function isAlive(pid: number): boolean {
   try {
@@ -690,6 +691,17 @@ async function handleProcessExit(
       subtype: result.subtype,
       session_id: result.session_id,
     });
+  }
+
+  // Post-exit orphan-branch recovery — covers explicit `brain_agent_dispatch`
+  // (no DispatchLoop watching). For workstream dispatches, ensureDelivery's
+  // DELIVERED_STATUSES guard makes the loop's later attempt a no-op when this
+  // hook already moved delivery to pr-open.
+  try {
+    await recoverBranchForAgent(svc.db.rawDb, agentId, resolveProjectDir(svc));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[dispatch] post-exit recovery failed for ${agentId}: ${msg}\n`);
   }
 }
 
