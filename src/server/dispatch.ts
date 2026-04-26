@@ -145,6 +145,31 @@ export async function dispatchTask(
     ? await resolveExplicitTask(svc, opts.taskId, projectDir, opts.dryRun)
     : await resolveNextTask(svc, projectDir, opts.dryRun);
 
+  // Invariant: from here on, if not dryRun, the task has been claimed. Any
+  // failure before we've successfully spawned the agent must release the claim,
+  // otherwise the task is stuck until a human manually clears it.
+  try {
+    return await runDispatch(svc, projectDir, pullResult, opts);
+  } catch (err) {
+    if (!opts.dryRun && pullResult.claimToken) {
+      await releaseTaskClaim(svc.db, svc.embedder, pullResult.taskId).catch((releaseErr) => {
+        process.stderr.write(
+          `[dispatch] failed to release claim for ${pullResult.taskId}: ${
+            releaseErr instanceof Error ? releaseErr.message : String(releaseErr)
+          }\n`
+        );
+      });
+    }
+    throw err;
+  }
+}
+
+async function runDispatch(
+  svc: BrainServiceClass,
+  projectDir: string,
+  pullResult: PullResult,
+  opts: DispatchOptions
+): Promise<DispatchResult | DryRunResult> {
   const workerDispatch = buildWorkerDispatchFromPull(svc.db, pullResult, {
     projectDir,
     teamName: 'headless',
@@ -191,6 +216,7 @@ export async function dispatchTask(
   const mcpConfigPath = writeMcpConfig(agentId, projectDir);
 
   const maxBudgetUsd = resolveMaxBudgetUsd(svc.db, projectDir, taskId, opts);
+  setAgentContext(svc.db, agentId, 'max_budget_usd', maxBudgetUsd);
 
   const proc = spawnClaude({
     prompt,
@@ -293,16 +319,23 @@ async function resolveExplicitTask(
     await claimTask(svc.db, svc.embedder, taskId);
   }
 
-  const dispatchContext = buildAgentDispatchContext(svc.db, taskId, { projectDir });
-  if (!dispatchContext) {
-    throw new Error(`Failed to build dispatch context for ${taskId}`);
+  try {
+    const dispatchContext = buildAgentDispatchContext(svc.db, taskId, { projectDir });
+    if (!dispatchContext) {
+      throw new Error(`Failed to build dispatch context for ${taskId}`);
+    }
+
+    const brief = formatDispatchBrief(dispatchContext);
+    const claim = getTask(svc.db, taskId);
+    const claimToken = dryRun ? '' : claim.ok ? (claim.data.claim_token ?? '') : '';
+
+    return { taskId, claimToken, dispatchContext, brief };
+  } catch (err) {
+    if (!dryRun) {
+      await releaseTaskClaim(svc.db, svc.embedder, taskId).catch(() => {});
+    }
+    throw err;
   }
-
-  const brief = formatDispatchBrief(dispatchContext);
-  const claim = getTask(svc.db, taskId);
-  const claimToken = dryRun ? '' : claim.ok ? (claim.data.claim_token ?? '') : '';
-
-  return { taskId, claimToken, dispatchContext, brief };
 }
 
 async function resolveNextTask(
@@ -364,6 +397,29 @@ async function claimTask(db: BrainDB, embedder: Embedder, taskId: string): Promi
       db.upsertNote({ ...reindexedNotes[0], metadata: JSON.stringify(newMeta) });
     }
   }
+}
+
+export async function releaseTaskClaim(
+  db: BrainDB,
+  embedder: Embedder,
+  taskId: string
+): Promise<void> {
+  const notes = getPmNotes(db, 'task', { display_id: taskId });
+  if (notes.length === 0) return;
+
+  const filePath = notes[0].filePath;
+  if (!existsSync(filePath)) return;
+
+  let content = readFileSync(filePath, 'utf-8');
+  content = replaceFrontmatterField(content, 'status', 'pending');
+  content = replaceFrontmatterField(content, 'claim_token', '');
+  content = replaceFrontmatterField(content, 'claimed_at', '');
+  content = replaceFrontmatterField(content, 'modified', new Date().toISOString().slice(0, 10));
+
+  writeFileSync(filePath, content, 'utf-8');
+
+  const hash = createHash('sha256').update(content).digest('hex');
+  await indexSingleFile(db, embedder, filePath, content, hash, Date.now());
 }
 
 // --- Spawn helpers ---
