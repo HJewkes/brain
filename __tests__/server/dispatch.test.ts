@@ -33,9 +33,13 @@ vi.mock('../../src/modules/agents/dispatch-context.js', () => ({
   formatDispatchBrief: vi.fn().mockReturnValue('test brief'),
 }));
 
-vi.mock('../../src/modules/agents/worktree.js', () => ({
-  allocateWorktree: vi.fn(),
-}));
+vi.mock('../../src/modules/agents/worktree.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/modules/agents/worktree.js')>();
+  return {
+    ...actual,
+    allocateWorktree: vi.fn(),
+  };
+});
 
 vi.mock('../../src/modules/agents/data.js', () => ({
   createAgent: vi.fn().mockReturnValue('agent-001'),
@@ -71,7 +75,8 @@ vi.mock('../../src/services/indexing.js', () => ({
 // Lazy imports for mocked modules
 const { pullNextTask } = await import('../../src/modules/agents/task-pull.js');
 const { buildWorkerDispatchFromPull } = await import('../../src/modules/agents/coordinator.js');
-const { allocateWorktree } = await import('../../src/modules/agents/worktree.js');
+const { allocateWorktree, WorktreeBudgetExhaustedError } =
+  await import('../../src/modules/agents/worktree.js');
 const { getPmNotes } = await import('../../src/modules/pm/data/queries.js');
 const fs = await import('node:fs');
 const { dispatchTask } = await import('../../src/server/dispatch.js');
@@ -193,17 +198,44 @@ describe('dispatch', () => {
       vi.mocked(fs.readFileSync).mockReturnValue(claimedFileContent);
     }
 
-    it('releases claim when worktree allocation fails', async () => {
+    it('releases claim and rethrows when worktree allocation fails', async () => {
       vi.mocked(pullNextTask).mockResolvedValue(makePullResult());
       vi.mocked(buildWorkerDispatchFromPull).mockReturnValue(
         makeWorkerDispatch({ routing: { ...defaultRouting, isolation: 'worktree' } })
       );
       vi.mocked(allocateWorktree).mockImplementation(() => {
-        throw new Error('Worktree budget exhausted: 3/3 allocated');
+        throw new Error('git worktree add: fatal');
       });
       setupNoteLookup();
 
-      await expect(dispatchTask(mockSvc, {})).rejects.toThrow('Worktree budget exhausted');
+      await expect(dispatchTask(mockSvc, {})).rejects.toThrow('git worktree add: fatal');
+
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      const written = vi.mocked(fs.writeFileSync).mock.calls[0]?.[1] as string;
+      expect(written).toContain('status: pending');
+      expect(written).not.toMatch(/^claim_token:/m);
+      expect(written).not.toMatch(/^claimed_at:/m);
+    });
+
+    it('returns queued result and releases claim when worktree budget is exhausted', async () => {
+      vi.mocked(pullNextTask).mockResolvedValue(makePullResult());
+      vi.mocked(buildWorkerDispatchFromPull).mockReturnValue(
+        makeWorkerDispatch({ routing: { ...defaultRouting, isolation: 'worktree' } })
+      );
+      vi.mocked(allocateWorktree).mockImplementation(() => {
+        throw new WorktreeBudgetExhaustedError(3, 3);
+      });
+      setupNoteLookup();
+
+      const result = await dispatchTask(mockSvc, {});
+
+      expect(result).toEqual({
+        status: 'queued',
+        taskId: 'VNM-99.01',
+        reason: 'Worktree budget exhausted: 3/3 allocated',
+        allocated: 3,
+        budget: 3,
+      });
 
       expect(fs.writeFileSync).toHaveBeenCalled();
       const written = vi.mocked(fs.writeFileSync).mock.calls[0]?.[1] as string;

@@ -1,14 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { agentsMigrationV1, agentsMigrationV2 } from '../../../src/modules/agents/schema.js';
+import {
+  agentsMigrationV1,
+  agentsMigrationV2,
+  agentsMigrationV3,
+  agentsMigrationV4,
+} from '../../../src/modules/agents/schema.js';
 import {
   allocateWorktree,
   releaseWorktree,
   checkWorktreePath,
   cleanupStaleAllocations,
   cleanupOrphanRemoteBranches,
+  reclaimTerminatedAllocations,
+  WorktreeBudgetExhaustedError,
 } from '../../../src/modules/agents/worktree.js';
-import { getWorktreeAllocations } from '../../../src/modules/agents/data.js';
+import {
+  createAgent,
+  getWorktreeAllocations,
+  updateAgentStatus,
+} from '../../../src/modules/agents/data.js';
+import { recordDelivery } from '../../../src/modules/agents/delivery.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -16,6 +28,8 @@ function makeDb(): ReturnType<typeof Database> {
   const db = new Database(':memory:');
   agentsMigrationV1.up(db);
   agentsMigrationV2.up(db);
+  agentsMigrationV3.up(db);
+  agentsMigrationV4.up(db);
   return db;
 }
 
@@ -154,7 +168,7 @@ describe('worktree lifecycle', () => {
       expect(allocs[0].task_id).toBe('VNM-09.02');
     });
 
-    it('enforces budget — throws when limit reached', () => {
+    it('enforces budget — throws WorktreeBudgetExhaustedError when limit reached', () => {
       allocateWorktree(db, '/repo', {
         taskId: 'VNM-09.01',
         workstream: 'ws-1',
@@ -178,7 +192,41 @@ describe('worktree lifecycle', () => {
           basePath: '.worktrees',
           budget: 2,
         })
-      ).toThrow('Worktree budget exhausted: 2/2');
+      ).toThrow(WorktreeBudgetExhaustedError);
+    });
+
+    it('reclaims terminated agents before counting budget', () => {
+      // First allocation: agent will reach terminal state
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'ws-1',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 1,
+      });
+      const agentId = createAgent(db, {
+        name: 'agent-1',
+        parent: 'test',
+        brain_task: 'VNM-09.01',
+      });
+      updateAgentStatus(db, agentId, 'completed');
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      // Budget is 1; allocation succeeds because the prior agent is reclaimed
+      const result = allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.02',
+        workstream: 'ws-2',
+        claimToken: 'tok-2',
+        basePath: '.worktrees',
+        budget: 1,
+      });
+
+      expect(result.worktreePath).toContain('VNM-09.02');
+      const allocs = getWorktreeAllocations(db);
+      expect(allocs).toHaveLength(1);
+      expect(allocs[0].task_id).toBe('VNM-09.02');
     });
 
     it('throws when workstream is empty', () => {
@@ -394,6 +442,128 @@ describe('worktree lifecycle', () => {
     it('returns empty array when there are no allocations', () => {
       const removed = cleanupStaleAllocations(db, '/repo');
       expect(removed).toHaveLength(0);
+    });
+  });
+
+  // ── reclaimTerminatedAllocations ───────────────────────────────────────────
+
+  describe('reclaimTerminatedAllocations', () => {
+    function allocateAndAttachAgent(taskId: string, status: 'completed' | 'failed' | 'abandoned') {
+      allocateWorktree(db, '/repo', {
+        taskId,
+        workstream: 'ws-x',
+        claimToken: `tok-${taskId}`,
+        basePath: '.worktrees',
+        budget: 5,
+      });
+      const agentId = createAgent(db, {
+        name: `agent-${taskId}`,
+        parent: 'test',
+        brain_task: taskId,
+      });
+      updateAgentStatus(db, agentId, status);
+      return agentId;
+    }
+
+    it('reclaims allocations whose agents are completed/failed/abandoned', () => {
+      // Allocate all three first (no agents yet, so no cascading reclaim)
+      for (const id of ['VNM-09.01', 'VNM-09.02', 'VNM-09.03']) {
+        allocateWorktree(db, '/repo', {
+          taskId: id,
+          workstream: 'ws-x',
+          claimToken: `tok-${id}`,
+          basePath: '.worktrees',
+          budget: 5,
+        });
+      }
+      const statuses: Array<'completed' | 'failed' | 'abandoned'> = [
+        'completed',
+        'failed',
+        'abandoned',
+      ];
+      ['VNM-09.01', 'VNM-09.02', 'VNM-09.03'].forEach((id, i) => {
+        const agentId = createAgent(db, { name: `a-${id}`, parent: 't', brain_task: id });
+        updateAgentStatus(db, agentId, statuses[i]);
+      });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed.sort()).toEqual(['VNM-09.01', 'VNM-09.02', 'VNM-09.03']);
+      expect(getWorktreeAllocations(db)).toHaveLength(0);
+    });
+
+    it('preserves allocations whose agents are still active or pending', () => {
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'ws-1',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 5,
+      });
+      const agentId = createAgent(db, {
+        name: 'agent-1',
+        parent: 'test',
+        brain_task: 'VNM-09.01',
+      });
+      updateAgentStatus(db, agentId, 'active');
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toHaveLength(0);
+      expect(getWorktreeAllocations(db)).toHaveLength(1);
+    });
+
+    it('preserves allocations whose owning agent has no record', () => {
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'ws-1',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 5,
+      });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toHaveLength(0);
+      expect(getWorktreeAllocations(db)).toHaveLength(1);
+    });
+
+    it('preserves allocations whose delivery is still in flight', () => {
+      const agentId = allocateAndAttachAgent('VNM-09.01', 'completed');
+      recordDelivery(db, agentId, {
+        status: 'pr-open',
+        task_id: 'VNM-09.01',
+        branch: 'agent/ws-x/VNM-09.01',
+      });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toHaveLength(0);
+      expect(getWorktreeAllocations(db)).toHaveLength(1);
+    });
+
+    it('reclaims allocations whose delivery has finalized', () => {
+      const agentId = allocateAndAttachAgent('VNM-09.01', 'completed');
+      recordDelivery(db, agentId, {
+        status: 'merged',
+        task_id: 'VNM-09.01',
+        branch: 'agent/ws-x/VNM-09.01',
+      });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toEqual(['VNM-09.01']);
+      expect(getWorktreeAllocations(db)).toHaveLength(0);
     });
   });
 
