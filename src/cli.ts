@@ -79,6 +79,12 @@ program.addCommand(serveCommand);
 program.addCommand(scanHtmlCommand);
 program.addCommand(launchCommand);
 
+const TOP_LEVEL_ALIASES: Record<string, string[]> = {
+  tasks: ['pm', 'task', 'list'],
+  sessions: ['session', 'list'],
+  agents: ['agent', 'status'],
+};
+
 async function main(): Promise<void> {
   const { registry } = await loadModules({
     modules: getBuiltinModules(),
@@ -86,7 +92,24 @@ async function main(): Promise<void> {
   for (const { command } of registry.getCommands()) {
     program.addCommand(command);
   }
-  await program.parseAsync();
+
+  for (const [alias, target] of Object.entries(TOP_LEVEL_ALIASES)) {
+    program
+      .command(alias)
+      .description(`Shortcut for "brain ${target.join(' ')}"`)
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .helpOption(false)
+      .action(() => {});
+  }
+
+  const argv = [...process.argv];
+  const aliasName = argv[2];
+  if (aliasName && TOP_LEVEL_ALIASES[aliasName]) {
+    argv.splice(2, 1, ...TOP_LEVEL_ALIASES[aliasName]);
+  }
+
+  await program.parseAsync(argv);
 }
 
 main().catch((err: Error) => {
