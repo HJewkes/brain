@@ -22,8 +22,6 @@
  *   interviewAnswers: pre-filled interview responses
  */
 
-import { existsSync, rmSync, mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { WorkflowFn } from '../runtime/types.js';
 import { buildPlanningSeed } from './planning-seed.js';
 import { buildPlanningCompletion } from './planning-completion.js';
@@ -41,14 +39,10 @@ export const planningWorkflow: WorkflowFn = async (ctx) => {
   const explicitSkipResearch = ctx.param('skipResearch') === 'true';
   const planId = ctx.param('planId') ?? ctx.runId.slice(0, 8);
 
-  // Clean plan directory to prevent prior run artifacts from polluting this run
-  const planDir = resolve(ctx.projectDir, '.plans', planId);
-  if (existsSync(planDir)) {
-    rmSync(planDir, { recursive: true, force: true });
-  }
-  mkdirSync(planDir, { recursive: true });
-
-  // Seed phase — gather pre-existing context (deterministic, no LLM)
+  // Seed phase — gather pre-existing context (deterministic, no LLM).
+  // Plan-dir cleanup happens INSIDE the seed step so it's cached as a unit
+  // and won't fire on hydration replay (which would otherwise destroy
+  // artifacts from prior steps in the same workflow instance).
   const priorContext = ctx.param('priorContext') ?? brief;
   await ctx.seed(
     'seed',

@@ -4,7 +4,7 @@
  * answers) before the LLM-driven planning pipeline begins.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { SeedResult } from '../runtime/types.js';
 
@@ -163,8 +163,14 @@ export function buildPlanningSeed(params: SeedParams): () => Promise<SeedResult>
     const flags = assessCoverage(sections, params);
     const skipResearch = shouldSkipResearch(flags);
 
-    // Write the gathered context to disk
+    // Clean prior run artifacts then recreate the plan directory.
+    // This is intentionally inside the seed function (which is cached after
+    // first run) rather than at workflow-function top level — otherwise
+    // hydration replays would destroy artifacts from later steps.
     const planDir = resolve(params.projectDir, '.plans', params.planId);
+    if (existsSync(planDir)) {
+      rmSync(planDir, { recursive: true, force: true });
+    }
     mkdirSync(planDir, { recursive: true });
     const contextPath = resolve(planDir, 'pre-existing-context.md');
 
