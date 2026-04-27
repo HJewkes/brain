@@ -4,9 +4,17 @@
  * Extracts structured condition signals (needs_revision, has_open_questions)
  * from agent output text. Used by WorkflowContext.dispatch() to populate
  * StepResult.signal.
+ *
+ * Agents should emit a canonical HTML-comment marker like
+ * `<!-- signal: needs_revision -->` so the runtime is not coupled to the
+ * agent's prose. Natural-language verdict headings remain a best-effort
+ * fallback for legacy outputs.
  */
 
 type SignalMatcher = (content: string) => boolean;
+
+/** Canonical signal marker — invisible in rendered markdown, unambiguous to parse. */
+const CANONICAL_MARKER_PATTERN = /<!--\s*signal:\s*([a-z_]+)\s*-->/i;
 
 const CONDITION_PATTERNS: Record<string, SignalMatcher> = {
   // Planning critic signals — matches heading, inline, and bold markdown variants
@@ -50,7 +58,12 @@ const CONDITION_PATTERNS: Record<string, SignalMatcher> = {
 
 /**
  * Parse condition signals from agent output text.
- * Returns the first matching signal name, or null if no patterns match.
+ *
+ * Resolution order:
+ *   1. Canonical `<!-- signal: <name> -->` marker (authoritative — agent's stated intent).
+ *   2. Natural-language verdict headings / bold markers via CONDITION_PATTERNS.
+ *
+ * Returns the resolved signal name, or null if nothing matches.
  */
 export function parseSignals(
   _stepId: string,
@@ -58,6 +71,12 @@ export function parseSignals(
   output: string | undefined
 ): string | null {
   if (!output) return null;
+
+  const markerMatch = output.match(CANONICAL_MARKER_PATTERN);
+  if (markerMatch) {
+    const signal = markerMatch[1].toLowerCase();
+    if (signal in CONDITION_PATTERNS) return signal;
+  }
 
   for (const [signal, matcher] of Object.entries(CONDITION_PATTERNS)) {
     if (matcher(output)) return signal;

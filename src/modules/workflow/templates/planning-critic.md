@@ -114,7 +114,18 @@ Write your findings to `.plans/{{PLAN_ID}}/critic-report.md` with this structure
 Total: <N> FIX items
 1. <file/section> — <brief description>
 2. ...
+
+<!-- signal: needs_revision -->
 ```
+
+### Signal Marker (REQUIRED)
+
+The last line of your report MUST be a canonical signal marker so the workflow runtime can route reliably:
+
+- `<!-- signal: needs_revision -->` — design has FIX items that must be addressed before implementation.
+- `<!-- signal: approved -->` — design is READY; no FIX items remain.
+
+The marker is invisible in rendered markdown but is parsed verbatim by the runtime. Pick exactly one — it must agree with your stated `## Verdict:`. Do not omit it; without the marker, the auto-revision loop cannot fire and a flawed design may advance to implementation.
 
 ## Important
 
