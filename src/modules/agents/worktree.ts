@@ -170,13 +170,102 @@ export function allocateWorktree(
 }
 
 /**
- * Release a worktree by task ID: remove from git, delete branch, remove from DB.
- * Returns false if no allocation exists for the given taskId.
+ * Inspect a worktree's safety to release. Returns flags for callers that
+ * want to preserve uncommitted edits or unpushed commits.
+ *
+ * - dirty: `git status --porcelain` is non-empty (untracked or modified files).
+ * - unpushed: branch has commits not present on origin (or origin missing).
  */
-export function releaseWorktree(db: unknown, projectRoot: string, taskId: string): boolean {
+export interface WorktreeReleaseSafety {
+  dirty: boolean;
+  unpushed: boolean;
+}
+
+export function inspectWorktreeForRelease(
+  worktreePath: string,
+  branch: string,
+  projectRoot: string
+): WorktreeReleaseSafety {
+  let dirty = false;
+  try {
+    const out = execFileSync('git', ['status', '--porcelain'], {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    dirty = out.trim().length > 0;
+  } catch {
+    // Worktree directory missing — treat as not-dirty so reclaim can proceed.
+    dirty = false;
+  }
+
+  let unpushed = false;
+  try {
+    const out = execFileSync('git', ['rev-list', '--count', `origin/main..${branch}`], {
+      cwd: projectRoot,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    const ahead = parseInt(out.trim(), 10);
+    if (Number.isFinite(ahead) && ahead > 0) {
+      // Branch has commits past main. Check whether origin has the branch ref.
+      try {
+        execFileSync('git', ['rev-parse', '--verify', `origin/${branch}`], {
+          cwd: projectRoot,
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        });
+        const aheadOfRemote = execFileSync(
+          'git',
+          ['rev-list', '--count', `origin/${branch}..${branch}`],
+          { cwd: projectRoot, encoding: 'utf-8', stdio: 'pipe' }
+        );
+        unpushed = parseInt(aheadOfRemote.trim(), 10) > 0;
+      } catch {
+        // Branch not on remote at all → its commits are unpushed.
+        unpushed = true;
+      }
+    }
+  } catch {
+    unpushed = false;
+  }
+
+  return { dirty, unpushed };
+}
+
+export interface ReleaseWorktreeOptions {
+  /** Bypass the dirty/unpushed safety check. Use for explicit destruction. */
+  force?: boolean;
+}
+
+/**
+ * Release a worktree by task ID: remove from git, delete branch, remove from DB.
+ * Returns false if no allocation exists, OR if the worktree has uncommitted
+ * changes or unpushed commits (unless `force: true` is set). Refusing to
+ * release in the unsafe case prevents the post-exit reconciler from racing
+ * orphan-recovery (VNM-56.63) and from destroying agent work that was
+ * written to the worktree but never committed (VNM-56.59).
+ */
+export function releaseWorktree(
+  db: unknown,
+  projectRoot: string,
+  taskId: string,
+  opts: ReleaseWorktreeOptions = {}
+): boolean {
   const allocations = getWorktreeAllocations(db);
   const allocation = allocations.find((a) => a.task_id === taskId);
   if (!allocation) return false;
+
+  if (!opts.force) {
+    const safety = inspectWorktreeForRelease(
+      allocation.worktree_path,
+      allocation.branch,
+      projectRoot
+    );
+    if (safety.dirty || safety.unpushed) {
+      return false;
+    }
+  }
 
   try {
     execFileSync('git', ['worktree', 'remove', allocation.worktree_path], {

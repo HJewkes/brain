@@ -339,18 +339,103 @@ describe('worktree lifecycle', () => {
       });
 
       vi.clearAllMocks();
-      // First call (git worktree remove) throws; second call (--force) should succeed
-      mockExecFileSync
-        .mockImplementationOnce(() => {
+      // Inspection calls (status, rev-list) return clean. Then `git worktree
+      // remove` throws (locked/dirty); `--force` fallback should succeed.
+      mockExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (argv[0] === 'status' || argv[0] === 'rev-list' || argv[0] === 'rev-parse') {
+          return '';
+        }
+        if (argv[0] === 'worktree' && argv[1] === 'remove' && !argv.includes('--force')) {
           throw new Error('dirty');
-        })
-        .mockReturnValue('');
+        }
+        return '';
+      });
 
       const released = releaseWorktree(db, '/repo', 'VNM-09.01');
 
       expect(released).toBe(true);
       const calls = mockExecFileSync.mock.calls.map((c) => (c as string[][])[1]);
       expect(calls.some((args) => args.includes('--force'))).toBe(true);
+    });
+
+    it('refuses to release when worktree has uncommitted changes', () => {
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'vnm-09',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 3,
+      });
+
+      vi.clearAllMocks();
+      mockExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (argv[0] === 'status' && argv.includes('--porcelain')) {
+          return ' M src/foo.ts\n?? new-file.md\n';
+        }
+        return '';
+      });
+
+      const released = releaseWorktree(db, '/repo', 'VNM-09.01');
+      expect(released).toBe(false);
+      // Still in DB — dirty state preserved for human rescue.
+      expect(getWorktreeAllocations(db)).toHaveLength(1);
+    });
+
+    it('refuses to release when branch has unpushed commits', () => {
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'vnm-09',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 3,
+      });
+
+      vi.clearAllMocks();
+      mockExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (argv[0] === 'status' && argv.includes('--porcelain')) return '';
+        if (
+          argv[0] === 'rev-list' &&
+          argv.includes('--count') &&
+          argv.some((a) => a.startsWith('origin/main..'))
+        ) {
+          return '2\n';
+        }
+        if (argv[0] === 'rev-parse' && argv.includes('--verify')) {
+          throw new Error('unknown ref'); // origin branch missing → unpushed
+        }
+        return '';
+      });
+
+      const released = releaseWorktree(db, '/repo', 'VNM-09.01');
+      expect(released).toBe(false);
+      expect(getWorktreeAllocations(db)).toHaveLength(1);
+    });
+
+    it('force=true bypasses the safety check', () => {
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'vnm-09',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 3,
+      });
+
+      vi.clearAllMocks();
+      // Same dirty mock as the refuses-to-release case
+      mockExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (argv[0] === 'status' && argv.includes('--porcelain')) {
+          return ' M src/foo.ts\n';
+        }
+        return '';
+      });
+
+      const released = releaseWorktree(db, '/repo', 'VNM-09.01', { force: true });
+      expect(released).toBe(true);
+      expect(getWorktreeAllocations(db)).toHaveLength(0);
     });
 
     it('returns false when task has no allocation', () => {
