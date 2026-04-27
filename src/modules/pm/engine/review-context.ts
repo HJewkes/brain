@@ -55,6 +55,16 @@ function readDependsOn(metadata: string | null): string[] {
   }
 }
 
+function readAcceptanceCriteria(metadata: string | null): string[] {
+  if (!metadata) return [];
+  try {
+    const meta = JSON.parse(metadata) as { acceptance_criteria?: string[] };
+    return Array.isArray(meta.acceptance_criteria) ? meta.acceptance_criteria : [];
+  } catch {
+    return [];
+  }
+}
+
 function readTaskStatus(metadata: string | null): string {
   if (!metadata) return 'unknown';
   try {
@@ -189,4 +199,41 @@ export function buildDependencyContextString(
 ): string {
   if (!taskDisplayId) return '';
   return renderDependencyContextBlock(buildDependencyPRContexts(db, taskDisplayId));
+}
+
+/**
+ * Render the originating task's acceptance criteria as a markdown block
+ * for injection into the review-agent prompt. Returns an empty string when
+ * the task has no acceptance criteria, so the template falls back without
+ * an empty section.
+ */
+export function renderAcceptanceCriteriaBlock(criteria: string[]): string {
+  if (criteria.length === 0) return '';
+  const lines: string[] = [
+    '## Acceptance Criteria for This PR',
+    '',
+    'The originating PM task declared the following acceptance criteria.',
+    'Your review MUST verify each one against the diff. For every item,',
+    'cite the file/line that satisfies it OR flag it as MISSING.',
+    'Do not approve unless every criterion is met or explicitly waived',
+    'with a stated reason.',
+    '',
+  ];
+  for (const ac of criteria) {
+    lines.push(`- ${ac}`);
+  }
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  return lines.join('\n');
+}
+
+export function buildAcceptanceCriteriaString(
+  db: Database.Database,
+  taskDisplayId: string | null | undefined
+): string {
+  if (!taskDisplayId) return '';
+  const task = findTaskByDisplayId(db, taskDisplayId);
+  if (!task) return '';
+  return renderAcceptanceCriteriaBlock(readAcceptanceCriteria(task.metadata));
 }

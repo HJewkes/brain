@@ -17,11 +17,13 @@ Blank-slate code review for a GitHub PR. Fill in variables and pass as agent pro
 | `{{PROJECT_PREFIX}}` | Project key from project-map.json | `VLT` |
 | `{{REVIEW_THRESHOLD}}` | Risk score that triggers human review | `4` |
 | `{{DEPENDENCY_CONTEXT}}` | Markdown block describing upstream PRs this one depends on (empty when none) | `## Dependency PR Context\n…` |
+| `{{ACCEPTANCE_CRITERIA}}` | Markdown block listing the originating task's acceptance criteria (empty when none) | `## Acceptance Criteria for This PR\n…` |
 
 ---
 
 ## Agent Prompt
 
+{{ACCEPTANCE_CRITERIA}}
 {{DEPENDENCY_CONTEXT}}
 You are reviewing PR #{{PR_NUMBER}} in {{OWNER}}/{{REPO}}.
 
@@ -29,7 +31,12 @@ Branch: `{{BRANCH}}` targeting `{{BASE}}`
 Repo path: `{{REPO_PATH}}`
 Project: `{{PROJECT_PREFIX}}` | Human review threshold: `{{REVIEW_THRESHOLD}}`
 
-If a `## Dependency PR Context` block is shown above, read it first. References to
+If an `## Acceptance Criteria for This PR` block is shown above, treat it as the
+primary success bar for this review. The PR is not approvable unless every
+criterion is met by the diff (or explicitly waived with a stated reason).
+Generic code-quality checks (below) come second to AC verification.
+
+If a `## Dependency PR Context` block is shown above, read it next. References to
 schemas, columns, functions, types, or files declared by an upstream task should
 NOT be flagged as missing/critical without first inspecting that dependency's
 branch — the PR you are reviewing was authored against an integrated base where
@@ -51,7 +58,26 @@ cd {{REPO_PATH}} && git diff --name-only {{BASE}}...{{BRANCH}}
 
 Read every changed file in its entirety (not just the diff hunks). You need surrounding context to evaluate correctness, naming, architecture, and test adequacy.
 
-### Step 3: Review against checklist
+### Step 3: Verify acceptance criteria
+
+If an `## Acceptance Criteria for This PR` block was provided above, work
+through it FIRST, before the generic checklist below. For each criterion:
+
+- **MET** — cite the file/line in the diff that satisfies it. A bare assertion
+  is insufficient; you must point to the code.
+- **MISSING** — the diff does not satisfy this criterion. Add a `[FIX]` for
+  what would be required.
+- **WAIVED: \<reason\>** — the criterion is intentionally not addressed in
+  this PR. State the reason and confirm a follow-up exists where appropriate.
+
+A PR with any MISSING criterion is automatically NEEDS WORK regardless of
+code quality elsewhere. A PR whose code is clean but does not deliver the
+declared acceptance criteria has not done the work.
+
+If no acceptance criteria block is present, skip this step. Note in your
+review summary that no AC were declared for this task.
+
+### Step 4: Review against generic checklist
 
 For EVERY finding, assign one of:
 - `[FIX]` — Must fix before merge. Explain why.
@@ -61,17 +87,18 @@ There is no "suggestion" category. Decide: fix it or justify leaving it.
 
 **Checklist:**
 
-1. **Code quality** — naming, readability, function length (max ~30 lines), dead code, commented-out code
-2. **Edge cases** — invalid inputs, null/undefined, boundary conditions, empty collections
-3. **Error handling** — failures handled at boundaries, missing guards, swallowed errors
-4. **Test coverage** — adequate tests? missing scenarios? tests verify behavior not implementation? Arrange-Act-Assert?
-5. **Backwards compatibility** — does existing behavior change? are defaults preserved? breaking API changes?
-6. **Architecture** — coupling, abstraction quality, separation of concerns, composition over inheritance
-7. **Performance** — unnecessary allocations, O(n) where O(1) possible, memory leaks, redundant re-renders
-8. **Type safety** — exhaustive switches, unchecked casts, `any` types, missing generics
-9. **Security** — injection risks, sensitive data exposure, path traversal, shell injection
+1. **Wiring & invocation** — for new services, classes, or modules: is the public API actually invoked from a real entry point (server startup, CLI command, hook handler)? Code that ships without callers is a known regression class — flag any orphaned export as `[FIX]`.
+2. **Code quality** — naming, readability, function length (max ~30 lines), dead code, commented-out code
+3. **Edge cases** — invalid inputs, null/undefined, boundary conditions, empty collections
+4. **Error handling** — failures handled at boundaries, missing guards, swallowed errors
+5. **Test coverage** — adequate tests? missing scenarios? tests verify behavior not implementation? Arrange-Act-Assert? **For each acceptance criterion, is there a test that maps to it?**
+6. **Backwards compatibility** — does existing behavior change? are defaults preserved? breaking API changes?
+7. **Architecture** — coupling, abstraction quality, separation of concerns, composition over inheritance
+8. **Performance** — unnecessary allocations, O(n) where O(1) possible, memory leaks, redundant re-renders
+9. **Type safety** — exhaustive switches, unchecked casts, `any` types, missing generics
+10. **Security** — injection risks, sensitive data exposure, path traversal, shell injection
 
-### Step 4: Post a GitHub review with inline comments
+### Step 5: Post a GitHub review with inline comments
 
 Separate your findings into two groups:
 
@@ -88,7 +115,7 @@ PR_NUMBER={{PR_NUMBER}}
 
 echo '{
   "event": "COMMENT",
-  "body": "## Code Review\n\nVerdict: <PASS or NEEDS WORK>\n\n### Summary\n<high-level summary of the changes and overall quality>\n\n### Structural Findings\n<any findings that do not map to a specific diff line>\n\n### FIX Items\n<numbered list of all FIX items, or \"None\" if verdict is PASS>",
+  "body": "## Code Review\n\nVerdict: <PASS or NEEDS WORK>\n\n### Acceptance Criteria\n<for each AC: MET (cite file:line) | MISSING | WAIVED (reason). If none declared, write \"No AC declared for this task.\">\n\n### Summary\n<high-level summary of the changes and overall quality>\n\n### Structural Findings\n<any findings that do not map to a specific diff line>\n\n### FIX Items\n<numbered list of all FIX items, or \"None\" if verdict is PASS>",
   "comments": [
     {
       "path": "<relative file path>",
@@ -111,7 +138,7 @@ echo '{
 - Submitted reviews (`event: "COMMENT"`) cannot be deleted — double-check before posting
 - Build the JSON programmatically if there are many comments to avoid syntax errors
 
-### Step 5: Assess risk level
+### Step 6: Assess risk level
 
 Score the PR on a 1–5 risk scale:
 
@@ -129,12 +156,12 @@ Score the PR on a 1–5 risk scale:
 - Publishing workflows (npm publish, app store, release scripts) are automatically risk 5
 - If unsure between two levels, round UP
 
-### Step 6: Determine verdict
+### Step 7: Determine verdict
 
-- **PASS** — No `[FIX]` items remain. Code is ready to merge.
-- **NEEDS WORK** — One or more `[FIX]` items exist. List them.
+- **PASS** — No `[FIX]` items remain AND every acceptance criterion is MET or WAIVED. Code is ready to merge.
+- **NEEDS WORK** — One or more `[FIX]` items exist, OR any acceptance criterion is MISSING. List both.
 
-### Step 7: Output orchestrator summary
+### Step 8: Output orchestrator summary
 
 After posting the review, output a structured summary for the orchestrator (not posted to GitHub):
 
@@ -143,6 +170,10 @@ After posting the review, output a structured summary for the orchestrator (not 
 
 ### Verdict: <PASS or NEEDS WORK>
 ### Risk: <1-5>
+
+### Acceptance Criteria (<met>/<total> met)
+- <ac text> — MET (file:line) | MISSING | WAIVED (reason)
+(Or: "No AC declared.")
 
 ### FIX Items (<count>)
 - <file:line> — <brief description>
