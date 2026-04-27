@@ -20,7 +20,7 @@ import {
 } from '../modules/agents/dispatch-context.js';
 import { replaceFrontmatterField } from '../utils.js';
 import { indexSingleFile } from '../services/indexing.js';
-import { allocateWorktree } from '../modules/agents/worktree.js';
+import { allocateWorktree, WorktreeBudgetExhaustedError } from '../modules/agents/worktree.js';
 import type { AllocateWorktreeResult } from '../modules/agents/worktree.js';
 import {
   createAgent,
@@ -115,6 +115,18 @@ export interface DispatchResult {
   prompt: string;
 }
 
+/**
+ * Returned when the worktree budget is exhausted. The PM task claim has been
+ * released, so the coordinator can poll and retry once a slot frees up.
+ */
+export interface QueuedDispatchResult {
+  status: 'queued';
+  taskId: string;
+  reason: string;
+  allocated: number;
+  budget: number;
+}
+
 export interface DryRunResult {
   taskId: string;
   prompt: string;
@@ -139,7 +151,7 @@ export interface ClaudeJsonResult {
 export async function dispatchTask(
   svc: BrainServiceClass,
   opts: DispatchOptions
-): Promise<DispatchResult | DryRunResult> {
+): Promise<DispatchResult | DryRunResult | QueuedDispatchResult> {
   const projectDir = resolveProjectDir(svc);
 
   const pullResult = opts.taskId
@@ -160,6 +172,15 @@ export async function dispatchTask(
           }\n`
         );
       });
+    }
+    if (err instanceof WorktreeBudgetExhaustedError) {
+      return {
+        status: 'queued',
+        taskId: pullResult.taskId,
+        reason: err.message,
+        allocated: err.allocated,
+        budget: err.budget,
+      };
     }
     throw err;
   }

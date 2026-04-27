@@ -5,8 +5,44 @@ import {
   allocateWorktree as dbAllocate,
   releaseWorktree as dbRelease,
   getWorktreeAllocations,
+  findAgentByTask,
 } from './data.js';
-import type { WorktreeAllocation, AllocateWorktreeInput } from './types.js';
+import { getDeliveryForTask } from './delivery.js';
+import { getRawDb } from '../../utils/db.js';
+import type Database from 'better-sqlite3';
+import type { BrainDB } from '../../services/brain-db.js';
+import type { WorktreeAllocation, AllocateWorktreeInput, AgentStatus } from './types.js';
+
+/**
+ * Thrown by {@link allocateWorktree} when no worktree slot is available even
+ * after stale and terminated-agent reclaim. Callers can catch this to surface
+ * a structured "queued" response instead of treating it as a hard failure.
+ */
+export class WorktreeBudgetExhaustedError extends Error {
+  constructor(
+    public readonly allocated: number,
+    public readonly budget: number
+  ) {
+    super(`Worktree budget exhausted: ${allocated}/${budget} allocated`);
+    this.name = 'WorktreeBudgetExhaustedError';
+  }
+}
+
+const TERMINAL_AGENT_STATUSES: ReadonlySet<AgentStatus> = new Set([
+  'completed',
+  'failed',
+  'abandoned',
+]);
+
+const ACTIVE_DELIVERY_STATUSES: ReadonlySet<string> = new Set([
+  'in-progress',
+  'pushed',
+  'pr-open',
+  'pr-failed',
+  'push-failed',
+  'conflicted',
+  'review-paused',
+]);
 
 export interface AllocateWorktreeOptions {
   taskId: string;
@@ -70,12 +106,14 @@ export function allocateWorktree(
   const budget = opts.budget ?? DEFAULT_BUDGET;
   const basePath = opts.basePath ?? DEFAULT_BASE_PATH;
 
-  // Clean up stale allocations before checking budget
+  // Reclaim slots before checking budget: first stale paths, then allocations
+  // whose owning agent has reached a terminal state without an in-flight delivery.
   cleanupStaleAllocations(db, projectRoot);
+  reclaimTerminatedAllocations(db, projectRoot);
 
   const currentAllocations = getWorktreeAllocations(db);
   if (currentAllocations.length >= budget) {
-    throw new Error(`Worktree budget exhausted: ${currentAllocations.length}/${budget} allocated`);
+    throw new WorktreeBudgetExhaustedError(currentAllocations.length, budget);
   }
 
   const branch = `agent/${opts.workstream}/${opts.taskId}`;
@@ -169,6 +207,48 @@ export function checkWorktreePath(expectedPath: string): CheckWorktreeResult {
   const boundary = expected + sep;
   const inWorktree = normalizedActual === expected || normalizedActual.startsWith(boundary);
   return { inWorktree, expected, actual };
+}
+
+/**
+ * Release allocations whose owning agent has reached a terminal status
+ * (completed/failed/abandoned) and has no in-flight delivery. Used to reclaim
+ * worktree budget when prior agents finished without the dispatch loop's
+ * cleanup hook running (e.g., individual `brain_agent_dispatch` calls or
+ * crash recovery).
+ *
+ * Allocations without an agent record, or whose agent is still pending/active,
+ * or whose delivery is mid-flight (push, PR, review) are left alone — releasing
+ * them would kill in-progress work.
+ */
+export function reclaimTerminatedAllocations(db: unknown, projectRoot: string): string[] {
+  const allocations = getWorktreeAllocations(db);
+  const reclaimed: string[] = [];
+  const rawDb = tryGetRawDb(db);
+
+  for (const allocation of allocations) {
+    const agent = findAgentByTask(db, allocation.task_id);
+    if (!agent) continue;
+    if (!TERMINAL_AGENT_STATUSES.has(agent.status)) continue;
+
+    if (rawDb) {
+      const delivery = getDeliveryForTask(rawDb, allocation.task_id);
+      if (delivery && ACTIVE_DELIVERY_STATUSES.has(delivery.status)) continue;
+    }
+
+    if (releaseWorktree(db, projectRoot, allocation.task_id)) {
+      reclaimed.push(allocation.task_id);
+    }
+  }
+
+  return reclaimed;
+}
+
+function tryGetRawDb(db: unknown): Database.Database | null {
+  try {
+    return getRawDb(db as BrainDB | Database.Database);
+  } catch {
+    return null;
+  }
 }
 
 /**

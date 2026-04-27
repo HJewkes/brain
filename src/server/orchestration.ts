@@ -384,6 +384,9 @@ export class OrchestrationService {
           worktreeBudget: this.wipLimit,
           maxBudgetUsd: opts?.maxBudgetUsd,
         });
+        if ('status' in result && result.status === 'queued') {
+          throw new Error(`Dispatch queued for ${taskId}: ${result.reason}`);
+        }
         const r = result as DispatchResult;
         return { agentId: r.agentId, taskId: r.taskId, branch: r.branch };
       },

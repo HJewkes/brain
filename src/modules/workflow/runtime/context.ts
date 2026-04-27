@@ -468,6 +468,9 @@ export class WorkflowContext {
     if ('dryRun' in result) {
       throw new Error('dispatchTask returned dry-run result unexpectedly');
     }
+    if ('status' in result) {
+      throw new Error(`Dispatch queued for ${taskId}: ${result.reason}`);
+    }
 
     // Store routing metadata so session analytics can track model usage (best-effort)
     try {
