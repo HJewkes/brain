@@ -1,8 +1,14 @@
 node_modules/
 dist/
 !dist/dashboard/index.html
-docs/
-!docs/plans/
+# Agent-generated outputs in docs/ — ephemeral, not for tracking.
+# Canonical user-facing docs (docs/pm-module/, docs/workflow/, docs/mcp/, etc.)
+# are NOT ignored — they should be committed normally.
+docs/audit-reports/
+docs/audits/
+docs/prototypes/
+docs/reviews/
+docs/demos.md
 *.db
 .env
 coverage/
