@@ -44,6 +44,20 @@ const ACTIVE_DELIVERY_STATUSES: ReadonlySet<string> = new Set([
   'review-paused',
 ]);
 
+/**
+ * Grace window between agent.completed_at and reclaim eligibility.
+ *
+ * dispatch.ts:handleProcessExit runs orphan-recovery (push + open PR) async
+ * after marking the agent terminal. The reconciler ticks on its own 60s timer
+ * and races with that work. Without this window, an agent that committed but
+ * had not yet pushed could lose its branch — releaseWorktree does
+ * `git branch -D`, leaving the commit dangling.
+ *
+ * 120s easily covers a normal push + `gh pr create` round-trip; the next
+ * reconciler tick handles cleanup once a delivery row exists.
+ */
+const RECLAIM_GRACE_MS = 120_000;
+
 export interface AllocateWorktreeOptions {
   taskId: string;
   workstream: string;
@@ -230,9 +244,20 @@ export function reclaimTerminatedAllocations(db: unknown, projectRoot: string): 
     if (!agent) continue;
     if (!TERMINAL_AGENT_STATUSES.has(agent.status)) continue;
 
+    let delivery: ReturnType<typeof getDeliveryForTask> = null;
     if (rawDb) {
-      const delivery = getDeliveryForTask(rawDb, allocation.task_id);
+      delivery = getDeliveryForTask(rawDb, allocation.task_id);
       if (delivery && ACTIVE_DELIVERY_STATUSES.has(delivery.status)) continue;
+    }
+
+    // Grace window: defer reclaim of recently-completed agents whose
+    // orphan-recovery has not yet created a delivery row. Without this guard
+    // the reconciler races with dispatch.ts:handleProcessExit's push + PR.
+    if (!delivery && agent.completed_at) {
+      const completedMs = Date.parse(agent.completed_at);
+      if (!Number.isNaN(completedMs) && Date.now() - completedMs < RECLAIM_GRACE_MS) {
+        continue;
+      }
     }
 
     if (releaseWorktree(db, projectRoot, allocation.task_id)) {

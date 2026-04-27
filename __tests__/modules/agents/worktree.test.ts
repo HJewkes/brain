@@ -209,7 +209,10 @@ describe('worktree lifecycle', () => {
         parent: 'test',
         brain_task: 'VNM-09.01',
       });
-      updateAgentStatus(db, agentId, 'completed');
+      // Use an old completed_at so the reclaim grace window does not block.
+      updateAgentStatus(db, agentId, 'completed', {
+        completed_at: '2020-01-01T00:00:00.000Z',
+      });
 
       vi.clearAllMocks();
       mockExistsSync.mockReturnValue(true);
@@ -448,6 +451,10 @@ describe('worktree lifecycle', () => {
   // ── reclaimTerminatedAllocations ───────────────────────────────────────────
 
   describe('reclaimTerminatedAllocations', () => {
+    // Past the 120s grace window — bypasses the reclaim deferral guard so
+    // tests that just check terminal-status semantics aren't affected.
+    const OLD_TIMESTAMP = '2020-01-01T00:00:00.000Z';
+
     function allocateAndAttachAgent(taskId: string, status: 'completed' | 'failed' | 'abandoned') {
       allocateWorktree(db, '/repo', {
         taskId,
@@ -461,7 +468,7 @@ describe('worktree lifecycle', () => {
         parent: 'test',
         brain_task: taskId,
       });
-      updateAgentStatus(db, agentId, status);
+      updateAgentStatus(db, agentId, status, { completed_at: OLD_TIMESTAMP });
       return agentId;
     }
 
@@ -483,7 +490,7 @@ describe('worktree lifecycle', () => {
       ];
       ['VNM-09.01', 'VNM-09.02', 'VNM-09.03'].forEach((id, i) => {
         const agentId = createAgent(db, { name: `a-${id}`, parent: 't', brain_task: id });
-        updateAgentStatus(db, agentId, statuses[i]);
+        updateAgentStatus(db, agentId, statuses[i], { completed_at: OLD_TIMESTAMP });
       });
 
       vi.clearAllMocks();
@@ -552,6 +559,78 @@ describe('worktree lifecycle', () => {
 
     it('reclaims allocations whose delivery has finalized', () => {
       const agentId = allocateAndAttachAgent('VNM-09.01', 'completed');
+      recordDelivery(db, agentId, {
+        status: 'merged',
+        task_id: 'VNM-09.01',
+        branch: 'agent/ws-x/VNM-09.01',
+      });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toEqual(['VNM-09.01']);
+      expect(getWorktreeAllocations(db)).toHaveLength(0);
+    });
+
+    it('defers reclaim within 120s grace window when no delivery exists', () => {
+      // Agent finished moments ago with no delivery row yet — orphan-recovery
+      // may still be running. Reconciler must not race-delete the branch.
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'ws-1',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 5,
+      });
+      const agentId = createAgent(db, {
+        name: 'a-1',
+        parent: 't',
+        brain_task: 'VNM-09.01',
+      });
+      const recent = new Date(Date.now() - 30_000).toISOString();
+      updateAgentStatus(db, agentId, 'completed', { completed_at: recent });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toHaveLength(0);
+      expect(getWorktreeAllocations(db)).toHaveLength(1);
+    });
+
+    it('reclaims after grace window expires', () => {
+      allocateWorktree(db, '/repo', {
+        taskId: 'VNM-09.01',
+        workstream: 'ws-1',
+        claimToken: 'tok-1',
+        basePath: '.worktrees',
+        budget: 5,
+      });
+      const agentId = createAgent(db, {
+        name: 'a-1',
+        parent: 't',
+        brain_task: 'VNM-09.01',
+      });
+      const expired = new Date(Date.now() - 200_000).toISOString();
+      updateAgentStatus(db, agentId, 'completed', { completed_at: expired });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toEqual(['VNM-09.01']);
+      expect(getWorktreeAllocations(db)).toHaveLength(0);
+    });
+
+    it('grace window does not apply once delivery row exists', () => {
+      // Once orphan-recovery (or any caller) creates a delivery row, reclaim
+      // semantics are governed by ACTIVE_DELIVERY_STATUSES, not the timer.
+      const agentId = allocateAndAttachAgent('VNM-09.01', 'completed');
+      // Override to a recent completed_at — grace-eligible — but with a
+      // finalized delivery, so reclaim still proceeds.
+      const recent = new Date(Date.now() - 5_000).toISOString();
+      updateAgentStatus(db, agentId, 'completed', { completed_at: recent });
       recordDelivery(db, agentId, {
         status: 'merged',
         task_id: 'VNM-09.01',
