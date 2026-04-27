@@ -271,11 +271,22 @@ npx tsx src/cli.ts # Run CLI in development
 
 ## Documentation
 
+### Project Management
+
 - [PM Quick Start](docs/pm-module/quickstart.md)
 - [PM User Guide](docs/pm-module/guide.md)
 - [PM Architecture](docs/pm-module/architecture.md)
 - [PM Command Reference](docs/pm-module/commands.md)
 - [Demo Workflow](docs/pm-module/demo.md)
+
+### Subsystems
+
+- [Workflow Runtime](docs/workflow/quickstart.md) — V2 imperative workflows with memoized dispatch and agent supervision
+- [MCP Server](docs/mcp/quickstart.md) — MCP tool catalog, stdio/HTTP transports, example sessions
+- [Hook Dispatch](docs/hooks/quickstart.md) — Ownership, git-safety, WIP limits, DoD checks, configuration
+- [Agent Module](docs/agents/quickstart.md) — Agent lifecycle, worktree allocation, done-handler
+- [Session Intelligence](docs/sessions/quickstart.md) — Session ingestion, analytics, briefings, restore flow
+- [Codebase Indexing](docs/codebase/quickstart.md) — Architecture scanning, post-merge hook setup
 
 ## License
 
