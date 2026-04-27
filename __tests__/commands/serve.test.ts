@@ -454,6 +454,113 @@ describe('createHttpHandler — route matching', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Port-takeover endpoints (VNM-56.70)
+// ---------------------------------------------------------------------------
+
+function makeReqWithBody(
+  method: string,
+  url: string,
+  body: string,
+  remoteAddress = '127.0.0.1'
+): IncomingMessage {
+  const handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
+  return {
+    method,
+    url,
+    socket: { remoteAddress },
+    on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
+      (handlers[event] ??= []).push(cb);
+      // Synchronously fire body events for readBody() before the handler awaits.
+      if (event === 'data' && body) {
+        for (const cb2 of handlers['data'] ?? []) cb2(Buffer.from(body));
+      }
+      if (event === 'end') {
+        for (const cb2 of handlers['end'] ?? []) cb2();
+      }
+    }),
+  } as unknown as IncomingMessage;
+}
+
+describe('createHttpHandler — port-takeover endpoints', () => {
+  let service: ReturnType<typeof makeService>;
+  let sseClients: SseClients;
+
+  beforeEach(() => {
+    service = makeService();
+    sseClients = new Set();
+  });
+
+  it('/api/info returns brain identity and dbPath', async () => {
+    const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
+    const res = makeMockRes();
+    await handler(makeReq('GET', '/api/info'), res as unknown as ServerResponse);
+    const body = JSON.parse(res.body);
+    expect(body.brain).toBe(true);
+    expect(body.dbPath).toBe('/tmp/test.db');
+    expect(typeof body.pid).toBe('number');
+  });
+
+  it('/api/shutdown rejects non-localhost callers with 403', async () => {
+    const onShutdownRequest = vi.fn();
+    const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients, {
+      onShutdownRequest,
+    });
+    const res = makeMockRes();
+    await handler(
+      makeReqWithBody('POST', '/api/shutdown', '{"dbPath":"/tmp/test.db"}', '8.8.8.8'),
+      res as unknown as ServerResponse
+    );
+    expect(res.writeHead).toHaveBeenCalledWith(403, expect.any(Object));
+    expect(onShutdownRequest).not.toHaveBeenCalled();
+  });
+
+  it('/api/shutdown rejects mismatched dbPath with 403', async () => {
+    const onShutdownRequest = vi.fn();
+    const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients, {
+      onShutdownRequest,
+    });
+    const res = makeMockRes();
+    await handler(
+      makeReqWithBody('POST', '/api/shutdown', '{"dbPath":"/tmp/other.db"}'),
+      res as unknown as ServerResponse
+    );
+    expect(res.writeHead).toHaveBeenCalledWith(403, expect.any(Object));
+    expect(onShutdownRequest).not.toHaveBeenCalled();
+  });
+
+  it('/api/shutdown calls onShutdownRequest when localhost + dbPath match', async () => {
+    const onShutdownRequest = vi.fn();
+    const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients, {
+      onShutdownRequest,
+    });
+    const res = makeMockRes();
+    await handler(
+      makeReqWithBody('POST', '/api/shutdown', '{"dbPath":"/tmp/test.db"}'),
+      res as unknown as ServerResponse
+    );
+    expect(res.writeHead).toHaveBeenCalledWith(
+      200,
+      expect.objectContaining({ 'Content-Type': 'application/json' })
+    );
+    // Shutdown is dispatched via setTimeout to allow the response to flush.
+    await new Promise((r) => setTimeout(r, 80));
+    expect(onShutdownRequest).toHaveBeenCalledOnce();
+  });
+
+  it('/api/shutdown without options.onShutdownRequest is a no-op (no crash)', async () => {
+    const handler = createHttpHandler(service as unknown as BrainServiceClass, sseClients);
+    const res = makeMockRes();
+    await handler(
+      makeReqWithBody('POST', '/api/shutdown', '{"dbPath":"/tmp/test.db"}'),
+      res as unknown as ServerResponse
+    );
+    expect(res.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
+    await new Promise((r) => setTimeout(r, 80));
+    // No assertion on the callback — just no crash.
+  });
+});
+
 describe('broadcast', () => {
   it('sends formatted SSE message to all clients', () => {
     const clients: SseClients = new Set();

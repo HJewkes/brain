@@ -47,9 +47,14 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+export interface HttpHandlerOptions {
+  onShutdownRequest?: () => void;
+}
+
 export function createHttpHandler(
   service: BrainServiceClass,
-  sseClients: SseClients
+  sseClients: SseClients,
+  options: HttpHandlerOptions = {}
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res) => {
     setCors(res);
@@ -62,6 +67,45 @@ export function createHttpHandler(
 
     const url = new URL(req.url ?? '/', `http://localhost`);
     const path = url.pathname;
+
+    // Identity probe used by `brain serve` startup to confirm the existing
+    // listener is a brain instance for the same project before attempting to
+    // take over the port. The {brain: true} shape is the contract.
+    if (path === '/api/info' && req.method === 'GET') {
+      json(res, {
+        brain: true,
+        pid: process.pid,
+        dbPath: service.config.dbPath,
+      });
+      return;
+    }
+
+    // Graceful-shutdown signal sent by a fresh `brain serve` startup that
+    // wants to claim our port. Localhost-only and gated by dbPath match so
+    // unrelated callers cannot kill the daemon.
+    if (path === '/api/shutdown' && req.method === 'POST') {
+      const remote = req.socket.remoteAddress ?? '';
+      const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+      if (!isLocal) {
+        json(res, { error: 'Forbidden: localhost only' }, 403);
+        return;
+      }
+      const body = await readBody(req);
+      let parsed: { dbPath?: string } = {};
+      try {
+        parsed = JSON.parse(body) as { dbPath?: string };
+      } catch {
+        // empty or malformed body — proceed with mismatch check below
+      }
+      if (parsed.dbPath !== service.config.dbPath) {
+        json(res, { error: 'Forbidden: dbPath mismatch' }, 403);
+        return;
+      }
+      json(res, { ok: true, pid: process.pid });
+      // Defer exit so the response can flush.
+      setTimeout(() => options.onShutdownRequest?.(), 50);
+      return;
+    }
 
     if (path === '/api/dashboard' && req.method === 'GET') {
       json(res, service.dashboard());
