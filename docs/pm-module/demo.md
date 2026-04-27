@@ -174,7 +174,7 @@ needed.
 $ brain pm orchestrate route TODO-01.01
 Task: TODO-01.01
 Agent: code
-Model: claude-opus-4-5
+Model: claude-opus-4-6
 Isolation: worktree
 Verify: true
 Concurrency: 1
