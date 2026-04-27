@@ -167,6 +167,96 @@ export function createServeServer(service: BrainServiceClass): McpServer {
   return server;
 }
 
+/**
+ * If a previous brain daemon is still bound to the port — likely because the
+ * user rebuilt and did NOT kill the old process — politely ask it to exit
+ * and then claim the port. Only takes over when the listener self-identifies
+ * as brain AND its dbPath matches ours, so unrelated services on the same
+ * port (or daemons for a different project) are left alone.
+ */
+async function takeoverStalePort(port: number, dbPath: string): Promise<boolean> {
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const infoRes = await fetch(`${base}/api/info`, { signal: AbortSignal.timeout(1500) });
+    if (!infoRes.ok) return false;
+    const info = (await infoRes.json()) as { brain?: boolean; dbPath?: string };
+    if (info.brain !== true || info.dbPath !== dbPath) return false;
+  } catch {
+    return false;
+  }
+
+  try {
+    const shutdownRes = await fetch(`${base}/api/shutdown`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dbPath }),
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!shutdownRes.ok) return false;
+  } catch {
+    return false;
+  }
+
+  // Poll for the port to free. The old process exits ~50ms after responding.
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    if (await isPortFree(port)) return true;
+  }
+  return false;
+}
+
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
+async function listenWithTakeover(
+  service: BrainServiceClass,
+  sseClients: SseClients,
+  port: number,
+  onShutdownRequest: () => void
+): Promise<ReturnType<typeof createServer> | undefined> {
+  const tryListen = (): Promise<{ server: ReturnType<typeof createServer>; bound: boolean }> =>
+    new Promise((resolve) => {
+      const server = createServer(createHttpHandler(service, sseClients, { onShutdownRequest }));
+      const onError = (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+          server.close();
+          resolve({ server, bound: false });
+        } else {
+          throw err;
+        }
+      };
+      server.once('error', onError);
+      server.listen(port, () => {
+        server.removeListener('error', onError);
+        resolve({ server, bound: true });
+      });
+    });
+
+  let attempt = await tryListen();
+  if (attempt.bound) return attempt.server;
+
+  const tookOver = await takeoverStalePort(port, service.config.dbPath);
+  if (!tookOver) {
+    process.stderr.write(
+      `Port ${port} held by another process — running MCP stdio only (dashboard unavailable)\n`
+    );
+    return undefined;
+  }
+
+  process.stderr.write(`Replaced stale brain daemon on port ${port}\n`);
+  attempt = await tryListen();
+  if (attempt.bound) return attempt.server;
+
+  process.stderr.write(`Port ${port} reclaimed by something else — running MCP stdio only\n`);
+  return undefined;
+}
+
 export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800): Promise<void> {
   const service = await BrainServiceClass.create(resolveOpts);
 
@@ -180,34 +270,24 @@ export async function startServeServer(resolveOpts?: ResolveOptions, port = 7800
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let httpServer: ReturnType<typeof createServer> | undefined;
 
-  if (port > 0) {
-    httpServer = createServer(createHttpHandler(service, sseClients));
-    httpServer.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE') {
-        process.stderr.write(
-          `Port ${port} in use — running MCP stdio only (dashboard served by another session)\n`
-        );
-        httpServer = undefined;
-      } else {
-        throw err;
-      }
-    });
-    httpServer.listen(port, () => {
-      process.stderr.write(`Dashboard: http://localhost:${port}\n`);
-      process.stderr.write(`API: http://localhost:${port}/api/dashboard\n`);
-    });
-
-    heartbeat = setInterval(() => {
-      broadcast(sseClients, 'heartbeat', { ts: Date.now() });
-    }, 30_000);
-  }
-
   const shutdown = () => {
     if (heartbeat) clearInterval(heartbeat);
     if (httpServer) httpServer.close();
     service.close();
     process.exit(0);
   };
+
+  if (port > 0) {
+    httpServer = await listenWithTakeover(service, sseClients, port, shutdown);
+    if (httpServer) {
+      process.stderr.write(`Dashboard: http://localhost:${port}\n`);
+      process.stderr.write(`API: http://localhost:${port}/api/dashboard\n`);
+      heartbeat = setInterval(() => {
+        broadcast(sseClients, 'heartbeat', { ts: Date.now() });
+      }, 30_000);
+    }
+  }
+
   process.on('SIGINT', () => shutdown());
   process.on('SIGTERM', () => shutdown());
 
