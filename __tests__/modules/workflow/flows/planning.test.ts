@@ -31,7 +31,7 @@ class TestableContext implements WorkflowContextInterface {
   readonly runId = `test-${randomUUID().slice(0, 8)}`;
   readonly workflowName = 'planning';
   readonly project = 'TST';
-  readonly projectDir = '/tmp/test';
+  readonly projectDir: string;
 
   calls: DispatchCall[] = [];
 
@@ -40,8 +40,9 @@ class TestableContext implements WorkflowContextInterface {
   private signalMap = new Map<SignalKey, string | null>();
   private cachedResults: Record<string, StepResult> = {};
 
-  constructor(params: Record<string, string> = {}) {
+  constructor(params: Record<string, string> = {}, projectDir = '/tmp/test') {
     this.params = { brief: 'Test planning workflow', ...params };
+    this.projectDir = projectDir;
   }
 
   /** Pre-configure what signal a step returns at a given iteration index. */
@@ -340,6 +341,62 @@ describe('planningWorkflow — flow logic', () => {
       'review',
       'decompose',
     ]);
+  });
+
+  test('hydration preserves plan-dir artifacts when seed is cached (VNM-48.279)', async () => {
+    const tmp = join(tmpdir(), `planning-hydration-${randomUUID()}`);
+    const planId = 'plan-hydrate';
+    const planDir = join(tmp, '.plans', planId);
+    const designFile = join(planDir, 'design.md');
+
+    try {
+      // Simulate a prior run that produced a design artifact
+      mkdirSync(planDir, { recursive: true });
+      const { writeFileSync } = await import('node:fs');
+      writeFileSync(designFile, '# Prior design output');
+
+      const ctx = new TestableContext({ complexity: 'low', planId }, tmp);
+
+      // Cache seed step — this simulates hydration after a brain restart
+      ctx.setCachedAssisted('seed', {
+        stepId: 'seed',
+        taskId: 'seed:seed',
+        agentId: null,
+        signal: null,
+        completedAt: '2026-01-01T00:00:00Z',
+      });
+
+      await planningWorkflow(ctx);
+
+      // The cached seed must NOT fire the rmSync — prior artifacts preserved
+      expect(existsSync(designFile)).toBe(true);
+    } finally {
+      if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test('first run cleans pre-existing plan-dir artifacts via seed step', async () => {
+    const tmp = join(tmpdir(), `planning-firstrun-${randomUUID()}`);
+    const planId = 'plan-firstrun';
+    const planDir = join(tmp, '.plans', planId);
+    const stalePath = join(planDir, 'stale-from-prior-run.md');
+
+    try {
+      mkdirSync(planDir, { recursive: true });
+      const { writeFileSync } = await import('node:fs');
+      writeFileSync(stalePath, '# stale');
+
+      // No cached seed — this is a fresh workflow instance
+      const ctx = new TestableContext({ complexity: 'low', planId }, tmp);
+
+      await planningWorkflow(ctx);
+
+      // Seed ran, rmSync fired, stale artifact gone, fresh dir + context.md present
+      expect(existsSync(stalePath)).toBe(false);
+      expect(existsSync(join(planDir, 'pre-existing-context.md'))).toBe(true);
+    } finally {
+      if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   test('restart recovery: memoized steps skip on re-invocation', async () => {
