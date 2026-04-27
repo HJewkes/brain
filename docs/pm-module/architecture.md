@@ -34,7 +34,7 @@ The PM module entry point is `src/modules/pm/index.ts`. Its `register()` call in
 - **1 migration**: Creates SQLite indexes on `display_id`, `status`, `project`, and `type` inside the `notes` table metadata JSON column
 - **1 extraction strategy**: `shouldExtract: () => false` — PM notes are never fed to the LLM memory extractor
 - **1 filter**: `visibility: 'private'` — PM notes are excluded from the user's search results
-- **13 command groups**: registered as subcommands of a top-level `pm` Commander command
+- **22 command groups**: registered as subcommands of a top-level `pm` Commander command
 
 All registration happens synchronously. The brain CLI calls `register()` once at startup before any command runs.
 
@@ -46,15 +46,15 @@ The PM module has three horizontal layers. Each layer only calls downward.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Commands  (src/modules/pm/commands/, 13 files)         │
+│  Commands  (src/modules/pm/commands/, 22 files)         │
 │  CLI handlers · input validation · output formatting    │
 ├─────────────────────────────────────────────────────────┤
-│  Data  (src/modules/pm/data/, 8 files)                  │
+│  Data  (src/modules/pm/data/, 8+ files)                 │
 │  Note CRUD · queries · cost calculations                │
 ├─────────────────────────────────────────────────────────┤
-│  Engine  (src/modules/pm/engine/, 7 files)              │
+│  Engine  (src/modules/pm/engine/, 15 files)             │
 │  State machine · routing · dispatch · templates         │
-│  worktrees · dependencies · claims                      │
+│  dependencies · claims · collisions · consistency       │
 └─────────────────────────────────────────────────────────┘
          ↓
    brain-service / BrainDB / SQLite
@@ -136,10 +136,10 @@ Source: `src/modules/pm/engine/state-machine.ts`
 
 ### Stored States
 
-Six states are persisted in frontmatter. Valid transitions:
+Seven states are persisted in frontmatter. Valid transitions:
 
 ```
-pending  ──→  claimed  ──→  in-progress  ──→  done
+pending  ──→  claimed  ──→  in-progress  ──→  pending-merge  ──→  done
    │             │                │
    └──→ blocked ←┘                └──→ blocked
    │                                       │
@@ -149,16 +149,19 @@ pending  ←──  blocked  ──→  cancelled
 claimed  ←──  (no reverse to pending from in-progress)
 ```
 
+The `pending-merge` state represents work that has been submitted as a PR and is awaiting review/merge. It is set by the review lifecycle (`brain pm review create`).
+
 In code:
 
 ```typescript
 const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  'pending':     ['claimed', 'blocked', 'cancelled'],
-  'claimed':     ['in-progress', 'pending', 'cancelled'],
-  'in-progress': ['done', 'blocked', 'cancelled'],
-  'done':        [],
-  'blocked':     ['pending', 'cancelled'],
-  'cancelled':   [],
+  'pending':        ['claimed', 'blocked', 'cancelled'],
+  'claimed':        ['in-progress', 'pending', 'cancelled'],
+  'in-progress':    ['done', 'pending-merge', 'blocked', 'cancelled'],
+  'pending-merge':  ['done', 'in-progress', 'cancelled'],
+  'done':           [],
+  'blocked':        ['pending', 'cancelled'],
+  'cancelled':      [],
 };
 ```
 
@@ -313,6 +316,14 @@ The routing table is a static lookup. There is no LLM call to decide which agent
 
 `assembleContext()` hashes its full output bundle. Before an agent launches, the orchestrator can call `isContextStale()` to check whether the task, its dependencies, its decisions, or its prompt have changed since the bundle was assembled. This detects staleness cheaply (one hash comparison) without re-fetching all data.
 
+### File-ownership collision detection
+
+`engine/collisions.ts` scans task descriptions for file path patterns and detects overlaps across the set of concurrently eligible tasks. `dispatch-wave` reports these collisions before any agent is launched, so overlapping work can be serialized (via `depends_on`) before dispatch rather than discovered as a merge conflict after.
+
+### Review lifecycle (pending-merge)
+
+When an agent submits a PR, `brain pm review create` transitions the source task to `pending-merge` and creates a new review task. Downstream tasks that depended on the source task are rewired to depend on the review task instead, so they remain blocked until the PR is actually merged and the review task is completed. This prevents downstream work from starting on unmerged code.
+
 ---
 
 ## File Index
@@ -324,19 +335,28 @@ src/modules/pm/
   errors.ts             — Result<T> monad, PmError, ok()/fail() helpers
   ids.ts                — Display ID parsing, formatting, and next-number allocation
   commands/
-    project.ts          — pm project create/list/get/update/delete
-    workstream.ts       — pm workstream create/list
-    task.ts             — pm task create/list/get/update/delete/claim/complete
-    decision.ts         — pm decision create/list/update
-    prompt.ts           — pm prompt create/list/update
-    orchestration.ts    — pm next/dispatch/wave/impact
-    orchestrate.ts      — pm orchestrate (multi-task dispatch)
+    project.ts          — pm project create/list/show/update/delete
+    workstream.ts       — pm workstream create/list/show/update/delete
+    task.ts             — pm task create/list/show/update/delete/claim/start/release/reset/migrate
+    decision.ts         — pm decision create/list/show/update/supersede
+    prompt.ts           — pm prompt write/show/list/history
+    orchestration.ts    — pm next/waves/dispatch/complete/briefing/overview/render-prompt
+    orchestrate.ts      — pm orchestrate session-start/route/render/worktree-*/agent-done/session-end
     context.ts          — pm context (show task context bundle)
-    verify.ts           — pm verify (run verification agent)
-    capture.ts          — pm capture/inbox
-    audit.ts            — pm audit (health checks)
-    import.ts           — pm import (bulk task import)
-    install-hooks.ts    — pm install-hooks (launchd/systemd scheduling)
+    verify.ts           — pm verify (generate verification checklist)
+    capture.ts          — pm capture/inbox/process
+    audit.ts            — pm audit summary/cost/performance/executions/enrich/cleanup
+    check.ts            — pm check (structural + semantic consistency checks)
+    import.ts           — pm import (bulk task import from JSON)
+    install-hooks.ts    — pm install-hooks (Claude Code hooks + skills)
+    dispatch-wave.ts    — pm dispatch-wave (wave analysis + collision detection)
+    pull.ts             — pm pull (next eligible task for dispatch)
+    review.ts           — pm review create (PR review task lifecycle)
+    burndown.ts         — pm burndown run/status/launch (orchestrator loop)
+    activity.ts         — pm activity list/show (activity note management)
+    rename-prefix.ts    — pm rename-prefix (project prefix rename)
+    relate.ts           — pm relate (create/remove note relations)
+    onboard.ts          — pm onboard (codebase project setup)
   data/
     queries.ts          — Cross-entity queries: getPmNotes, getEligibleTasks, resolveDisplayId
     project-ops.ts      — Project CRUD
@@ -350,8 +370,16 @@ src/modules/pm/
     state-machine.ts    — Transition table, validateTransition, computeVirtualState, canClaim
     dependency.ts       — DAG construction, cycle detection, wave computation, impact analysis
     routing.ts          — Category → execution profile lookup table
-    dispatch.ts         — ContextBundle assembly and staleness detection
+    dispatch.ts         — ContextBundle assembly (task + workstream + deps + decisions + related notes)
     template.ts         — Agent prompt, verification prompt, briefing summary rendering
     claims.ts           — Claim token generation, validation, and staleness checks
-    worktree.ts         — Git worktree allocation, budget enforcement, release
+    collisions.ts       — File-ownership overlap detection across concurrent tasks
+    consistency.ts      — Structural checks: orphans, broken deps, blocked-without-cause, cancelled deps
+    concurrency.ts      — WIP accounting and slot management
+    activity.ts         — Activity note recording helpers
+    command-resolution.ts — Shared command/workstream resolution utilities
+    rename-prefix.ts    — Prefix rename logic (file moves + frontmatter rewrite)
+    review-context.ts   — Review task context assembly for PR lifecycle
+    detect.ts           — Project/workstream auto-detection from cwd
+    doc-scanner.ts      — Documentation file discovery for onboarding
 ```
