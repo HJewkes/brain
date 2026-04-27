@@ -4,8 +4,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  buildAcceptanceCriteriaString,
   buildDependencyPRContexts,
   buildDependencyContextString,
+  renderAcceptanceCriteriaBlock,
   renderDependencyContextBlock,
   type DependencyPRContext,
 } from '../../../../src/modules/pm/engine/review-context.js';
@@ -43,6 +45,7 @@ function insertTask(
     status?: string;
     dependsOn?: string[];
     contentDir?: string | null;
+    acceptanceCriteria?: string[];
   }
 ): void {
   db.prepare(
@@ -55,6 +58,7 @@ function insertTask(
       display_id: opts.displayId,
       status: opts.status ?? 'pending',
       depends_on: opts.dependsOn ?? [],
+      acceptance_criteria: opts.acceptanceCriteria,
     }),
     opts.contentDir ?? null
   );
@@ -309,5 +313,64 @@ describe('buildDependencyContextString', () => {
 
     expect(() => buildDependencyContextString(bareDb, 'VNM-56.42')).not.toThrow();
     bareDb.close();
+  });
+});
+
+describe('renderAcceptanceCriteriaBlock', () => {
+  it('returns "" for empty list', () => {
+    expect(renderAcceptanceCriteriaBlock([])).toBe('');
+  });
+
+  it('renders header + every criterion as a list item', () => {
+    const block = renderAcceptanceCriteriaBlock([
+      'Reconciler runs on 60s timer',
+      'Detects BEHIND PRs and rebases',
+    ]);
+    expect(block).toContain('## Acceptance Criteria for This PR');
+    expect(block).toContain('- Reconciler runs on 60s timer');
+    expect(block).toContain('- Detects BEHIND PRs and rebases');
+    expect(block).toContain('cite the file/line');
+    expect(block).toContain('flag it as MISSING');
+  });
+});
+
+describe('buildAcceptanceCriteriaString', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    createNotesSchema(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('returns "" for null/undefined/empty taskDisplayId', () => {
+    expect(buildAcceptanceCriteriaString(db, null)).toBe('');
+    expect(buildAcceptanceCriteriaString(db, undefined)).toBe('');
+    expect(buildAcceptanceCriteriaString(db, '')).toBe('');
+  });
+
+  it('returns "" when task has no AC', () => {
+    insertTask(db, { id: 't1', title: 'Bare', displayId: 'VNM-56.99' });
+    expect(buildAcceptanceCriteriaString(db, 'VNM-56.99')).toBe('');
+  });
+
+  it('returns "" when task does not exist', () => {
+    expect(buildAcceptanceCriteriaString(db, 'VNM-56.404')).toBe('');
+  });
+
+  it('renders block when task has AC', () => {
+    insertTask(db, {
+      id: 't1',
+      title: 'Watchdog',
+      displayId: 'VNM-56.46',
+      acceptanceCriteria: ['Reconciler runs on 60s timer', 'Stale worktrees reclaimed'],
+    });
+    const block = buildAcceptanceCriteriaString(db, 'VNM-56.46');
+    expect(block).toContain('## Acceptance Criteria for This PR');
+    expect(block).toContain('- Reconciler runs on 60s timer');
+    expect(block).toContain('- Stale worktrees reclaimed');
   });
 });

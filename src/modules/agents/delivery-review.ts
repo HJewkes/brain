@@ -8,7 +8,10 @@ import type { DeliveryRecord } from './delivery.js';
 import { recordDelivery, readAndClearHumanSignal } from './delivery.js';
 import { parseSignals } from '../workflow/runtime/signals.js';
 import { renderTemplate } from '../workflow/engine/templates.js';
-import { buildDependencyContextString } from '../pm/engine/review-context.js';
+import {
+  buildAcceptanceCriteriaString,
+  buildDependencyContextString,
+} from '../pm/engine/review-context.js';
 import { sleep } from '../../utils/db.js';
 
 export type ReviewTier = 'ci-only' | 'ai-review' | 'human-review';
@@ -435,6 +438,7 @@ export function buildReviewPrompt(
   const repo = getRepoInfo(projectDir);
   const prefix = delivery.task_id ? delivery.task_id.split('.')[0] : 'VNM';
   const dependencyContext = buildDependencyContextString(db, delivery.task_id);
+  const acceptanceCriteria = buildAcceptanceCriteriaString(db, delivery.task_id);
   const vars: Record<string, string> = {
     OWNER: repo.owner,
     REPO: repo.repo,
@@ -445,6 +449,7 @@ export function buildReviewPrompt(
     PROJECT_PREFIX: prefix,
     REVIEW_THRESHOLD: '4',
     DEPENDENCY_CONTEXT: dependencyContext,
+    ACCEPTANCE_CRITERIA: acceptanceCriteria,
   };
   const rendered = renderTemplate('review-agent', vars);
   if (rendered.ok) return rendered.data;
