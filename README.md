@@ -10,6 +10,12 @@ Developer second brain — hybrid RAG search (BM25 + vector embeddings), LLM-pow
 - **AI Orchestration** — Agent routing, claim tokens, worktree isolation, verification, cost tracking
 - **Inbox Pipeline** — Zero-friction capture from CLI, file import, RSS feeds
 - **Module System** — Extensible plugin architecture with namespace isolation
+- **Workflow Runtime** — V2 imperative workflows: TypeScript async functions with memoized dispatch, agent supervision, and channel-based push events
+- **MCP Server** — Model Context Protocol server (stdio + HTTP) exposing brain tools to Claude and other MCP clients
+- **Hook Dispatch** — Centralized Claude Code hook infrastructure: ownership, git-safety, WIP limits, DoD checks, friction detection
+- **Session Intelligence** — Session event capture, analytics, restore/resume context, and briefing generation
+- **Agent Module** — Agent lifecycle management: spawn, track, worktree allocation, done-handler
+- **Codebase Indexing** — Architecture scanning with incremental note generation and post-merge hooks
 
 ## Install
 
@@ -71,26 +77,87 @@ See [PM Quick Start](docs/pm-module/quickstart.md) for the full 5-minute guide.
 | `brain template <type>` | Output frontmatter template                                     |
 | `brain archive`         | Archive expired notes                                           |
 | `brain config`          | View/set configuration                                          |
+| `brain notes`           | Notes operations                                                |
+| `brain format`          | Output formatting utilities                                     |
+| `brain dashboard`       | React dashboard launcher                                        |
+| `brain launch`          | Launch brain with session briefing                              |
+| `brain mcp`             | MCP server — stdio + HTTP (alias: `serve`)                      |
+| `brain hook`            | Hook dispatch, status, and install                              |
+| `brain agent`           | Agent lifecycle (`list`, `show`, `migrate-ao`)                  |
+| `brain session`         | Session intelligence (`list`, `analytics`, `restore`)           |
+| `brain workflow`        | V2 workflow runtime (`start`, `status`, `signal`)               |
+| `brain codebase`        | Architecture indexing (`index`, `install-hook`)                 |
+| `brain instances`       | Workflow instance management                                    |
+| `brain pr-feedback`     | PR feedback ingestion                                           |
 
 ### Project Management (`brain pm`)
 
+#### Project
+
+| Command                             | Description                              |
+| ----------------------------------- | ---------------------------------------- |
+| `brain pm init <name> --prefix <P>` | Initialize a new project                 |
+| `brain pm use <prefix>`             | Set active project context               |
+| `brain pm list`                     | List all projects                        |
+| `brain pm status [prefix]`          | Show project status                      |
+
+#### Workstreams
+
+| Command                                   | Description              |
+| ----------------------------------------- | ------------------------ |
+| `brain pm workstream add <name>`          | Add a workstream         |
+| `brain pm workstream list`                | List workstreams         |
+| `brain pm workstream show <id>`           | Show workstream detail   |
+| `brain pm workstream update <id>`         | Update a workstream      |
+| `brain pm workstream delete <id>`         | Delete a workstream      |
+
+#### Tasks
+
+| Command                             | Description                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| `brain pm task add <name>`          | Create a task                                                            |
+| `brain pm task list`                | List tasks (filterable by status, workstream)                            |
+| `brain pm task show <id>`           | Show task detail                                                         |
+| `brain pm task update <id>`         | Update task fields                                                       |
+| `brain pm task claim <id>`          | Claim an eligible task (pending → claimed)                               |
+| `brain pm task start <id>`          | Start a claimed task (claimed → in-progress)                             |
+| `brain pm task done <id>`           | Mark done (low-level — use `brain pm complete` for full impact tracking) |
+| `brain pm task release <id>`        | Release a claim (claimed → pending)                                      |
+| `brain pm task block <id>`          | Mark task as blocked                                                     |
+| `brain pm task unblock <id>`        | Unblock a task                                                           |
+| `brain pm task reset <id>`          | Reset a completed task to pending                                        |
+| `brain pm task delete <id>`         | Delete a task                                                            |
+| `brain pm task migrate <id>`        | Move a task to a different workstream                                    |
+
+#### Planning & Dispatch
+
 | Command                             | Description                                               |
 | ----------------------------------- | --------------------------------------------------------- |
-| `brain pm init <name> --prefix <P>` | Initialize a new project                                  |
-| `brain pm use <prefix>`             | Set active project context                                |
-| `brain pm list`                     | List all projects                                         |
-| `brain pm status [prefix]`          | Show project status                                       |
-| `brain pm workstream add <name>`    | Add a workstream                                          |
-| `brain pm task add <name>`          | Create a task                                             |
-| `brain pm task list`                | List tasks (filterable by status, workstream)             |
-| `brain pm task done <id>`           | Mark task done                                            |
 | `brain pm next`                     | Show eligible tasks (all deps satisfied)                  |
 | `brain pm waves`                    | Topological wave grouping of remaining tasks              |
 | `brain pm dispatch <id>`            | Assemble context bundle for a task                        |
+| `brain pm dispatch-wave`            | Dispatch an entire wave of tasks in parallel              |
 | `brain pm complete <id>`            | Mark done, run impact analysis                            |
+| `brain pm overview`                 | High-level project overview across all workstreams        |
 | `brain pm briefing`                 | Session briefing with project state overview              |
+| `brain pm context`                  | Show PM context for the active project                    |
+| `brain pm render-prompt <id>`       | Render the agent prompt for a task                        |
+| `brain pm burndown`                 | Burndown chart and velocity stats                         |
+
+#### Maintenance
+
+| Command                             | Description                                               |
+| ----------------------------------- | --------------------------------------------------------- |
 | `brain pm audit summary`            | Activity log, cost tracking                               |
 | `brain pm check [--deep]`           | Consistency check (structural + semantic analysis)        |
+| `brain pm verify`                   | Run verification for completed tasks                      |
+| `brain pm import`                   | Import tasks from external data                           |
+| `brain pm relate`                   | Create relations between tasks                            |
+| `brain pm activity`                 | View project activity log                                 |
+| `brain pm review`                   | Review commands                                           |
+| `brain pm pull`                     | Pull and sync from remote                                 |
+| `brain pm rename-prefix`            | Rename a project prefix                                   |
+| `brain pm onboard`                  | Onboarding workflow                                       |
 | `brain pm setup`                    | Configure PM module (paths, hooks)                        |
 | `brain pm install-hooks`            | Install PM hooks and skills (orchestrator + sanity-check) |
 
@@ -100,8 +167,31 @@ See [PM Quick Start](docs/pm-module/quickstart.md) for the full 5-minute guide.
 src/
   cli.ts                 — Entry point, Commander program
   types.ts               — TypeScript interfaces and constants
-  utils.ts               — Shared utilities
-  commands/              — 22 core CLI commands
+  utils.ts               — Shared utilities (slugify)
+  utils/
+    template.ts          — Shared template substitution (single/double brace styles)
+  commands/              — Core CLI commands
+  services/
+    brain-db.ts          — Database facade (delegates to repos)
+    brain-service.ts     — Resource lifecycle (withBrain/withDb)
+    repos/               — Domain repositories (note, memory, capture)
+    config.ts            — Configuration loading via env-paths
+    file-scanner.ts      — File change detection (hash-based)
+    markdown-parser.ts   — Frontmatter parsing + heading-aware chunking
+    indexing.ts          — Index pipeline (file scanning, chunking, embedding)
+    search.ts            — Hybrid search orchestration (BM25 + vector + memory)
+    graph.ts             — Note relation traversal (batch queries)
+    memory-extractor.ts  — LLM fact extraction and reconciliation
+    extraction-pipeline.ts — Three-tier extraction orchestrator
+    extraction-tiers/    — Deterministic, LLM classifier, agent queue
+    ollama.ts            — Ollama client, health checks
+    health.ts            — System health checks
+    reranker.ts          — Cross-encoder reranking pipeline
+  adapters/              — Embedder backends (local/ollama/remote) with factory
+  hooks/
+    registry.ts          — HookRegistry with register/dispatch
+    config.ts            — resolveHookConfig from ao.config.json
+    checks/              — Core checks (ownership, git-safety, workspace, dod, wip, worktree, workflow-resource, friction)
   modules/
     types.ts             — Module system interfaces
     registry.ts          — ModuleRegistry class
@@ -109,20 +199,19 @@ src/
     loader.ts            — Module discovery and loading
     validation.ts        — Frontmatter schema validation
     knowledge/           — Knowledge module (core note types)
-    pm/                  — Project management module
+    pm/                  — Project management module (34 files)
       commands/          — 15 command groups (incl. check)
       data/              — CRUD operations and queries
-      engine/            — Dependency waves, dispatch, state machine, claims, consistency
-  services/
-    brain-db.ts          — Database facade
-    brain-service.ts     — Resource lifecycle (withBrain/withDb)
-    repos/               — Domain repositories (note, memory, capture)
-    config.ts            — Configuration loading
-    search.ts            — Hybrid search orchestration
-    memory-extractor.ts  — LLM fact extraction and reconciliation
-    indexing.ts          — Index pipeline
-    reranker.ts          — Cross-encoder reranking
-  adapters/              — Embedder backends (local/ollama/remote)
+      engine/            — State machine, routing, dispatch, templates, worktrees, dependencies, consistency
+    agents/              — Agent orchestration (lifecycle, worktrees, state, done-handler)
+    sessions/            — Session intelligence (capture, restore, briefing, analytics)
+    workflow/            — V2 imperative workflow runtime
+      runtime/           — WorkflowRuntime, WorkflowContext, signals, channels, migration
+      flows/             — 6 workflow definitions (planning, implementation, review, brainstorming, pr-lifecycle, ux-prototype)
+      engine/            — Template rendering (dispatch, templates, output-capture)
+      templates/         — Agent prompt templates
+    codebase/            — Architecture indexing (scanner, notes, post-merge hook)
+  server/                — MCP server (stdio + HTTP transports)
 ```
 
 **Storage:** SQLite via better-sqlite3 with FTS5 full-text search and sqlite-vec for vector search.
@@ -173,7 +262,7 @@ Link related notes and traverse connections:
 ## Testing
 
 ```bash
-npm test          # ~2,350 tests (Vitest)
+npm test          # ~4,035 tests (Vitest)
 npm run typecheck # TypeScript checking
 npm run lint      # ESLint
 npm run build     # Production build (tsup)
