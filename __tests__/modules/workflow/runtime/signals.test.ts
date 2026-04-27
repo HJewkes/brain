@@ -137,3 +137,42 @@ describe('parseSignals — bold markdown variants', () => {
     expect(parseSignals('review', 'planning', output)).toBe('needs_fixes');
   });
 });
+
+// --- Canonical signal marker tests ---
+
+describe('parseSignals — canonical signal marker', () => {
+  test('recognizes canonical needs_revision marker', () => {
+    const output = '## Summary\nLooks fine.\n\n<!-- signal: needs_revision -->';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+
+  test('recognizes canonical approved marker', () => {
+    const output = '# Critic Report\n\n<!-- signal: approved -->';
+    expect(parseSignals('critic', 'planning', output)).toBe('approved');
+  });
+
+  test('canonical marker overrides conflicting natural-language verdict', () => {
+    const output = '## Verdict: READY\n\n<!-- signal: needs_revision -->';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+
+  test('canonical marker is case-insensitive on the comment, signal name normalized', () => {
+    const output = '<!-- SIGNAL: Needs_Revision -->';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+
+  test('tolerates extra whitespace inside the marker', () => {
+    const output = '<!--   signal:    approved   -->';
+    expect(parseSignals('review', 'planning', output)).toBe('approved');
+  });
+
+  test('falls back to natural-language matching when marker missing', () => {
+    const output = '## Verdict: NEEDS REVISION\n\nIssues identified.';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+
+  test('ignores unknown signal names in the marker and falls back', () => {
+    const output = '<!-- signal: bogus_signal -->\n\n## Verdict: NEEDS REVISION';
+    expect(parseSignals('critic', 'planning', output)).toBe('needs_revision');
+  });
+});
