@@ -4,6 +4,8 @@ import type { BrainServiceClass } from '../services/brain-service.js';
 import { createBrainMcpServer } from './mcp.js';
 import type { ResolveOptions } from '../services/config.js';
 import { WorkflowChannel } from '../modules/workflow/runtime/channel.js';
+import { MergeLifecycleReconciler } from '../services/merge-lifecycle-reconciler.js';
+import { resolveProjectDir } from './dispatch.js';
 
 // Polling-first instructions: brain_workflow_events is the reliable path.
 // notifications/claude/channel is broken (GitHub #40729, #36802, #41733).
@@ -69,7 +71,16 @@ async function initV2Runtime(
   (svc as unknown as Record<string, unknown>)._workflowRuntime = runtime;
   process.stderr.write('Workflow runtime active\n');
 
-  return runtime;
+  const mergeReconciler = new MergeLifecycleReconciler(svc.db, resolveProjectDir(svc));
+  mergeReconciler.start();
+  process.stderr.write('Merge-lifecycle reconciler active (60s timer)\n');
+
+  return {
+    stopReconciler: () => {
+      runtime.stopReconciler();
+      mergeReconciler.stop();
+    },
+  };
 }
 
 const log = (msg: string) => process.stderr.write(`[brain-mcp] ${msg}\n`);
