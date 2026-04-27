@@ -6,6 +6,7 @@ import {
   parseRiskScore,
   runHumanReviewGate,
   resolveOriginalSessionId,
+  buildReviewPrompt,
   type ReviewDeps,
   type ReviewRunOutput,
 } from '../../../src/modules/agents/delivery-review.js';
@@ -729,6 +730,73 @@ describe('resolveOriginalSessionId', () => {
     // No tables — function should swallow the error and return null.
     const result = resolveOriginalSessionId(db, makeDelivery());
     expect(result).toBeNull();
+    db.close();
+  });
+});
+
+// ── buildReviewPrompt — dependency context injection ────────────────────────
+
+describe('buildReviewPrompt dependency context', () => {
+  function makeDbWithDeps(): Database.Database {
+    const db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE notes (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        type TEXT,
+        module TEXT,
+        metadata TEXT,
+        content_dir TEXT
+      );
+      CREATE TABLE delivery_states (
+        agent_id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        branch TEXT,
+        status TEXT,
+        pr_number INTEGER,
+        pr_url TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    return db;
+  }
+
+  it('includes upstream PR/branch info in the fallback prompt when deps exist', () => {
+    const db = makeDbWithDeps();
+    db.prepare(
+      `INSERT INTO notes (id, title, type, module, metadata)
+       VALUES ('dep', 'Add fix_attempts column', 'task', 'pm', ?)`
+    ).run(JSON.stringify({ display_id: 'VNM-56.24', status: 'done', depends_on: [] }));
+    db.prepare(
+      `INSERT INTO delivery_states (agent_id, task_id, branch, status, pr_number, pr_url)
+       VALUES ('a-dep', 'VNM-56.24', 'agent/VNM-56/VNM-56.24', 'merged', 142,
+               'https://github.com/example/repo/pull/142')`
+    ).run();
+    db.prepare(
+      `INSERT INTO notes (id, title, type, module, metadata)
+       VALUES ('cur', 'Use column', 'task', 'pm', ?)`
+    ).run(
+      JSON.stringify({ display_id: 'VNM-56.42', status: 'pending', depends_on: ['VNM-56.24'] })
+    );
+
+    const delivery = { ...makeDelivery(), task_id: 'VNM-56.42' };
+    const prompt = buildReviewPrompt(db, delivery, '/tmp/project');
+    expect(prompt).toContain('## Dependency PR Context');
+    expect(prompt).toContain('VNM-56.24');
+    expect(prompt).toContain('agent/VNM-56/VNM-56.24');
+    expect(prompt).toContain('https://github.com/example/repo/pull/142');
+    db.close();
+  });
+
+  it('omits the dependency block when the task has no upstream deps', () => {
+    const db = makeDbWithDeps();
+    db.prepare(
+      `INSERT INTO notes (id, title, type, module, metadata)
+       VALUES ('cur', 'Solo', 'task', 'pm', ?)`
+    ).run(JSON.stringify({ display_id: 'VNM-56.29', status: 'pending', depends_on: [] }));
+
+    const prompt = buildReviewPrompt(db, makeDelivery(), '/tmp/project');
+    expect(prompt).not.toContain('## Dependency PR Context');
     db.close();
   });
 });

@@ -8,6 +8,7 @@ import type { DeliveryRecord } from './delivery.js';
 import { recordDelivery, readAndClearHumanSignal } from './delivery.js';
 import { parseSignals } from '../workflow/runtime/signals.js';
 import { renderTemplate } from '../workflow/engine/templates.js';
+import { buildDependencyContextString } from '../pm/engine/review-context.js';
 import { sleep } from '../../utils/db.js';
 
 export type ReviewTier = 'ci-only' | 'ai-review' | 'human-review';
@@ -390,7 +391,7 @@ async function runReviewAgent(
   delivery: DeliveryRecord,
   projectDir: string
 ): Promise<ReviewRunOutput> {
-  const prompt = buildReviewPrompt(delivery, projectDir);
+  const prompt = buildReviewPrompt(db, delivery, projectDir);
   const result = await spawnClaudeReview(prompt, projectDir, RESEARCH_TOOLS);
   persistReviewAgentId(db, delivery.agent_id, result.agentId);
   return result;
@@ -426,9 +427,14 @@ export function resolveOriginalSessionId(
   }
 }
 
-function buildReviewPrompt(delivery: DeliveryRecord, projectDir: string): string {
+export function buildReviewPrompt(
+  db: Database.Database,
+  delivery: DeliveryRecord,
+  projectDir: string
+): string {
   const repo = getRepoInfo(projectDir);
   const prefix = delivery.task_id ? delivery.task_id.split('.')[0] : 'VNM';
+  const dependencyContext = buildDependencyContextString(db, delivery.task_id);
   const vars: Record<string, string> = {
     OWNER: repo.owner,
     REPO: repo.repo,
@@ -438,9 +444,11 @@ function buildReviewPrompt(delivery: DeliveryRecord, projectDir: string): string
     REPO_PATH: projectDir,
     PROJECT_PREFIX: prefix,
     REVIEW_THRESHOLD: '4',
+    DEPENDENCY_CONTEXT: dependencyContext,
   };
   const rendered = renderTemplate('review-agent', vars);
-  return rendered.ok ? rendered.data : fallbackReviewPrompt(delivery, projectDir, repo);
+  if (rendered.ok) return rendered.data;
+  return fallbackReviewPrompt(delivery, projectDir, repo, dependencyContext);
 }
 
 function buildFixupPrompt(
@@ -488,16 +496,22 @@ function prependReviewFindings(base: string, summary: ReviewSummary): string {
 function fallbackReviewPrompt(
   delivery: DeliveryRecord,
   projectDir: string,
-  repo: { owner: string; repo: string }
+  repo: { owner: string; repo: string },
+  dependencyContext: string
 ): string {
-  return [
-    `Review PR #${delivery.pr_number ?? '?'} in ${repo.owner}/${repo.repo}.`,
-    `Branch: ${delivery.branch ?? ''} targeting main`,
-    `Repo path: ${projectDir}`,
-    '',
-    'Read the diff, evaluate code quality, and post a GitHub review.',
-    'Output Verdict: PASS or NEEDS WORK, and Risk: <1-5> in an orchestrator summary.',
-  ].join('\n');
+  const parts: string[] = [];
+  if (dependencyContext) parts.push(dependencyContext);
+  parts.push(
+    [
+      `Review PR #${delivery.pr_number ?? '?'} in ${repo.owner}/${repo.repo}.`,
+      `Branch: ${delivery.branch ?? ''} targeting main`,
+      `Repo path: ${projectDir}`,
+      '',
+      'Read the diff, evaluate code quality, and post a GitHub review.',
+      'Output Verdict: PASS or NEEDS WORK, and Risk: <1-5> in an orchestrator summary.',
+    ].join('\n')
+  );
+  return parts.join('\n');
 }
 
 function fallbackFixupPrompt(delivery: DeliveryRecord, reviewOutput: string): string {
