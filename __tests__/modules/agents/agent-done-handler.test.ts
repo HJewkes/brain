@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   handleAgentDone,
   tryExtractArtifacts,
@@ -148,7 +152,7 @@ describe('handleAgentDone', () => {
     expect(result.agentId).toBe('nonexistent-id');
   });
 
-  it('does not release worktree — dispatch loop owns worktree lifecycle', () => {
+  it('releases the worktree allocation when an agent transitions to terminal', () => {
     const id = createAgent(db, {
       name: 'worker',
       parent: 'orch',
@@ -164,11 +168,61 @@ describe('handleAgentDone', () => {
 
     handleAgentDone(db, id, { exit_code: 0 }, '/tmp');
 
-    // Worktree allocation should still exist — dispatch loop handles release
+    // Worktree allocation row removed by tryReleaseWorktree
     const raw = db
       .prepare('SELECT COUNT(*) as n FROM worktree_allocations WHERE task_id = ?')
       .get('VNM-07.03') as { n: number };
-    expect(raw.n).toBe(1);
+    expect(raw.n).toBe(0);
+  });
+
+  it('removes the worktree directory from disk when agent completes', () => {
+    const tmpRoot = mkdtempSync(join(tmpdir(), 'agent-done-vnm-56-61-'));
+    try {
+      const worktreePath = join(tmpRoot, 'VNM-99.99');
+      mkdirSync(worktreePath, { recursive: true });
+
+      const id = createAgent(db, {
+        name: 'worker',
+        parent: 'orch',
+        brain_task: 'VNM-99.99',
+      });
+      updateAgentStatus(db, id, 'active');
+      allocateWorktree(db, {
+        task_id: 'VNM-99.99',
+        worktree_path: worktreePath,
+        branch: 'agent/test/VNM-99.99',
+      });
+
+      const exec = vi.mocked(execFileSync);
+      exec.mockImplementation(((cmd: string, args?: readonly string[]) => {
+        if (
+          cmd === 'git' &&
+          args &&
+          args[0] === 'worktree' &&
+          args[1] === 'remove' &&
+          typeof args[args.length - 1] === 'string'
+        ) {
+          const target = args[args.length - 1] as string;
+          if (existsSync(target)) {
+            rmSync(target, { recursive: true, force: true });
+          }
+        }
+        return '';
+      }) as typeof execFileSync);
+
+      expect(existsSync(worktreePath)).toBe(true);
+
+      handleAgentDone(db, id, { exit_code: 0 }, tmpRoot);
+
+      expect(existsSync(worktreePath)).toBe(false);
+
+      const remaining = db
+        .prepare('SELECT COUNT(*) as n FROM worktree_allocations WHERE task_id = ?')
+        .get('VNM-99.99') as { n: number };
+      expect(remaining.n).toBe(0);
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 
   it('sets taskUpdated when brain_task is set and status is completed', () => {

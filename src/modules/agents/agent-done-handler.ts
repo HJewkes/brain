@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolveInstance, loadConfig } from '../../services/config.js';
 import { getAgent, updateAgentStatus, getAgentContext, setAgentContext } from './data.js';
+import { findGitRoot, releaseWorktree } from './worktree.js';
 
 /**
  * Open a writable DB connection for hook context.
@@ -57,6 +58,22 @@ function tryUpdatePmTask(taskId: string, cwd: string, targetStatus = 'done'): nu
       return ids.length;
     }
     return 0;
+  }
+}
+
+/**
+ * Best-effort worktree release. Mirrors releaseWorktree() — git worktree
+ * remove (with --force fallback for dirty trees), branch -D, and DB row
+ * delete. Safety check inside releaseWorktree declines dirty/unpushed trees
+ * so we never destroy uncommitted edits or unpushed commits.
+ */
+function tryReleaseWorktree(db: Database.Database, taskId: string): void {
+  try {
+    const projectRoot = findGitRoot();
+    releaseWorktree(db, projectRoot, taskId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[agent-done] worktree release failed for ${taskId}: ${msg}\n`);
   }
 }
 
@@ -125,8 +142,15 @@ export function handleAgentDone(
   });
   result.updated = true;
 
-  // Delivery (push, PR, merge) and worktree release are owned by the dispatch
-  // loop. The hook only handles status, PM task updates, and observability.
+  // Delivery (push, PR, merge) is owned by the dispatch loop. Worktree cleanup
+  // is best-effort here so the directory does not leak when an agent runs
+  // without a watching dispatch loop (standalone brain_agent_dispatch, MCP
+  // restart). releaseWorktree's safety check refuses dirty/unpushed trees, so
+  // this is safe even when handleProcessExit's recoverBranchForAgent has not
+  // pushed the branch yet — the dispatch-loop cleanup will retry post-delivery.
+  if (agent.brain_task) {
+    tryReleaseWorktree(db, agent.brain_task);
+  }
 
   if (status === 'completed' && agent.brain_task && !agent.branch) {
     process.stderr.write(
