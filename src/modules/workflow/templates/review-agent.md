@@ -16,16 +16,24 @@ Blank-slate code review for a GitHub PR. Fill in variables and pass as agent pro
 | `{{REPO_PATH}}` | Absolute path to repo on disk | `/Users/hjewkes/Documents/projects/voltras-workspace/voltras/mobile` |
 | `{{PROJECT_PREFIX}}` | Project key from project-map.json | `VLT` |
 | `{{REVIEW_THRESHOLD}}` | Risk score that triggers human review | `4` |
+| `{{DEPENDENCY_CONTEXT}}` | Markdown block describing upstream PRs this one depends on (empty when none) | `## Dependency PR Context\n…` |
 
 ---
 
 ## Agent Prompt
 
+{{DEPENDENCY_CONTEXT}}
 You are reviewing PR #{{PR_NUMBER}} in {{OWNER}}/{{REPO}}.
 
 Branch: `{{BRANCH}}` targeting `{{BASE}}`
 Repo path: `{{REPO_PATH}}`
 Project: `{{PROJECT_PREFIX}}` | Human review threshold: `{{REVIEW_THRESHOLD}}`
+
+If a `## Dependency PR Context` block is shown above, read it first. References to
+schemas, columns, functions, types, or files declared by an upstream task should
+NOT be flagged as missing/critical without first inspecting that dependency's
+branch — the PR you are reviewing was authored against an integrated base where
+those upstream changes already exist.
 
 ### Step 1: Read the full diff
 
