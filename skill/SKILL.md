@@ -37,6 +37,34 @@ CLI for knowledge management, project tracking, session intelligence, agent orch
 
 Brain CLI requires **Node 22+**. If using nvm, run `nvm use 22` first.
 
+## Agent Happy Path
+
+Five commands take an agent from "what should I work on" to "task done":
+
+```bash
+# 1. See project state — task counts, in-progress, blockers
+brain pm status VNM
+
+# 2. Pick eligible work — sorted by priority, deps satisfied
+brain pm next VNM --json
+
+# 3. Claim a task — atomic claim + start, returns a token
+brain pm task claim VNM-22.05 --start --json
+# → { ..., "token": "<claim-token>" }
+
+# 4. Do the work — implement, verify (typecheck, tests, lint), commit
+#    Stay within file ownership; keep diffs scoped to the task.
+
+# 5. Complete — records activity, runs impact analysis, surfaces newly-eligible work
+brain pm complete VNM-22.05 --token <claim-token> --summary "what changed"
+```
+
+Notes:
+- `claim` without `--start` leaves the task in `claimed` state; run `brain pm task start <id> --token <token>` before working.
+- `--token` on `complete` is validated against the stored claim token — keep it from step 3.
+- If you cannot finish, release with `brain pm task release <id> --token <token>` so another agent can pick it up.
+- Use `--json` on every step when scripting.
+
 ## Project Management Commands (USE FIRST)
 
 | Command | Purpose | Example |
