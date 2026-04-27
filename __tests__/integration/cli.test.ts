@@ -201,4 +201,30 @@ describe('CLI integration', { timeout: 60_000 }, () => {
     expect(typeof result.totalNotes).toBe('number');
     expect(result.totalNotes).toBeGreaterThanOrEqual(2);
   });
+
+  it('top-level aliases appear in --help', () => {
+    const output = cli('--help');
+    expect(output).toContain('tasks');
+    expect(output).toContain('Shortcut for "brain pm task list"');
+    expect(output).toContain('sessions');
+    expect(output).toContain('Shortcut for "brain session list"');
+    expect(output).toContain('agents');
+    expect(output).toContain('Shortcut for "brain agent status"');
+  });
+
+  it('tasks alias delegates to pm task list', () => {
+    const output = cli('tasks --help');
+    expect(output).toContain('Usage: brain pm task list');
+    expect(output).toContain('List tasks');
+  });
+
+  it('sessions alias delegates to session list', () => {
+    const output = cli('sessions --help');
+    expect(output).toContain('Usage: brain session list');
+  });
+
+  it('agents alias delegates to agent status', () => {
+    const output = cli('agents --help');
+    expect(output).toContain('Usage: brain agent status');
+  });
 });
