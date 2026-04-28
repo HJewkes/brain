@@ -15,6 +15,10 @@ export interface PrStatus {
   mergeStateStatus?: string;
   state: 'open' | 'closed' | 'merged';
   failedChecks: string[];
+  /** ISO timestamp from GitHub when the PR merged. Only populated when state==='merged'. */
+  mergedAt?: string;
+  /** ISO timestamp from GitHub when the PR closed. Populated for both merged and closed states. */
+  closedAt?: string;
 }
 
 export type MergeStrategy = 'squash' | 'merge' | 'rebase';
@@ -40,7 +44,7 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
         'view',
         branch,
         '--json',
-        'number,headRefName,state,mergeable,mergeStateStatus,statusCheckRollup',
+        'number,headRefName,state,mergeable,mergeStateStatus,statusCheckRollup,mergedAt,closedAt',
       ],
       { cwd: projectDir, encoding: 'utf-8', stdio: 'pipe' }
     );
@@ -51,6 +55,8 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
       mergeable: string;
       mergeStateStatus?: string;
       statusCheckRollup: Array<{ conclusion: string; state: string; name?: string }> | null;
+      mergedAt?: string | null;
+      closedAt?: string | null;
     };
 
     const checks = data.statusCheckRollup ?? [];
@@ -69,6 +75,8 @@ export function getPrForBranch(branch: string, projectDir: string): PrStatus | n
       mergeStateStatus: data.mergeStateStatus,
       state: data.state.toLowerCase() as PrStatus['state'],
       failedChecks,
+      mergedAt: data.mergedAt ?? undefined,
+      closedAt: data.closedAt ?? undefined,
     };
   } catch {
     return null;

@@ -24,6 +24,11 @@ vi.mock('../../src/modules/agents/worktree.js', () => ({
 
 vi.mock('../../src/modules/agents/delivery.js', () => ({
   enableAutoMerge: vi.fn(),
+  updateDeliveryStatus: vi.fn(),
+}));
+
+vi.mock('../../src/modules/pm/data/task-ops.js', () => ({
+  updateTaskStatus: vi.fn(() => Promise.resolve({ ok: true, value: {} })),
 }));
 
 vi.mock('../../src/server/orchestration.js', () => ({
@@ -42,9 +47,10 @@ import {
 import { getPrForBranch, rerunPrChecks } from '../../src/modules/agents/auto-merge.js';
 import { rebaseInIsolationDetailed } from '../../src/modules/agents/rebase-isolation.js';
 import { reclaimTerminatedAllocations } from '../../src/modules/agents/worktree.js';
-import { enableAutoMerge } from '../../src/modules/agents/delivery.js';
+import { enableAutoMerge, updateDeliveryStatus } from '../../src/modules/agents/delivery.js';
 import { recoverBranchForAgent } from '../../src/server/orchestration.js';
 import { loadFlakyTests } from '../../src/modules/agents/delivery-monitor.js';
+import { updateTaskStatus } from '../../src/modules/pm/data/task-ops.js';
 
 const mockGetPr = vi.mocked(getPrForBranch);
 const mockRerun = vi.mocked(rerunPrChecks);
@@ -53,6 +59,8 @@ const mockReclaim = vi.mocked(reclaimTerminatedAllocations);
 const mockArm = vi.mocked(enableAutoMerge);
 const mockRecover = vi.mocked(recoverBranchForAgent);
 const mockFlaky = vi.mocked(loadFlakyTests);
+const mockUpdateDelivery = vi.mocked(updateDeliveryStatus);
+const mockUpdateTask = vi.mocked(updateTaskStatus);
 
 interface PreparedQuery {
   sql: string;
@@ -228,16 +236,79 @@ describe('reconcileMergeLifecycle', () => {
     expect(report.ciReruns).toEqual(['agent/vnm-1/VNM-1.1']);
   });
 
-  it('skips PRs that are not currently open', async () => {
+  it('advances delivery state to merged when GH reports the PR merged', async () => {
     const db = makeDbMock([makeDelivery()]);
-    mockGetPr.mockReturnValue(makePr({ state: 'merged' }));
+    mockGetPr.mockReturnValue(makePr({ state: 'merged', mergedAt: '2026-04-28T12:00:00Z' }));
 
     const report = await reconcileMergeLifecycle(db as unknown as object, projectDir);
 
+    expect(mockUpdateDelivery).toHaveBeenCalledWith(db, 'agent-1', 'merged', {
+      pr_merged_at: '2026-04-28T12:00:00Z',
+    });
     expect(mockRebase).not.toHaveBeenCalled();
     expect(mockRerun).not.toHaveBeenCalled();
     expect(mockArm).not.toHaveBeenCalled();
+    expect(report.deliveriesMerged).toEqual(['VNM-1.1']);
     expect(report.prsScanned).toBe(1);
+  });
+
+  it('advances delivery state to stalled when GH reports the PR closed without merge', async () => {
+    const db = makeDbMock([makeDelivery()]);
+    mockGetPr.mockReturnValue(makePr({ state: 'closed' }));
+
+    const report = await reconcileMergeLifecycle(db as unknown as object, projectDir);
+
+    expect(mockUpdateDelivery).toHaveBeenCalledWith(db, 'agent-1', 'stalled', {
+      stall_reason: 'pr-closed',
+    });
+    expect(report.deliveriesClosed).toEqual(['VNM-1.1']);
+    expect(report.deliveriesMerged).toEqual([]);
+  });
+
+  it('advances PM task to done when pmDeps wired and PR merged', async () => {
+    const db = makeDbMock([makeDelivery()]);
+    mockGetPr.mockReturnValue(makePr({ state: 'merged', mergedAt: '2026-04-28T12:00:00Z' }));
+    const pmDeps = {
+      brainDb: {} as never,
+      config: {} as never,
+      embedder: {} as never,
+    };
+
+    const report = await reconcileMergeLifecycle(db as unknown as object, projectDir, {
+      pmDeps,
+    });
+
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      pmDeps.brainDb,
+      pmDeps.config,
+      pmDeps.embedder,
+      'VNM-1.1',
+      'done'
+    );
+    expect(report.errors).toEqual([]);
+  });
+
+  it('skips PM task advance when pmDeps absent', async () => {
+    const db = makeDbMock([makeDelivery()]);
+    mockGetPr.mockReturnValue(makePr({ state: 'merged' }));
+
+    await reconcileMergeLifecycle(db as unknown as object, projectDir);
+
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('falls back to ctx.now when GH does not report mergedAt', async () => {
+    const db = makeDbMock([makeDelivery()]);
+    mockGetPr.mockReturnValue(makePr({ state: 'merged' }));
+    const fixedNow = Date.UTC(2026, 3, 28, 13, 0, 0);
+
+    await reconcileMergeLifecycle(db as unknown as object, projectDir, {
+      now: () => fixedNow,
+    });
+
+    expect(mockUpdateDelivery).toHaveBeenCalledWith(db, 'agent-1', 'merged', {
+      pr_merged_at: new Date(fixedNow).toISOString(),
+    });
   });
 
   it('reclaims terminated worktrees on every pass', async () => {
