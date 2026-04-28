@@ -708,6 +708,41 @@ describe('worktree lifecycle', () => {
       expect(getWorktreeAllocations(db)).toHaveLength(0);
     });
 
+    it('force-releases after squash-merge when delivery is finalized', () => {
+      // After `gh pr merge --squash --delete-branch`, the local branch has
+      // commits past origin/main while origin/{branch} no longer exists.
+      // The safety check would see "unpushed=true" and refuse release without
+      // the delivery-aware force flag.
+      const agentId = allocateAndAttachAgent('VNM-09.01', 'completed');
+      recordDelivery(db, agentId, {
+        status: 'merged',
+        task_id: 'VNM-09.01',
+        branch: 'agent/ws-x/VNM-09.01',
+      });
+
+      vi.clearAllMocks();
+      mockExistsSync.mockReturnValue(true);
+      mockExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+        const argv = args as string[];
+        if (argv[0] === 'status' && argv.includes('--porcelain')) return '';
+        if (
+          argv[0] === 'rev-list' &&
+          argv.includes('--count') &&
+          argv.some((a) => a.startsWith('origin/main..'))
+        ) {
+          return '1\n';
+        }
+        if (argv[0] === 'rev-parse' && argv.includes('--verify')) {
+          throw new Error('unknown ref'); // origin branch deleted by squash-merge
+        }
+        return '';
+      });
+
+      const reclaimed = reclaimTerminatedAllocations(db, '/repo');
+      expect(reclaimed).toEqual(['VNM-09.01']);
+      expect(getWorktreeAllocations(db)).toHaveLength(0);
+    });
+
     it('grace window does not apply once delivery row exists', () => {
       // Once orphan-recovery (or any caller) creates a delivery row, reclaim
       // semantics are governed by ACTIVE_DELIVERY_STATUSES, not the timer.
