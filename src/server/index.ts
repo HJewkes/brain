@@ -71,7 +71,11 @@ async function initV2Runtime(
   (svc as unknown as Record<string, unknown>)._workflowRuntime = runtime;
   process.stderr.write('Workflow runtime active\n');
 
-  const mergeReconciler = new MergeLifecycleReconciler(svc.db, resolveProjectDir(svc));
+  const mergeReconciler = new MergeLifecycleReconciler(svc.db, resolveProjectDir(svc), 60_000, {
+    brainDb: svc.db,
+    config: svc.config,
+    embedder: svc.embedder,
+  });
   mergeReconciler.start();
   process.stderr.write('Merge-lifecycle reconciler active (60s timer)\n');
 

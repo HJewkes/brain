@@ -5,9 +5,15 @@ import { getRawDb } from '../utils/db.js';
 import { getPrForBranch, rerunPrChecks } from '../modules/agents/auto-merge.js';
 import { rebaseInIsolationDetailed } from '../modules/agents/rebase-isolation.js';
 import { reclaimTerminatedAllocations } from '../modules/agents/worktree.js';
-import { enableAutoMerge, type DeliveryRecord } from '../modules/agents/delivery.js';
+import {
+  enableAutoMerge,
+  updateDeliveryStatus,
+  type DeliveryRecord,
+} from '../modules/agents/delivery.js';
 import { recoverBranchForAgent } from '../server/orchestration.js';
 import { loadFlakyTests } from '../modules/agents/delivery-monitor.js';
+import { updateTaskStatus } from '../modules/pm/data/task-ops.js';
+import type { BrainConfig, Embedder } from '../types.js';
 
 export interface ReconcileReport {
   prsScanned: number;
@@ -16,7 +22,22 @@ export interface ReconcileReport {
   autoMergeArmed: number[];
   worktreesReclaimed: string[];
   branchesRecovered: string[];
+  /** Tasks whose delivery+PM state advanced because GitHub reports the PR merged. */
+  deliveriesMerged: string[];
+  /** Tasks whose delivery state advanced because GitHub reports the PR closed without merge. */
+  deliveriesClosed: string[];
   errors: { kind: string; target: string; reason: string }[];
+}
+
+/**
+ * Optional dependencies needed to advance PM task status when a PR's terminal
+ * state is observed. Absent in tests / contexts that only need the
+ * delivery_states-level reconcile path.
+ */
+export interface PmDeps {
+  brainDb: BrainDB;
+  config: BrainConfig;
+  embedder: Embedder;
 }
 
 interface OrphanAgentRow {
@@ -55,6 +76,8 @@ function emptyReport(): ReconcileReport {
     autoMergeArmed: [],
     worktreesReclaimed: [],
     branchesRecovered: [],
+    deliveriesMerged: [],
+    deliveriesClosed: [],
     errors: [],
   };
 }
@@ -120,6 +143,8 @@ interface ReconcileOptions {
   ciRerunCooldown?: Map<string, number>;
   /** Override for testability — defaults to Date.now(). */
   now?: () => number;
+  /** Wire PM task status advance on PR-terminal observations. */
+  pmDeps?: PmDeps;
 }
 
 /**
@@ -146,7 +171,12 @@ export async function reconcileMergeLifecycle(
   const now = opts.now ?? Date.now;
   const flakyTests = loadFlakyTests(projectDir);
 
-  await reconcilePrActions(rawDb, projectDir, report, { cooldown, now, flakyTests });
+  await reconcilePrActions(rawDb, projectDir, report, {
+    cooldown,
+    now,
+    flakyTests,
+    pmDeps: opts.pmDeps,
+  });
   reconcileWorktrees(rawDb, projectDir, report);
   await reconcileOrphanBranches(rawDb, projectDir, report);
 
@@ -157,6 +187,7 @@ interface PrActionContext {
   cooldown: Map<string, number>;
   now: () => number;
   flakyTests: string[];
+  pmDeps?: PmDeps;
 }
 
 async function reconcilePrActions(
@@ -170,8 +201,70 @@ async function reconcilePrActions(
     if (!delivery.branch || !delivery.pr_number) continue;
     report.prsScanned += 1;
     const pr = getPrForBranch(delivery.branch, projectDir);
-    if (!pr || pr.state !== 'open') continue;
+    if (!pr) continue;
+    if (pr.state === 'merged' || pr.state === 'closed') {
+      await advanceTerminatedDelivery(rawDb, delivery, pr, report, ctx);
+      continue;
+    }
+    if (pr.state !== 'open') continue;
     await reconcileSinglePr(delivery.branch, delivery.pr_number, pr, projectDir, report, ctx);
+  }
+}
+
+/**
+ * GitHub reports the PR is no longer open: advance delivery_states past its
+ * blocking ACTIVE_PR_STATUSES so worktree reclaim (VNM-56.69) can fire, and
+ * — when PM dependencies are available — close the PM task. This is what
+ * makes standalone `brain_agent_dispatch` ergonomically equivalent to a
+ * workstream-dispatch wave: both paths converge on this observer.
+ */
+async function advanceTerminatedDelivery(
+  rawDb: Database.Database,
+  delivery: DeliveryRecord,
+  pr: NonNullable<ReturnType<typeof getPrForBranch>>,
+  report: ReconcileReport,
+  ctx: PrActionContext
+): Promise<void> {
+  const taskId = delivery.task_id;
+  if (!taskId) return;
+
+  try {
+    if (pr.state === 'merged') {
+      const mergedAt = pr.mergedAt ?? new Date(ctx.now()).toISOString();
+      updateDeliveryStatus(rawDb, delivery.agent_id, 'merged', { pr_merged_at: mergedAt });
+      report.deliveriesMerged.push(taskId);
+    } else {
+      // closed without merge — stall with explicit reason so reclaim can fire
+      updateDeliveryStatus(rawDb, delivery.agent_id, 'stalled', {
+        stall_reason: 'pr-closed',
+      });
+      report.deliveriesClosed.push(taskId);
+    }
+  } catch (err) {
+    report.errors.push({ kind: 'delivery-advance', target: taskId, reason: errMsg(err) });
+    return;
+  }
+
+  if (!ctx.pmDeps) return;
+
+  const nextStatus = pr.state === 'merged' ? 'done' : 'cancelled';
+  try {
+    const result = await updateTaskStatus(
+      ctx.pmDeps.brainDb,
+      ctx.pmDeps.config,
+      ctx.pmDeps.embedder,
+      taskId,
+      nextStatus
+    );
+    if (!result.ok) {
+      report.errors.push({
+        kind: 'pm-advance',
+        target: taskId,
+        reason: result.error.message,
+      });
+    }
+  } catch (err) {
+    report.errors.push({ kind: 'pm-advance', target: taskId, reason: errMsg(err) });
   }
 }
 
@@ -285,7 +378,8 @@ export class MergeLifecycleReconciler {
   constructor(
     private readonly db: BrainDB | Database.Database,
     private readonly projectDir: string,
-    private readonly intervalMs: number = 60_000
+    private readonly intervalMs: number = 60_000,
+    private readonly pmDeps?: PmDeps
   ) {}
 
   start(): void {
@@ -308,6 +402,7 @@ export class MergeLifecycleReconciler {
     try {
       const report = await reconcileMergeLifecycle(this.db, this.projectDir, {
         ciRerunCooldown: this.cooldown,
+        pmDeps: this.pmDeps,
       });
       this.lastReport = report;
       return report;
