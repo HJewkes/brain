@@ -349,7 +349,13 @@ export function reclaimTerminatedAllocations(db: unknown, projectRoot: string): 
       }
     }
 
-    if (releaseWorktree(db, projectRoot, allocation.task_id)) {
+    // After a squash-merge with --delete-branch, the local branch retains
+    // commits ahead of origin/main while origin/{branch} is gone, so the
+    // safety check sees "unpushed=true" and refuses release. The check exists
+    // to protect racing orphan-recovery (VNM-56.63), not branches whose
+    // delivery has already finalized — force-release in that case.
+    const deliveryFinalized = delivery !== null;
+    if (releaseWorktree(db, projectRoot, allocation.task_id, { force: deliveryFinalized })) {
       reclaimed.push(allocation.task_id);
     }
   }
