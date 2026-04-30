@@ -18,6 +18,7 @@ import type { WorkflowFn } from '../../../../src/modules/workflow/runtime/types.
 import { WorkflowRuntime } from '../../../../src/modules/workflow/runtime/runtime.js';
 import { planningWorkflow } from '../../../../src/modules/workflow/flows/planning.js';
 import { createTestDb, createMockEmbedder } from '../../../helpers.js';
+import { createWorkflowRunsTable, resolveAllAgents } from '../helpers.js';
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -74,50 +75,8 @@ const criticLoopWorkflow: WorkflowFn = async (ctx) => {
 };
 
 // ---------------------------------------------------------------------------
-// resolveAllAgents utility
-// ---------------------------------------------------------------------------
-
-async function resolveAllAgents(
-  runtime: WorkflowRuntime,
-  runId: string,
-  outputFn: (stepId: string) => string = (s) => `output for ${s}`,
-  maxSteps = 20
-): Promise<void> {
-  for (let i = 0; i < maxSteps; i++) {
-    const running = runtime.activeRuns.get(runId);
-    if (!running) break;
-    const agent = running.ctx.activeAgent;
-    if (!agent) {
-      await new Promise((r) => setImmediate(r));
-      continue;
-    }
-    running.ctx.resolveAgent(agent.stepId, outputFn(agent.stepId));
-    await new Promise((r) => setImmediate(r));
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Shared test setup
 // ---------------------------------------------------------------------------
-
-function createWorkflowRunsTable(db: BrainDB): void {
-  db.rawDb.exec(`
-    CREATE TABLE IF NOT EXISTS workflow_runs (
-      id TEXT PRIMARY KEY,
-      workflow_name TEXT NOT NULL,
-      context JSON NOT NULL,
-      status TEXT NOT NULL DEFAULT 'running'
-        CHECK(status IN ('running', 'completed', 'failed', 'paused')),
-      current_step TEXT,
-      step_results JSON NOT NULL DEFAULT '{}',
-      active_agent JSON,
-      started_at TEXT NOT NULL,
-      completed_at TEXT,
-      error TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status);
-  `);
-}
 
 const embedder = createMockEmbedder();
 

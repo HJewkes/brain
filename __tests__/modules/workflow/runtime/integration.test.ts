@@ -32,6 +32,7 @@ import {
   agentsMigrationV3,
 } from '../../../../src/modules/agents/schema.js';
 import { createTestDb, createMockEmbedder } from '../../../helpers.js';
+import { createWorkflowRunsTable } from '../helpers.js';
 
 // Mock at the lowest possible level: child_process.spawn. This exercises the
 // REAL dispatchTask + resolveExplicitTask + dispatchTemplate path, so any
@@ -69,25 +70,6 @@ const minimalDispatchWorkflow: WorkflowFn = async (ctx) => {
   // and the test fails.
   await ctx.dispatch('step-a', 'implementation-compact');
 };
-
-function createWorkflowRunsTable(db: BrainDB): void {
-  db.rawDb.exec(`
-    CREATE TABLE IF NOT EXISTS workflow_runs (
-      id TEXT PRIMARY KEY,
-      workflow_name TEXT NOT NULL,
-      context JSON NOT NULL,
-      status TEXT NOT NULL DEFAULT 'running'
-        CHECK(status IN ('running', 'completed', 'failed', 'paused')),
-      current_step TEXT,
-      step_results JSON NOT NULL DEFAULT '{}',
-      active_agent JSON,
-      started_at TEXT NOT NULL,
-      completed_at TEXT,
-      error TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status);
-  `);
-}
 
 const embedder = createMockEmbedder();
 
