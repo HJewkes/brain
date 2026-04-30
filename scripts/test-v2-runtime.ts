@@ -32,7 +32,7 @@ async function main() {
     });
     console.log('Run ID:', runId);
 
-    const timeoutMs = 5 * 60 * 1000; // 5 minutes
+    const timeoutMs = 10000;
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error(`Workflow timed out after ${timeoutMs}ms`)), timeoutMs)
     );
@@ -40,8 +40,22 @@ async function main() {
 
     const status = runtime.getStatus(runId);
     console.log('Status:', JSON.stringify(status, null, 2));
+
+    // Meaningful pass/fail output
+    if (status.status === 'completed') {
+      console.log('✓ Workflow completed successfully');
+      process.exit(0);
+    } else if (status.status === 'failed') {
+      console.log('✗ Workflow failed');
+      console.log('Error:', status.error);
+      process.exit(1);
+    } else {
+      console.log('⚠ Workflow status:', status.status);
+      process.exit(1);
+    }
   } catch (err) {
-    console.error('Error:', err);
+    console.error('✗ Error:', err);
+    process.exit(1);
   }
 
   svc.close();
