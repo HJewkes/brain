@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve as pathResolve } from 'node:path';
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import { tmpdir, homedir } from 'node:os';
 import type { BrainServiceClass } from '../services/brain-service.js';
@@ -192,8 +192,16 @@ async function runDispatch(
   pullResult: PullResult,
   opts: DispatchOptions
 ): Promise<DispatchResult | DryRunResult> {
+  // For multi-repo workspaces, the worktree + agent cwd live under the
+  // per-project repoPath; templates and the brain instance still live at
+  // workspaceRoot. taskRepoDir falls back to projectDir for single-repo
+  // workspaces (i.e. when the project note has no repoPath).
+  const workspaceRoot = projectDir;
+  const taskRepoDir = resolveTaskRepoDir(svc, pullResult.taskId, workspaceRoot);
+
   const workerDispatch = buildWorkerDispatchFromPull(svc.db, pullResult, {
-    projectDir,
+    projectDir: workspaceRoot,
+    taskRepoDir,
     teamName: 'headless',
   });
 
@@ -208,7 +216,7 @@ async function runDispatch(
 
   const worktreeResult = maybeAllocateWorktree(
     svc.db,
-    projectDir,
+    taskRepoDir,
     routing,
     taskId,
     pullResult,
@@ -240,6 +248,12 @@ async function runDispatch(
   const maxBudgetUsd = resolveMaxBudgetUsd(svc.db, projectDir, taskId, opts);
   setAgentContext(svc.db, agentId, 'max_budget_usd', maxBudgetUsd);
 
+  // Synthetic tasks (workflow runtime) keep their existing addDir behavior
+  // (none) — they run in the workspace root with no worktree. Real tasks
+  // get --add-dir <workspaceRoot> so the agent can read workspace-level
+  // files (e.g. .plans/, coordination/) regardless of which per-project
+  // repo they were dispatched into.
+  const isSynthetic = isSyntheticTaskId(taskId);
   const proc = spawnClaude({
     prompt,
     model,
@@ -249,9 +263,9 @@ async function runDispatch(
     claimToken: pullResult.claimToken,
     mcpConfigPath,
     maxBudgetUsd,
-    cwd: worktreeResult?.worktreePath || projectDir,
+    cwd: worktreeResult?.worktreePath || taskRepoDir,
     worktreePath: worktreeResult?.worktreePath,
-    addDir: worktreeResult ? projectDir : undefined,
+    addDir: isSynthetic ? undefined : workspaceRoot,
     allowedTools: routing.allowedTools,
   });
 
@@ -262,7 +276,7 @@ async function runDispatch(
   });
 
   if (!proc.pid) {
-    const cwd = worktreeResult?.worktreePath || projectDir;
+    const cwd = worktreeResult?.worktreePath || taskRepoDir;
     updateAgentStatus(svc.db, agentId, 'failed', {
       exit_reason: 'spawn_error',
       summary: `Failed to spawn claude. Binary: ${getClaudePath()}, cwd: ${cwd}, cwd exists: ${existsSync(cwd)}`,
@@ -300,6 +314,43 @@ export function resolveProjectDir(svc: BrainServiceClass): string {
     return dirname(svc.instance.root);
   }
   return process.cwd();
+}
+
+/**
+ * Resolve the per-task repo directory for multi-repo workspaces.
+ *
+ * Each PM project may declare a `repoPath` (relative to the workspace root)
+ * on its project note's metadata. Tasks under that prefix dispatch into
+ * `<workspaceRoot>/<repoPath>` so `git worktree add` lands inside a real
+ * repo. When `repoPath` is absent (single-repo workspace, the common case),
+ * this returns `workspaceRoot` and behavior is unchanged.
+ *
+ * Synthetic workflow-runtime task IDs short-circuit to workspaceRoot.
+ */
+export function resolveTaskRepoDir(
+  svc: BrainServiceClass,
+  taskId: string,
+  workspaceRoot: string
+): string {
+  if (isSyntheticTaskId(taskId)) return workspaceRoot;
+
+  const prefix = taskId.split('-')[0];
+  if (!prefix) return workspaceRoot;
+
+  try {
+    const projectNoteId = `${prefix.toLowerCase()}-project`;
+    const notes = getPmNotes(svc.db, 'project', { display_id: prefix.toUpperCase() });
+    const note = notes.find((n) => n.id === projectNoteId);
+    if (!note?.metadata) return workspaceRoot;
+
+    const meta = JSON.parse(note.metadata) as { repoPath?: unknown };
+    if (typeof meta.repoPath !== 'string' || !meta.repoPath.trim()) {
+      return workspaceRoot;
+    }
+    return pathResolve(workspaceRoot, meta.repoPath);
+  } catch {
+    return workspaceRoot;
+  }
 }
 
 /**

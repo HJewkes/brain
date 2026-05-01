@@ -356,4 +356,104 @@ describe('dispatch', () => {
       expect(EXIT_CRASH).not.toBe(0);
     });
   });
+
+  describe('resolveTaskRepoDir', () => {
+    it('returns <workspaceRoot>/<repoPath> when project note has repoPath', async () => {
+      const { resolveTaskRepoDir } = await import('../../src/server/dispatch.js');
+      vi.mocked(getPmNotes).mockReturnValueOnce([
+        {
+          id: 'wa-project',
+          metadata: JSON.stringify({ display_id: 'WA', repoPath: 'workout-analytics' }),
+        } as never,
+      ]);
+
+      const result = resolveTaskRepoDir(mockSvc, 'WA-04.01', '/Users/x/voltras-workspace');
+
+      expect(result).toBe('/Users/x/voltras-workspace/workout-analytics');
+    });
+
+    it('returns workspaceRoot when project note exists but has no repoPath', async () => {
+      const { resolveTaskRepoDir } = await import('../../src/server/dispatch.js');
+      vi.mocked(getPmNotes).mockReturnValueOnce([
+        {
+          id: 'vnm-project',
+          metadata: JSON.stringify({ display_id: 'VNM' }),
+        } as never,
+      ]);
+
+      const result = resolveTaskRepoDir(mockSvc, 'VNM-56.01', '/Users/x/brain');
+
+      expect(result).toBe('/Users/x/brain');
+    });
+
+    it('returns workspaceRoot when project note does not exist', async () => {
+      const { resolveTaskRepoDir } = await import('../../src/server/dispatch.js');
+      vi.mocked(getPmNotes).mockReturnValueOnce([]);
+
+      const result = resolveTaskRepoDir(mockSvc, 'XYZ-1.1', '/Users/x/workspace');
+
+      expect(result).toBe('/Users/x/workspace');
+    });
+
+    it('returns workspaceRoot for synthetic workflow task IDs without DB lookup', async () => {
+      const { resolveTaskRepoDir } = await import('../../src/server/dispatch.js');
+      vi.mocked(getPmNotes).mockClear();
+
+      const result = resolveTaskRepoDir(
+        mockSvc,
+        'workflow:planning:design:abc123',
+        '/Users/x/workspace'
+      );
+
+      expect(result).toBe('/Users/x/workspace');
+      expect(vi.mocked(getPmNotes)).not.toHaveBeenCalled();
+    });
+
+    it('extracts compound prefixes correctly (VMCP-01.05 → VMCP)', async () => {
+      const { resolveTaskRepoDir } = await import('../../src/server/dispatch.js');
+      vi.mocked(getPmNotes).mockImplementationOnce((_db, type, filters) => {
+        if (type === 'project' && (filters as { display_id?: string })?.display_id === 'VMCP') {
+          return [
+            {
+              id: 'vmcp-project',
+              metadata: JSON.stringify({ display_id: 'VMCP', repoPath: 'mcp-server' }),
+            },
+          ] as never;
+        }
+        return [];
+      });
+
+      const result = resolveTaskRepoDir(mockSvc, 'VMCP-01.05', '/Users/x/voltras-workspace');
+
+      expect(result).toBe('/Users/x/voltras-workspace/mcp-server');
+    });
+
+    it('returns workspaceRoot when repoPath is empty string', async () => {
+      const { resolveTaskRepoDir } = await import('../../src/server/dispatch.js');
+      vi.mocked(getPmNotes).mockReturnValueOnce([
+        {
+          id: 'wa-project',
+          metadata: JSON.stringify({ display_id: 'WA', repoPath: '   ' }),
+        } as never,
+      ]);
+
+      const result = resolveTaskRepoDir(mockSvc, 'WA-04.01', '/Users/x/voltras-workspace');
+
+      expect(result).toBe('/Users/x/voltras-workspace');
+    });
+
+    it('returns workspaceRoot when metadata JSON is malformed', async () => {
+      const { resolveTaskRepoDir } = await import('../../src/server/dispatch.js');
+      vi.mocked(getPmNotes).mockReturnValueOnce([
+        {
+          id: 'wa-project',
+          metadata: 'not-valid-json',
+        } as never,
+      ]);
+
+      const result = resolveTaskRepoDir(mockSvc, 'WA-04.01', '/Users/x/voltras-workspace');
+
+      expect(result).toBe('/Users/x/voltras-workspace');
+    });
+  });
 });

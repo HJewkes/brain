@@ -79,12 +79,19 @@ export async function buildWorkerDispatch(
 
 /**
  * Build a worker dispatch from an already-pulled task.
+ *
+ * `projectDir` is the workspace root — where templates and the brain instance
+ * live. `taskRepoDir` (optional, defaults to `projectDir`) is the per-task
+ * repo directory for multi-repo workspaces; it's the value substituted into
+ * CWD/PROJECT_DIR in the rendered prompt. For single-repo workspaces the
+ * two are identical and behavior is unchanged.
  */
 export function buildWorkerDispatchFromPull(
   db: BrainDB,
   pullResult: PullResult,
   options: {
     projectDir: string;
+    taskRepoDir?: string;
     teamName: string;
     templateName?: string;
   }
@@ -92,10 +99,11 @@ export function buildWorkerDispatchFromPull(
   const templateName =
     options.templateName ?? pullResult.dispatchContext.routing.template ?? 'worker';
   const templatePath = join(options.projectDir, 'templates', 'agents', `${templateName}.md`);
+  const variableProjectDir = options.taskRepoDir ?? options.projectDir;
 
   if (!existsSync(templatePath)) {
     const fallback = buildSpawnPrompt(db, pullResult.taskId, {
-      projectDir: options.projectDir,
+      projectDir: variableProjectDir,
     });
     return {
       taskId: pullResult.taskId,
@@ -111,7 +119,7 @@ export function buildWorkerDispatchFromPull(
   });
   if (!dispatch) return null;
 
-  const variables = buildTemplateVariables(dispatch, options.projectDir, {
+  const variables = buildTemplateVariables(dispatch, variableProjectDir, {
     teamName: options.teamName,
     claimToken: pullResult.claimToken,
   });
