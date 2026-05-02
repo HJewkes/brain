@@ -9,6 +9,8 @@ docs/audits/
 docs/prototypes/
 docs/reviews/
 docs/demos.md
+docs/plans/
+docs/pm-module/diagnostic/
 *.db
 .env
 coverage/
