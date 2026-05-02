@@ -6,6 +6,13 @@ import { createWorkstream } from '../../../src/modules/pm/data/workstream-ops.js
 import type { BrainConfig } from '../../../src/types.js';
 import { extractPathReferences } from '../../../src/modules/agents/extensions/file-ownership-ext.js';
 import { fileOwnershipExtension } from '../../../src/modules/agents/extensions/file-ownership-ext.js';
+import { createAgent, updateAgentStatus } from '../../../src/modules/agents/data.js';
+import {
+  agentsMigrationV1,
+  agentsMigrationV2,
+  agentsMigrationV3,
+  agentsMigrationV4,
+} from '../../../src/modules/agents/schema.js';
 
 const embedder = createMockEmbedder();
 
@@ -65,6 +72,13 @@ describe('fileOwnershipExtension.compute', () => {
       embedder: 'local',
     };
 
+    // Ensure agents tables exist (template DB doesn't include them)
+    const rawDb = (db as unknown as { db: unknown }).db;
+    agentsMigrationV1.up(rawDb);
+    agentsMigrationV2.up(rawDb);
+    agentsMigrationV3.up(rawDb);
+    agentsMigrationV4.up(rawDb);
+
     await createProject(db, config, embedder, { name: 'Test', prefix: 'OWN' });
     await createWorkstream(db, config, embedder, { project: 'OWN', name: 'Alpha' });
   });
@@ -114,8 +128,9 @@ describe('fileOwnershipExtension.compute', () => {
     expect(result!.rules[0].patterns).toContain('src/modules/pm/commands/dispatch.ts');
   });
 
-  it('assigns separate ownership to wave peers', async () => {
-    // Two tasks in the same wave (no deps on each other)
+  it('does NOT include peer scope when peer has no in-flight agent (solo dispatch)', async () => {
+    // Two tasks in the same workstream — but no agents are dispatched.
+    // Solo dispatch of OWN-01.01 should give it full scope from its own description.
     await createTestTask(db, config, embedder, {
       project: 'OWN',
       workstream: 1,
@@ -134,17 +149,82 @@ describe('fileOwnershipExtension.compute', () => {
       taskDisplayId: 'OWN-01.01',
     });
     expect(result).toBeDefined();
+    expect(result!.rules).toHaveLength(1);
+
+    const agentA = result!.rules.find((r) => r.agentId === 'OWN-01.01');
+    expect(agentA).toBeDefined();
+    expect(agentA!.patterns).toContain('src/services/search.ts');
+    // Peer not included because OWN-01.02 has no in-flight agent
+    const agentB = result!.rules.find((r) => r.agentId === 'OWN-01.02');
+    expect(agentB).toBeUndefined();
+  });
+
+  it('subtracts peer scope when peer has an in-flight agent', async () => {
+    await createTestTask(db, config, embedder, {
+      project: 'OWN',
+      workstream: 1,
+      name: 'Worker A',
+      description: 'Modify src/services/search.ts for improved results',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'OWN',
+      workstream: 1,
+      name: 'Worker B',
+      description: 'Modify src/services/graph.ts for better traversal',
+    });
+
+    // Mark OWN-01.02 as in-flight
+    const peerAgentId = createAgent(db, {
+      name: 'peer',
+      parent: 'test',
+      brain_task: 'OWN-01.02',
+    });
+    updateAgentStatus(db, peerAgentId, 'active', { pid: 9999 });
+
+    const result = fileOwnershipExtension.compute({
+      db,
+      taskDisplayId: 'OWN-01.01',
+    });
+    expect(result).toBeDefined();
     expect(result!.rules).toHaveLength(2);
 
     const agentA = result!.rules.find((r) => r.agentId === 'OWN-01.01');
     const agentB = result!.rules.find((r) => r.agentId === 'OWN-01.02');
-    expect(agentA).toBeDefined();
-    expect(agentB).toBeDefined();
     expect(agentA!.patterns).toContain('src/services/search.ts');
     expect(agentB!.patterns).toContain('src/services/graph.ts');
   });
 
-  it('resolves conflicts by prioritizing current task', async () => {
+  it('ignores peers whose agents are in terminal status', async () => {
+    await createTestTask(db, config, embedder, {
+      project: 'OWN',
+      workstream: 1,
+      name: 'Worker A',
+      description: 'Modify src/services/search.ts',
+    });
+    await createTestTask(db, config, embedder, {
+      project: 'OWN',
+      workstream: 1,
+      name: 'Worker B',
+      description: 'Modify src/services/graph.ts',
+    });
+
+    // Peer agent already finished — should NOT subtract scope
+    const peerAgentId = createAgent(db, {
+      name: 'peer',
+      parent: 'test',
+      brain_task: 'OWN-01.02',
+    });
+    updateAgentStatus(db, peerAgentId, 'completed', { exit_reason: 'done' });
+
+    const result = fileOwnershipExtension.compute({
+      db,
+      taskDisplayId: 'OWN-01.01',
+    });
+    expect(result!.rules).toHaveLength(1);
+    expect(result!.rules[0].agentId).toBe('OWN-01.01');
+  });
+
+  it('resolves conflicts by prioritizing current task when peer is in-flight', async () => {
     await createTestTask(db, config, embedder, {
       project: 'OWN',
       workstream: 1,
@@ -158,6 +238,13 @@ describe('fileOwnershipExtension.compute', () => {
       description: 'Modify src/shared.ts for feature B',
     });
 
+    const peerAgentId = createAgent(db, {
+      name: 'peer',
+      parent: 'test',
+      brain_task: 'OWN-01.02',
+    });
+    updateAgentStatus(db, peerAgentId, 'active', { pid: 9999 });
+
     const result = fileOwnershipExtension.compute({
       db,
       taskDisplayId: 'OWN-01.01',
@@ -169,7 +256,6 @@ describe('fileOwnershipExtension.compute', () => {
     const agentB = result!.rules.find((r) => r.agentId === 'OWN-01.02');
     expect(agentA).toBeDefined();
     expect(agentA!.patterns).toContain('src/shared.ts');
-    // agentB either has no rules or doesn't have the conflicting pattern
     if (agentB) {
       expect(agentB.patterns).not.toContain('src/shared.ts');
     }
