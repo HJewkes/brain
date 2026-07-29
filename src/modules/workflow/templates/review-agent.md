@@ -191,4 +191,4 @@ After posting the review, output a structured summary for the orchestrator (not 
 - <trivial / small / medium — to help orchestrator decide whether to resume agent or re-review>
 ```
 
-The orchestrator uses the risk score and verdict to route the review — see `coordination/scripts/review-route.sh`.
+The orchestrator uses the risk score and verdict to route the review — see `sources/scripts/review-route.sh`.
