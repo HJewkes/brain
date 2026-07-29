@@ -251,7 +251,7 @@ async function runDispatch(
   // Synthetic tasks (workflow runtime) keep their existing addDir behavior
   // (none) — they run in the workspace root with no worktree. Real tasks
   // get --add-dir <workspaceRoot> so the agent can read workspace-level
-  // files (e.g. .plans/, coordination/) regardless of which per-project
+  // files (e.g. .plans/, sources/) regardless of which per-project
   // repo they were dispatched into.
   const isSynthetic = isSyntheticTaskId(taskId);
   const proc = spawnClaude({
