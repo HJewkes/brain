@@ -1,11 +1,11 @@
 import type { DispatchExtension, DispatchExtensionInput } from '../dispatch-extensions.js';
 import type { FileOwnershipManifest } from '../file-ownership.js';
 import { buildOwnershipManifest, checkConflicts, formatOwnershipBrief } from '../file-ownership.js';
-import { computeWaves } from '../../pm/engine/dependency.js';
 import { readTaskBody } from '../../pm/engine/dispatch.js';
 import { getPmNotes } from '../../pm/data/queries.js';
 import type { TaskMetadata } from '../../pm/types.js';
 import type { BrainDB } from '../../../services/brain-db.js';
+import { findInFlightAgentTasks } from '../data.js';
 
 // TODO: Future improvement — write computed ownership to the persisted manifest
 // (`.claude/ownership.json`) before agent dispatch so the hook check
@@ -37,13 +37,6 @@ function pathsToPatterns(paths: string[]): string[] {
   });
 }
 
-function resolveProject(db: BrainDB, taskDisplayId: string): string | null {
-  const notes = getPmNotes(db, 'task', { display_id: taskDisplayId });
-  if (notes.length === 0) return null;
-  const meta = JSON.parse(notes[0].metadata!) as TaskMetadata;
-  return meta.project;
-}
-
 function getTaskDescription(db: BrainDB, taskDisplayId: string): string {
   const notes = getPmNotes(db, 'task', { display_id: taskDisplayId });
   if (notes.length === 0) return '';
@@ -52,18 +45,18 @@ function getTaskDescription(db: BrainDB, taskDisplayId: string): string {
   return [meta.title ?? '', body].join('\n');
 }
 
-function findWavePeers(db: BrainDB, project: string, taskDisplayId: string): string[] {
-  const waves = computeWaves(db, project);
-  for (const wave of waves) {
-    if (wave.taskIds.includes(taskDisplayId)) {
-      return wave.taskIds.filter((id) => id !== taskDisplayId);
-    }
-  }
-  return [];
-}
-
 /**
  * Dynamically compute file ownership from task descriptions for dispatch context.
+ *
+ * Subtracts scope only from peers whose agent is currently in flight
+ * (status pending/active). Solo dispatches with no concurrent agents
+ * therefore receive their full natural scope; wave dispatches subtract
+ * from siblings as they spawn.
+ *
+ * Previously this used the entire computed-waves peer list — including
+ * every task that *could* run in parallel based on dep analysis — which
+ * for large projects produced empty authorized-to-modify lists for
+ * solo dispatches. (Tracked as VNM-48.280/.281/.282.)
  *
  * This produces **recommendations** included in the agent's dispatch prompt so it
  * knows which files it should touch. It is NOT the enforcement mechanism — the
@@ -74,10 +67,7 @@ function findWavePeers(db: BrainDB, project: string, taskDisplayId: string): str
 function computeOwnership(input: DispatchExtensionInput): FileOwnershipManifest | undefined {
   try {
     const { db, taskDisplayId } = input;
-    const project = resolveProject(db, taskDisplayId);
-    if (!project) return undefined;
-
-    const peers = findWavePeers(db, project, taskDisplayId);
+    const peers = findInFlightAgentTasks(db, taskDisplayId);
     const allAgents = [taskDisplayId, ...peers];
 
     const assignments: Array<{ agentId: string; patterns: string[] }> = [];
