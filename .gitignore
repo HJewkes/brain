@@ -29,3 +29,9 @@ coverage/
 
 # Screenshots (development artifacts)
 *.png
+
+# Live but deliberately untracked (VW-108, decided 2026-09-09): local-only
+# architecture notes and the platform spike. Listed so 87 untracked files stop
+# burying real changes in `git status`.
+docs/architecture/
+spike/
