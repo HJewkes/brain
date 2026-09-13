@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrainDB } from '../../../src/services/brain-db.js';
 import { NoteRepo } from '../../../src/services/repos/note-repo.js';
@@ -162,6 +163,26 @@ describe('NoteRepo', () => {
 
       db.deleteChunksForNote('to-clear');
       expect(db.getChunksForNote('to-clear')).toHaveLength(0);
+    });
+
+    it('re-upserts a chunk id whose vector row was orphaned by a prior chunks-only delete', () => {
+      const note = makeNote({ id: 'orphan-vec' });
+      db.upsertNote(note);
+
+      const chunks: Chunk[] = [
+        makeChunk({ id: 'orphan-vec:s:0', noteId: 'orphan-vec', content: 'data', tokenCount: 1 }),
+      ];
+      db.upsertChunks('orphan-vec', chunks, [new Float32Array(384)]);
+
+      // Simulate a chunk_vectors row surviving a delete that only touched `chunks`
+      // (e.g. an earlier partial write), so the note has a vector row but no chunk row.
+      (db as unknown as { db: DatabaseType }).db.prepare('DELETE FROM chunks WHERE id = ?').run('orphan-vec:s:0');
+      expect(db.getChunksForNote('orphan-vec')).toHaveLength(0);
+
+      expect(() =>
+        db.upsertChunks('orphan-vec', chunks, [new Float32Array(384)])
+      ).not.toThrow();
+      expect(db.getChunksForNote('orphan-vec')).toHaveLength(1);
     });
   });
 

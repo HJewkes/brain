@@ -148,6 +148,11 @@ export class NoteRepo {
       `INSERT INTO chunks (id, note_id, heading, heading_ancestry, content, token_count, chunk_type, cut_type, content_type, position)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
+    // deleteChunksForNote only clears vectors for chunk ids still present in the
+    // `chunks` table, so a chunk_vectors row orphaned by an earlier partial write
+    // (chunks row gone, vector row left behind) survives it. Clear by chunk id
+    // here too so a reused id can never collide with a stale vector row.
+    const deleteVector = this.db.prepare('DELETE FROM chunk_vectors WHERE chunk_id = ?');
     const insertVector = this.db.prepare(
       `INSERT INTO chunk_vectors (chunk_id, embedding)
        VALUES (?, ?)`
@@ -168,6 +173,7 @@ export class NoteRepo {
           chunk.contentType,
           chunk.position
         );
+        deleteVector.run(chunk.id);
         insertVector.run(chunk.id, Buffer.from(embeddings[i].buffer));
       }
     });
