@@ -10,6 +10,15 @@ export interface CaptureEventInput {
 }
 
 export function captureSessionEvent(db: BrainDB, input: CaptureEventInput): void {
+  try {
+    insertSessionEvent(db, input);
+  } catch {
+    // Silently ignore — hook capture should never block
+  }
+}
+
+/** Throwing variant for callers that report their own write failures. */
+export function insertSessionEvent(db: BrainDB, input: CaptureEventInput): void {
   const dataStr = JSON.stringify(input.data);
   const dataHash = createHash('sha256')
     .update(`${input.session_id}:${input.event_type}:${dataStr}`)
@@ -25,23 +34,19 @@ export function captureSessionEvent(db: BrainDB, input: CaptureEventInput): void
     }
   ).db;
 
-  try {
-    rawDb
-      .prepare(
-        `INSERT OR IGNORE INTO session_events (session_id, event_type, category, data, timestamp, data_hash)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        input.session_id,
-        input.event_type,
-        input.category ?? null,
-        dataStr,
-        input.timestamp,
-        dataHash
-      );
-  } catch {
-    // Silently ignore — hook capture should never block
-  }
+  rawDb
+    .prepare(
+      `INSERT OR IGNORE INTO session_events (session_id, event_type, category, data, timestamp, data_hash)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      input.session_id,
+      input.event_type,
+      input.category ?? null,
+      dataStr,
+      input.timestamp,
+      dataHash
+    );
 }
 
 export function captureSessionChunk(

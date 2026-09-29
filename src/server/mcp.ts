@@ -27,6 +27,7 @@ import type { WorkflowRuntime } from '../modules/workflow/runtime/runtime.js';
 import { askAdvisor, reviewAdvisor } from './advisor.js';
 import { getAoConfigWatcher } from '../services/ao-config-watcher.js';
 import { triageDispatch } from './triage.js';
+import { recordSearchEvent } from '../modules/sessions/search-event.js';
 
 function textResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -48,7 +49,15 @@ function registerSearchTools(server: McpServer, svc: BrainServiceClass): void {
       limit: z.number().optional().describe('Max results (default 10)'),
     },
     async ({ query, limit }) => {
+      const startedAt = performance.now();
       const results = await svc.search(query, { limit: limit ?? 10 });
+      recordSearchEvent(svc.db, {
+        entryPoint: 'mcp',
+        query,
+        options: { limit: limit ?? 10 },
+        results,
+        latencyMs: performance.now() - startedAt,
+      });
       return textResult(
         results.map((r) => ({
           noteId: r.noteId,
