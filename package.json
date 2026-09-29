@@ -24,6 +24,7 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:eval": "vitest run --project eval",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run build && vitest run --project unit --exclude __tests__/adapters/local-embedder.test.ts && vitest run --project integration",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src __tests__ --no-error-on-unmatched-pattern",
     "format": "prettier --write \"src/**/*.ts\" \"__tests__/**/*.ts\"",

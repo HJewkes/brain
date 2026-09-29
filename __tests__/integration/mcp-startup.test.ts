@@ -5,33 +5,14 @@
  * MergeLifecycleReconciler heartbeat message appears within 5 seconds.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
-// Resolve main brain repo path from git (handles worktrees)
-function getProjectRoot(): string {
-  const gitDir = execSync('git rev-parse --git-dir', {
-    encoding: 'utf-8',
-  }).trim();
-
-  // If gitDir contains 'worktrees', we're in a worktree; extract main repo
-  if (gitDir.includes('worktrees')) {
-    // gitDir is like: /path/to/brain/.git/worktrees/VNM-56.57
-    // We want: /path/to/brain
-    const gitPath = gitDir.replace(/\/.git\/worktrees\/[^/]+$/, '');
-    return gitPath;
-  }
-
-  // Otherwise, use git rev-parse --show-toplevel for normal repos
-  const gitRoot = execSync('git rev-parse --show-toplevel', {
-    encoding: 'utf-8',
-  }).trim();
-  return gitRoot;
-}
-
-const PROJECT_ROOT = getProjectRoot();
+// The checkout under test, so a worktree runs its own CLI and native modules.
+const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const TSX_BIN = join(PROJECT_ROOT, 'node_modules', '.bin', 'tsx');
 const CLI = join(PROJECT_ROOT, 'src', 'cli.ts');
 

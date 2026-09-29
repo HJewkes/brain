@@ -3,9 +3,13 @@ name: CI
 on:
   push:
     branches: [main]
+  # Unfiltered so `check` reports on every PR, including stacked ones.
   pull_request:
-    branches: [main]
 
+permissions:
+  contents: read
+
+# These job names stay while the ruleset requires them; a later PR moves them onto node.yml.
 jobs:
   gitleaks:
     runs-on: ubuntu-latest
@@ -36,9 +40,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
+      - run: npm run verify
 
   test-unit:
     runs-on: ubuntu-latest
@@ -116,3 +118,13 @@ jobs:
       - run: npm run build
       - name: Verify build output
         run: test -f dist/cli.js || (echo "Build output missing" && exit 1)
+
+  # The only job named `check`; all-green fails if any job here is missing from needs.
+  check:
+    if: always()
+    needs: [gitleaks, security-audit, lint, test-unit, test-integration, test-report, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: HJewkes/ci/actions/all-green@v1
+        with:
+          needs: ${{ toJSON(needs) }}
