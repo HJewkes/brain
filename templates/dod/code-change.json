@@ -3,6 +3,8 @@
   "criteria": [
     { "name": "types check", "check": "npm run typecheck", "required": true },
     { "name": "tests pass", "check": "npm test", "required": true },
-    { "name": "lint clean", "check": "npm run lint", "required": true }
+    { "name": "lint clean", "check": "npm run lint", "required": true },
+    { "name": "format clean", "check": "npm run format:check", "required": true },
+    { "name": "build succeeds", "check": "npm run build", "required": true }
   ]
 }
