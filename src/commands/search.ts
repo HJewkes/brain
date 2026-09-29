@@ -7,6 +7,7 @@ import { resolveFormat } from './format.js';
 import { formatOutput } from '../services/output-formatter.js';
 import type { SearchOptions, SearchResult, FacetResult, TokenUsage } from '../types.js';
 import type { EnrichedSearchResult } from '../services/relational-enrichment.js';
+import { recordSearchEvent } from '../modules/sessions/search-event.js';
 
 export const searchCommand = new Command('search')
   .description('Search notes with hybrid BM25 + vector search')
@@ -39,6 +40,7 @@ export const searchCommand = new Command('search')
   .option('--show-cost', 'display token usage breakdown for the search')
   .action(async (query, opts, cmd) => {
     await withBrain(async ({ db, embedder, config, modules }) => {
+      const startedAt = performance.now();
       const searchOpts: SearchOptions = {
         limit: parseInt(opts.limit, 10),
         tier: opts.tier as SearchOptions['tier'],
@@ -158,6 +160,14 @@ export const searchCommand = new Command('search')
           return (b.score ?? 0) - (a.score ?? 0);
         });
       }
+
+      recordSearchEvent(db, {
+        entryPoint: 'cli',
+        query,
+        options: { ...opts },
+        results: allResults,
+        latencyMs: performance.now() - startedAt,
+      });
 
       const memoryResults = opts.memories
         ? await searchMemories(db, embedder, query, parseInt(opts.limit, 10), opts.container)
