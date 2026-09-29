@@ -122,11 +122,11 @@ describe('CLI integration', { timeout: 60_000 }, () => {
     expect(existsSync(outputPath)).toBe(true);
   });
 
-  it('index processes notes into the database', () => {
+  it('index finds nothing new because add already indexed the notes', () => {
     const output = cli('index --json');
     const result = JSON.parse(output);
 
-    expect(result.indexed).toBeGreaterThanOrEqual(2);
+    expect(result.indexed).toBe(0);
     expect(result.total).toBeGreaterThanOrEqual(2);
   });
 
