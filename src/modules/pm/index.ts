@@ -142,6 +142,8 @@ export const pmModule: BrainModule = {
           },
           due_date: { type: 'string', description: 'Due date (YYYY-MM-DD)' },
           milestone: { type: 'string', description: 'Milestone name' },
+          estimate: { type: 'number', description: 'Estimate in story points (0-100)' },
+          tags: { type: 'array', description: 'Tags such as kind:platform' },
         },
         required: ['project', 'workstream', 'number', 'status', 'mode', 'category', 'priority'],
       },

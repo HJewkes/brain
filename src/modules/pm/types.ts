@@ -122,6 +122,8 @@ export interface TaskMetadata {
   due_date?: string;
   milestone?: string;
   done_when?: string;
+  estimate?: number;
+  tags?: string[];
   acceptance_criteria?: string[];
   references?: string[];
   spawn_timestamp?: string;
