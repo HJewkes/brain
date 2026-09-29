@@ -142,6 +142,8 @@ function taskMetaFromRecord(meta: Record<string, unknown>): TaskMetadata {
     due_date: coerceDateField(meta.due_date),
     milestone: meta.milestone as string | undefined,
     done_when: meta.done_when as string | undefined,
+    estimate: meta.estimate as number | undefined,
+    tags: meta.tags as string[] | undefined,
     acceptance_criteria: meta.acceptance_criteria as string[] | undefined,
     references: meta.references as string[] | undefined,
     spawn_timestamp: meta.spawn_timestamp as string | undefined,
