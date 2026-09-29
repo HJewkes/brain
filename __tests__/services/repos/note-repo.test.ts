@@ -176,12 +176,12 @@ describe('NoteRepo', () => {
 
       // Simulate a chunk_vectors row surviving a delete that only touched `chunks`
       // (e.g. an earlier partial write), so the note has a vector row but no chunk row.
-      (db as unknown as { db: DatabaseType }).db.prepare('DELETE FROM chunks WHERE id = ?').run('orphan-vec:s:0');
+      (db as unknown as { db: DatabaseType }).db
+        .prepare('DELETE FROM chunks WHERE id = ?')
+        .run('orphan-vec:s:0');
       expect(db.getChunksForNote('orphan-vec')).toHaveLength(0);
 
-      expect(() =>
-        db.upsertChunks('orphan-vec', chunks, [new Float32Array(384)])
-      ).not.toThrow();
+      expect(() => db.upsertChunks('orphan-vec', chunks, [new Float32Array(384)])).not.toThrow();
       expect(db.getChunksForNote('orphan-vec')).toHaveLength(1);
     });
   });
