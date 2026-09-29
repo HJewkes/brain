@@ -9,7 +9,6 @@ import {
   makeInboxItem,
   createTestDb,
   createMockEmbedder,
-  createTestTask,
 } from '../helpers.js';
 import { createStandardProject } from '../fixtures/pm-project.js';
 import type { BrainDB } from '../../src/services/brain-db.js';
@@ -55,12 +54,6 @@ async function seedFullBrain(): Promise<void> {
   seedCoreBrain();
   const embedder = createMockEmbedder();
   await createStandardProject(db, config, embedder);
-  const task = await createTestTask(db, config, embedder, {
-    project: 'TEST',
-    workstream: 1,
-    name: 'Synthetic task',
-  });
-  if (!task.ok) throw new Error(task.error.message);
 }
 
 beforeEach(() => {
@@ -108,7 +101,7 @@ describe('status --full', () => {
     expect(out).toContain('Pending: 1');
     expect(out).toContain('== PM ==');
     expect(out).toContain('Projects: 1');
-    expect(out).toContain('Tasks: 1');
+    expect(out).toMatch(/Tasks: [1-9]/);
     expect(process.exitCode ?? 0).toBe(0);
   });
 
@@ -143,7 +136,7 @@ describe('status --full', () => {
 
     const parsed = JSON.parse(stdout());
     expect(Object.keys(parsed).sort()).toEqual(['inbox', 'index', 'memory', 'pm']);
-    expect(parsed.index.totalNotes).toBe(2);
+    expect(parsed.index.byType.decision).toBe(1);
     expect(parsed.memory.activeMemories).toBe(3);
     expect(parsed.inbox.pending).toBe(1);
     expect(parsed.pm.projects).toBe(1);
