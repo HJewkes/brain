@@ -107,6 +107,7 @@ async function handleUrlAdd(
     reviewInterval?: string;
     created?: string;
     reason?: string;
+    index?: boolean;
   },
   resolveOpts?: ResolveOptions
 ): Promise<void> {
@@ -162,16 +163,33 @@ async function handleUrlAdd(
 
   const markdown = frontmatterLines.join('\n') + '\n\n' + result.markdown;
 
-  await withBrain(async ({ db, embedder, config }) => {
-    const outPath = resolveOutputPath(config.notesDir, tier, type, id);
-    const dir = dirname(outPath);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(outPath, markdown, 'utf-8');
+  const config = loadConfig(resolveInstance(resolveOpts));
+  const outPath = resolveOutputPath(config.notesDir, tier, type, id);
+  const dir = dirname(outPath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(outPath, markdown, 'utf-8');
+  process.stdout.write(`Created: ${outPath}\n`);
 
-    const hash = createHash('sha256').update(markdown).digest('hex');
-    await indexSingleFile(db, embedder, outPath, markdown, hash, Date.now());
-    process.stdout.write(`Created: ${outPath}\n`);
-  }, resolveOpts);
+  if (opts.index !== false) await indexCreatedNote(outPath, markdown, resolveOpts);
+}
+
+async function indexCreatedNote(
+  outPath: string,
+  content: string,
+  resolveOpts?: ResolveOptions
+): Promise<void> {
+  try {
+    await withBrain(async ({ db, embedder }) => {
+      const hash = createHash('sha256').update(content).digest('hex');
+      await indexSingleFile(db, embedder, outPath, content, hash, Date.now());
+    }, resolveOpts);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `Warning: note saved to ${outPath} but indexing failed: ${reason}. Run \`brain index\` to retry.\n`
+    );
+    process.exitCode = 1;
+  }
 }
 
 function validateEnum<T extends string>(
@@ -205,6 +223,7 @@ export const addCommand = new Command('add')
   .option('--created <date>', 'Created date (YYYY-MM-DD), defaults to today')
   .option('--url <url>', 'Fetch URL and create note from extracted content')
   .option('--reason <text>', 'Why this note is being added (embedded for retrieval)')
+  .option('--no-index', 'Skip indexing the new note (for bulk operations)')
   .action(async (file, opts, cmd) => {
     if (opts.type && !VALID_CORE_NOTE_TYPES.includes(opts.type as CoreNoteType)) {
       process.stderr.write(
@@ -288,4 +307,6 @@ export const addCommand = new Command('add')
       return;
     }
     process.stdout.write(outPath + '\n');
+
+    if (opts.index) await indexCreatedNote(outPath, content, resolveOpts);
   });
