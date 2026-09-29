@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BrainConfig } from '../../src/types.js';
 
+// onnxruntime-node cannot load in a second worker thread on Linux, and the factory test never embeds.
+vi.mock('@huggingface/transformers', () => ({ pipeline: vi.fn() }));
+
 // --- OllamaEmbedder (mocked) ---
 
 vi.mock('ollama', () => {
