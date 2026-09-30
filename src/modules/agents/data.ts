@@ -192,6 +192,25 @@ export function countActiveAgents(db: unknown): number {
   return row.n;
 }
 
+/**
+ * Return brain_task display IDs of agents that are not in a terminal status
+ * (i.e. pending or active), excluding the given task. Used by file-ownership
+ * computation to subtract scope only from peers that are actually in flight,
+ * rather than from every theoretically-parallel task in the wave.
+ */
+export function findInFlightAgentTasks(db: unknown, excludeTaskId: string): string[] {
+  const raw = toRaw(db);
+  const rows = raw
+    .prepare(
+      `SELECT DISTINCT brain_task FROM agents
+        WHERE brain_task IS NOT NULL
+          AND brain_task != ?
+          AND status IN ('pending', 'active')`
+    )
+    .all(excludeTaskId) as { brain_task: string }[];
+  return rows.map((r) => r.brain_task);
+}
+
 /** Retrieve full context object or a specific key for an agent. */
 export function getAgentContext(
   db: unknown,
