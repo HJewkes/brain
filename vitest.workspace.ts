@@ -15,11 +15,6 @@ export default defineWorkspace([
         '__tests__/server/**/*.test.ts',
       ],
       pool: 'threads',
-      poolOptions: {
-        threads: {
-          maxThreads: 4,
-        },
-      },
     },
   },
   {
@@ -28,11 +23,6 @@ export default defineWorkspace([
       globalSetup: ['__tests__/setup/global-setup.ts'],
       include: ['__tests__/integration/**/*.test.ts'],
       pool: 'threads',
-      poolOptions: {
-        threads: {
-          maxThreads: 1,
-        },
-      },
       testTimeout: 60_000,
       hookTimeout: 120_000,
     },
@@ -42,11 +32,6 @@ export default defineWorkspace([
       name: 'eval',
       include: ['__tests__/eval/**/*.test.ts'],
       pool: 'threads',
-      poolOptions: {
-        threads: {
-          maxThreads: 2,
-        },
-      },
       testTimeout: 60_000,
       hookTimeout: 120_000,
     },
