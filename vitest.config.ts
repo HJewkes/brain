@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     globals: true,
     passWithNoTests: true,
+    // vitest 3.x reads poolOptions only from the root, so the cap lives here
+    pool: 'threads',
+    poolOptions: { threads: { maxThreads: 4, minThreads: 1 } },
     teardownTimeout: 30_000,
     hookTimeout: 30_000,
     coverage: {
